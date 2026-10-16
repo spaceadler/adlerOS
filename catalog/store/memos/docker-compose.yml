@@ -1,0 +1,10 @@
+# Memos, from adlerOS's store: quick thoughts, timeline style.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  memos:
+    image: neosmemo/memos:stable
+    restart: unless-stopped
+    ports:
+      - "${PORT}:5230"
+    volumes:
+      - ./data:/var/opt/memos

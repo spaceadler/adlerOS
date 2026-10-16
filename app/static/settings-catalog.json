@@ -1,0 +1,315 @@
+{
+  "_about": [
+    "The Settings page, as data: add a row here to add a setting.",
+    "category: one of the categories below. icon: a name from ICONS in settings.js.",
+    "control.type:",
+    "  setting-text  edits one of the home screen's own settings (key), saved at once",
+    "  password      the change-password dialog",
+    "  wallpaper     the wallpaper picker",
+    "  config        a homelab.env value (key), applied with an action from",
+    "                scripts/agent/actions.json that accepts that key as a param",
+    "  action        a button that runs an action from actions.json, after confirm",
+    "  info          a read-only value: config.<KEY>, device.<field>, or a named",
+    "                formatter from FORMATTERS in settings.js",
+    "  admin         the admin mode switch (asks for the password to turn on)",
+    "admin: true on a row: it only works while admin mode is on.",
+    "mode: \"homelab\" or \"standalone\" on a row: only shown in that kind of install.",
+    "keywords: extra words the search box matches."
+  ],
+  "categories": [
+    {
+      "id": "account",
+      "label": "Account"
+    },
+    {
+      "id": "homelab",
+      "label": "Homelab",
+      "labelStandalone": "This machine"
+    },
+    {
+      "id": "system",
+      "label": "System"
+    }
+  ],
+  "rows": [
+    {
+      "id": "name",
+      "category": "account",
+      "icon": "user",
+      "title": "Name",
+      "description": "Used in your greeting.",
+      "keywords": "first name greeting hello",
+      "control": {
+        "type": "setting-text",
+        "key": "name",
+        "placeholder": "Your first name",
+        "maxLength": 40
+      }
+    },
+    {
+      "id": "password",
+      "category": "account",
+      "icon": "key",
+      "title": "Password",
+      "description": "The password for this home screen.",
+      "keywords": "login security change",
+      "control": {
+        "type": "password"
+      }
+    },
+    {
+      "id": "wallpaper",
+      "category": "account",
+      "icon": "image",
+      "title": "Wallpaper",
+      "description": "Add your own by putting images in containers/core/os/wallpaper.",
+      "keywords": "background photo image",
+      "control": {
+        "type": "wallpaper"
+      }
+    },
+    {
+      "id": "web-search",
+      "category": "account",
+      "icon": "search",
+      "title": "Web search",
+      "description": "Where the search bar on your home screen takes you. {QUERY} becomes what you typed.",
+      "keywords": "search engine 4get google duckduckgo searxng url",
+      "control": {
+        "type": "setting-text",
+        "key": "searchUrl",
+        "placeholder": "https://duckduckgo.com/?q={QUERY}",
+        "maxLength": 500
+      }
+    },
+    {
+      "id": "domain",
+      "category": "homelab",
+      "icon": "globe",
+      "title": "Domain",
+      "description": "Every app lives at <app>.<domain>.",
+      "keywords": "dns address url hostname",
+      "control": {
+        "type": "config",
+        "key": "DOMAIN",
+        "input": "text",
+        "action": "apply-config"
+      },
+      "mode": "homelab"
+    },
+    {
+      "id": "timezone",
+      "category": "homelab",
+      "icon": "clock",
+      "title": "Timezone",
+      "description": "Used by every app for times and schedules.",
+      "keywords": "time zone clock tz",
+      "control": {
+        "type": "config",
+        "key": "TZ",
+        "input": "timezone",
+        "action": "apply-config"
+      },
+      "mode": "homelab"
+    },
+    {
+      "id": "https",
+      "category": "homelab",
+      "icon": "lock",
+      "title": "HTTPS",
+      "description": "How your apps are encrypted in the browser. See docs/tls.md.",
+      "keywords": "tls ssl certificate secure",
+      "control": {
+        "type": "info",
+        "value": "https"
+      },
+      "mode": "homelab"
+    },
+    {
+      "id": "tailscale",
+      "category": "homelab",
+      "icon": "network",
+      "title": "Tailscale address",
+      "description": "Reach any app directly at this address and its port.",
+      "keywords": "ip vpn tailnet",
+      "control": {
+        "type": "info",
+        "value": "config.TS_IP"
+      },
+      "mode": "homelab"
+    },
+    {
+      "id": "storage",
+      "category": "homelab",
+      "icon": "drive",
+      "title": "Storage folder",
+      "description": "Where photos, music, documents and notes live.",
+      "keywords": "disk folder files path",
+      "control": {
+        "type": "info",
+        "value": "config.STORAGE_DIR"
+      },
+      "mode": "homelab"
+    },
+    {
+      "id": "address",
+      "category": "homelab",
+      "icon": "network",
+      "title": "Address",
+      "mode": "standalone",
+      "description": "How apps found or installed here are reached: http://<this>:<port>. Set ADLEROS_HOST in adlerOS's .env.",
+      "keywords": "host ip hostname url",
+      "control": {
+        "type": "info",
+        "value": "config.ADLEROS_HOST"
+      }
+    },
+    {
+      "id": "compose-folders",
+      "category": "homelab",
+      "icon": "drive",
+      "title": "Compose folders",
+      "mode": "standalone",
+      "description": "Where adlerOS looks for your apps (COMPOSE_ROOTS in its .env).",
+      "keywords": "compose docker folders roots scan",
+      "control": {
+        "type": "info",
+        "value": "config.COMPOSE_ROOTS"
+      }
+    },
+    {
+      "id": "discover",
+      "category": "homelab",
+      "icon": "search",
+      "title": "Look for new apps",
+      "mode": "standalone",
+      "description": "Goes through your compose folders again: new compose files become apps, sorted into collections.",
+      "keywords": "scan rescan discover find compose import",
+      "control": {
+        "type": "action",
+        "action": "app-discover",
+        "label": "Look"
+      }
+    },
+    {
+      "id": "admin",
+      "category": "system",
+      "icon": "shield",
+      "title": "Admin mode",
+      "description": "Lets you restart and shut down this machine, delete apps, and stop core apps (Pi-hole, Vaultwarden). Off until you turn it on.",
+      "keywords": "administrator sudo power delete danger advanced",
+      "control": {
+        "type": "admin"
+      }
+    },
+    {
+      "id": "backup",
+      "category": "system",
+      "icon": "archive",
+      "title": "Back up now",
+      "description": "Copies every app's settings and data into backup/. Apps pause while it runs.",
+      "keywords": "backup copy save restore",
+      "control": {
+        "type": "action",
+        "action": "backup",
+        "label": "Back up",
+        "detail": "backups",
+        "confirm": {
+          "title": "Back up now?",
+          "body": "Each running app stops while its data is copied, then starts again. Usually a few minutes.",
+          "button": "Back up"
+        }
+      },
+      "mode": "homelab"
+    },
+    {
+      "id": "update",
+      "category": "system",
+      "icon": "download",
+      "title": "Update homelab",
+      "description": "Gets the latest version of this repository, re-runs install.sh, and restarts adlerOS.",
+      "keywords": "upgrade git pull new version",
+      "control": {
+        "type": "action",
+        "action": "update",
+        "label": "Update",
+        "confirm": {
+          "title": "Update your homelab?",
+          "body": "Pulls the latest version and re-applies it. Apps whose settings changed restart.",
+          "button": "Update"
+        }
+      },
+      "mode": "homelab"
+    },
+    {
+      "id": "update-adleros",
+      "category": "system",
+      "icon": "download",
+      "title": "Update adlerOS",
+      "mode": "standalone",
+      "description": "Gets the newest adlerOS (git pull) and restarts it.",
+      "keywords": "upgrade git pull new version",
+      "control": {
+        "type": "action",
+        "action": "update-adleros",
+        "label": "Update",
+        "confirm": {
+          "title": "Update adlerOS?",
+          "body": "It downloads the newest version and restarts; the page reloads when it's back.",
+          "button": "Update"
+        }
+      }
+    },
+    {
+      "id": "device",
+      "category": "system",
+      "icon": "cpu",
+      "title": "Device",
+      "description": "This machine.",
+      "keywords": "hardware model os kernel raspberry pi",
+      "control": {
+        "type": "info",
+        "value": "device"
+      }
+    },
+    {
+      "id": "restart",
+      "category": "system",
+      "icon": "restart",
+      "title": "Restart",
+      "description": "Restarts the machine. Every app comes back on its own.",
+      "keywords": "reboot",
+      "control": {
+        "type": "action",
+        "action": "reboot",
+        "label": "Restart",
+        "confirm": {
+          "title": "Restart now?",
+          "body": "Every app is unavailable for a minute or two while the machine restarts.",
+          "button": "Restart"
+        }
+      },
+      "admin": true
+    },
+    {
+      "id": "shutdown",
+      "category": "system",
+      "icon": "power",
+      "title": "Shut down",
+      "description": "Turns the machine off. Starting it again needs someone at the machine.",
+      "keywords": "power off turn off",
+      "control": {
+        "type": "action",
+        "action": "shutdown",
+        "label": "Shut down",
+        "destructive": true,
+        "confirm": {
+          "title": "Shut down?",
+          "body": "Every app goes offline until the machine is switched back on by hand.",
+          "button": "Shut down"
+        }
+      },
+      "admin": true
+    }
+  ]
+}

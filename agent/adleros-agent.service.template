@@ -1,0 +1,16 @@
+# Rendered by install.sh into /etc/systemd/system/adleros-agent.service.
+# Started by adleros-agent.path whenever adlerOS queues a request.
+[Unit]
+Description=adlerOS helper: runs what adlerOS asks for
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=${AGENT_USER}
+Group=${AGENT_GROUP}
+WorkingDirectory=${ADLEROS_DIR}
+ExecStart=/usr/bin/python3 -I ${ADLEROS_DIR}/agent/agent.py
+# Installing a big app from the store can take a while on a first run.
+TimeoutStartSec=4h
+PrivateTmp=yes

@@ -1,0 +1,364 @@
+{
+  "_about": [
+    "What the adlerOS helper (agent.py) may do when adlerOS asks.",
+    "Each action: a label shown while it runs, the parameters it accepts (each",
+    "checked against its pattern, anything else rejected), and steps run in order:",
+    "  {\"run\": [argv...]}         a command, no shell. {adleros} is this repo's",
+    "                               folder, {homelab} the homelab's (homelab mode),",
+    "                               {param:NAME} a whole argument from the params",
+    "  {\"set-config\": [KEYS...]}  write those params into the settings file",
+    "  \"result\": true on a run step: its output is JSON handed to the page",
+    "  \"quiet\": true on an action: a status check, run alongside anything else",
+    "  \"admin\": true: only while admin mode is on (Settings); \"core\" for apps:",
+    "     only when the app is a core one",
+    "  \"mode\": \"standalone\" or \"homelab\": only in that kind of install",
+    "Root-only commands go through sudo to root-owned copies that install.sh puts",
+    "in /usr/local/libexec/adleros; /etc/sudoers.d/adleros allows exactly those.",
+    "A homelab adds its own actions in its scripts/agent/actions.json."
+  ],
+  "app-status": {
+    "label": "Checking apps",
+    "description": "Reports each app's containers for the App Store.",
+    "quiet": true,
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "status"
+        ],
+        "result": true
+      }
+    ]
+  },
+  "app-usage": {
+    "label": "Measuring apps",
+    "description": "Each app's CPU and memory right now (docker stats), for Live Usage.",
+    "quiet": true,
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "usage"
+        ],
+        "result": true
+      }
+    ]
+  },
+  "app-logs": {
+    "label": "Reading logs",
+    "description": "The app's recent logs (docker compose logs), for its Logs view.",
+    "quiet": true,
+    "params": {
+      "app": {
+        "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "logs",
+          "{param:app}"
+        ],
+        "result": true
+      }
+    ]
+  },
+  "app-start": {
+    "label": "Starting",
+    "description": "Starts every container of the app (each compose file in its folder).",
+    "params": {
+      "app": {
+        "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "start",
+          "{param:app}"
+        ]
+      }
+    ]
+  },
+  "app-stop": {
+    "label": "Stopping",
+    "admin": "core",
+    "description": "Stops every container of the app; they stay, ready to start again.",
+    "params": {
+      "app": {
+        "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "stop",
+          "{param:app}"
+        ]
+      }
+    ]
+  },
+  "app-restart": {
+    "label": "Restarting",
+    "description": "Restarts every container of the app.",
+    "params": {
+      "app": {
+        "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "restart",
+          "{param:app}"
+        ]
+      }
+    ]
+  },
+  "app-update": {
+    "label": "Updating",
+    "description": "Pulls the app's newest images and recreates its containers on them (docker compose pull, then up -d). Data stays.",
+    "params": {
+      "app": {
+        "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "update",
+          "{param:app}"
+        ]
+      }
+    ]
+  },
+  "app-install": {
+    "label": "Installing",
+    "description": "Puts an app (back) on the home screen: from the catalog or the store it's set up and started; an imported one starts again.",
+    "params": {
+      "app": {
+        "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "install",
+          "{param:app}"
+        ]
+      }
+    ]
+  },
+  "app-delete": {
+    "label": "Deleting",
+    "admin": true,
+    "description": "Removes the app's containers and takes it off the home screen. Its data and compose files stay.",
+    "params": {
+      "app": {
+        "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "delete",
+          "{param:app}"
+        ]
+      }
+    ]
+  },
+  "app-import-scan": {
+    "label": "Looking for compose files",
+    "description": "Lists the compose files in a folder of yours, with their services, for Import.",
+    "quiet": true,
+    "params": {
+      "path": {
+        "pattern": "^/[A-Za-z0-9 ._/@+~-]{0,400}$",
+        "maxLength": 401
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "scan",
+          "{param:path}"
+        ],
+        "result": true
+      }
+    ]
+  },
+  "app-import": {
+    "label": "Importing",
+    "description": "Adds an app from one of your compose files (containers/extras/<app>/app.json): its service first, then the services it needs. Nothing is moved.",
+    "params": {
+      "name": {
+        "pattern": "^[^\\u0000-\\u001f]{1,40}$",
+        "maxLength": 40
+      },
+      "file": {
+        "pattern": "^/[A-Za-z0-9 ._/@+~-]{1,400}$",
+        "maxLength": 401
+      },
+      "services": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}(,[A-Za-z0-9][A-Za-z0-9._-]{0,63}){0,49}$",
+        "maxLength": 3250
+      },
+      "url": {
+        "pattern": "^https?://[^\\s\"'<>\\\\]{1,300}$",
+        "maxLength": 310
+      },
+      "icon": {
+        "pattern": "^(di:[a-z0-9-]{1,64})?$"
+      },
+      "port": {
+        "pattern": "^([1-9][0-9]{0,4})?$"
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "import",
+          "{param:name}",
+          "{param:file}",
+          "{param:services}",
+          "{param:url}",
+          "{param:icon}",
+          "{param:port}"
+        ]
+      }
+    ]
+  },
+  "app-forget": {
+    "label": "Removing from adlerOS",
+    "description": "Un-imports an imported app. Its containers and files aren't touched.",
+    "params": {
+      "app": {
+        "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "forget",
+          "{param:app}"
+        ]
+      }
+    ]
+  },
+  "app-discover": {
+    "label": "Looking for apps",
+    "description": "Scans your compose folders again: new compose files become apps, sorted into collections.",
+    "mode": "standalone",
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "discover"
+        ]
+      }
+    ]
+  },
+  "reboot": {
+    "label": "Restarting",
+    "admin": true,
+    "description": "Restarts the machine.",
+    "finalBeforeRun": true,
+    "steps": [
+      {
+        "run": [
+          "sudo",
+          "-n",
+          "/usr/local/libexec/adleros/power",
+          "reboot"
+        ]
+      }
+    ]
+  },
+  "shutdown": {
+    "label": "Shutting down",
+    "admin": true,
+    "description": "Turns the machine off.",
+    "finalBeforeRun": true,
+    "steps": [
+      {
+        "run": [
+          "sudo",
+          "-n",
+          "/usr/local/libexec/adleros/power",
+          "poweroff"
+        ]
+      }
+    ]
+  },
+  "update-adleros": {
+    "label": "Updating adlerOS",
+    "description": "Gets the newest adlerOS (git pull), then restarts it.",
+    "mode": "standalone",
+    "steps": [
+      {
+        "run": [
+          "git",
+          "-C",
+          "{adleros}",
+          "pull",
+          "--ff-only"
+        ]
+      },
+      {
+        "run": [
+          "docker",
+          "compose",
+          "-f",
+          "{adleros}/docker-compose.yml",
+          "up",
+          "-d"
+        ]
+      },
+      {
+        "run": [
+          "docker",
+          "compose",
+          "-f",
+          "{adleros}/docker-compose.yml",
+          "restart"
+        ]
+      }
+    ]
+  }
+}

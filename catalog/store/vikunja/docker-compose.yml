@@ -1,0 +1,17 @@
+# Vikunja, from adlerOS's store: tasks, Kanban, Gantt.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  vikunja:
+    image: vikunja/vikunja:latest
+    restart: unless-stopped
+    user: ${PUID}:${PGID}
+    ports:
+      - "${PORT}:3456"
+    environment:
+      VIKUNJA_SERVICE_JWTSECRET: ${JWT_SECRET}
+      VIKUNJA_DATABASE_TYPE: sqlite
+      VIKUNJA_DATABASE_PATH: /db/vikunja.db
+      VIKUNJA_SERVICE_TIMEZONE: ${TZ}
+    volumes:
+      - ./files:/app/vikunja/files
+      - ./db:/db

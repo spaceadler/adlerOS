@@ -1,0 +1,7 @@
+{
+  "name": "Jellyfin",
+  "collection": "media",
+  "icon": "di:jellyfin",
+  "about": "Films and TV, streamed to every device",
+  "port": 8096
+}

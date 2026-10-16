@@ -1,0 +1,14 @@
+# Jellyfin, from adlerOS's store: films and TV, streamed to every device.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    restart: unless-stopped
+    user: ${PUID}:${PGID}
+    ports:
+      - "${PORT}:8096"
+    volumes:
+      - ./config:/config
+      - ./cache:/cache
+      # Your films and series: Media/Movies and Media/Shows in your storage.
+      - ${MEDIA_DIR}:/media:ro

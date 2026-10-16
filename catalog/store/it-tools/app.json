@@ -1,0 +1,7 @@
+{
+  "name": "IT Tools",
+  "collection": "productivity",
+  "icon": "di:it-tools",
+  "about": "Handy converters and generators for developers",
+  "port": 8180
+}

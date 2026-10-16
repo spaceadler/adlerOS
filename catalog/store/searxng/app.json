@@ -1,0 +1,7 @@
+{
+  "name": "SearXNG",
+  "collection": "knowledge",
+  "icon": "di:searxng",
+  "about": "Private metasearch engine",
+  "port": 8888
+}

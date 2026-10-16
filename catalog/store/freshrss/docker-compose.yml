@@ -1,0 +1,14 @@
+# FreshRSS, from adlerOS's store: rSS reader.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  freshrss:
+    image: freshrss/freshrss:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT}:80"
+    environment:
+      TZ: ${TZ}
+      CRON_MIN: "*/20"
+    volumes:
+      - ./data:/var/www/FreshRSS/data
+      - ./extensions:/var/www/FreshRSS/extensions

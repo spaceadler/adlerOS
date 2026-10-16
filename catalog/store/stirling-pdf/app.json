@@ -1,0 +1,8 @@
+{
+  "name": "Stirling-PDF",
+  "collection": "productivity",
+  "icon": "di:stirling-pdf",
+  "about": "Everything you'd want to do to a PDF",
+  "port": 8380,
+  "firstRun": "A big download (about a gigabyte) the first time."
+}

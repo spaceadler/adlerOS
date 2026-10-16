@@ -1,0 +1,14 @@
+# Navidrome, from adlerOS's store: music streaming (Subsonic apps work too).
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  navidrome:
+    image: deluan/navidrome:latest
+    restart: unless-stopped
+    user: ${PUID}:${PGID}
+    ports:
+      - "${PORT}:4533"
+    environment:
+      ND_SCANSCHEDULE: 1h
+    volumes:
+      - ./data:/data
+      - ${MUSIC_DIR}:/music:ro

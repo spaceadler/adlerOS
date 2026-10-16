@@ -1,0 +1,122 @@
+{
+  "_about": [
+    "The desktop widgets, as data: add one here to offer it in Edit widgets.",
+    "max: how many you can show. default: shown until you pick your own.",
+    "type: how it's drawn (four-stats, three-stats, progress, gauges, list,",
+    "      text-button, clock); see TYPES in widgets.js.",
+    "value / items[].value: a named value from VALUES in widgets.js, read from",
+    "      GET /api/widgets (system, apps, backups).",
+    "open: what clicking it does: live-usage, app-store, settings, settings:<row>."
+  ],
+  "max": 3,
+  "default": [
+    "system",
+    "storage",
+    "apps"
+  ],
+  "widgets": [
+    {
+      "id": "system",
+      "label": "System",
+      "description": "CPU, memory, storage and temperature",
+      "type": "four-stats",
+      "open": "live-usage",
+      "items": [
+        {
+          "title": "CPU",
+          "value": "cpu"
+        },
+        {
+          "title": "Memory",
+          "value": "memory-used"
+        },
+        {
+          "title": "Storage",
+          "value": "storage-free"
+        },
+        {
+          "title": "Temperature",
+          "value": "temperature"
+        }
+      ]
+    },
+    {
+      "id": "storage",
+      "label": "Storage",
+      "description": "How full your disk is",
+      "type": "progress",
+      "value": "storage",
+      "open": "live-usage"
+    },
+    {
+      "id": "memory",
+      "label": "Memory",
+      "description": "Memory in use right now",
+      "type": "progress",
+      "value": "memory",
+      "open": "live-usage"
+    },
+    {
+      "id": "gauges",
+      "label": "Processor",
+      "description": "CPU load and temperature as gauges",
+      "type": "gauges",
+      "open": "live-usage",
+      "items": [
+        {
+          "title": "CPU",
+          "value": "cpu"
+        },
+        {
+          "title": "Temp",
+          "value": "temperature"
+        }
+      ]
+    },
+    {
+      "id": "apps",
+      "label": "Apps",
+      "description": "How many apps are up",
+      "type": "three-stats",
+      "open": "app-store",
+      "items": [
+        {
+          "icon": "check",
+          "value": "apps-up"
+        },
+        {
+          "icon": "alert",
+          "value": "apps-offline"
+        },
+        {
+          "icon": "grid",
+          "value": "apps-total"
+        }
+      ]
+    },
+    {
+      "id": "offline",
+      "label": "Offline apps",
+      "description": "Apps that aren't answering",
+      "type": "list",
+      "value": "offline-apps",
+      "empty": "Every app is up.",
+      "open": "app-store"
+    },
+    {
+      "id": "backups",
+      "label": "Backups",
+      "description": "When you last backed up",
+      "type": "text-button",
+      "value": "last-backup",
+      "button": "Back up…",
+      "open": "settings:backup"
+    },
+    {
+      "id": "clock",
+      "label": "Clock",
+      "description": "The time and date",
+      "type": "clock"
+    }
+  ]
+}

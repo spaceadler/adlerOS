@@ -1,0 +1,181 @@
+# Which images are which app, so adlerOS can name an app it finds and put it
+# in a collection. One row per app, tab-separated:
+#
+#   match       image paths (immich-app/immich-server) or just their last part
+#               (jellyfin), separated by |; a registry in front and the tag
+#               don't matter
+#   id          a short name for the app
+#   name        what the home screen calls it
+#   collection  core, system, media, knowledge, productivity, life, files,
+#               or extras
+#   icon        di:<name> from dashboard-icons, or - for a lettered tile
+#   about       one line
+#   port        where it answers when it shares the host's network (no ports
+#               published), or -
+#
+# Databases and caches (postgres, redis...) are never an app: they belong to the
+# app that needs them. Anything not in this list goes in extras, named after
+# its folder. Add a row to teach adlerOS an app.
+#
+# match	id	name	collection	icon	about	port
+
+# core: network, DNS, proxies, VPN, sign-in, passwords
+pihole/pihole|pihole	pihole	Pi-hole	core	di:pi-hole	DNS and ad blocking for every device	80
+adguard/adguardhome|adguardhome	adguardhome	AdGuard Home	core	di:adguard-home	DNS and ad blocking	80
+jc21/nginx-proxy-manager|nginx-proxy-manager	nginx-proxy-manager	Nginx Proxy Manager	core	di:nginx-proxy-manager	Reverse proxy with a web UI	-
+traefik	traefik	Traefik	core	di:traefik	Reverse proxy that configures itself	-
+caddy	caddy	Caddy	core	di:caddy	Web server and reverse proxy with automatic HTTPS	-
+wg-easy/wg-easy|wg-easy	wg-easy	WireGuard Easy	core	di:wireguard	WireGuard VPN with a web UI	51821
+tailscale/tailscale	tailscale	Tailscale	core	di:tailscale	Mesh VPN	-
+cloudflare/cloudflared|cloudflared	cloudflared	Cloudflare Tunnel	core	di:cloudflare	Publishes a site without opening ports	-
+authelia/authelia	authelia	Authelia	core	di:authelia	Single sign-on and two-factor in front of apps	-
+goauthentik/server|authentik	authentik	authentik	core	di:authentik	Identity provider and single sign-on	-
+vaultwarden/server|vaultwarden	vaultwarden	Vaultwarden	core	di:vaultwarden	Password manager (Bitwarden compatible)	-
+crowdsecurity/crowdsec	crowdsec	CrowdSec	core	di:crowdsec	Blocks attackers from shared signals	-
+mvance/unbound|unbound	unbound	Unbound	core	di:unbound	Recursive DNS resolver	-
+technitium/dns-server	technitium	Technitium DNS	core	di:technitium	DNS server with a web UI	5380
+
+# system: dashboards, monitoring, container tools
+glanceapp/glance	glance	Glance	system	di:glance	Dashboard of feeds, calendar and containers	-
+gethomepage/homepage	homepage	Homepage	system	di:homepage	Dashboard of your services	-
+ajnart/homarr|homarr-labs/homarr|homarr	homarr	Homarr	system	di:homarr	Dashboard of your services	-
+lissy93/dashy|dashy	dashy	Dashy	system	di:dashy	Dashboard of your services	-
+linuxserver/heimdall|heimdall	heimdall	Heimdall	system	di:heimdall	Application dashboard	-
+louislam/uptime-kuma|uptime-kuma	uptime-kuma	Uptime Kuma	system	di:uptime-kuma	Uptime monitoring and status pages	3001
+henrygd/beszel|beszel	beszel	Beszel	system	di:beszel	Server and container monitoring	8090
+henrygd/beszel-agent|beszel-agent	beszel-agent	Beszel agent	system	di:beszel	Reports this machine to Beszel	-
+netdata/netdata	netdata	Netdata	system	di:netdata	Real-time performance monitoring	19999
+grafana/grafana|grafana	grafana	Grafana	system	di:grafana	Dashboards and charts	-
+prom/prometheus|prometheus	prometheus	Prometheus	system	di:prometheus	Metrics collection	-
+grafana/loki	loki	Loki	system	di:loki	Log collection	-
+portainer/portainer-ce|portainer/portainer-ee|portainer	portainer	Portainer	system	di:portainer	Container management	-
+louislam/dockge|dockge	dockge	Dockge	system	di:dockge	Compose stack manager	-
+amir20/dozzle|dozzle	dozzle	Dozzle	system	di:dozzle	Live container logs	-
+containrrr/watchtower|nickfedor/watchtower|watchtower	watchtower	Watchtower	system	di:watchtower	Updates containers automatically	-
+sergi0g/cup	cup	Cup	system	di:cup	Shows which container images have updates	-
+crazymax/diun|diun	diun	Diun	system	di:diun	Notifies you of image updates	-
+nicolargo/glances|glances	glances	Glances	system	di:glances	System monitor	61208
+analogj/scrutiny|scrutiny	scrutiny	Scrutiny	system	di:scrutiny	Disk health (SMART) monitoring	8080
+linuxserver/speedtest-tracker|speedtest-tracker	speedtest-tracker	Speedtest Tracker	system	di:speedtest-tracker	Internet speed history	-
+openspeedtest/latest|openspeedtest	openspeedtest	OpenSpeedTest	system	di:openspeedtest	Speed test between your devices and this machine	-
+gotify/server|gotify	gotify	Gotify	system	di:gotify	Push notifications	-
+binwiederhier/ntfy|ntfy	ntfy	ntfy	system	di:ntfy	Push notifications over HTTP	-
+
+# media: photos, video, music, books, the *arr family
+immich-app/immich-server|immich-server	immich	Immich	media	di:immich	Photos and videos, with phone backup	-
+photoprism/photoprism	photoprism	PhotoPrism	media	di:photoprism	Photo library with AI tagging	-
+jellyfin/jellyfin|linuxserver/jellyfin	jellyfin	Jellyfin	media	di:jellyfin	Films and TV, streamed to every device	8096
+plexinc/pms-docker|linuxserver/plex	plex	Plex	media	di:plex	Films and TV, streamed to every device	32400
+emby/embyserver|linuxserver/emby	emby	Emby	media	di:emby	Films and TV, streamed to every device	8096
+deluan/navidrome|navidrome	navidrome	Navidrome	media	di:navidrome	Music streaming (Subsonic apps work too)	4533
+advplyr/audiobookshelf|audiobookshelf	audiobookshelf	Audiobookshelf	media	di:audiobookshelf	Audiobooks, podcasts and e-books	-
+jvmilazz0/kavita|kizaing/kavita|kavita	kavita	Kavita	media	di:kavita	Comics, manga and books	-
+gotson/komga|komga	komga	Komga	media	di:komga	Comics and manga	-
+linuxserver/calibre-web|calibre-web	calibre-web	Calibre-Web	media	di:calibre-web	E-book library in the browser	-
+linuxserver/calibre	calibre	Calibre	media	di:calibre	E-book manager	-
+tsaridas/stremio-docker|stremio/server|stremio	stremio	Stremio	media	di:stremio	Streaming server for the Stremio apps	-
+linuxserver/sonarr|sonarr	sonarr	Sonarr	media	di:sonarr	Finds and organises TV series	-
+linuxserver/radarr|radarr	radarr	Radarr	media	di:radarr	Finds and organises films	-
+linuxserver/lidarr|lidarr	lidarr	Lidarr	media	di:lidarr	Finds and organises music	-
+linuxserver/readarr|readarr	readarr	Readarr	media	di:readarr	Finds and organises books	-
+linuxserver/prowlarr|prowlarr	prowlarr	Prowlarr	media	di:prowlarr	Indexer manager for the *arr apps	-
+linuxserver/bazarr|bazarr	bazarr	Bazarr	media	di:bazarr	Subtitles for Sonarr and Radarr	-
+fallenbagel/jellyseerr|jellyseerr	jellyseerr	Jellyseerr	media	di:jellyseerr	Requests for films and series	-
+sctx/overseerr|linuxserver/overseerr|overseerr	overseerr	Overseerr	media	di:overseerr	Requests for films and series	-
+tautulli/tautulli|linuxserver/tautulli|tautulli	tautulli	Tautulli	media	di:tautulli	Plex statistics	-
+haveagitgat/tdarr|tdarr	tdarr	Tdarr	media	di:tdarr	Transcodes your library	-
+alexta69/metube|metube	metube	MeTube	media	di:metube	Downloads videos from YouTube and more	-
+kieraneglin/pinchflat|pinchflat	pinchflat	Pinchflat	media	di:pinchflat	Archives YouTube channels	-
+bbilly1/tubearchivist|tubearchivist	tubearchivist	Tube Archivist	media	di:tube-archivist	Your own YouTube archive	-
+lycheeorg/lychee|lychee	lychee	Lychee	media	di:lychee	Photo galleries	-
+
+# knowledge: notes, wikis, bookmarks, reading, search, AI
+neosmemo/memos|memos	memos	Memos	knowledge	di:memos	Quick thoughts, timeline style	-
+linuxserver/bookstack|solidnerd/bookstack|bookstack	bookstack	BookStack	knowledge	di:bookstack	Wiki: shelves, books, chapters, pages	-
+requarks/wiki|wikijs	wikijs	Wiki.js	knowledge	di:wikijs	Wiki	-
+outlinewiki/outline|outline	outline	Outline	knowledge	di:outline	Team wiki and notes	-
+zadam/trilium|triliumnext/notes|triliumnext/trilium	trilium	Trilium	knowledge	di:trilium	Hierarchical notes	-
+joplin/server	joplin	Joplin Server	knowledge	di:joplin	Sync server for Joplin notes	-
+docmost/docmost|docmost	docmost	Docmost	knowledge	di:docmost	Wiki and docs	-
+b3log/siyuan|siyuan	siyuan	SiYuan	knowledge	di:siyuan	Block-based notes	-
+ghcr.io/toeverything/affine-graphql|affine-graphql	affine	AFFiNE	knowledge	di:affine	Docs, whiteboards and databases	-
+hedgedoc/hedgedoc|linuxserver/hedgedoc|hedgedoc	hedgedoc	HedgeDoc	knowledge	di:hedgedoc	Collaborative Markdown	-
+karakeep-app/karakeep|hoarder-app/hoarder|karakeep	karakeep	Karakeep	knowledge	di:karakeep	Bookmarks that archive the page itself	-
+sissbruecker/linkding|linkding	linkding	linkding	knowledge	di:linkding	Bookmarks	-
+linkwarden/linkwarden|linkwarden	linkwarden	Linkwarden	knowledge	di:linkwarden	Bookmarks, archived	-
+go-shiori/shiori|shiori	shiori	Shiori	knowledge	di:shiori	Bookmarks	-
+wallabag/wallabag|wallabag	wallabag	wallabag	knowledge	di:wallabag	Read it later	-
+freshrss/freshrss|linuxserver/freshrss|freshrss	freshrss	FreshRSS	knowledge	di:freshrss	RSS reader	-
+miniflux/miniflux|miniflux	miniflux	Miniflux	knowledge	di:miniflux	Minimalist RSS reader	-
+kiwix/kiwix-serve|kiwix-serve	kiwix	Kiwix	knowledge	di:kiwix	Offline Wikipedia and other .zim archives	-
+searxng/searxng|searxng	searxng	SearXNG	knowledge	di:searxng	Private metasearch engine	-
+driftywinds/4get|4get|fourget	4get	4get	knowledge	di:4get	Private metasearch engine	-
+benbusby/whoogle-search|whoogle-search	whoogle	Whoogle	knowledge	di:whoogle	Private Google search	-
+alexindigo/globnotes|globnotes	globnotes	Globnotes	knowledge	-	Markdown notes in a folder (Obsidian-compatible)	-
+grishy/any-sync-bundle|any-sync-bundle	anytype	Anytype	knowledge	di:anytype	Sync server for Anytype	-
+ollama/ollama|ollama	ollama	Ollama	knowledge	di:ollama	Runs AI models on this machine	-
+open-webui/open-webui|open-webui	open-webui	Open WebUI	knowledge	di:open-webui	Chat with AI models	-
+
+# productivity: tasks, calendars, documents, office, automation
+vikunja/vikunja|vikunja/api|vikunja	vikunja	Vikunja	productivity	di:vikunja	Tasks, Kanban, Gantt	-
+johannesjo/super-productivity|super-productivity	super-productivity	Super Productivity	productivity	di:super-productivity	Time blocking and planning	-
+tomsquest/docker-radicale|cupcakearmy/radicale|radicale	radicale	Radicale	productivity	di:radicale	Calendar and contacts (CalDAV/CardDAV)	-
+ckulka/baikal|baikal	baikal	Baïkal	productivity	di:baikal	Calendar and contacts (CalDAV/CardDAV)	-
+paperless-ngx/paperless-ngx|paperless-ngx	paperless-ngx	Paperless-ngx	productivity	di:paperless-ngx	Scanned documents with OCR and search	-
+cryptpad/cryptpad|cryptpad	cryptpad	CryptPad	productivity	di:cryptpad	End-to-end encrypted office suite	-
+nomie	nomie	Nomie	productivity	di:nomie	Life and mood tracking	5005
+onlyoffice/documentserver	onlyoffice	ONLYOFFICE	productivity	di:onlyoffice	Office documents in the browser	-
+collabora/code	collabora	Collabora Online	productivity	di:collabora-online	Office documents in the browser	-
+frooodle/s-pdf|stirling-tools/s-pdf|stirling-pdf	stirling-pdf	Stirling-PDF	productivity	di:stirling-pdf	Everything you'd want to do to a PDF	-
+corentinth/it-tools|it-tools	it-tools	IT Tools	productivity	di:it-tools	Handy converters and generators for developers	-
+excalidraw/excalidraw|excalidraw	excalidraw	Excalidraw	productivity	di:excalidraw	Hand-drawn style whiteboard	-
+n8nio/n8n|n8n	n8n	n8n	productivity	di:n8n	Workflow automation	5678
+nocodb/nocodb|nocodb	nocodb	NocoDB	productivity	di:nocodb	Spreadsheets that are databases	-
+baserow/baserow|baserow	baserow	Baserow	productivity	di:baserow	Spreadsheets that are databases	-
+plankanban/planka|planka	planka	Planka	productivity	di:planka	Kanban boards	-
+wekanteam/wekan|wekan	wekan	WeKan	productivity	di:wekan	Kanban boards	-
+kanboard/kanboard|kanboard	kanboard	Kanboard	productivity	di:kanboard	Kanban boards	-
+etherpad/etherpad|etherpad	etherpad	Etherpad	productivity	di:etherpad	Collaborative text editing	-
+mattermost/mattermost-team-edition	mattermost	Mattermost	productivity	di:mattermost	Team chat	-
+nodered/node-red|node-red	node-red	Node-RED	productivity	di:node-red	Flow-based automation	1880
+
+# life: places, trips, money, food, health, home
+freikin/dawarich|dawarich	dawarich	Dawarich	life	di:dawarich	Location history (Google Timeline replacement)	-
+mauriceboe/trek	trek	TREK	life	-	Trip planner	-
+johly/airtrail|airtrail	airtrail	AirTrail	life	di:airtrail	Flight log	-
+fuzzygrim/yamtrack|yamtrack	yamtrack	Yamtrack	life	di:yamtrack	Films, shows, anime, books and games you've finished	-
+ghostfolio/ghostfolio|ghostfolio	ghostfolio	Ghostfolio	life	di:ghostfolio	Investment portfolio and net worth	-
+maybe-finance/maybe	maybe	Maybe	life	di:maybe	Budgeting and expenses	-
+actualbudget/actual-server|actual-server	actual	Actual Budget	life	di:actual-budget	Envelope budgeting	-
+fireflyiii/core|firefly-iii	firefly-iii	Firefly III	life	di:firefly-iii	Personal finances	-
+mealie-recipes/mealie|hkotel/mealie|mealie	mealie	Mealie	life	di:mealie	Recipes and meal plans	-
+vabene1111/recipes|tandoor	tandoor	Tandoor Recipes	life	di:tandoor-recipes	Recipes and meal plans	-
+grocy/grocy|linuxserver/grocy|grocy	grocy	Grocy	life	di:grocy	Groceries and household	-
+monica|monicahq/monica	monica	Monica	life	di:monica	Personal relationship manager	-
+wger/server|wger	wger	wger	life	di:wger	Workouts and nutrition	-
+sysadminsmedia/homebox|hay-kot/homebox|homebox	homebox	Homebox	life	di:homebox	Home inventory	-
+homeassistant/home-assistant|home-assistant/home-assistant|home-assistant	home-assistant	Home Assistant	life	di:home-assistant	Smart home	8123
+
+# files: sync, sharing, git, downloads, backups
+syncthing/syncthing|linuxserver/syncthing|syncthing	syncthing	Syncthing	files	di:syncthing	Keeps folders in sync between devices	8384
+filebrowser/filebrowser|gtstef/filebrowser|hurlenko/filebrowser|filebrowser	filebrowser	File Browser	files	di:filebrowser	Files in the browser	-
+gitea/gitea|gitea	gitea	Gitea	files	di:gitea	Git hosting	3000
+codeberg.org/forgejo/forgejo|forgejo/forgejo|forgejo	forgejo	Forgejo	files	di:forgejo	Git hosting	-
+gitlab/gitlab-ce|gitlab-ce	gitlab	GitLab	files	di:gitlab	Git hosting and CI	-
+linuxserver/qbittorrent|qbittorrentofficial/qbittorrent-nox|qbittorrent	qbittorrent	qBittorrent	files	di:qbittorrent	Torrent downloads	8080
+linuxserver/transmission|transmission	transmission	Transmission	files	di:transmission	Torrent downloads	9091
+linuxserver/deluge|deluge	deluge	Deluge	files	di:deluge	Torrent downloads	8112
+linuxserver/sabnzbd|sabnzbd	sabnzbd	SABnzbd	files	di:sabnzbd	Usenet downloads	-
+jlesage/jdownloader-2|jdownloader-2	jdownloader	JDownloader	files	di:jdownloader	Download manager	-
+nextcloud|linuxserver/nextcloud|nextcloud/all-in-one	nextcloud	Nextcloud	files	di:nextcloud	Files, calendar and more	-
+seafileltd/seafile-mc|seafile	seafile	Seafile	files	di:seafile	File sync and sharing	-
+owncloud/ocis|ocis	ocis	ownCloud Infinite Scale	files	di:owncloud	File sync and sharing	-
+minio/minio	minio	MinIO	files	di:minio	S3-compatible object storage	-
+duplicati/duplicati|linuxserver/duplicati|duplicati	duplicati	Duplicati	files	di:duplicati	Encrypted backups	-
+kopia/kopia|kopia	kopia	Kopia	files	di:kopia	Backups with snapshots	-
+linuxserver/pairdrop|pairdrop	pairdrop	PairDrop	files	di:pairdrop	Send files between nearby devices	-
+drakkan/sftpgo|sftpgo	sftpgo	SFTPGo	files	di:sftpgo	SFTP, FTP and WebDAV server	-
+hacdias/webdav	webdav	WebDAV	files	di:webdav	WebDAV file server	-
+
+# extras: known, but they're not one of the collections
+itzg/minecraft-server|minecraft-server	minecraft	Minecraft	extras	di:minecraft	Minecraft server	-

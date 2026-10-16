@@ -1,0 +1,8 @@
+{
+  "name": "Memos",
+  "collection": "knowledge",
+  "icon": "di:memos",
+  "about": "Quick thoughts, timeline style",
+  "port": 5230,
+  "firstRun": "The first account you create is the admin."
+}

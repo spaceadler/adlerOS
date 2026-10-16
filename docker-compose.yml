@@ -1,0 +1,52 @@
+# adlerOS, standalone: a home screen and App Store for the Docker apps on this
+# machine. ./install.sh writes .env (password, address, your compose folders)
+# and starts this; `docker compose up -d` here after changing .env.
+#
+# Python's standard library and plain HTML/CSS/JS, nothing to build. It has no
+# Docker or root access: it runs as you, read-only, with no capabilities.
+# Anything that changes the machine (starting an app, installing one) is a
+# request it queues in ./data/agent for the helper (agent/agent.py, set up
+# by install.sh), which runs only what agent/actions.json allows.
+services:
+  adleros:
+    image: python:3.13-alpine
+    container_name: adleros
+    restart: unless-stopped
+    user: ${PUID:?run ./install.sh}:${PGID:?run ./install.sh}
+    # Host network: it checks each app at 127.0.0.1:<port>.
+    network_mode: host
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command: ["python", "-u", "/app/server.py"]
+    environment:
+      ADLEROS_MODE: standalone
+      OS_PASSWORD: ${OS_PASSWORD:?run ./install.sh}
+      OS_SESSION_SECRET: ${OS_SESSION_SECRET:?run ./install.sh}
+      OS_NAME: ${OS_NAME:-}
+      OS_PORT: ${ADLEROS_PORT:-8686}
+      TZ: ${TZ:-UTC}
+      # Shown in Settings; the helper is the one that uses them.
+      ADLEROS_HOST: ${ADLEROS_HOST:-}
+      COMPOSE_ROOTS: ${COMPOSE_ROOTS:-}
+      APPS_DIR: ${APPS_DIR:-}
+      STORAGE_DIR: ${STORAGE_DIR:-}
+      PYTHONDONTWRITEBYTECODE: 1
+    volumes:
+      - ./app:/app:ro
+      # Its own settings, icons it fetched, and requests for the helper.
+      - ./data:/data
+      # Your wallpaper and dock icons, if you add any.
+      - ./wallpaper:/wallpaper:ro
+      - ./icons:/icons:ro
+      # Read-only: the apps the helper found or installed, the store, and
+      # what the helper may do.
+      - ./registry:/adleros/registry:ro
+      - ./catalog:/adleros/catalog:ro
+      - ./agent:/adleros/agent:ro
+      - /etc/os-release:/host/os-release:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, urllib.request as u; u.urlopen('http://127.0.0.1:' + os.environ['OS_PORT'] + '/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

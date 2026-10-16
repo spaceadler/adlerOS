@@ -1,0 +1,11 @@
+# Rendered by install.sh into /etc/systemd/system/adleros-agent.path.
+# Runs the adlerOS helper as soon as a request appears in its queue.
+[Unit]
+Description=Start the adlerOS helper when adlerOS asks for something
+
+[Path]
+PathExistsGlob=${ADLEROS_DIR}/data/agent/queue/*.json
+Unit=adleros-agent.service
+
+[Install]
+WantedBy=multi-user.target

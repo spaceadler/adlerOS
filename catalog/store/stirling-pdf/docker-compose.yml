@@ -1,0 +1,12 @@
+# Stirling-PDF, from adlerOS's store: everything you'd want to do to a PDF.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT}:8080"
+    environment:
+      DOCKER_ENABLE_SECURITY: "false"
+    volumes:
+      - ./configs:/configs
