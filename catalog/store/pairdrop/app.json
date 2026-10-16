@@ -1,0 +1,7 @@
+{
+  "name": "PairDrop",
+  "collection": "files",
+  "icon": "di:pairdrop",
+  "about": "Send files between nearby devices",
+  "port": 3000
+}

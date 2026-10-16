@@ -1,0 +1,9 @@
+# Everything install.sh writes or adlerOS keeps is specific to one machine:
+# settings, secrets, the apps it found, the apps it installed.
+.env
+/data/
+/registry/
+/apps/
+/wallpaper/
+/icons/
+__pycache__/

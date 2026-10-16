@@ -1,0 +1,13 @@
+# linkding, from adlerOS's store: bookmarks.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  linkding:
+    image: sissbruecker/linkding:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT}:9090"
+    environment:
+      LD_SUPERUSER_NAME: admin
+      LD_SUPERUSER_PASSWORD: ${ADMIN_PASSWORD}
+    volumes:
+      - ./data:/etc/linkding/data

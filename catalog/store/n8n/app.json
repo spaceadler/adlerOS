@@ -1,0 +1,8 @@
+{
+  "name": "n8n",
+  "collection": "productivity",
+  "icon": "di:n8n",
+  "about": "Workflow automation",
+  "port": 5678,
+  "firstRun": "Its first page sets up the owner account."
+}

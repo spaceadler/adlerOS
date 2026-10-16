@@ -1,0 +1,8 @@
+{
+  "name": "qBittorrent",
+  "collection": "files",
+  "icon": "di:qbittorrent",
+  "about": "Torrent downloads",
+  "port": 8090,
+  "firstRun": "Log in as admin; its first password is in its logs (App Store \u2192 Logs)."
+}

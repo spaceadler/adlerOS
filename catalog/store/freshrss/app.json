@@ -1,0 +1,8 @@
+{
+  "name": "FreshRSS",
+  "collection": "knowledge",
+  "icon": "di:freshrss",
+  "about": "RSS reader",
+  "port": 8085,
+  "firstRun": "Its first page sets up the admin account."
+}

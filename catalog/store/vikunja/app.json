@@ -1,0 +1,8 @@
+{
+  "name": "Vikunja",
+  "collection": "productivity",
+  "icon": "di:vikunja",
+  "about": "Tasks, Kanban, Gantt",
+  "port": 3456,
+  "firstRun": "Register on its first page; that's your account."
+}

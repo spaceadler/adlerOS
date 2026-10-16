@@ -1,0 +1,12 @@
+# PairDrop, from adlerOS's store: send files between nearby devices.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  pairdrop:
+    image: lscr.io/linuxserver/pairdrop:latest
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    ports:
+      - "${PORT}:3000"

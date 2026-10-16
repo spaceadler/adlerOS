@@ -1,0 +1,8 @@
+# IT Tools, from adlerOS's store: handy converters and generators for developers.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  it-tools:
+    image: corentinth/it-tools:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT}:80"

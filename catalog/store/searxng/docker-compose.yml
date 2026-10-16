@@ -1,0 +1,13 @@
+# SearXNG, from adlerOS's store: private metasearch engine.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT}:8080"
+    environment:
+      SEARXNG_SECRET: ${SECRET}
+      SEARXNG_BASE_URL: http://localhost:${PORT}/
+    volumes:
+      - ./config:/etc/searxng

@@ -1,0 +1,8 @@
+{
+  "name": "Uptime Kuma",
+  "collection": "system",
+  "icon": "di:uptime-kuma",
+  "about": "Uptime monitoring and status pages",
+  "port": 3001,
+  "firstRun": "Its first page sets up the admin account."
+}

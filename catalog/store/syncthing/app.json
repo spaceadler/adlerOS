@@ -1,0 +1,8 @@
+{
+  "name": "Syncthing",
+  "collection": "files",
+  "icon": "di:syncthing",
+  "about": "Keeps folders in sync between devices",
+  "port": 8384,
+  "firstRun": "Set a GUI password in its settings first."
+}

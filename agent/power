@@ -1,0 +1,12 @@
+#!/bin/sh
+# Installed root-owned as /usr/local/libexec/adleros/power by install.sh, so
+# the adlerOS helper can restart or shut down the machine through sudo, and
+# do nothing else with it.
+case "$1" in
+reboot) exec systemctl reboot ;;
+poweroff) exec systemctl poweroff ;;
+*)
+    echo "usage: power reboot|poweroff" >&2
+    exit 64
+    ;;
+esac

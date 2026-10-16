@@ -1,0 +1,13 @@
+# Kavita, from adlerOS's store: comics, manga and books.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  kavita:
+    image: jvmilazz0/kavita:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT}:5000"
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - ./config:/kavita/config
+      - ${BOOKS_DIR}:/books

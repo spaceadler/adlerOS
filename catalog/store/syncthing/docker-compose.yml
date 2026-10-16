@@ -1,0 +1,18 @@
+# Syncthing, from adlerOS's store: keeps folders in sync between devices.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  syncthing:
+    image: lscr.io/linuxserver/syncthing:latest
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    ports:
+      - "${PORT}:8384"
+      - "22000:22000/tcp"
+      - "22000:22000/udp"
+      - "21027:21027/udp"
+    volumes:
+      - ./config:/config
+      - ${STORAGE_DIR}:/storage

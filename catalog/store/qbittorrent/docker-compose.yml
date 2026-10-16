@@ -1,0 +1,18 @@
+# qBittorrent, from adlerOS's store: torrent downloads.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      WEBUI_PORT: ${PORT}
+    ports:
+      - "${PORT}:${PORT}"
+      - "6881:6881"
+      - "6881:6881/udp"
+    volumes:
+      - ./config:/config
+      - ${DOWNLOADS_DIR}:/downloads

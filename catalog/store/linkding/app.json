@@ -1,0 +1,8 @@
+{
+  "name": "linkding",
+  "collection": "knowledge",
+  "icon": "di:linkding",
+  "about": "Bookmarks",
+  "port": 9090,
+  "firstRun": "Log in as admin; the password is ADMIN_PASSWORD in its .env."
+}

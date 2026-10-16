@@ -1,0 +1,8 @@
+{
+  "name": "Navidrome",
+  "collection": "media",
+  "icon": "di:navidrome",
+  "about": "Music streaming (Subsonic apps work too)",
+  "port": 4533,
+  "firstRun": "The first account you create is the admin."
+}

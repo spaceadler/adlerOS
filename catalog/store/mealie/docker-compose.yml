@@ -1,0 +1,15 @@
+# Mealie, from adlerOS's store: recipes and meal plans.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  mealie:
+    image: ghcr.io/mealie-recipes/mealie:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT}:9000"
+    environment:
+      TZ: ${TZ}
+      ALLOW_SIGNUP: "false"
+      PUID: ${PUID}
+      PGID: ${PGID}
+    volumes:
+      - ./data:/app/data

@@ -1,0 +1,8 @@
+{
+  "name": "Mealie",
+  "collection": "life",
+  "icon": "di:mealie",
+  "about": "Recipes and meal plans",
+  "port": 9925,
+  "firstRun": "Log in as changeme@example.com / MyPassword, then change both."
+}

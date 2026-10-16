@@ -1,0 +1,15 @@
+# Audiobookshelf, from adlerOS's store: audiobooks, podcasts and e-books.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT}:80"
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - ./config:/config
+      - ./metadata:/metadata
+      - ${AUDIOBOOKS_DIR}:/audiobooks
+      - ${PODCASTS_DIR}:/podcasts

@@ -1,0 +1,15 @@
+# n8n, from adlerOS's store: workflow automation.
+# adlerOS fills in .env (port, timezone, passwords) when it installs this.
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT}:5678"
+    environment:
+      GENERIC_TIMEZONE: ${TZ}
+      TZ: ${TZ}
+      # Plain http on your own network: allow its login cookie without HTTPS.
+      N8N_SECURE_COOKIE: "false"
+    volumes:
+      - ./data:/home/node/.n8n

@@ -1,0 +1,8 @@
+{
+  "name": "Actual Budget",
+  "collection": "life",
+  "icon": "di:actual-budget",
+  "about": "Envelope budgeting",
+  "port": 5006,
+  "firstRun": "Its first page sets the server password. Browsers want HTTPS for it; see adlerOS's docs."
+}

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>adlerOS</title>
+  <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+  <!-- "Add to Home Screen" opens it full-screen, like an app. -->
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="adlerOS">
+  <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+  <script src="/static/settings.js" defer></script>
+  <script src="/static/widgets.js" defer></script>
+  <script src="/static/store.js" defer></script>
+  <script src="/static/usage.js" defer></script>
+  <script src="/static/drawer.js" defer></script>
+  <script src="/static/notifications.js" defer></script>
+  <script src="/static/keyboard.js" defer></script>
+</head>
+<body>
+  <div class="wallpaper blurred" id="wallpaper" aria-hidden="true"></div>
+  <div class="veil" id="veil" aria-hidden="true"></div>
+
+  <!-- Lock screen -->
+  <main id="lock" class="lock" hidden>
+    <img class="lock-mark" src="/static/mark.svg" alt="">
+    <div class="lock-heading">
+      <h1 class="title">Welcome back</h1>
+      <p class="subtitle">Enter your adlerOS password to log in</p>
+    </div>
+    <form id="login" class="login-form">
+      <!-- Lets password managers pair the password with an account. -->
+      <input class="visually-hidden" type="text" name="username" value="adlerOS"
+             autocomplete="username" tabindex="-1" aria-hidden="true">
+      <label class="field">
+        <span class="field-label">Password</span>
+        <input id="password" class="input" name="password" type="password"
+               autocomplete="current-password" required>
+      </label>
+      <p class="error" id="login-error" role="alert"></p>
+      <button class="button-primary" type="submit"><span>Log in</span></button>
+    </form>
+  </main>
+
+  <!-- Desktop -->
+  <main id="desktop" class="desktop" hidden>
+    <header class="header">
+      <h1 id="greeting" class="greeting"></h1>
+    </header>
+    <button class="bell" id="bell" type="button" aria-label="Notifications" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+      <span class="bell-count" id="bell-count" hidden></span>
+    </button>
+    <div class="stage" id="stage">
+    <form class="web-search" id="web-search" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="web-search-input" type="search" name="q" placeholder="Search the web"
+             aria-label="Search the web" autocomplete="off" enterkeyhint="search">
+      <kbd aria-hidden="true">↵</kbd>
+    </form>
+    <section class="widgets" id="widgets" aria-label="Widgets"></section>
+    <section class="grid-area" id="grid-area" aria-label="Apps">
+      <div id="pages" class="pages"></div>
+      <button class="arrow arrow-left" id="prev" type="button" aria-label="Previous page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg>
+      </button>
+      <button class="arrow arrow-right" id="next" type="button" aria-label="Next page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg>
+      </button>
+    </section>
+    <div class="pills" id="pills" role="tablist" aria-label="Pages"></div>
+    </div>
+    <button class="search-pill" id="search-open" type="button">
+      <span class="orb" aria-hidden="true"></span>Search<span class="kbd" id="kbd"></span>
+    </button>
+    <div class="dock-spacer"></div>
+  </main>
+
+  <!-- Settings: a window that slides up over the desktop -->
+  <section id="settings" class="sheet" aria-label="Settings" hidden>
+    <div class="sheet-bg" aria-hidden="true">
+      <div class="sheet-wallpaper" id="sheet-wallpaper"></div>
+      <div class="sheet-tint"></div>
+    </div>
+    <button class="sheet-close" id="settings-close" type="button" aria-label="Close settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+    <div class="sheet-body">
+      <aside class="settings-side">
+        <div class="preview" id="settings-preview" aria-hidden="true"></div>
+        <h2 class="owner"><span id="owner-name"></span><span class="faint">adlerOS</span></h2>
+        <dl class="summary" id="settings-summary"></dl>
+        <div class="side-buttons">
+          <button type="button" class="chip-button" id="side-logout">Log out</button>
+          <button type="button" class="chip-button" data-row="restart">Restart</button>
+          <button type="button" class="chip-button destructive" data-row="shutdown">Shut down</button>
+        </div>
+        <hr class="separator">
+        <div class="usage" id="usage-cards"></div>
+      </aside>
+      <div class="settings-main">
+        <div class="settings-rail">
+          <div class="filters" id="settings-filters" role="tablist" aria-label="Categories"></div>
+          <label class="settings-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="settings-search" type="search" placeholder="Search" aria-label="Search settings" autocomplete="off">
+          </label>
+        </div>
+        <div class="settings-rows" id="settings-rows"></div>
+      </div>
+    </div>
+    <div class="apply-bar material" id="apply-bar" hidden>
+      <span id="apply-text"></span>
+      <button type="button" class="button-secondary" id="apply-discard">Discard</button>
+      <button type="button" class="button-primary" id="apply-ok">Apply</button>
+    </div>
+  </section>
+
+  <!-- App Store: your apps and their containers -->
+  <section id="store" class="sheet" aria-label="App Store" hidden>
+    <div class="sheet-bg" aria-hidden="true">
+      <div class="sheet-wallpaper" id="store-wallpaper"></div>
+      <div class="sheet-tint"></div>
+    </div>
+    <button class="sheet-close" id="store-close" type="button" aria-label="Close the App Store">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+    <div class="sheet-body store-body">
+      <header class="store-header">
+        <div>
+          <h2 class="store-title">App Store</h2>
+          <p class="store-intro">Your apps and what their containers are doing. Stop, start, restart or delete them; data always stays.</p>
+        </div>
+        <button type="button" class="chip-button" id="store-import">Import apps…</button>
+      </header>
+      <div class="settings-rail">
+        <div class="filters" id="store-filters" role="tablist" aria-label="Collections"></div>
+        <label class="settings-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="store-search" type="search" placeholder="Search" aria-label="Search apps" autocomplete="off">
+        </label>
+      </div>
+      <div id="store-apps" class="store-apps"></div>
+    </div>
+  </section>
+
+  <!-- Live Usage: the machine and each app, as they change -->
+  <section id="usage" class="sheet" aria-label="Live Usage" hidden>
+    <div class="sheet-bg" aria-hidden="true">
+      <div class="sheet-wallpaper"></div>
+      <div class="sheet-tint"></div>
+    </div>
+    <button class="sheet-close" id="usage-close" type="button" aria-label="Close Live Usage">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+    <div class="sheet-body store-body">
+      <header class="store-header">
+        <div>
+          <h2 class="store-title">Live Usage</h2>
+          <p class="store-intro">Your homelab right now. The charts cover the last three minutes; hover one for a moment's value.</p>
+        </div>
+      </header>
+      <div class="u-tiles" id="usage-tiles"></div>
+      <div class="u-apps-head">
+        <h3 class="group-title">By app</h3>
+        <div class="filters" id="usage-tabs" role="tablist" aria-label="What to compare"></div>
+      </div>
+      <div id="usage-apps"></div>
+    </div>
+  </section>
+
+  <!-- Dialogs opened by Settings: confirm, password, progress -->
+  <div id="modal" class="dialog-backdrop" hidden></div>
+
+  <!-- All apps, A to Z -->
+  <div id="drawer" class="drawer" role="dialog" aria-label="All apps" hidden>
+    <div class="drawer-top">
+      <label class="drawer-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="drawer-search" type="search" placeholder="Search apps" aria-label="Search apps" autocomplete="off" spellcheck="false" enterkeyhint="go">
+      </label>
+      <span class="drawer-count" id="drawer-count"></span>
+      <button class="sheet-close drawer-close" id="drawer-close" type="button" aria-label="Close All apps">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="drawer-grid" id="drawer-grid"></div>
+    <p class="drawer-empty" id="drawer-empty" hidden>No apps match.</p>
+  </div>
+
+  <nav id="dock" class="dock" aria-label="Dock" hidden></nav>
+
+  <!-- While rearranging on a touch screen -->
+  <button id="arrange-done" class="arrange-done material" type="button" hidden>Done</button>
+
+  <!-- Notifications, under the bell -->
+  <div id="notes" class="notes material" role="dialog" aria-label="Notifications" hidden>
+    <div class="notes-head">
+      <h2>Notifications</h2>
+      <button type="button" class="chip-button" id="notes-clear">Clear all</button>
+    </div>
+    <div class="notes-list" id="notes-list"></div>
+  </div>
+
+  <!-- Right-click menu on the desktop -->
+  <!-- Filled in by openMenu() for whatever was right-clicked. -->
+  <div id="menu" class="menu material" role="menu" hidden></div>
+
+  <!-- Search (⌘K / Ctrl+K) -->
+  <div id="search" class="search" hidden>
+    <div class="search-panel material" role="dialog" aria-label="Search">
+      <div class="search-field">
+        <span class="orb" aria-hidden="true"></span>
+        <input id="search-input" type="text" placeholder="Search for apps or actions"
+               autocomplete="off" spellcheck="false" aria-controls="search-results">
+      </div>
+      <ul id="search-results" class="search-results" role="listbox"></ul>
+    </div>
+  </div>
+
+  <!-- Log out confirmation -->
+  <div id="confirm" class="dialog-backdrop" hidden>
+    <div class="dialog material" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
+      <h2 id="confirm-title">Are you sure you want to log out?</h2>
+      <div class="dialog-actions">
+        <button type="button" class="button-secondary" id="confirm-cancel">Cancel</button>
+        <button type="button" class="button-destructive" id="confirm-ok">Log out</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast material" role="status" hidden></div>
+</body>
+</html>

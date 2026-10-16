@@ -1,0 +1,7 @@
+{
+  "name": "Audiobookshelf",
+  "collection": "media",
+  "icon": "di:audiobookshelf",
+  "about": "Audiobooks, podcasts and e-books",
+  "port": 13378
+}
