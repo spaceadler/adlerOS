@@ -349,13 +349,14 @@ def display_name():
 
 def search_url():
     """Where the home screen's web search goes; {QUERY} becomes the words.
-    Default: your own 4get if it's installed, else DuckDuckGo."""
+    Default: your own 4get or SearXNG if adlerOS knows one, else DuckDuckGo."""
     chosen = load_settings().get("searchUrl")
     if chosen:
         return chosen
-    if any(a["id"] == "4get" for a in installed_apps()):
-        env = read_env_file(HOMELAB_ENV)
-        return f"{env.get('URL_SCHEME', 'http')}://search.{env.get('DOMAIN', 'homelab.local')}/web?s={{QUERY}}"
+    apps = {a["id"]: a for a in installed_apps()}
+    for app_id, path in (("4get", "/web?s={QUERY}"), ("searxng", "/search?q={QUERY}")):
+        if apps.get(app_id, {}).get("url"):
+            return apps[app_id]["url"].rstrip("/") + path
     return "https://duckduckgo.com/?q={QUERY}"
 
 
