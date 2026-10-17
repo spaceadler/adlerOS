@@ -178,9 +178,11 @@ function renderSide() {
   // Restart and Shut down are only offered in admin mode.
   document.querySelectorAll(".side-buttons [data-row]").forEach((b) => { b.hidden = !d.admin; });
 
+  // A homelab: its domain and Tailscale address; on its own: its address.
   const summary = [
-    ["Domain", d.config.DOMAIN || "–"],
-    ["Tailscale", d.config.TS_IP || "–"],
+    ...(d.mode === "standalone"
+      ? [["Address", d.config.ADLEROS_HOST || location.hostname]]
+      : [["Domain", d.config.DOMAIN || "–"], ["Tailscale", d.config.TS_IP || "–"]]),
     ["Uptime", duration(d.device.uptime)],
     ["Apps", String(d.appCount)],
   ];

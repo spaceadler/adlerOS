@@ -24,7 +24,7 @@ room.
 | Key | Does |
 | --- | --- |
 | Arrows | Move to the nearest item that way |
-| Enter | Open it (an app opens in a new tab) |
+| Enter | Open it (an app opens in a new tab; in desktop mode, in a window if it allows) |
 | Escape | Close the menu, dialog or window on top; again to go back further |
 | Menu key, Shift+F10, or `m` | The menu for what's selected: Open, Keep in Dock, Rearrange… |
 | Tab / Shift+Tab | Next / previous control in the open window |
