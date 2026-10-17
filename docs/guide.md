@@ -309,6 +309,9 @@ Desktop and User themselves: opening one takes you there.
 - **Delete** moves it to the **Trash** (a `.trash` folder at the top of its
   place; Root's go to User's), where **Restore** puts it back where it was.
   **Empty Trash** deletes for good.
+- **Hidden files** (`.env`, `.gitignore`…) don't show. In admin mode, **Show
+  hidden files** in the toolbar shows them (this browser remembers); with
+  admin mode off they're hidden whatever it's set to.
 
 **Root is your homelab's own folder**: compose files, `homelab.env`, your
 apps' data. Changing it can stop your apps, so adlerOS doesn't, unless:
@@ -336,11 +339,12 @@ changes asks first.
 <!-- screenshot: the Terminal window running htop -->
 ![Terminal](screenshots/terminal.png)
 
-A shell on this machine, as you, in a window: **Settings → System →
-Terminal**, ⌘K "terminal", or `t`. It's off unless it's switched on *on the
-machine itself* (`ADLEROS_TERMINAL=on`, see
-[standalone](standalone.md#settings-in-env) or [homelab](homelab.md)), it opens
-only in admin mode, and it asks for your password every time.
+A shell on this machine, as you, in a window: the dock, **Settings → System →
+Terminal**, ⌘K "terminal", or `t`. It's there only in admin mode: with admin
+mode off it's not in the dock, All apps, search or Settings. It's also off
+unless it's switched on *on the machine itself* (`ADLEROS_TERMINAL=on`, see
+[standalone](standalone.md#settings-in-env) or [homelab](homelab.md)). It asks
+for nothing more: admin mode was your password.
 
 The shell is your account's own (fish, zsh, bash…; `chsh` changes it). It
 starts in `ADLEROS_TERMINAL_DIR` if that's set, else the homelab's folder in a

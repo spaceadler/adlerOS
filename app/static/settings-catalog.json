@@ -291,8 +291,8 @@
       "category": "system",
       "icon": "terminal",
       "title": "Terminal",
-      "admin": true,
-      "description": "A shell on this machine, in a window. Off unless ADLEROS_TERMINAL=on on the machine; asks for your password each time.",
+      "admin": "hide",
+      "description": "A shell on this machine, in a window. Only here in admin mode, and off unless ADLEROS_TERMINAL=on on the machine.",
       "keywords": "shell console ssh bash command line",
       "control": {
         "type": "open",

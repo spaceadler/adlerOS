@@ -441,7 +441,8 @@ const dockKeyFor = (pinned) => pinned.map((a) => `${a.id}:${a.icon}:${a.up}`).jo
 function buildDock() {
   // Your apps on the left; after the divider adlerOS's own: the four that
   // always stay, then Files and the Terminal while they're pinned.
-  const all = state.dock.map(pinFor).filter(Boolean);
+  // The terminal shows only in admin mode (its pin waits until then).
+  const all = state.dock.map(pinFor).filter((p) => p && (p.id !== "adleros:terminal" || state.admin));
   let pinned = all.filter((p) => !p.builtin);
   let fixed = [...DOCK_FIXED.map((item) => ({ item })), ...all.filter((p) => p.builtin).map((pin) => ({ pin }))];
   // A phone's dock holds four, like an iPhone's: your pins first, then
@@ -451,7 +452,7 @@ function buildDock() {
     fixed = fixed.slice(0, PHONE_DOCK - pinned.length);
   }
   // Rebuilt only when the pins, their icons or their status change.
-  const key = `${dockKeyFor(pinned)}|${fixed.map((f) => f.item?.id || f.pin.id).join(",")}`;
+  const key = `${dockKeyFor(pinned)}|${fixed.map((f) => f.item?.id || f.pin.id).join(",")}|${state.admin}`;
   if (key === dockKey) return;
   dockKey = key;
   $("dock").replaceChildren(...pinned.map(pinnedDockItem),
@@ -1018,7 +1019,7 @@ function renderResults() {
   const q = $("search-input").value.trim().toLowerCase();
   const apps = state.apps.filter((a) => !q || a.name.toLowerCase().includes(q) || a.about.toLowerCase().includes(q));
   const actions = q ? ACTIONS.filter((a) => (a.name.toLowerCase().includes(q) || a.keywords.includes(q))
-    && (a.id !== "desktop-mode" || computerScreen())) : [];
+    && (a.id !== "desktop-mode" || computerScreen()) && (a.id !== "terminal" || state.admin)) : [];
   results = [...apps.slice(0, 8).map((app) => ({ type: "app", app })), ...settingsSearchResults(q),
     ...actions.map((action) => ({ type: "action", action })),
     // Last: the web, for anything else (a phone has no search bar of its own).

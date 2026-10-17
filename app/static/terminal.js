@@ -1,6 +1,6 @@
-// Terminal: a shell on this machine, in a window. Admin mode only, off
-// unless ADLEROS_TERMINAL=on on the host, and your password again for each
-// session. The shell runs in agent/terminal.py on the host; this page sends
+// Terminal: a shell on this machine, in a window. Only there in admin mode
+// (with it off, the terminal isn't shown anywhere), and off unless
+// ADLEROS_TERMINAL=on on the host. The shell runs in agent/terminal.py on the host; this page sends
 // what you type and shows what it writes, through /api/terminal.
 // The screen is a small xterm-style emulator: cursor movement, erasing,
 // scroll regions, 16/256/true colour, bold/underline/inverse, the alternate
@@ -471,11 +471,8 @@ async function openTerminal() {
   if (status === 401) return showLock();
   if (status !== 200) return toast("Can't reach adlerOS right now.");
   if (!body.enabled) return terminalOffDialog();
-  if (!body.admin) {
-    toast("The terminal needs admin mode: switch it on here first.");
-    return openSettings("admin");
-  }
-  terminalPasswordDialog();
+  if (!body.admin) return toast("The terminal is only there in admin mode (Settings).");
+  newTerminal();
 }
 
 function terminalOffDialog() {
@@ -489,37 +486,17 @@ function terminalOffDialog() {
     el("div", { class: "dialog-actions" }, ok)));
 }
 
-function terminalPasswordDialog() {
-  const password = el("input", { class: "field-input", type: "password", placeholder: "Your adlerOS password", autocomplete: "current-password", required: "" });
-  const error = el("p", { class: "error", role: "alert" });
-  const go = el("button", { type: "submit", class: "button-destructive wide" }, "Open terminal");
-  const cancel = el("button", { type: "button", class: "button-secondary" }, "Cancel");
-  const form = el("form", {}, password, error);
-  cancel.addEventListener("click", closeModal);
-  const submit = async (e) => {
-    e.preventDefault();
-    go.disabled = true;
-    const size = measureTerminal();
-    const { status, body } = await api("/api/terminal", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: password.value, rows: size.rows, cols: size.cols }),
-    }).catch(() => ({ status: 0 }));
-    go.disabled = false;
-    if (status === 200) {
-      closeModal();
-      return startTerminal(body.sid);
-    }
-    error.textContent = status === 401 ? "That password is wrong."
-      : status === 429 ? "Too many attempts. Try again in a few minutes." : body?.error || "That didn't work.";
-    password.select();
-  };
-  form.addEventListener("submit", submit);
-  go.addEventListener("click", submit);
-  openModal(el("div", { class: "dialog material", role: "dialog", "aria-modal": "true" },
-    el("h2", {}, "Open a terminal?"),
-    el("p", {}, "A shell on this machine, as you. Anything you type runs for real."),
-    form, el("div", { class: "dialog-actions" }, cancel, go)));
+// Straight in: admin mode (which your password turned on) is the key.
+async function newTerminal() {
+  const size = measureTerminal();
+  const { status, body } = await api("/api/terminal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rows: size.rows, cols: size.cols }),
+  }).catch(() => ({ status: 0 }));
+  if (status === 200) return startTerminal(body.sid);
+  if (status === 401) return showLock();
+  toast(status === 403 ? "The terminal needs admin mode." : body?.error || "Couldn't open a terminal.");
 }
 
 // Rows and columns that fit the window, from one character's size.

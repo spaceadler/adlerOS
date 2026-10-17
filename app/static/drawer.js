@@ -51,7 +51,8 @@ const BUILT_IN = [
   { id: "settings", name: "Settings", about: "adlerOS and this machine", open: () => openSettings(), keywords: "settings preferences", phone: true },
   { id: "live-usage", name: "Live Usage", about: "CPU, memory, storage, temperature", open: () => openUsage(), keywords: "usage cpu memory stats", phone: true },
 ];
-const builtIns = () => BUILT_IN.filter((b) => !b.phone || phoneLayout());
+// The terminal only in admin mode.
+const builtIns = () => BUILT_IN.filter((b) => (!b.phone || phoneLayout()) && (b.id !== "terminal" || state.admin));
 
 function builtInTile(b) {
   // Files and the terminal can be pinned: they carry their pin's id.

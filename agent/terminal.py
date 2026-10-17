@@ -5,7 +5,7 @@ or homelab.env in a homelab), which adlerOS itself can't change.
 
 systemd starts this (adleros-terminal.path) when adlerOS asks for a session
 by writing data/agent/term/<id>/start.json; adlerOS only does that in admin
-mode, after you type your password again. Each session is your login shell
+mode (which your password turns on). Each session is your login shell
 (fish, zsh, bash: whatever your account has), as you, starting in
 ADLEROS_TERMINAL_DIR, else the homelab's folder in a homelab, else your home
 folder. What you type arrives in the session's `in` file and

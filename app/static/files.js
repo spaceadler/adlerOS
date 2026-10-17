@@ -12,7 +12,13 @@
 const files = {
   path: "/user", place: "user", places: [], entries: [], view: "folder", editor: null, uploads: 0,
   writable: true, admin: false, rootAllowed: false, clip: null, tasks: new Map(), rootOk: false,
+  showHidden: false,
 };
+// Hidden files (.env, .gitignore…): shown only in admin mode, and only when
+// you ask (this browser remembers); off to begin with.
+const HIDDEN_KEY = "adleros.showHidden";
+try { files.showHidden = localStorage.getItem(HIDDEN_KEY) === "1"; } catch { /* private window */ }
+const hiddenShown = () => files.admin && files.showHidden;
 
 const FILE_ICONS = {
   folder: ["M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"],
@@ -140,7 +146,7 @@ function renderFiles() {
   if (files.view === "editor") return;
   $("files-crumbs").replaceChildren(...crumbs());
   $("files-up").disabled = files.path.split("/").filter(Boolean).length < 2;
-  const rows = files.entries.map((entry) => {
+  const rows = files.entries.filter((e) => hiddenShown() || !e.name.startsWith(".")).map((entry) => {
     const path = entry.place && files.path === "/" ? `/${entry.place}` : join(files.path, entry.name);
     const row = el("button", { type: "button", class: `file-row${entry.outside ? " outside" : ""}`, "data-file": path,
       title: entry.outside ? "A link to somewhere outside this place" : entry.place ? `${entry.name}: your ${PLACE_NAMES[entry.place]}` : entry.name },
@@ -166,6 +172,10 @@ function renderTools() {
   const canChange = inFolder && files.writable;
   $("files-new-folder").hidden = $("files-new-file").hidden = !canChange;
   $("files-upload").hidden = !canChange || files.place === "root";
+  const hidden = $("files-hidden");
+  hidden.hidden = !inFolder || !files.admin;
+  hidden.textContent = files.showHidden ? "Hide hidden files" : "Show hidden files";
+  hidden.setAttribute("aria-pressed", String(files.showHidden));
   const paste = $("files-paste");
   paste.hidden = !files.clip || !canChange;
   if (files.clip) paste.textContent = `${files.clip.copy ? "Paste copy of" : "Move"} ${files.clip.label} here`;
@@ -516,6 +526,11 @@ $("files-up").addEventListener("click", () => {
 $("files-new-folder").addEventListener("click", () => newFolder());
 $("files-new-file").addEventListener("click", () => newTextFile());
 $("files-paste").addEventListener("click", () => paste());
+$("files-hidden").addEventListener("click", () => {
+  files.showHidden = !files.showHidden;
+  try { localStorage.setItem(HIDDEN_KEY, files.showHidden ? "1" : "0"); } catch { /* not kept */ }
+  renderFiles();
+});
 $("files-upload").addEventListener("click", () => {
   files.uploadTo = null;
   $("files-picker").click();
