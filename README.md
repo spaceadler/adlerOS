@@ -47,6 +47,9 @@ Screen*: it opens like an app.
 - **Admin mode.** Restart and shut down, deleting apps, and stopping core
   apps (DNS, passwords) are off until you switch admin mode on, with your
   password.
+- **Files**: your storage folder in a window. Upload, download, rename,
+  delete into a Trash you can restore from, preview photos and videos, and
+  edit text files.
 - **A terminal**, if you want one: a real shell in a window (colours, `htop`,
   `vim`), off unless you switch it on on the machine, admin mode only, and
   your password each time.

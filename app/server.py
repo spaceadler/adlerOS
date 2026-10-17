@@ -17,6 +17,10 @@ folder mounted read-only.
     POST /api/terminal     {"password", "rows", "cols"} -> a new shell (admin mode)
     GET  /api/terminal/<id>?offset=N  its output from N (waits for some)
     POST /api/terminal/<id>/input|size|close
+    GET  /api/files?path=   a folder in your storage folder (the Files window)
+    GET  /api/files/text|raw|trash    a file to edit, a file to download, the trash
+    POST /api/files/text|mkdir|rename|delete|restore|empty-trash
+    PUT  /api/files/upload?dir=&name=  a file, streamed in
     GET  /api/notifications           what happened: apps offline, jobs, warnings
     POST /api/notifications           {"read": "all"} or {"clear": true}
     GET  /api/settings     everything the Settings page shows
@@ -44,6 +48,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import socket
 import sys
 import threading
@@ -901,6 +906,113 @@ def terminal_read(folder, offset):
     return data, info, started
 
 
+# ------------------------------------------------------------------ files
+
+# Your storage folder, mounted read-write for the Files window, and nothing else.
+FILES = Path(os.environ.get("ADLEROS_FILES", "/storage"))
+TRASH = ".trash"  # deleted files wait here, in the storage folder itself
+TEXT_LIMIT = 2 * 1024 * 1024  # biggest file the editor opens
+UPLOAD_LIMIT = 50 * 1024 ** 3
+TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".json", ".yml", ".yaml", ".toml", ".ini", ".cfg", ".conf", ".env",
+                 ".sh", ".bash", ".py", ".js", ".ts", ".css", ".html", ".xml", ".csv", ".tsv", ".log", ".sql",
+                 ".c", ".h", ".cpp", ".rs", ".go", ".java", ".lua", ".tex", ".typ", ".srt", ".vtt", ".service"}
+KINDS = {"image": {".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".svg", ".heic"},
+         "video": {".mp4", ".webm", ".mkv", ".mov", ".avi", ".m4v"},
+         "audio": {".mp3", ".flac", ".ogg", ".opus", ".wav", ".m4a", ".aac", ".m4b"},
+         "pdf": {".pdf"}, "archive": {".zip", ".tar", ".gz", ".tgz", ".xz", ".7z", ".rar", ".zst"}}
+# What may be shown in the browser rather than downloaded; never HTML or SVG.
+INLINE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+                ".webp": "image/webp", ".avif": "image/avif", ".bmp": "image/bmp", ".pdf": "application/pdf",
+                ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg", ".ogg": "audio/ogg",
+                ".opus": "audio/ogg", ".wav": "audio/wav", ".m4a": "audio/mp4", ".flac": "audio/flac",
+                ".txt": "text/plain; charset=utf-8"}
+
+
+def files_on():
+    return FILES.is_dir()
+
+
+def file_path(rel, must_exist=True):
+    """The real path of rel ('/Documents/a.txt') inside the storage folder, or
+    None. '..' and links that lead out of it are refused."""
+    if not isinstance(rel, str) or "\x00" in rel or len(rel) > 4096:
+        return None
+    parts = [p for p in rel.split("/") if p not in ("", ".")]
+    if ".." in parts:
+        return None
+    root = FILES.resolve()
+    try:
+        real = root.joinpath(*parts).resolve(strict=must_exist)
+    except (OSError, RuntimeError):
+        return None
+    return real if real == root or real.is_relative_to(root) else None
+
+
+def file_rel(real):
+    rel = real.relative_to(FILES.resolve())
+    return "/" + str(rel) if str(rel) != "." else "/"
+
+
+def good_name(name):
+    return (isinstance(name, str) and 0 < len(name) <= 255 and "/" not in name and "\x00" not in name
+            and name not in (".", "..") and name.isprintable())
+
+
+def file_kind(path, is_dir):
+    if is_dir:
+        return "folder"
+    suffix = path.suffix.lower()
+    if suffix in TEXT_SUFFIXES or path.name in ("Dockerfile", "Makefile", ".gitignore", "README"):
+        return "text"
+    return next((k for k, sufs in KINDS.items() if suffix in sufs), "file")
+
+
+def list_folder(real):
+    entries = []
+    root = FILES.resolve()
+    for child in real.iterdir():
+        if real == root and child.name == TRASH:
+            continue
+        try:
+            st = child.stat()
+            is_dir = child.is_dir()
+        except OSError:
+            continue  # a broken link
+        link = child.is_symlink()
+        # A link that leads out of the storage folder is shown, but can't be opened.
+        outside = link and not child.resolve().is_relative_to(root)
+        entries.append({"name": child.name, "dir": is_dir, "size": None if is_dir else st.st_size,
+                        "mtime": st.st_mtime, "kind": file_kind(child, is_dir), "link": link, "outside": outside})
+    entries.sort(key=lambda e: (not e["dir"], e["name"].lower()))
+    return entries
+
+
+def unique_name(folder, name):
+    """name, or 'name (2).ext' if that's taken."""
+    candidate, n = folder / name, 2
+    stem, suffix = Path(name).stem, Path(name).suffix
+    while candidate.exists() or candidate.is_symlink():
+        candidate = folder / f"{stem} ({n}){suffix}"
+        n += 1
+    return candidate
+
+
+def trash_items():
+    items = []
+    trash = FILES / TRASH
+    if not trash.is_dir():
+        return items
+    for entry in trash.iterdir():
+        try:
+            meta = json.loads((entry / "meta.json").read_text())
+            inside = next(p for p in entry.iterdir() if p.name != "meta.json")
+        except (OSError, ValueError, StopIteration):
+            continue
+        items.append({"id": entry.name, "name": inside.name, "from": meta.get("from", ""),
+                      "deleted": meta.get("deleted", 0), "dir": inside.is_dir()})
+    return sorted(items, key=lambda i: -i["deleted"])
+
+
 # ----------------------------------------------------------- notifications
 
 KEEP_NOTIFICATIONS = 100
@@ -1198,6 +1310,8 @@ class Handler(BaseHTTPRequestHandler):
             data, ended, started = terminal_read(folder, offset)
             return self.send_json(200, {"data": base64.b64encode(data).decode(), "offset": offset + len(data),
                                         "ended": ended, "started": started})
+        if path.startswith("/api/files"):
+            return self.files_get(path, query)
         if path == "/api/notifications":
             items = load_notifications()[::-1]
             return self.send_json(200, {"items": items, "unread": sum(not n.get("read") for n in items)})
@@ -1215,14 +1329,14 @@ class Handler(BaseHTTPRequestHandler):
 
     # -------------------------------------------------------------- POST
 
-    def read_json(self):
+    def read_json(self, limit=4096):
         if not self.headers.get("Content-Type", "").startswith("application/json"):
             return None
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             return None
-        if not 0 < length <= 4096:
+        if not 0 < length <= limit:
             return None
         try:
             body = json.loads(self.rfile.read(length))
@@ -1245,7 +1359,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(401, {"error": "login required"})
         # JSON only: a plain cross-site form can't send it, so with SameSite
         # cookies these can't be triggered from another site.
-        body = self.read_json()
+        # Saving a file from the editor is the one big body.
+        body = self.read_json(TEXT_LIMIT * 2 + 4096 if path == "/api/files/text" else 4096)
         if body is None:
             return self.send_json(400, {"error": "expected a JSON object"})
         if path == "/api/settings":
@@ -1254,6 +1369,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.change_password(body)
         if path == "/api/admin":
             return self.set_admin(body)
+        if path.startswith("/api/files/"):
+            return self.files_post(path[len("/api/files/"):], body)
         if path == "/api/terminal":
             return self.open_terminal(body)
         if path.startswith("/api/terminal/"):
@@ -1357,6 +1474,207 @@ class Handler(BaseHTTPRequestHandler):
         save_settings({"passwordHash": hash_password(new)})
         # Every other session is now signed with the old key; this one carries on.
         return self.send_json(200, {"ok": True}, [self.cookie_header(new_session(), SESSION_SECONDS)])
+
+    # ---------------------------------------------------------- files
+
+    def files_get(self, path, query):
+        if not files_on():
+            return self.send_json(404, {"error": "no storage folder is mounted"})
+        rel = query.get("path", ["/"])[0]
+        if path == "/api/files":
+            real = file_path(rel)
+            if not real or not real.is_dir():
+                return self.send_json(404, {"error": "no such folder"})
+            try:
+                entries = list_folder(real)
+            except OSError as e:
+                return self.send_json(403, {"error": f"can't read it: {e.strerror}"})
+            return self.send_json(200, {"path": file_rel(real), "entries": entries})
+        if path == "/api/files/trash":
+            return self.send_json(200, {"items": trash_items()})
+        real = file_path(rel)
+        if not real or not real.is_file():
+            return self.send_json(404, {"error": "no such file"})
+        if path == "/api/files/text":
+            st = real.stat()
+            if st.st_size > TEXT_LIMIT:
+                return self.send_json(413, {"error": "too big to edit here (over 2 MB); download it instead"})
+            try:
+                text = real.read_bytes().decode("utf-8")
+            except UnicodeDecodeError:
+                return self.send_json(415, {"error": "not a text file (or not UTF-8)"})
+            return self.send_json(200, {"path": file_rel(real), "text": text, "mtime": st.st_mtime})
+        if path == "/api/files/raw":
+            return self.send_file_stream(real, inline=query.get("inline", ["0"])[0] == "1")
+        return self.send(404, b"not found")
+
+    def send_file_stream(self, real, inline):
+        """A file from the storage folder, streamed; Range requests (seeking in
+        a video) work. Inline only for types that can't run code."""
+        size = real.stat().st_size
+        ctype = INLINE_TYPES.get(real.suffix.lower()) if inline else None
+        start, end = 0, size - 1
+        match = re.fullmatch(r"bytes=(\d*)-(\d*)", self.headers.get("Range", ""))
+        if match and size:
+            a, b = match.groups()
+            start = int(a) if a else max(0, size - int(b or 0))
+            end = min(size - 1, int(b)) if a and b else size - 1
+            if start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+        self.send_response(206 if match and size else 200)
+        self.send_header("Content-Type", ctype or "application/octet-stream")
+        self.send_header("Content-Length", str(max(0, end - start + 1)))
+        self.send_header("Accept-Ranges", "bytes")
+        if match and size:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        quoted = urllib.parse.quote(real.name)
+        self.send_header("Content-Disposition", f"{'inline' if ctype else 'attachment'}; filename*=UTF-8''{quoted}")
+        # PDFs keep the browser's viewer; everything else can't run anything.
+        self.send_header("Content-Security-Policy", "default-src 'none'" if real.suffix.lower() == ".pdf" else "default-src 'none'; img-src 'self'; media-src 'self'; sandbox")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", "private, no-cache")
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+        with open(real, "rb") as f:
+            f.seek(start)
+            left = end - start + 1
+            while left > 0:
+                chunk = f.read(min(1024 * 1024, left))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                left -= len(chunk)
+
+    def files_post(self, what, body):
+        if not files_on():
+            return self.send_json(404, {"error": "no storage folder is mounted"})
+        root = FILES.resolve()
+        if what == "text":
+            # Save from the editor; with "mtime", only if nobody changed it since.
+            real = file_path(body.get("path"), must_exist=False)
+            text = body.get("text")
+            if not real or real == root or not isinstance(text, str):
+                return self.send_json(400, {"error": "expected path and text"})
+            data = text.encode("utf-8")
+            if len(data) > TEXT_LIMIT:
+                return self.send_json(413, {"error": "too big (over 2 MB)"})
+            if real.exists():
+                if not real.is_file():
+                    return self.send_json(409, {"error": "that's a folder"})
+                if isinstance(body.get("mtime"), (int, float)) and abs(real.stat().st_mtime - body["mtime"]) > 0.001:
+                    return self.send_json(409, {"error": "changed since you opened it", "conflict": True})
+            elif body.get("mtime") is not None or not real.parent.is_dir():
+                return self.send_json(404, {"error": "it's gone, or its folder is"})
+            tmp = real.with_name(f".{real.name}.{secrets.token_hex(4)}.saving")
+            tmp.write_bytes(data)
+            if real.exists():
+                os.chmod(tmp, real.stat().st_mode & 0o7777)
+            os.replace(tmp, real)
+            return self.send_json(200, {"ok": True, "mtime": real.stat().st_mtime, "path": file_rel(real)})
+        if what == "mkdir":
+            parent = file_path(body.get("path", "/"))
+            if not parent or not parent.is_dir() or not good_name(body.get("name")):
+                return self.send_json(400, {"error": "a folder name, without /"})
+            target = parent / body["name"]
+            if target.exists():
+                return self.send_json(409, {"error": "there's already something called that"})
+            target.mkdir()
+            return self.send_json(200, {"ok": True, "path": file_rel(target)})
+        if what == "rename":
+            real = file_path(body.get("path"))
+            if not real or real == root or not good_name(body.get("name")):
+                return self.send_json(400, {"error": "a new name, without /"})
+            target = real.parent / body["name"]
+            if target.exists():
+                return self.send_json(409, {"error": "there's already something called that"})
+            real.rename(target)
+            return self.send_json(200, {"ok": True, "path": file_rel(target)})
+        if what == "delete":
+            # Into the trash, not gone: restore from the Trash view.
+            paths = body.get("paths")
+            if not isinstance(paths, list) or not 0 < len(paths) <= 500:
+                return self.send_json(400, {"error": "expected paths"})
+            moved = 0
+            for rel in paths:
+                real = file_path(rel)
+                if not real or real == root or real.is_relative_to(root / TRASH):
+                    continue
+                slot = root / TRASH / f"{int(time.time() * 1000)}-{secrets.token_hex(3)}"
+                slot.mkdir(parents=True)
+                (slot / "meta.json").write_text(json.dumps({"from": file_rel(real), "deleted": time.time()}))
+                shutil.move(str(real), str(slot / real.name))
+                moved += 1
+            return self.send_json(200, {"ok": True, "moved": moved})
+        if what in ("restore", "empty-trash"):
+            trash = root / TRASH
+            ids = body.get("ids") if what == "restore" else [i["id"] for i in trash_items()]
+            if not isinstance(ids, list):
+                return self.send_json(400, {"error": "expected ids"})
+            done = 0
+            for item_id in ids:
+                slot = trash / str(item_id)
+                if not re.fullmatch(r"\d+-[0-9a-f]{6}", str(item_id)) or not slot.is_dir() or slot.is_symlink():
+                    continue
+                if what == "empty-trash":
+                    shutil.rmtree(slot)
+                    done += 1
+                    continue
+                item = next((p for p in slot.iterdir() if p.name != "meta.json"), None)
+                try:
+                    origin = json.loads((slot / "meta.json").read_text()).get("from", "/" + (item.name if item else ""))
+                except (OSError, ValueError):
+                    origin = "/" + (item.name if item else "")
+                parent = file_path(str(Path(origin).parent)) or root
+                if item:
+                    shutil.move(str(item), str(unique_name(parent if parent.is_dir() else root, item.name)))
+                shutil.rmtree(slot)
+                done += 1
+            return self.send_json(200, {"ok": True, "done": done})
+        return self.send(404, b"not found")
+
+    def do_PUT(self):
+        """Upload: PUT /api/files/upload?dir=/Documents&name=a.pdf, the file as
+        the body. A cross-site page can't send a PUT with your cookie."""
+        url = urllib.parse.urlsplit(self.path)
+        query = urllib.parse.parse_qs(url.query)
+        if url.path != "/api/files/upload":
+            return self.send(404, b"not found")
+        if not self.logged_in():
+            return self.send_json(401, {"error": "login required"})
+        if not files_on():
+            return self.send_json(404, {"error": "no storage folder is mounted"})
+        folder = file_path(query.get("dir", ["/"])[0])
+        name = query.get("name", [""])[0]
+        try:
+            length = int(self.headers.get("Content-Length", "-1"))
+        except ValueError:
+            length = -1
+        if not folder or not folder.is_dir() or not good_name(name) or name == TRASH:
+            return self.send_json(400, {"error": "a folder and a file name"})
+        if not 0 <= length <= UPLOAD_LIMIT:
+            return self.send_json(413, {"error": "too big"})
+        target = folder / name
+        if target.exists() and query.get("replace", ["0"])[0] != "1":
+            target = unique_name(folder, name)
+        part = folder / f".{name}.{secrets.token_hex(4)}.part"
+        try:
+            with open(part, "wb") as f:
+                left = length
+                while left > 0:
+                    chunk = self.rfile.read(min(1024 * 1024, left))
+                    if not chunk:
+                        raise OSError("the upload stopped part-way")
+                    f.write(chunk)
+                    left -= len(chunk)
+            os.replace(part, target)
+        except OSError as e:
+            part.unlink(missing_ok=True)
+            return self.send_json(500, {"error": str(e)})
+        return self.send_json(200, {"ok": True, "path": file_rel(target), "name": target.name})
 
     def open_terminal(self, body):
         """A new shell: admin mode, the terminal switched on, and your password again."""

@@ -1,6 +1,7 @@
 # Using adlerOS
 
-A tour of everything on the screen. Every part works with a mouse, a touch
+A tour of everything on the screen, and the two built-in apps, Files and the
+Terminal. Every part works with a mouse, a touch
 screen, or a keyboard alone ([docs/keyboard.md](keyboard.md)).
 
 ## Logging in
@@ -178,6 +179,35 @@ or the search box:
 Only while it's on can you restart or shut down the machine, delete apps, or
 stop core apps. adlerOS's server checks it on every request, not just the
 buttons on the page. It stays on, for every browser, until you switch it off.
+
+## Files
+
+<!-- screenshot: Files, a folder of documents -->
+![Files](screenshots/files.png)
+
+Your storage folder (`STORAGE_DIR`: photos, music, documents, notes), in a
+window: **All apps → Files**, ⌘K "files", or `f`. Nothing outside that folder
+is reachable, and a link that leads out of it is shown greyed out and won't
+open.
+
+- **Open** a folder to go in; the path at the top takes you back up. A text
+  file opens in the editor, an image, video, song or PDF in a preview,
+  anything else downloads.
+- **Upload** with the button, or drop files onto the window; big files are
+  fine. A file with a name that's taken gets a `(2)`.
+- **New folder**, **New text file**, and per file (right-click, `m`, or the
+  keys below): Rename, Download, Edit as text, Delete.
+- **Delete** moves it to the **Trash** (a `.trash` folder in your storage
+  folder), where **Restore** puts it back where it was. **Empty Trash**
+  deletes for good.
+
+<!-- screenshot: the text editor -->
+![The editor](screenshots/editor.png)
+
+**The editor** opens text files up to 2 MB: notes, configs, compose files,
+code. Ctrl+S (⌘S) saves; Tab indents. If something else changed the file
+since you opened it, it asks before saving over it. Leaving with unsaved
+changes asks first.
 
 ## Terminal
 

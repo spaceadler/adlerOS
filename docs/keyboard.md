@@ -42,6 +42,7 @@ These work anywhere except while you're typing in a text box.
 | `u` | Live Usage |
 | `w` | Edit widgets |
 | `t` | Terminal (admin mode) |
+| `f` | Files |
 | `[` or Page Up | Previous page of apps |
 | `]` or Page Down | Next page |
 | `?` | The list of keys |
@@ -54,6 +55,13 @@ Text boxes keep their keys: Left and Right move the cursor, letters type.
 Up and Down still move you out of a one-line box (so you can leave the search
 bar for the widgets below it). In search, Up and Down pick a result and Enter
 opens it.
+
+## In Files
+
+Arrows move between files; Enter opens one (a folder goes in). **Delete**
+deletes the selected file (to the Trash), **F2** renames it, `m` or the Menu
+key shows its menu. Escape goes back: out of the editor, out of the Trash,
+then out of Files. In the editor, Ctrl+S saves and Tab indents.
 
 ## In the terminal
 

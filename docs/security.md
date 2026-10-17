@@ -68,6 +68,17 @@ itself (not just a login) could ask the host for a shell without your
 password, since the host trusts adlerOS's requests. Leave it off unless you
 use it.
 
+## Files
+
+The Files window needs adlerOS to read and write your storage folder, so that
+one folder is mounted read-write into its container (`STORAGE_DIR` at
+`/storage`). Nothing else of yours is. Every path is checked to stay inside
+it, links leading out of it are refused, uploads are written next to the
+target and renamed into place, and files are only ever *shown* in the browser
+when they can't run code (images, video, audio, PDFs, plain text); anything
+else, HTML and SVG included, downloads. Deleting moves things to `.trash`
+rather than erasing them.
+
 ## What adlerOS reads and touches
 
 - **Discovery** (standalone) reads every compose file in `COMPOSE_ROOTS`
@@ -92,7 +103,8 @@ only queue actions from the list. That means they could:
   removes containers);
 - install a store app, or start a compose file already in your home folder;
 - with admin mode on (or your password): restart or shut down the machine;
-- with the terminal switched on (on the machine): get a shell (see above).
+- with the terminal switched on (on the machine): get a shell (see above);
+- read, change or delete files in your storage folder (through Files).
 
 They couldn't run their own commands, read your files beyond what's above, or
 reach Docker directly. Your user is in the `docker` group, which is as good as
