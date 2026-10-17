@@ -67,28 +67,14 @@ const VERBS = {
 
 function isOpen(id) {
   const sheet = $(id);
-  return !sheet.hidden && !sheet.classList.contains("closing");
+  return Boolean(sheet) && !sheet.hidden && !sheet.classList.contains("closing");
 }
 
-function toggleStore() {
-  if (isOpen("store")) closeStore();
-  else openStore();
-}
+function toggleStore() { toggleWindow("store", openStore); }
 
 function openStore() {
-  closeSearch();
-  closeMenu();
-  closeDrawer();
-  if (isOpen("settings")) closeSettings();
-  if (isOpen("usage")) closeUsage();
-  hideTerminal();
-  if (filesOpen()) closeFiles();
-  const sheet = $("store");
-  sheet.classList.remove("closing");
-  sheet.hidden = false;
-  document.body.classList.add("sheet-open");
+  openWindow("store");
   history.replaceState(null, "", "#store");
-  markDockOpen("app-store", true);
   $("store-search").value = store.query = "";
   store.view = "apps";
   renderStore();
@@ -99,17 +85,10 @@ function openStore() {
 }
 
 function closeStore() {
-  const sheet = $("store");
-  if (sheet.hidden) return;
+  if (!isOpen("store")) return;
   clearInterval(store.timer);
-  sheet.classList.add("closing");
-  if (!isOpen("settings") && !isOpen("usage")) document.body.classList.remove("sheet-open");
+  closeWindow("store");
   history.replaceState(null, "", location.pathname);
-  markDockOpen("app-store", false);
-  setTimeout(() => {
-    sheet.hidden = true;
-    sheet.classList.remove("closing");
-  }, 280);
 }
 
 // ------------------------------------------------------------ status
@@ -782,6 +761,7 @@ function importRunStep() {
 
 // ------------------------------------------------------------- wiring
 
+registerWindow("store", { title: "App Store", close: closeStore, dock: "app-store", size: [1100, 780] });
 $("store-close").addEventListener("click", closeStore);
 $("store-import").addEventListener("click", startImport);
 $("store-search").addEventListener("input", (e) => {
@@ -789,7 +769,7 @@ $("store-search").addEventListener("input", (e) => {
   renderStore();
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape" || !isOpen("store")) return;
+  if (e.key !== "Escape" || !isActive("store")) return;
   if (!$("modal").hidden || !$("search").hidden || !$("menu").hidden) return;
   e.stopImmediatePropagation();
   closeStore();

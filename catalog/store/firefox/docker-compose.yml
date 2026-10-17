@@ -1,0 +1,24 @@
+# Firefox, from adlerOS's store: a real Firefox running on this machine and
+# shown in your browser (linuxserver.io's image, streamed with Selkies). You
+# browse from here: this machine's network, its logins, any site.
+# adlerOS fills in .env (port, timezone, your user) when it installs this.
+#
+# It serves HTTPS with a certificate it makes itself: open it once in a tab
+# and accept it. Anyone who can reach it can use it (and get a root shell
+# inside its container), so keep it on your own network or VPN. For a
+# password, add CUSTOM_USER and PASSWORD under environment.
+services:
+  firefox:
+    image: lscr.io/linuxserver/firefox:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT}:3001"
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    volumes:
+      # Its profile: bookmarks, logins, settings.
+      - ./config:/config
+    # Modern sites (video, maps) need more shared memory than Docker's 64 MB.
+    shm_size: "1gb"

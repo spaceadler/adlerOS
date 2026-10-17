@@ -456,10 +456,7 @@ const term = { sid: null, screen: null, offset: 0, decoder: null, sending: Promi
 
 function terminalOpen() { return isOpen("terminal"); }
 
-function toggleTerminal() {
-  if (terminalOpen()) hideTerminal();
-  else openTerminal();
-}
+function toggleTerminal() { toggleWindow("terminal", openTerminal); }
 
 async function openTerminal() {
   closeSearch();
@@ -539,16 +536,7 @@ function measureTerminal() {
   return { cols: Math.max(20, Math.floor((width - 16) / cw)), rows: Math.max(5, Math.floor((height - 8) / ch)) };
 }
 
-function showTerminalWindow() {
-  if (filesOpen()) closeFiles();
-  if (isOpen("settings")) closeSettings();
-  if (isOpen("store")) closeStore();
-  if (isOpen("usage")) closeUsage();
-  const sheet = $("terminal");
-  sheet.classList.remove("closing");
-  sheet.hidden = false;
-  document.body.classList.add("sheet-open");
-}
+function showTerminalWindow() { openWindow("terminal"); }
 
 function startTerminal(sid) {
   showTerminalWindow();
@@ -650,16 +638,7 @@ function closeTerminal() {
 }
 
 // Puts the window away; a running shell keeps running (t brings it back).
-function hideTerminal() {
-  const sheet = $("terminal");
-  if (sheet.hidden) return;
-  sheet.classList.add("closing");
-  if (!isOpen("settings") && !isOpen("store") && !isOpen("usage")) document.body.classList.remove("sheet-open");
-  setTimeout(() => {
-    sheet.hidden = true;
-    sheet.classList.remove("closing");
-  }, 280);
-}
+function hideTerminal() { closeWindow("terminal"); }
 
 // ------------------------------------------------------------- wiring
 
@@ -698,5 +677,7 @@ $("term-screen").addEventListener("scroll", () => {
   const s = $("term-screen");
   if (term.screen) term.screen.follow = s.scrollTop + s.clientHeight >= s.scrollHeight - 4;
 });
+registerWindow("terminal", { title: "Terminal", close: closeTerminal, hide: hideTerminal, size: [920, 580] });
 $("term-close").addEventListener("click", closeTerminal);
-window.addEventListener("resize", resizeTerminal);
+// The window's size changes with the screen, or (desktop mode) by dragging.
+new ResizeObserver(resizeTerminal).observe($("term-screen"));

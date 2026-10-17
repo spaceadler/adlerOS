@@ -17,10 +17,12 @@ folder mounted read-only.
     POST /api/terminal     {"password", "rows", "cols"} -> a new shell (admin mode)
     GET  /api/terminal/<id>?offset=N  its output from N (waits for some)
     POST /api/terminal/<id>/input|size|close
-    GET  /api/files?path=   a folder in your storage folder (the Files window)
-    GET  /api/files/text|raw|trash    a file to edit, a file to download, the trash
-    POST /api/files/text|mkdir|rename|delete|restore|empty-trash
+    GET  /api/files?path=   a folder (the Files window): /desktop, /user or /root/...
+    GET  /api/files/text|raw|trash|tasks  a file to edit or download, the Trash,
+                           copies and moves under way
+    POST /api/files/text|mkdir|rename|delete|move|copy|restore|empty-trash
     PUT  /api/files/upload?dir=&name=  a file, streamed in
+    GET  /api/frame/<app>?secure=  whether the app can open in a window (desktop mode)
     GET  /api/notifications           what happened: apps offline, jobs, warnings
     POST /api/notifications           {"read": "all"} or {"clear": true}
     GET  /api/settings     everything the Settings page shows
@@ -50,9 +52,11 @@ import re
 import secrets
 import shutil
 import socket
+import ssl
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -211,7 +215,9 @@ def registry_apps(installed=True):
         collection = info.get("collection") if info.get("collection") in COLLECTION_ORDER else EXTRAS
         apps.append({"id": folder.name, "genre": collection, "sub": "-", "port": port, "icon": icon,
                      "name": info["name"][:40], "about": str(info.get("about", ""))[:200], "url": info["url"],
-                     "imported": True, "known": str(info.get("known", "")), "note": str(info.get("note", ""))[:300]})
+                     "imported": True, "known": str(info.get("known", "")), "note": str(info.get("note", ""))[:300],
+                     # "https": only in a window when adlerOS is on HTTPS too; "tab": never.
+                     "window": info.get("window") if info.get("window") in ("https", "tab") else ""})
     return apps
 
 
@@ -724,6 +730,78 @@ def app_status(apps):
     return {a["id"]: ports[a["port"]] if a["port"] else True for a in apps}
 
 
+# ----------------------------------------------------------- app windows
+
+_frames = {}
+_frames_lock = threading.Lock()
+FRAME_TTL = 600
+
+
+def frame_headers(app):
+    """The headers of the app's page, asked at its own port where we know it
+    (no DNS needed), else at its address. None if it doesn't answer."""
+    urls = ([f"http://127.0.0.1:{app['port']}/", f"https://127.0.0.1:{app['port']}/"] if app.get("port")
+            else [app["url"]])
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE  # only to read its headers: its own certificate, often
+    for url in urls:
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "adlerOS"})
+            with urllib.request.urlopen(request, timeout=4, context=context) as response:
+                return response.headers
+        except urllib.error.HTTPError as e:
+            return e.headers  # a 401 or 404 page says it as well as any
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def frame_allowed(headers, host):
+    """Whether these headers let a page at `host` (adlerOS) show it in a frame."""
+    xfo = headers.get("X-Frame-Options", "").strip().lower()
+    if xfo:
+        return False  # DENY, SAMEORIGIN (adlerOS is another origin), ALLOW-FROM (obsolete)
+    policy = " ".join(headers.get_all("Content-Security-Policy") or [])
+    match = re.search(r"frame-ancestors\s+([^;]*)", policy, re.I)
+    if not match:
+        return True
+    name = host.split(":")[0].lower()
+    for source in match[1].lower().split():
+        bare = re.sub(r"^[a-z][a-z0-9+.-]*://", "", source).rstrip("/")
+        if source == "*" or bare in (host.lower(), name) or (bare.startswith("*.") and name.endswith(bare[1:])):
+            return True
+    return False
+
+
+def frame_answer(app, host, secure):
+    """{"frame": bool, "why": ...}: whether the app can open in a window."""
+    url = app.get("url") or ""
+    if not url:
+        return {"frame": False, "why": "it has no web page"}
+    if app.get("window") == "tab":
+        return {"frame": False, "why": "it works best in a tab of its own"}
+    if app.get("window") == "https" and not secure:
+        return {"frame": False, "why": "in a window it needs adlerOS on HTTPS too"}
+    if secure and url.startswith("http:"):
+        return {"frame": False, "why": "its page is plain HTTP and adlerOS is on HTTPS"}
+    key = (app["id"], url, host)
+    with _frames_lock:
+        cached = _frames.get(key)
+    if cached and time.monotonic() - cached[0] < FRAME_TTL:
+        return cached[1]
+    headers = frame_headers(app)
+    if headers is None:
+        answer = {"frame": False, "why": "it didn't answer adlerOS's check"}
+    elif frame_allowed(headers, host):
+        answer = {"frame": True, "why": ""}
+    else:
+        answer = {"frame": False, "why": "it doesn't allow being shown inside another page"}
+    with _frames_lock:
+        _frames[key] = (time.monotonic(), answer)
+    return answer
+
+
 def port_status(ports):
     """{port: up?} for every port, checked in parallel, cached STATUS_TTL."""
     now = time.monotonic()
@@ -919,14 +997,28 @@ def terminal_read(folder, offset):
 
 # ------------------------------------------------------------------ files
 
-# Your storage folder, mounted read-write for the Files window, and nothing else.
-FILES = Path(os.environ.get("ADLEROS_FILES", "/storage"))
-TRASH = ".trash"  # deleted files wait here, in the storage folder itself
+# The Files window's three places, each its own mount:
+#   desktop  the Desktop folder (a homelab's mailbox/), read-write
+#   user     your storage folder, read-write
+#   root     the homelab's own folder, read-only. Changes there go through the
+#            helper, in admin mode, and only while the machine allows
+#            shell-level access (ADLEROS_TERMINAL=on, like the terminal).
+# A place inside another (Root's mailbox/ and storage/) counts as itself.
+PLACES = {
+    "desktop": Path(os.environ.get("ADLEROS_DESKTOP_MOUNT", "/places/desktop")),
+    "user": Path(os.environ.get("ADLEROS_FILES", "/storage")),
+    "root": Path(os.environ.get("ADLEROS_ROOT_MOUNT", "/places/root")),
+}
+PLACE_LABELS = {"desktop": "Desktop", "user": "User", "root": "Root"}
+WRITABLE = ("desktop", "user")
+TRASH = ".trash"  # deleted files wait here, at the top of their place (Root's in User's)
+FILE_REQUESTS = DATA / "agent" / "files"  # a change in Root, written out for the helper
 TEXT_LIMIT = 2 * 1024 * 1024  # biggest file the editor opens
 UPLOAD_LIMIT = 50 * 1024 ** 3
 TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".json", ".yml", ".yaml", ".toml", ".ini", ".cfg", ".conf", ".env",
                  ".sh", ".bash", ".py", ".js", ".ts", ".css", ".html", ".xml", ".csv", ".tsv", ".log", ".sql",
-                 ".c", ".h", ".cpp", ".rs", ".go", ".java", ".lua", ".tex", ".typ", ".srt", ".vtt", ".service"}
+                 ".c", ".h", ".cpp", ".rs", ".go", ".java", ".lua", ".tex", ".typ", ".srt", ".vtt", ".service",
+                 ".example", ".template", ".fish"}
 KINDS = {"image": {".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".svg", ".heic"},
          "video": {".mp4", ".webm", ".mkv", ".mov", ".avi", ".m4v"},
          "audio": {".mp3", ".flac", ".ogg", ".opus", ".wav", ".m4a", ".aac", ".m4b"},
@@ -939,50 +1031,89 @@ INLINE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"
                 ".txt": "text/plain; charset=utf-8"}
 
 
-def files_on():
-    return FILES.is_dir()
+def place_host(place):
+    """Where a place is on the host (ADLEROS_HOST_*), to see one inside another."""
+    value = os.environ.get("ADLEROS_HOST_STORAGE" if place == "user" else f"ADLEROS_HOST_{place.upper()}", "")
+    return os.path.normpath(value) if value.startswith("/") else ""
 
 
-def file_path(rel, must_exist=True):
-    """The real path of rel ('/Documents/a.txt') inside the storage folder, or
-    None. '..' and links that lead out of it are refused."""
-    if not isinstance(rel, str) or "\x00" in rel or len(rel) > 4096:
-        return None
-    parts = [p for p in rel.split("/") if p not in ("", ".")]
-    if ".." in parts:
-        return None
-    root = FILES.resolve()
+def place_on(place):
+    # Storage needs no host path (older installs don't pass one); the others do.
+    return PLACES[place].is_dir() and (place == "user" or bool(place_host(place)))
+
+
+def places_on():
+    return [p for p in PLACES if place_on(p)]
+
+
+def nested(place):
+    """[(other place, its path inside this one, as parts)], deepest first."""
+    here = place_host(place)
+    found = []
+    for other in PLACES:
+        there = place_host(other)
+        if here and other != place and there.startswith(here + "/") and place_on(other):
+            found.append((other, there[len(here) + 1:].split("/")))
+    return sorted(found, key=lambda f: -len(f[1]))
+
+
+def locate(path, must_exist=True):
+    """(place, real path) for '/user/Documents/a.txt', else (None, None). '..'
+    and links that lead out of their place are refused."""
+    if not isinstance(path, str) or "\x00" in path or len(path) > 4096:
+        return None, None
+    parts = [p for p in path.split("/") if p not in ("", ".")]
+    if not parts or ".." in parts or parts[0] not in PLACES or not place_on(parts[0]):
+        return None, None
+    place, rest = parts[0], parts[1:]
+    for _ in PLACES:  # Root/storage/Desktop: one hop per place at most
+        hop = next(((other, p) for other, p in nested(place) if rest[:len(p)] == p), None)
+        if not hop:
+            break
+        place, rest = hop[0], rest[len(hop[1]):]
+    top = PLACES[place].resolve()
     try:
-        real = root.joinpath(*parts).resolve(strict=must_exist)
+        real = top.joinpath(*rest).resolve(strict=must_exist)
     except (OSError, RuntimeError):
-        return None
-    return real if real == root or real.is_relative_to(root) else None
+        return None, None
+    return (place, real) if real == top or real.is_relative_to(top) else (None, None)
 
 
-def file_rel(real):
-    rel = real.relative_to(FILES.resolve())
-    return "/" + str(rel) if str(rel) != "." else "/"
+def place_path(place, real):
+    rel = real.relative_to(PLACES[place].resolve())
+    return f"/{place}" + ("" if str(rel) == "." else f"/{rel}")
+
+
+def is_top(place, real):
+    return real == PLACES[place].resolve()
+
+
+def root_writes():
+    """Whether Root may change now: admin mode, and the machine allows it."""
+    return admin_on() and terminal_enabled()
 
 
 def good_name(name):
     return (isinstance(name, str) and 0 < len(name) <= 255 and "/" not in name and "\x00" not in name
-            and name not in (".", "..") and name.isprintable())
+            and name not in (".", "..", TRASH) and name.isprintable())
 
 
 def file_kind(path, is_dir):
     if is_dir:
         return "folder"
     suffix = path.suffix.lower()
-    if suffix in TEXT_SUFFIXES or path.name in ("Dockerfile", "Makefile", ".gitignore", "README"):
+    if suffix in TEXT_SUFFIXES or path.name in ("Dockerfile", "Makefile", ".gitignore", "README", ".env", ".stignore"):
         return "text"
     return next((k for k, sufs in KINDS.items() if suffix in sufs), "file")
 
 
-def list_folder(real):
+def list_folder(place, real):
     entries = []
-    root = FILES.resolve()
+    top = PLACES[place].resolve()
+    here = real.relative_to(top)
+    inner = {"/".join(parts): other for other, parts in nested(place)}
     for child in real.iterdir():
-        if real == root and child.name == TRASH:
+        if real == top and child.name == TRASH:
             continue
         try:
             st = child.stat()
@@ -990,10 +1121,14 @@ def list_folder(real):
         except OSError:
             continue  # a broken link
         link = child.is_symlink()
-        # A link that leads out of the storage folder is shown, but can't be opened.
-        outside = link and not child.resolve().is_relative_to(root)
-        entries.append({"name": child.name, "dir": is_dir, "size": None if is_dir else st.st_size,
-                        "mtime": st.st_mtime, "kind": file_kind(child, is_dir), "link": link, "outside": outside})
+        # A link that leads out of its place is shown, but can't be opened.
+        outside = link and not child.resolve().is_relative_to(top)
+        entry = {"name": child.name, "dir": is_dir, "size": None if is_dir else st.st_size,
+                 "mtime": st.st_mtime, "kind": file_kind(child, is_dir), "link": link, "outside": outside}
+        other = inner.get(str(here / child.name) if str(here) != "." else child.name)
+        if other and is_dir and not link:
+            entry["place"] = other  # Root's mailbox/: opening it opens the Desktop
+        entries.append(entry)
     entries.sort(key=lambda e: (not e["dir"], e["name"].lower()))
     return entries
 
@@ -1008,20 +1143,153 @@ def unique_name(folder, name):
     return candidate
 
 
+def to_trash(place, real):
+    """Into the place's Trash, with where it came from."""
+    slot = PLACES[place] / TRASH / f"{int(time.time() * 1000)}-{secrets.token_hex(3)}"
+    slot.mkdir(parents=True)
+    (slot / "meta.json").write_text(json.dumps({"from": place_path(place, real), "deleted": time.time()}))
+    shutil.move(str(real), str(slot / real.name))
+
+
 def trash_items():
     items = []
-    trash = FILES / TRASH
-    if not trash.is_dir():
-        return items
-    for entry in trash.iterdir():
-        try:
-            meta = json.loads((entry / "meta.json").read_text())
-            inside = next(p for p in entry.iterdir() if p.name != "meta.json")
-        except (OSError, ValueError, StopIteration):
+    for place in WRITABLE:
+        trash = PLACES[place] / TRASH
+        if not place_on(place) or not trash.is_dir():
             continue
-        items.append({"id": entry.name, "name": inside.name, "from": meta.get("from", ""),
-                      "deleted": meta.get("deleted", 0), "dir": inside.is_dir()})
+        for entry in trash.iterdir():
+            try:
+                meta = json.loads((entry / "meta.json").read_text())
+                inside = next(p for p in entry.iterdir() if p.name != "meta.json")
+            except (OSError, ValueError, StopIteration):
+                continue
+            origin = meta.get("from", "")
+            if not any(origin == f"/{p}" or origin.startswith(f"/{p}/") for p in PLACES):
+                origin = "/user" + origin  # from before there were places
+            items.append({"id": f"{place}/{entry.name}", "name": inside.name, "from": origin,
+                          "deleted": meta.get("deleted", 0), "dir": inside.is_dir()})
     return sorted(items, key=lambda i: -i["deleted"])
+
+
+def trash_slot(item_id):
+    """(place, slot folder) for a Trash item's id, else (None, None)."""
+    match = re.fullmatch(r"(desktop|user)/(\d+-[0-9a-f]{6})", str(item_id))
+    if not match or not place_on(match[1]):
+        return None, None
+    slot = PLACES[match[1]] / TRASH / match[2]
+    return (match[1], slot) if slot.is_dir() and not slot.is_symlink() else (None, None)
+
+
+# Copies and moves between places take a while: they run as tasks, with
+# progress, while the page carries on.
+TASKS = {}
+_tasks_lock = threading.Lock()
+
+
+def start_task(label, work):
+    task = {"id": secrets.token_hex(8), "label": label, "done": 0, "total": 0, "status": "running",
+            "error": None, "started": time.time()}
+    with _tasks_lock:
+        for old in [k for k, t in TASKS.items() if t["status"] != "running" and time.time() - t["started"] > 600]:
+            del TASKS[old]
+        TASKS[task["id"]] = task
+
+    def run():
+        try:
+            work(task)
+            task["status"] = "done"
+        except OSError as e:
+            task["status"], task["error"] = "failed", e.strerror or str(e)
+        except Exception as e:  # noqa: BLE001 (it's reported, not swallowed)
+            task["status"], task["error"] = "failed", str(e)
+    threading.Thread(target=run, daemon=True).start()
+    return task
+
+
+def tree_size(path):
+    if path.is_symlink() or not path.is_dir():
+        return path.lstat().st_size
+    total = 0
+    for folder, _, names in os.walk(path):
+        for name in names:
+            try:
+                total += os.lstat(os.path.join(folder, name)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def copy_item(src, dst, task):
+    """src to dst (which mustn't exist), counting bytes into the task. Links
+    are copied as links, never followed."""
+    if src.is_symlink():
+        os.symlink(os.readlink(src), dst)
+    elif src.is_dir():
+        dst.mkdir()
+        for child in src.iterdir():
+            copy_item(child, dst / child.name, task)
+        shutil.copystat(src, dst)
+    else:
+        with open(src, "rb") as a, open(dst, "xb") as b:
+            while chunk := a.read(1024 * 1024):
+                b.write(chunk)
+                task["done"] += len(chunk)
+        shutil.copystat(src, dst)
+
+
+def remove_item(path):
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    else:
+        path.unlink(missing_ok=True)
+
+
+def transfer(sources, folder, copy):
+    """Copy or move [(place, path)] into folder; a task. A move inside one
+    place is a rename, done at once (None)."""
+    if not copy:
+        try:
+            for _, src in sources:
+                os.rename(src, unique_name(folder, src.name))
+            return None
+        except OSError:
+            pass  # another disk: copy, then delete
+    names = [src.name for _, src in sources]
+    label = (f"{'Copying' if copy else 'Moving'} {names[0]}" if len(names) == 1
+             else f"{'Copying' if copy else 'Moving'} {len(names)} items")
+
+    def work(task):
+        task["total"] = sum(tree_size(src) for _, src in sources if src.exists() or src.is_symlink())
+        for _, src in sources:
+            if not (src.exists() or src.is_symlink()):
+                continue  # moved already, by the rename above
+            target = unique_name(folder, src.name)
+            try:
+                copy_item(src, target, task)
+            except BaseException:
+                if target.exists() or target.is_symlink():
+                    remove_item(target)
+                raise
+            if not copy:
+                remove_item(src)
+    return start_task(label, work)
+
+
+def root_request(op, **details):
+    """Queues a change in Root for the helper: the details in a file of their
+    own (paths and text don't fit an action's parameters), its name the
+    action's one parameter."""
+    token = secrets.token_hex(16)
+    FILE_REQUESTS.mkdir(parents=True, exist_ok=True)
+    write_private(FILE_REQUESTS / f"{token}.json", json.dumps({"op": op, "created": time.time(), **details}))
+    actions = load_actions()
+    if "files-root" not in actions:
+        return None, "this adlerOS's helper can't change Root"
+    job, busy = queue_action("files-root", {"request": token}, actions)
+    if busy:
+        (FILE_REQUESTS / f"{token}.json").unlink(missing_ok=True)
+        return None, f"the helper is busy ({busy.get('label', 'something else')}); try again when it's done"
+    return job, None
 
 
 # ----------------------------------------------------------- notifications
@@ -1323,6 +1591,11 @@ class Handler(BaseHTTPRequestHandler):
                                         "ended": ended, "started": started})
         if path.startswith("/api/files"):
             return self.files_get(path, query)
+        if path.startswith("/api/frame/"):
+            app = next((a for a in installed_apps() if a["id"] == path[len("/api/frame/"):]), None)
+            if not app:
+                return self.send_json(404, {"error": "no such app"})
+            return self.send_json(200, frame_answer(app, self.headers.get("Host", ""), query.get("secure", ["0"])[0] == "1"))
         if path == "/api/notifications":
             items = load_notifications()[::-1]
             return self.send_json(200, {"items": items, "unread": sum(not n.get("read") for n in items)})
@@ -1371,7 +1644,8 @@ class Handler(BaseHTTPRequestHandler):
         # JSON only: a plain cross-site form can't send it, so with SameSite
         # cookies these can't be triggered from another site.
         # Saving a file from the editor is the one big body.
-        body = self.read_json(TEXT_LIMIT * 2 + 4096 if path == "/api/files/text" else 4096)
+        body = self.read_json(TEXT_LIMIT * 2 + 4096 if path == "/api/files/text"
+                              else 256 * 1024 if path.startswith("/api/files/") else 4096)
         if body is None:
             return self.send_json(400, {"error": "expected a JSON object"})
         if path == "/api/settings":
@@ -1489,21 +1763,33 @@ class Handler(BaseHTTPRequestHandler):
     # ---------------------------------------------------------- files
 
     def files_get(self, path, query):
-        if not files_on():
+        on = places_on()
+        if not on:
             return self.send_json(404, {"error": "no storage folder is mounted"})
+        if path == "/api/files/trash":
+            return self.send_json(200, {"items": trash_items()})
+        if path == "/api/files/tasks":
+            with _tasks_lock:
+                return self.send_json(200, {"tasks": list(TASKS.values())})
         rel = query.get("path", ["/"])[0]
+        places = [{"place": p, "name": PLACE_LABELS[p]} for p in on]
         if path == "/api/files":
-            real = file_path(rel)
+            if rel.strip("/") == "":
+                entries = [{"name": PLACE_LABELS[p], "dir": True, "size": None, "mtime": None, "kind": "folder",
+                            "link": False, "outside": False, "place": p} for p in on]
+                return self.send_json(200, {"path": "/", "place": None, "places": places, "entries": entries,
+                                            "writable": False})
+            place, real = locate(rel)
             if not real or not real.is_dir():
                 return self.send_json(404, {"error": "no such folder"})
             try:
-                entries = list_folder(real)
+                entries = list_folder(place, real)
             except OSError as e:
                 return self.send_json(403, {"error": f"can't read it: {e.strerror}"})
-            return self.send_json(200, {"path": file_rel(real), "entries": entries})
-        if path == "/api/files/trash":
-            return self.send_json(200, {"items": trash_items()})
-        real = file_path(rel)
+            return self.send_json(200, {"path": place_path(place, real), "place": place, "places": places,
+                                        "entries": entries, "writable": place in WRITABLE or root_writes(),
+                                        "admin": admin_on(), "rootAllowed": terminal_enabled()})
+        place, real = locate(rel)
         if not real or not real.is_file():
             return self.send_json(404, {"error": "no such file"})
         if path == "/api/files/text":
@@ -1514,14 +1800,15 @@ class Handler(BaseHTTPRequestHandler):
                 text = real.read_bytes().decode("utf-8")
             except UnicodeDecodeError:
                 return self.send_json(415, {"error": "not a text file (or not UTF-8)"})
-            return self.send_json(200, {"path": file_rel(real), "text": text, "mtime": st.st_mtime})
+            return self.send_json(200, {"path": place_path(place, real), "place": place, "text": text,
+                                        "mtime": st.st_mtime, "writable": place in WRITABLE or root_writes()})
         if path == "/api/files/raw":
             return self.send_file_stream(real, inline=query.get("inline", ["0"])[0] == "1")
         return self.send(404, b"not found")
 
     def send_file_stream(self, real, inline):
-        """A file from the storage folder, streamed; Range requests (seeking in
-        a video) work. Inline only for types that can't run code."""
+        """A file, streamed; Range requests (seeking in a video) work. Inline
+        only for types that can't run code."""
         size = real.stat().st_size
         ctype = INLINE_TYPES.get(real.suffix.lower()) if inline else None
         start, end = 0, size - 1
@@ -1560,19 +1847,43 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
                 left -= len(chunk)
 
+    def root_refused(self):
+        """Sends why Root can't change right now (and says so), else False."""
+        if not admin_on():
+            self.send_json(403, {"error": "Root is read-only. Switch admin mode on (Settings) to change it.", "admin": True})
+            return True
+        if not terminal_enabled():
+            self.send_json(403, {"error": "Root is read-only on this machine: changing it needs ADLEROS_TERMINAL=on, like the terminal."})
+            return True
+        return False
+
+    def root_change(self, op, **details):
+        """A change in Root, done by the helper: the page waits for the job."""
+        if self.root_refused():
+            return None
+        job, error = root_request(op, **details)
+        if error:
+            return self.send_json(409, {"error": error})
+        return self.send_json(202, {"ok": True, "job": job})
+
     def files_post(self, what, body):
-        if not files_on():
+        if not places_on():
             return self.send_json(404, {"error": "no storage folder is mounted"})
-        root = FILES.resolve()
+
+        def in_trash(place, real):
+            return place in WRITABLE and real.is_relative_to(PLACES[place].resolve() / TRASH)
+
         if what == "text":
             # Save from the editor; with "mtime", only if nobody changed it since.
-            real = file_path(body.get("path"), must_exist=False)
+            place, real = locate(body.get("path"), must_exist=False)
             text = body.get("text")
-            if not real or real == root or not isinstance(text, str):
+            if not real or is_top(place, real) or in_trash(place, real) or not isinstance(text, str):
                 return self.send_json(400, {"error": "expected path and text"})
             data = text.encode("utf-8")
             if len(data) > TEXT_LIMIT:
                 return self.send_json(413, {"error": "too big (over 2 MB)"})
+            if place == "root":
+                return self.root_change("text", path=place_path(place, real), text=text, mtime=body.get("mtime"))
             if real.exists():
                 if not real.is_file():
                     return self.send_json(409, {"error": "that's a folder"})
@@ -1585,50 +1896,75 @@ class Handler(BaseHTTPRequestHandler):
             if real.exists():
                 os.chmod(tmp, real.stat().st_mode & 0o7777)
             os.replace(tmp, real)
-            return self.send_json(200, {"ok": True, "mtime": real.stat().st_mtime, "path": file_rel(real)})
+            return self.send_json(200, {"ok": True, "mtime": real.stat().st_mtime, "path": place_path(place, real)})
         if what == "mkdir":
-            parent = file_path(body.get("path", "/"))
-            if not parent or not parent.is_dir() or not good_name(body.get("name")):
+            place, parent = locate(body.get("path", ""))
+            if not parent or not parent.is_dir() or in_trash(place, parent) or not good_name(body.get("name")):
                 return self.send_json(400, {"error": "a folder name, without /"})
+            if place == "root":
+                return self.root_change("mkdir", path=place_path(place, parent), name=body["name"])
             target = parent / body["name"]
             if target.exists():
                 return self.send_json(409, {"error": "there's already something called that"})
             target.mkdir()
-            return self.send_json(200, {"ok": True, "path": file_rel(target)})
+            return self.send_json(200, {"ok": True, "path": place_path(place, target)})
         if what == "rename":
-            real = file_path(body.get("path"))
-            if not real or real == root or not good_name(body.get("name")):
+            place, real = locate(body.get("path"))
+            if not real or is_top(place, real) or in_trash(place, real) or not good_name(body.get("name")):
                 return self.send_json(400, {"error": "a new name, without /"})
+            if place == "root":
+                return self.root_change("rename", path=place_path(place, real), name=body["name"])
             target = real.parent / body["name"]
             if target.exists():
                 return self.send_json(409, {"error": "there's already something called that"})
             real.rename(target)
-            return self.send_json(200, {"ok": True, "path": file_rel(target)})
+            return self.send_json(200, {"ok": True, "path": place_path(place, target)})
         if what == "delete":
-            # Into the trash, not gone: restore from the Trash view.
+            # Into the Trash, not gone: restore from the Trash view.
             paths = body.get("paths")
             if not isinstance(paths, list) or not 0 < len(paths) <= 500:
                 return self.send_json(400, {"error": "expected paths"})
+            found = [locate(p) for p in paths]
+            if any(not real or is_top(place, real) or in_trash(place, real) for place, real in found):
+                return self.send_json(400, {"error": "can't delete that (a place itself, or something already in the Trash)"})
+            in_root = [place_path(place, real) for place, real in found if place == "root"]
+            if in_root and self.root_refused():
+                return None
             moved = 0
-            for rel in paths:
-                real = file_path(rel)
-                if not real or real == root or real.is_relative_to(root / TRASH):
-                    continue
-                slot = root / TRASH / f"{int(time.time() * 1000)}-{secrets.token_hex(3)}"
-                slot.mkdir(parents=True)
-                (slot / "meta.json").write_text(json.dumps({"from": file_rel(real), "deleted": time.time()}))
-                shutil.move(str(real), str(slot / real.name))
-                moved += 1
+            for place, real in found:
+                if place in WRITABLE:
+                    to_trash(place, real)
+                    moved += 1
+            if in_root:
+                return self.root_change("delete", paths=in_root)
             return self.send_json(200, {"ok": True, "moved": moved})
+        if what in ("move", "copy"):
+            paths, to = body.get("paths"), body.get("to")
+            if not isinstance(paths, list) or not 0 < len(paths) <= 500:
+                return self.send_json(400, {"error": "expected paths"})
+            dest, folder = locate(to)
+            if not folder or not folder.is_dir() or in_trash(dest, folder):
+                return self.send_json(400, {"error": "pick a folder to put them in"})
+            sources = [locate(p) for p in paths]
+            for place, src in sources:
+                if not src or in_trash(place, src) or (what == "move" and is_top(place, src)):
+                    return self.send_json(400, {"error": f"can't {what} that"})
+                if folder == src or folder.is_relative_to(src):
+                    return self.send_json(400, {"error": "a folder can't go inside itself"})
+            if what == "move" and all(src.parent == folder for _, src in sources):
+                return self.send_json(200, {"ok": True, "task": None})  # already there
+            if dest == "root" or (what == "move" and any(place == "root" for place, _ in sources)):
+                return self.root_change(what, paths=[place_path(p, s) for p, s in sources], to=place_path(dest, folder))
+            task = transfer(sources, folder, copy=what == "copy")
+            return self.send_json(200, {"ok": True, "task": task})
         if what in ("restore", "empty-trash"):
-            trash = root / TRASH
             ids = body.get("ids") if what == "restore" else [i["id"] for i in trash_items()]
             if not isinstance(ids, list):
                 return self.send_json(400, {"error": "expected ids"})
-            done = 0
+            done, to_root = 0, []
             for item_id in ids:
-                slot = trash / str(item_id)
-                if not re.fullmatch(r"\d+-[0-9a-f]{6}", str(item_id)) or not slot.is_dir() or slot.is_symlink():
+                place, slot = trash_slot(item_id)
+                if not slot:
                     continue
                 if what == "empty-trash":
                     shutil.rmtree(slot)
@@ -1636,35 +1972,46 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 item = next((p for p in slot.iterdir() if p.name != "meta.json"), None)
                 try:
-                    origin = json.loads((slot / "meta.json").read_text()).get("from", "/" + (item.name if item else ""))
+                    origin = json.loads((slot / "meta.json").read_text()).get("from", "")
                 except (OSError, ValueError):
-                    origin = "/" + (item.name if item else "")
-                parent = file_path(str(Path(origin).parent)) or root
+                    origin = ""
+                if not any(origin == f"/{p}" or origin.startswith(f"/{p}/") for p in PLACES):
+                    origin = "/user" + (origin or "/" + (item.name if item else ""))
+                if origin.startswith("/root/"):
+                    to_root.append(item_id)
+                    continue
+                back, parent = locate(str(Path(origin).parent))
+                if not parent or not parent.is_dir() or back not in WRITABLE:
+                    parent = PLACES[place].resolve()  # its folder is gone: the top of its place
                 if item:
-                    shutil.move(str(item), str(unique_name(parent if parent.is_dir() else root, item.name)))
+                    shutil.move(str(item), str(unique_name(parent, item.name)))
                 shutil.rmtree(slot)
                 done += 1
+            if to_root:
+                return self.root_change("restore", ids=to_root)
             return self.send_json(200, {"ok": True, "done": done})
         return self.send(404, b"not found")
 
     def do_PUT(self):
-        """Upload: PUT /api/files/upload?dir=/Documents&name=a.pdf, the file as
-        the body. A cross-site page can't send a PUT with your cookie."""
+        """Upload: PUT /api/files/upload?dir=/user/Documents&name=a.pdf, the
+        file as the body. A cross-site page can't send a PUT with your cookie."""
         url = urllib.parse.urlsplit(self.path)
         query = urllib.parse.parse_qs(url.query)
         if url.path != "/api/files/upload":
             return self.send(404, b"not found")
         if not self.logged_in():
             return self.send_json(401, {"error": "login required"})
-        if not files_on():
+        if not places_on():
             return self.send_json(404, {"error": "no storage folder is mounted"})
-        folder = file_path(query.get("dir", ["/"])[0])
+        place, folder = locate(query.get("dir", [""])[0])
         name = query.get("name", [""])[0]
         try:
             length = int(self.headers.get("Content-Length", "-1"))
         except ValueError:
             length = -1
-        if not folder or not folder.is_dir() or not good_name(name) or name == TRASH:
+        if place == "root":
+            return self.send_json(400, {"error": "Root takes no uploads: upload to the Desktop or User, then move it"})
+        if not folder or not folder.is_dir() or not good_name(name) or folder.is_relative_to(PLACES[place].resolve() / TRASH):
             return self.send_json(400, {"error": "a folder and a file name"})
         if not 0 <= length <= UPLOAD_LIMIT:
             return self.send_json(413, {"error": "too big"})
@@ -1685,7 +2032,7 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as e:
             part.unlink(missing_ok=True)
             return self.send_json(500, {"error": str(e)})
-        return self.send_json(200, {"ok": True, "path": file_rel(target), "name": target.name})
+        return self.send_json(200, {"ok": True, "path": place_path(place, target), "name": target.name})
 
     def open_terminal(self, body):
         """A new shell: admin mode, the terminal switched on, and your password again."""

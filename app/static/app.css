@@ -1163,6 +1163,9 @@ body.arranging .app:nth-child(2n) .app-icon { animation-delay: -0.12s; }
    live usage on the left, and searchable, filterable rows on the right. */
 
 .sheet {
+  /* What's inside follows the window's width (in desktop mode it's not the
+     screen's): the @container sheet rules below. */
+  container: sheet / inline-size;
   position: fixed;
   left: 50%;
   bottom: 0;
@@ -1713,13 +1716,13 @@ a.chip-button { text-decoration: none; }
 .service-body > select.field-input { width: auto; max-width: 100%; margin-top: 6px; align-self: flex-start; }
 .service-fields { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
 .service-fields .import-field { gap: 4px; }
-@media (min-width: 640px) { .service-fields { grid-template-columns: 1fr 1.4fr 1fr; } }
+@container sheet (min-width: 640px) { .service-fields { grid-template-columns: 1fr 1.4fr 1fr; } }
 .import-badge { padding: 2px 10px; border-radius: 999px; background: rgb(255 255 255 / 0.12); font-size: 12px; font-weight: 600; }
 .import-field { display: flex; flex-direction: column; gap: 6px; }
 .import-field .field-input { width: 100%; }
 .import-skip { display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: 13px; cursor: pointer; }
 .import-skip input { accent-color: #fff; }
-@media (min-width: 900px) {
+@container sheet (min-width: 850px) {
   .import-step { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
   .compose-text { max-height: 62vh; }
 }
@@ -1747,6 +1750,32 @@ a.chip-button { text-decoration: none; }
 .crumb.current { cursor: default; }
 .crumb-sep { color: rgb(255 255 255 / 0.35); }
 .files-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.files-main { display: flex; flex: 1; gap: 14px; min-height: 0; }
+.files-side { display: flex; flex-direction: column; gap: 2px; width: 170px; flex-shrink: 0; }
+.files-place {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: rgb(255 255 255 / 0.8);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.files-place:hover { background: rgb(255 255 255 / 0.06); }
+.files-place.current { background: rgb(255 255 255 / 0.12); color: #fff; font-weight: 600; }
+.files-place:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.9); }
+.files-place-icon svg { display: block; width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.files-col { display: flex; flex: 1; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+.files-note { margin: 0; padding: 10px 14px; border-radius: 12px; background: rgb(255 255 255 / 0.06); font-size: 13px; color: rgb(255 255 255 / 0.75); }
+.files-note.warn { background: rgb(251 191 36 / 0.14); color: #fde68a; }
+@container sheet (max-width: 640px) {
+  .files-main { flex-direction: column; }
+  .files-side { flex-direction: row; flex-wrap: wrap; width: auto; }
+}
 .files-list {
   flex: 1;
   min-height: 0;
@@ -1797,7 +1826,7 @@ a.chip-button { text-decoration: none; }
 /* The editor takes the window's place while it's open. */
 .editor { display: none; flex: 1; flex-direction: column; gap: 10px; min-height: 0; }
 .files-sheet.editing .editor { display: flex; }
-.files-sheet.editing .files-bar, .files-sheet.editing .files-list, .files-sheet.editing .uploads { display: none; }
+.files-sheet.editing .files-bar, .files-sheet.editing .files-main { display: none; }
 .editor-bar { display: flex; align-items: center; gap: 10px; padding-right: 48px; }
 .editor-title { display: flex; flex: 1; flex-direction: column; min-width: 0; font-size: 15px; font-weight: 600; }
 .editor-path { overflow: hidden; font-size: 12px; font-weight: 400; color: rgb(255 255 255 / 0.45); white-space: nowrap; text-overflow: ellipsis; }
@@ -1817,8 +1846,8 @@ a.chip-button { text-decoration: none; }
   outline: none;
 }
 .editor-text:focus-visible { box-shadow: 0 0 0 2px rgb(255 255 255 / 0.5); }
-@media (min-width: 768px) { .files-body { padding: 40px 40px 34px; } }
-@media (max-width: 640px) {
+@container sheet (min-width: 718px) { .files-body { padding: 40px 40px 34px; } }
+@container sheet (max-width: 640px) {
   .file-row { grid-template-columns: 28px minmax(0, 1fr) 70px; }
   .file-date { display: none; }
   .trash-row { grid-template-columns: 28px minmax(0, 1fr) auto; }
@@ -1875,7 +1904,7 @@ a.chip-button { text-decoration: none; }
   opacity: 0;
   resize: none;
 }
-@media (max-width: 640px) { .term-hint { display: none; } .term { font-size: 11px; } }
+@container sheet (max-width: 640px) { .term-hint { display: none; } .term { font-size: 11px; } }
 
 /* =========================================================== live usage */
 
@@ -1970,7 +1999,7 @@ a.chip-button { text-decoration: none; }
 .u-row.idle .u-row-icon { opacity: 0.5; }
 .u-other { margin: 10px 8px 0; font-size: 12px; color: rgb(255 255 255 / 0.5); }
 .u-row-value { min-width: 56px; font-size: 13px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
-@media (max-width: 520px) {
+@container sheet (max-width: 520px) {
   .u-row { grid-template-columns: 24px 1fr auto; }
   .u-row-value { grid-row: 1; grid-column: 3; }
   .u-bar { grid-row: 2; grid-column: 2 / -1; }
@@ -1978,13 +2007,141 @@ a.chip-button { text-decoration: none; }
 
 @media (min-width: 768px) {
   .sheet { width: calc(100vw - 50px); }
-  .sheet-body { padding: 48px 40px 140px; }
   .sheet-close { top: 20px; right: 20px; }
 }
 @media (min-width: 1024px) {
   .sheet { width: calc(100vw - 120px); height: calc(100dvh - 60px); border-radius: 40px 40px 0 0; }
+}
+/* The same steps as the screen widths above, as the window widths they make. */
+@container sheet (min-width: 718px) { .sheet-body { padding: 48px 40px 140px; } }
+@container sheet (min-width: 904px) {
   .sheet-body { grid-template-columns: 286px minmax(0, 1fr); align-items: start; overflow: hidden; padding: 48px 40px 0; }
   .settings-side, .settings-main { height: 100%; overflow-y: auto; padding-bottom: 140px; scrollbar-width: none; }
   .settings-side::-webkit-scrollbar, .settings-main::-webkit-scrollbar { display: none; }
 }
-@media (min-width: 1280px) { .sheet-body { padding-inline: 60px; } }
+@container sheet (min-width: 1160px) { .sheet-body { padding-inline: 60px; } }
+
+/* ========================================================== desktop mode
+   Floating windows over your Desktop folder's files (Settings → Desktop
+   mode, per device). windows.js places them; these are their looks. */
+
+.desk, .win-bar, .win-grip, .app-shield { display: none; }
+body.wm .header, body.wm .stage { display: none; }
+body.wm.sheet-open .desktop { opacity: 1; }
+body.wm .desk {
+  position: fixed;
+  inset: 18px 18px calc(var(--dock-h, 74px) + 30px);
+  z-index: 1;
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(auto-fill, 108px);
+  grid-auto-columns: 96px;
+  align-content: start;
+  gap: 6px 10px;
+}
+.desk.dropping { border-radius: 20px; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.6) inset; }
+.desk-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 96px;
+  height: 108px;
+  padding: 8px 4px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: #fff;
+  cursor: default;
+}
+.desk-icon:hover { background: rgb(255 255 255 / 0.08); }
+.desk-icon:focus { outline: none; background: rgb(255 255 255 / 0.16); }
+.desk-icon:focus-visible { box-shadow: 0 0 0 3px rgb(255 255 255 / 0.9); }
+.desk-icon.outside { opacity: 0.45; }
+.desk-glyph.file-icon { width: 52px; height: 52px; border-radius: 14px; background: rgb(0 0 0 / 0.35); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.desk-glyph svg { width: 28px; height: 28px; }
+.desk-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.8);
+  overflow-wrap: anywhere;
+}
+.desk-empty { grid-column: 1 / span 4; max-width: 360px; margin: 0; padding: 14px 16px; border-radius: 14px; background: rgb(0 0 0 / 0.4); font-size: 13px; }
+
+body.wm .sheet {
+  bottom: auto;
+  max-width: none;
+  padding-top: 38px;
+  border-radius: 14px;
+  box-shadow: 0 22px 60px rgb(0 0 0 / 0.6);
+  transform: none;
+  animation: win-in 0.16s ease-out both;
+}
+body.wm .sheet:not(.active) { box-shadow: 0 10px 30px rgb(0 0 0 / 0.45); }
+body.wm .sheet.closing { animation: win-out 0.16s ease-in both; }
+body.wm .sheet.minimized { display: none; }
+body.wm .sheet[data-mode="max"] { border-radius: 0; }
+body.wm .sheet.win-keyed { box-shadow: 0 0 0 3px #fff, 0 22px 60px rgb(0 0 0 / 0.6); }
+@keyframes win-in { from { opacity: 0; transform: scale(0.97); } }
+@keyframes win-out { to { opacity: 0; transform: scale(0.97); } }
+body.wm .sheet-close { display: none; }
+body.wm .win-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 38px;
+  padding: 0 6px 0 10px;
+  border-bottom: 0.5px solid rgb(255 255 255 / 0.08);
+  background: rgb(255 255 255 / 0.07);
+  user-select: none;
+  touch-action: none;
+}
+body.wm .sheet:not(.active) .win-bar { color: rgb(255 255 255 / 0.55); background: rgb(255 255 255 / 0.03); }
+.win-title { flex: 1; overflow: hidden; padding: 3px 6px; border-radius: 6px; font-size: 13px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.win-title:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.9); }
+.win-button { display: grid; place-items: center; width: 30px; height: 28px; padding: 0; border: 0; border-radius: 8px; background: none; color: inherit; cursor: pointer; }
+.win-button:hover { background: rgb(255 255 255 / 0.12); }
+.win-button.close:hover { background: #e5484d; color: #fff; }
+.win-button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.9); }
+.win-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Resize from any edge (inside it: the window clips what's outside). */
+body.wm .win-grip { position: absolute; z-index: 9; display: block; }
+body.wm .sheet[data-mode="max"] .win-grip { display: none; }
+.win-grip.n, .win-grip.s { left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+.win-grip.e, .win-grip.w { top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+.win-grip.n { top: 0; }
+.win-grip.s { bottom: 0; }
+.win-grip.e { right: 0; }
+.win-grip.w { left: 0; }
+.win-grip.ne, .win-grip.nw, .win-grip.se, .win-grip.sw { width: 12px; height: 12px; }
+.win-grip.ne { top: 0; right: 0; cursor: nesw-resize; }
+.win-grip.sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.win-grip.nw { top: 0; left: 0; cursor: nwse-resize; }
+.win-grip.se { bottom: 0; right: 0; cursor: nwse-resize; }
+.win-snap {
+  position: fixed;
+  z-index: 48;
+  border: 2px solid rgb(255 255 255 / 0.55);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.1);
+  pointer-events: none;
+  transition: left 0.1s, top 0.1s, width 0.1s, height 0.1s;
+}
+body.win-moving { user-select: none; }
+body.win-moving iframe { pointer-events: none; }
+
+/* An app's own page, in a window. */
+.app-sheet { display: flex; flex-direction: column; }
+.app-frame { position: relative; z-index: 2; flex: 1; width: 100%; border: 0; background: #fff; }
+body.wm .app-sheet:not(.active) .app-shield { position: absolute; inset: 38px 0 0; z-index: 7; display: block; }

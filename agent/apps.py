@@ -671,10 +671,14 @@ def store_install(app):
     make_mount_dirs(target, env_text)
     say(f"Set up {t.get('name', app['id'])} in {target}, on port {port}.")
     compose_file_path = target / "docker-compose.yml"
+    # "scheme": https for an app that only serves that; "window": how adlerOS
+    # may show it (https: in a window only when adlerOS is on HTTPS too).
+    scheme = t.get("scheme") if t.get("scheme") in ("http", "https") else "http"
     record = {"name": t.get("name", app["id"]), "files": [str(compose_file_path)], "services": None,
-              "url": f"http://{host_address()}:{port}", "icon": t.get("icon", ""), "port": port,
+              "url": f"{scheme}://{host_address()}:{port}", "icon": t.get("icon", ""), "port": port,
               "about": t.get("about", ""), "collection": t.get("collection", "extras"), "source": "store",
-              "known": app["id"], "note": t.get("firstRun", ""), "added": time.strftime("%Y-%m-%d"), "installed": True}
+              "known": app["id"], "note": t.get("firstRun", ""), "added": time.strftime("%Y-%m-%d"), "installed": True,
+              **({"window": t["window"]} if t.get("window") in ("https", "tab") else {})}
     code = compose(compose_file_path, "up", "-d")
     if code:
         say(f"It didn't start ({code}); its folder stays, so you can look. Delete it to tidy up.")

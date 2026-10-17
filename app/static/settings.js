@@ -10,6 +10,7 @@ const ICONS = {
   user: ["M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2", "M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"],
   key: ["M2.6 18.4 9 12", "M7.5 21.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z", "m21 2-9.6 9.6", "m15.5 7.5 3 3L22 7l-3-3"],
   image: ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "m21 15-5-5L5 21", "M9 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"],
+  windows: ["M3 4h11v9H3z", "M3 7h11", "M10 11h11v9H10z", "M10 14h11"],
   globe: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M2 12h20", "M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"],
   clock: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M12 6v6l4 2"],
   lock: ["M7 11h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z", "M8 11V7a4 4 0 0 1 8 0v4"],
@@ -85,21 +86,10 @@ async function loadCatalog() {
 // --------------------------------------------------------- open / close
 
 async function openSettings(rowId) {
-  closeSearch();
-  closeMenu();
-  closeDrawer();
   await loadCatalog();
-  const sheet = $("settings");
-  sheet.classList.remove("closing");
-  sheet.hidden = false;
-  document.body.classList.add("sheet-open");
+  openWindow("settings");
   // #settings in the address: a reload comes back here, and it can be linked.
   history.replaceState(null, "", rowId ? `#settings/${rowId}` : "#settings");
-  if (isOpen("store")) closeStore();
-  if (isOpen("usage")) closeUsage();
-  hideTerminal();
-  if (filesOpen()) closeFiles();
-  markDockOpen("settings", true);
   if (!(await loadSettings())) return;
   settings.query = "";
   $("settings-search").value = "";
@@ -116,17 +106,10 @@ async function openSettings(rowId) {
 }
 
 function closeSettings() {
-  const sheet = $("settings");
-  if (sheet.hidden) return;
+  if (!isOpen("settings")) return;
   clearInterval(settings.timer);
-  sheet.classList.add("closing");
-  if (!isOpen("store") && !isOpen("usage")) document.body.classList.remove("sheet-open");
+  closeWindow("settings");
   history.replaceState(null, "", location.pathname);
-  markDockOpen("settings", false);
-  setTimeout(() => {
-    sheet.hidden = true;
-    sheet.classList.remove("closing");
-  }, 280);
 }
 
 // The little line under a dock item whose window is open.
@@ -299,6 +282,11 @@ function buildRow(row) {
     control.append(configInput(row, c));
   } else if (c.type === "admin") {
     control.append(adminSwitch());
+  } else if (c.type === "desktop-mode") {
+    // Kept in this browser, not on the server: each device picks.
+    const sw = el("button", { type: "button", class: "switch", role: "switch", "aria-checked": String(desktopMode()), "aria-label": "Desktop mode" }, el("span"));
+    sw.addEventListener("click", () => setDesktopMode(!desktopMode()));
+    control.append(sw);
   } else if (c.type === "open") {
     // Opens one of adlerOS's windows (the terminal, say).
     const b = el("button", { type: "button", class: "chip-button" }, c.label || "Open");
@@ -694,9 +682,10 @@ document.addEventListener("keydown", (e) => {
   if (!$("modal").hidden) {
     e.stopImmediatePropagation();
     closeModal();
-  } else if (!$("settings").hidden && $("search").hidden && $("menu").hidden && $("confirm").hidden) {
+  } else if (isActive("settings") && $("search").hidden && $("menu").hidden && $("confirm").hidden) {
     e.stopImmediatePropagation();
     closeSettings();
   }
 }, true);
+registerWindow("settings", { title: "Settings", close: closeSettings, dock: "settings", size: [1100, 780] });
 loadCatalog().catch(() => {});
