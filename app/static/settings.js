@@ -207,7 +207,8 @@ function renderSide() {
 // Rows for the other kind of install (homelab or standalone) aren't shown.
 function forMode(row) {
   const mode = settings.data?.mode || state.mode || "homelab";
-  return !row.mode || row.mode === mode;
+  // "device": "computer": not on a phone (desktop mode).
+  return (!row.mode || row.mode === mode) && (row.device !== "computer" || computerScreen());
 }
 
 function categoryLabel(c) {

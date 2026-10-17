@@ -92,7 +92,9 @@ Click one again to close its window. Put your own icon for any of the four in
 For a computer with a mouse: windows side by side, like any desktop. Switch it
 on in **Settings → Desktop mode**, ⌘K "desktop mode", or right-click the
 desktop. It's kept in that browser only, so the TV can stay on the home screen
-while the laptop uses desktop mode.
+while the laptop uses desktop mode. It's for computers: a phone never has it
+(held upright, it gets the iPhone-style layout instead), and a browser window
+made phone-narrow leaves it until it's wide again.
 
 - **The desktop** shows your Desktop folder (a homelab's `mailbox/`) as icons.
   Double-click one (Enter, or a tap) to open it; right-click for Copy, Cut,

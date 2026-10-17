@@ -862,7 +862,8 @@ function closeSearch() { $("search").hidden = true; }
 function renderResults() {
   const q = $("search-input").value.trim().toLowerCase();
   const apps = state.apps.filter((a) => !q || a.name.toLowerCase().includes(q) || a.about.toLowerCase().includes(q));
-  const actions = q ? ACTIONS.filter((a) => a.name.toLowerCase().includes(q) || a.keywords.includes(q)) : [];
+  const actions = q ? ACTIONS.filter((a) => (a.name.toLowerCase().includes(q) || a.keywords.includes(q))
+    && (a.id !== "desktop-mode" || computerScreen())) : [];
   results = [...apps.slice(0, 8).map((app) => ({ type: "app", app })), ...settingsSearchResults(q),
     ...actions.map((action) => ({ type: "action", action })),
     // Last: the web, for anything else (a phone has no search bar of its own).
