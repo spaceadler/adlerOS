@@ -2036,7 +2036,8 @@ body.wm .desk {
   z-index: 1;
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: repeat(auto-fill, 108px);
+  /* Half an icon a row: an icon takes two, a widget three (desk.js). */
+  grid-template-rows: repeat(auto-fill, 51px);
   grid-auto-columns: 96px;
   align-content: start;
   gap: 6px 10px;
@@ -2294,11 +2295,10 @@ body.wm .app-sheet:not([data-mode="max"]) .app-frame { opacity: 0.92; }
 .file-row.drag-source { opacity: 0.4; }
 .file-row.drop-target, .files-place.drop-target { background: rgb(255 255 255 / 0.16); box-shadow: 0 0 0 2px rgb(255 255 255 / 0.85) inset; }
 
-/* Desktop mode: widgets on the desktop (desk.js). Each takes three cells by
-   two, but shows a row and a half tall, centred: a quarter of a row free
-   above it and below. */
+/* Desktop mode: widgets on the desktop (desk.js): three icons wide, a row
+   and a half tall (three of the desktop's half rows). */
 .desk-widget { display: flex; align-items: center; min-width: 0; min-height: 0; }
-.desk-widget .widget { width: 100%; height: calc(1.5 * 108px + 0.5 * 6px); gap: 6px; }
+.desk-widget .widget { width: 100%; height: 100%; gap: 6px; }
 .desk-widget .widget-panel { flex: 1 1 auto; width: 100%; height: auto; min-height: 0; }
 .desk-widget .widget-panel:hover { transform: none; }
 .desk-ghost.desk-widget { background: none; opacity: 0.85; }
@@ -2307,3 +2307,5 @@ body.wm .app-sheet:not([data-mode="max"]) .app-frame { opacity: 0.92; }
 .desk-app-glyph.builtin { -webkit-mask: none; mask: none; }
 .desk-app-glyph.builtin img { width: 100%; height: 100%; }
 .desk-app.offline .plate { filter: brightness(0.5); }
+body.wm .desk > .desk-icon { grid-row: span 2; }
+body.wm .desk > .desk-empty { grid-row: span 2; }

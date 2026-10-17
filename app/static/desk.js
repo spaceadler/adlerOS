@@ -13,11 +13,26 @@
 
 const desk = { entries: [], on: false, timer: null, at: 0, drag: null };
 const DESK_REFRESH_MS = 15000;
-const DESK_PLACES_KEY = "adleros.deskPlaces"; // {file name: [column, row]}, this computer's
-const DESK_CELL = { w: 96, h: 108, gapX: 10, gapY: 6 }; // as in app.css
-// Widgets on the desktop: three cells wide, two tall, where you put them.
-const DESK_WIDGETS_KEY = "adleros.deskWidgets"; // [{key, id, cell: [column, row]}], this computer's
-const DESK_WIDGET = { cols: 3, rows: 2 };
+// The desktop's grid: columns an icon wide, and rows half an icon tall, so
+// an icon takes two of them and a widget (three columns wide) three: a row
+// and a half. Places are [column, half row], the top left one an item takes.
+const DESK_PLACES_KEY = "adleros.deskPlaces"; // {file name: [column, half row]}, this computer's
+const DESK_CELL = { w: 96, h: 51, gapX: 10, gapY: 6 }; // as in app.css
+const ICON_ROWS = 2;
+const DESK_WIDGETS_KEY = "adleros.deskWidgets"; // [{key, id, cell: [column, half row]}], this computer's
+const DESK_WIDGET = { cols: 3, rows: 3 };
+// From before the half rows: whole rows, once, into half ones.
+try {
+  if (localStorage.getItem("adleros.deskGrid") !== "half") {
+    const half = (cell) => [cell[0], (cell[1] - 1) * 2 + 1];
+    const places = JSON.parse(localStorage.getItem(DESK_PLACES_KEY) || "{}");
+    for (const name of Object.keys(places)) places[name] = half(places[name]);
+    localStorage.setItem(DESK_PLACES_KEY, JSON.stringify(places));
+    const list = JSON.parse(localStorage.getItem(DESK_WIDGETS_KEY) || "[]");
+    localStorage.setItem(DESK_WIDGETS_KEY, JSON.stringify(list.map((w) => ({ ...w, cell: half(w.cell) }))));
+    localStorage.setItem("adleros.deskGrid", "half");
+  }
+} catch { /* nothing kept, nothing to change */ }
 desk.widgets = new Map(); // key -> {node, update}, kept between redraws
 // Apps put on the desktop (All apps → Add to desktop): their pin ids (an
 // app's id, or adleros:files…), this computer's; placed like files, as "app:<id>".
@@ -55,7 +70,7 @@ function deskAppNodes() {
     const icon = el("button", { type: "button", class: `desk-icon desk-app${p.up === false ? " offline" : ""}`, "data-desk-app": p.id, title: name },
       glyph, el("span", { class: "desk-name" }, name));
     const at = places[`app:${p.id}`];
-    if (at && at[1] <= deskRows()) placeIcon(icon, at);
+    if (at && at[1] <= deskRows() - ICON_ROWS + 1) placeIcon(icon, at);
     const open = () => (p.builtin ? p.builtin.open() : openApp(p));
     icon.addEventListener("dblclick", open);
     icon.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); open(); } });
@@ -89,25 +104,30 @@ function fitsWidget(cell, except) {
   }
   return true;
 }
-// The nearest place a widget fits, starting from where you wanted it.
+// The nearest place a widget fits, starting from where you wanted it: up or
+// down that column before another column (a column is wider than a half row).
 function widgetSpot(want, except) {
   const rows = deskRows();
   const start = [Math.max(1, want[0]), Math.min(Math.max(1, want[1]), Math.max(1, rows - DESK_WIDGET.rows + 1))];
-  if (fitsWidget(start, except)) return start;
-  for (let d = 1; d < 40; d++) {
-    for (const [dc, dr] of [[0, d], [-d, 0], [d, 0], [0, -d]]) {
-      const cell = [start[0] + dc, start[1] + dr];
-      if (fitsWidget(cell, except)) return cell;
+  let best = null;
+  for (let col = 1; col <= deskCols() + DESK_WIDGET.cols; col++) {
+    for (let row = 1; row <= rows; row++) {
+      const cost = Math.abs(col - start[0]) * 4 + Math.abs(row - start[1]);
+      if ((!best || cost < best.cost) && fitsWidget([col, row], except)) best = { cell: [col, row], cost };
     }
   }
-  return start;
+  return best ? best.cell : start;
+}
+// Whether an icon there would be (partly) under a widget.
+function iconUnderWidget(cell) {
+  return underWidget(cell) || underWidget([cell[0], cell[1] + ICON_ROWS - 1]);
 }
 // Icons you'd put where a widget now is go back in with the rest.
 function clearUnderWidgets() {
   const places = deskPlaces();
   let changed = false;
   for (const [name, cell] of Object.entries(places)) {
-    if (underWidget(cell)) {
+    if (iconUnderWidget(cell)) {
       delete places[name];
       changed = true;
     }
@@ -174,7 +194,7 @@ async function deskWidgetPicker(cell) {
   cancel.addEventListener("click", closeModal);
   openModal(el("div", { class: "dialog material widget-picker", role: "dialog", "aria-modal": "true", "aria-label": "Add a widget" },
     el("div", { class: "picker-head" }, el("h2", {}, "Add a widget")),
-    el("p", { class: "picker-note" }, "It goes on the desktop, three icons wide, in the room of two rows: drag it where you want it."),
+    el("p", { class: "picker-note" }, "It goes on the desktop, three icons wide and a row and a half tall: drag it where you want it."),
     grid, el("div", { class: "dialog-actions" }, cancel)));
   grid.querySelector("button")?.focus();
 }
@@ -186,12 +206,18 @@ function saveDeskPlaces(places) {
   try { localStorage.setItem(DESK_PLACES_KEY, JSON.stringify(places)); } catch { /* private window: not kept */ }
 }
 function deskRows() {
-  return Math.max(1, Math.floor(($("desk").clientHeight + DESK_CELL.gapY) / (DESK_CELL.h + DESK_CELL.gapY)));
+  return Math.max(ICON_ROWS, Math.floor(($("desk").clientHeight + DESK_CELL.gapY) / (DESK_CELL.h + DESK_CELL.gapY)));
 }
 function placeIcon(icon, at) {
   icon.style.gridColumn = at ? String(at[0]) : "";
-  icon.style.gridRow = at ? String(at[1]) : "";
+  icon.style.gridRow = at ? `${at[1]} / span ${ICON_ROWS}` : "";
 }
+// An icon on the desktop by its place's name (a file's, or app:<id>).
+function deskNode(name) {
+  return $("desk").querySelector(name.startsWith("app:") ? `[data-desk-app="${CSS.escape(name.slice(4))}"]`
+    : `[data-file="${CSS.escape(`/desktop/${name}`)}"]`);
+}
+const iconsOverlap = (a, b) => a[0] === b[0] && Math.abs(a[1] - b[1]) < ICON_ROWS;
 
 async function refreshDesk() {
   if (!desktopMode()) return;
@@ -217,7 +243,7 @@ function renderDesk() {
       el("span", { class: `desk-glyph file-icon ${entry.kind}` }, svg(FILE_ICONS[entry.kind] || FILE_ICONS.file)),
       el("span", { class: "desk-name" }, entry.name));
     const at = deskPlaces()[entry.name];
-    if (at && at[1] <= deskRows()) placeIcon(icon, at);
+    if (at && at[1] <= deskRows() - ICON_ROWS + 1) placeIcon(icon, at);
     icon.addEventListener("dblclick", () => openEntry(entry, path));
     icon.addEventListener("click", () => { if (matchMedia("(pointer: coarse)").matches) openEntry(entry, path); });
     icon.addEventListener("keydown", (e) => {
@@ -327,36 +353,39 @@ async function deskMoveTo(name, folder) {
   refreshFiles();
 }
 
-// Somewhere else on the desktop: that cell, and whatever was there takes
-// this one's old place (or flows back in with the rest).
-// The cell of the desktop's grid under a point: [column, row].
+// The cell of the desktop's grid under a point: [column, half row].
 function deskCellAt(x, y) {
   const r = $("desk").getBoundingClientRect();
   return [Math.max(1, Math.floor((x - r.left) / (DESK_CELL.w + DESK_CELL.gapX)) + 1),
     Math.min(deskRows(), Math.max(1, Math.floor((y - r.top) / (DESK_CELL.h + DESK_CELL.gapY)) + 1))];
 }
+// Where an icon whose top you'd put at that cell fits (it's two half rows tall).
+const iconCell = (cell) => [cell[0], Math.min(cell[1], deskRows() - ICON_ROWS + 1)];
 
 // A file arriving on the desktop (dragged from Files): there, from now on.
-// Whatever had that cell flows back in with the rest.
+// Whatever had that spot flows back in with the rest.
 function rememberDeskPlace(name, cell) {
+  const at = iconCell(cell);
   const places = deskPlaces();
-  for (const n of Object.keys(places)) if (places[n][0] === cell[0] && places[n][1] === cell[1]) delete places[n];
-  places[name] = cell;
+  for (const n of Object.keys(places)) if (iconsOverlap(places[n], at)) delete places[n];
+  places[name] = at;
   saveDeskPlaces(places);
 }
 
+// Somewhere else on the desktop: there, and an icon that was there takes
+// this one's old place (or flows back in with the rest).
 function deskPlace(icon, name, e) {
-  const [col, row] = deskCellAt(e.clientX, e.clientY);
-  if (underWidget([col, row])) return; // a widget's there: it stays where it was
+  const [col, row] = iconCell(deskCellAt(e.clientX, e.clientY));
+  if (iconUnderWidget([col, row])) return; // a widget's there: it stays where it was
   const places = deskPlaces();
   const before = places[name];
-  const there = Object.keys(places).find((n) => n !== name && places[n][0] === col && places[n][1] === row);
-  if (there) {
-    if (before) places[there] = before;
-    else delete places[there];
-    const other = $("desk").querySelector(`[data-file="${CSS.escape(`/desktop/${there}`)}"]`);
-    if (other) placeIcon(other, places[there]);
-  }
+  const there = Object.keys(places).filter((n) => n !== name && iconsOverlap(places[n], [col, row]));
+  there.forEach((n, i) => {
+    if (i === 0 && before) places[n] = before;
+    else delete places[n];
+    const other = deskNode(n);
+    if (other) placeIcon(other, places[n]);
+  });
   places[name] = [col, row];
   // Only what's on the desktop now is remembered.
   const names = new Set([...desk.entries.map((x) => x.name), ...deskApps().map((id) => `app:${id}`)]);

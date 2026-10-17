@@ -121,8 +121,8 @@ made phone-narrow leaves it until it's wide again.
   double-click to open it, drag it about, right-click → **Remove from
   desktop**.
 - **Widgets on the desktop:** right-click the desktop → **Add widget…** and
-  pick one (the same ones as the home screen's). It takes the room of three
-  icons by two, shown a row and a half tall; drag it where you want it (icons make room), right-click it →
+  pick one (the same ones as the home screen's). It's three icons wide and a
+  row and a half tall; drag it where you want it (icons make room), right-click it →
   **Remove widget**. Each computer keeps its own desktop: where things are,
   which apps and widgets. Files that arrive
   some other way (Syncthing) show up within 15 seconds.
