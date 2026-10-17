@@ -2303,7 +2303,7 @@ body.wm .app-sheet:not([data-mode="max"]) .app-frame { opacity: 0.92; }
 .desk-widget .widget-panel:hover { transform: none; }
 .desk-ghost.desk-widget { background: none; opacity: 0.85; }
 /* An app on the desktop: its own icon, the same squircle as the dock's. */
-.desk-app-glyph { position: relative; overflow: hidden; background: none; -webkit-mask: url("/static/dock/squircle.svg") center / 100% 100% no-repeat; mask: url("/static/dock/squircle.svg") center / 100% 100% no-repeat; }
+.desk-app-glyph { position: relative; display: block; flex-shrink: 0; width: 52px; height: 52px; overflow: hidden; background: none; -webkit-mask: url("/static/dock/squircle.svg") center / 100% 100% no-repeat; mask: url("/static/dock/squircle.svg") center / 100% 100% no-repeat; }
 .desk-app-glyph.builtin { -webkit-mask: none; mask: none; }
 .desk-app-glyph.builtin img { width: 100%; height: 100%; }
 .desk-app.offline .plate { filter: brightness(0.5); }
