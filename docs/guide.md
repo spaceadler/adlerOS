@@ -63,6 +63,58 @@ Click one again to close its window. Put your own icon for any of the four in
 <!-- screenshot: the All apps drawer -->
 ![All apps](screenshots/all-apps.png)
 
+## Desktop mode
+
+<!-- screenshot: desktop mode, Files and an app side by side, icons on the desktop -->
+![Desktop mode](screenshots/desktop-mode.png)
+
+For a computer with a mouse: windows side by side, like any desktop. Switch it
+on in **Settings → Desktop mode**, ⌘K "desktop mode", or right-click the
+desktop. It's kept in that browser only, so the TV can stay on the home screen
+while the laptop uses desktop mode.
+
+- **The desktop** shows your Desktop folder (a homelab's `mailbox/`) as icons.
+  Double-click one (Enter, or a tap) to open it; right-click for Copy, Cut,
+  Rename, Delete; right-click the desktop itself for New folder, New text
+  file, Paste, Upload. Drop files on it to put them there. Files that arrive
+  some other way (Syncthing) show up within a few seconds.
+- **Windows:** Settings, the App Store, Live Usage, Files and the Terminal
+  open as windows you can have side by side. Drag one by its title bar; drag
+  any edge to resize it; drag it to the left or right edge of the screen for
+  that half, or to the top to fill the screen (or double-click its bar). The
+  buttons on its bar minimize it to the dock, maximize it, and close it.
+  Windows remember where you put them.
+- **Your apps** open in windows of their own, if they allow it: adlerOS asks
+  each app whether it may be shown inside another page, and opens the ones
+  that say no in a tab, as on the home screen. Ctrl+click opens any app in a
+  tab. An app's window has Reload and *Open in a new tab* on its bar.
+- **The dock** shows what's open: a mark under pinned apps and adlerOS's own
+  items with a window, and, after a divider at the end, the windows that have
+  no place in the dock otherwise (Files, the Terminal, apps you haven't
+  pinned). Click one to bring it forward, again to minimize it.
+- **Keys:** Ctrl+` goes to the next window, then the desktop; Ctrl+Shift+`
+  goes back. On a title bar, `m` (or the Menu key) opens its menu: left or
+  right half, maximize, minimize, close, or move and resize it with the
+  arrow keys. See [keyboard](keyboard.md).
+
+### Firefox
+
+The App Store has **Firefox**: a real Firefox running on this machine, shown
+in your browser. You browse from the machine (its network, its logins), from
+any device, even a slow one. It's [linuxserver.io's
+image](https://docs.linuxserver.io/images/docker-firefox/), so:
+
+- It serves HTTPS with a certificate it makes itself: open it once in a tab
+  and accept it.
+- It needs a secure page around it, so it opens in a window only when adlerOS
+  itself is on HTTPS (a homelab with HTTPS, or `tailscale serve`); otherwise
+  in a tab.
+- It's heavy: about 1 GB of memory and a good part of the CPU while it runs
+  (a Raspberry Pi 4 manages, slowly for video). Stop it in the App Store when
+  you're done.
+- Anyone who can reach it can use it, so keep it on your own network or VPN,
+  like adlerOS.
+
 ## Search
 
 <!-- screenshot: ⌘K search -->
@@ -182,13 +234,21 @@ buttons on the page. It stays on, for every browser, until you switch it off.
 
 ## Files
 
-<!-- screenshot: Files, a folder of documents -->
+<!-- screenshot: Files, a folder of documents, the places down the side -->
 ![Files](screenshots/files.png)
 
-Your storage folder (`STORAGE_DIR`: photos, music, documents, notes), in a
-window: **All apps → Files**, ⌘K "files", or `f`. Nothing outside that folder
-is reachable, and a link that leads out of it is shown greyed out and won't
-open.
+Your files, in a window: **All apps → Files**, ⌘K "files", or `f`. Down the
+side are three places, and the Trash:
+
+| | | |
+| --- | --- | --- |
+| **Desktop** | `DESKTOP_DIR`; in a homelab, its `mailbox/` | Yours to change. In desktop mode, it's what the desktop shows. |
+| **User** | `STORAGE_DIR`: photos, music, documents | Yours to change. |
+| **Root** | `FILES_ROOT`; in a homelab, the homelab's own folder | Read-only: look around, copy things out. See below. |
+
+Nothing outside them is reachable, and a link that leads out of its place is
+shown greyed out and won't open. Root's `mailbox/` and `storage/` are the
+Desktop and User themselves: opening one takes you there.
 
 - **Open** a folder to go in; the path at the top takes you back up. A text
   file opens in the editor, an image, video, song or PDF in a preview,
@@ -196,10 +256,28 @@ open.
 - **Upload** with the button, or drop files onto the window; big files are
   fine. A file with a name that's taken gets a `(2)`.
 - **New folder**, **New text file**, and per file (right-click, `m`, or the
-  keys below): Rename, Download, Edit as text, Delete.
-- **Delete** moves it to the **Trash** (a `.trash` folder in your storage
-  folder), where **Restore** puts it back where it was. **Empty Trash**
-  deletes for good.
+  keys below): Edit as text, Download, Copy, Cut, Rename, Delete.
+- **Copy** or **Cut**, then go to another folder (in any place) and
+  **Paste** (the button that appears, or Ctrl+V). Between places it's a real
+  copy, so a big one shows its progress under the list and carries on while
+  you do other things. Sorting the mailbox is this: cut on the Desktop, paste
+  in User.
+- **Delete** moves it to the **Trash** (a `.trash` folder at the top of its
+  place; Root's go to User's), where **Restore** puts it back where it was.
+  **Empty Trash** deletes for good.
+
+**Root is your homelab's own folder**: compose files, `homelab.env`, your
+apps' data. Changing it can stop your apps, so adlerOS doesn't, unless:
+
+1. **admin mode** is on (Settings), and
+2. the machine allows it: `ADLEROS_TERMINAL=on`, the same switch as the
+   terminal, because it's the same kind of power, and
+3. you say yes to a warning, once each time admin mode is on.
+
+Then Root works like the other places (except uploads: upload to the Desktop,
+then move it), and the helper on the machine makes each change, since adlerOS
+itself only sees Root read-only. Git and the terminal are still the better
+way to change a homelab.
 
 <!-- screenshot: the text editor -->
 ![The editor](screenshots/editor.png)

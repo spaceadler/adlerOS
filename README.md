@@ -47,9 +47,16 @@ Screen*: it opens like an app.
 - **Admin mode.** Restart and shut down, deleting apps, and stopping core
   apps (DNS, passwords) are off until you switch admin mode on, with your
   password.
-- **Files**: your storage folder in a window. Upload, download, rename,
-  delete into a Trash you can restore from, preview photos and videos, and
-  edit text files.
+- **Desktop mode**, for a computer with a mouse (each device chooses):
+  windows side by side that you drag, resize and snap to half the screen,
+  your apps in windows of their own, and your Desktop folder on the desktop.
+- **Files**: your Desktop, your storage folder and (read-only) your
+  homelab's own folder, in a window. Upload, download, cut, copy and paste
+  between them, rename, delete into a Trash you can restore from, preview
+  photos and videos, and edit text files.
+- **Firefox** in the store: a real browser running on the machine, in your
+  browser. With Files and the terminal, an old laptop is enough to work on
+  your homelab.
 - **A terminal**, if you want one: a real shell in a window (colours, `htop`,
   `vim`), off unless you switch it on on the machine, admin mode only, and
   your password each time.
@@ -61,7 +68,7 @@ Screen*: it opens like an app.
 
 adlerOS reads each compose file with `docker compose config` (which never
 starts anything) and looks at the images. `catalog/known-apps.tsv` knows about
-145 self-hosted apps: Immich and Jellyfin go in **Media**, Paperless-ngx in
+146 self-hosted apps: Immich and Jellyfin go in **Media**, Paperless-ngx in
 **Productivity**, Actual Budget in **Life**, and so on. Databases and caches
 (Postgres, Redis…) are never apps of their own; they belong to the app that
 needs them. One compose file with two apps in it (Ollama and Open WebUI, say)
@@ -127,6 +134,7 @@ adleros/
 │   ├── actions.json      # the only things it will do
 │   ├── apps.py           # finds, installs, starts, stops, updates and deletes apps
 │   ├── terminal.py       # the Terminal's shells (only with ADLEROS_TERMINAL=on)
+│   ├── files.py          # changes in Files' Root (admin mode, ADLEROS_TERMINAL=on)
 │   └── power             # restart / shut down, installed root-owned for sudo
 ├── catalog/
 │   ├── known-apps.tsv    # which images are which app, and their collection
@@ -135,7 +143,8 @@ adleros/
 ```
 
 Made by install.sh and never committed: `.env`, `data/` (adlerOS's settings,
-icons it fetched, the helper's queue), `registry/` (the apps it knows about),
+icons it fetched, the helper's queue, the empty folders Files mounts when
+there's no Desktop or Root), `registry/` (the apps it knows about),
 `apps/` (apps from the store), `wallpaper/` and `icons/` (yours, if you add
 any).
 

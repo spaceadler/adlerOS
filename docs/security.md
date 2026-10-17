@@ -70,14 +70,45 @@ use it.
 
 ## Files
 
-The Files window needs adlerOS to read and write your storage folder, so that
-one folder is mounted read-write into its container (`STORAGE_DIR` at
-`/storage`). Nothing else of yours is. Every path is checked to stay inside
-it, links leading out of it are refused, uploads are written next to the
-target and renamed into place, and files are only ever *shown* in the browser
-when they can't run code (images, video, audio, PDFs, plain text); anything
-else, HTML and SVG included, downloads. Deleting moves things to `.trash`
-rather than erasing them.
+The Files window has three places, each mounted into adlerOS's container on
+its own, and nothing else of yours is:
+
+- **Desktop** (`DESKTOP_DIR`, a homelab's `mailbox/`) and **User**
+  (`STORAGE_DIR`), read-write.
+- **Root** (`FILES_ROOT`, or the whole homelab), **read-only**. adlerOS can
+  read everything in it (compose files, `.env` files, `homelab.env`), so
+  anyone logged in can too: choose `FILES_ROOT` with that in mind, or leave
+  it empty. A homelab's Root includes its secrets; that's the trade for
+  being able to look at your own homelab from adlerOS.
+
+Changing Root doesn't happen in the container at all. adlerOS writes what it
+wants done into `data/agent/files/<request>.json` and queues the `files-root`
+action; the helper runs `agent/files.py`, which refuses unless
+`ADLEROS_TERMINAL=on` on the machine (adlerOS can't change that), checks
+every path again on the host, and makes the change as you. The server asks
+for admin mode first, and the page warns you once per admin session. With
+the terminal off, Root stays read-only whatever happens to adlerOS.
+
+Every path is checked to stay inside its place, links leading out of one are
+refused, uploads are written next to the target and renamed into place, and
+files are only ever *shown* in the browser when they can't run code (images,
+video, audio, PDFs, plain text); anything else, HTML and SVG included,
+downloads. Deleting moves things to a `.trash` folder rather than erasing
+them.
+
+## Apps in windows
+
+In desktop mode an app opens inside adlerOS's page (an iframe), so it's still
+the app's own page, on its own address, with its own login: adlerOS can't see
+into it, and it can't see into adlerOS (they're different origins). adlerOS
+only asks the app's server for its headers first, to honour an app that
+forbids being framed (`X-Frame-Options`, CSP `frame-ancestors`); those open in
+a tab instead.
+
+**Firefox** from the store is a whole browser on the machine: whoever reaches
+its port can browse as the machine, and its web interface can give a root
+shell inside its own container. It has no login unless you add one
+(`CUSTOM_USER` and `PASSWORD`). Keep it on your own network or VPN.
 
 ## What adlerOS reads and touches
 
@@ -104,7 +135,9 @@ only queue actions from the list. That means they could:
 - install a store app, or start a compose file already in your home folder;
 - with admin mode on (or your password): restart or shut down the machine;
 - with the terminal switched on (on the machine): get a shell (see above);
-- read, change or delete files in your storage folder (through Files).
+- read, change or delete files in your Desktop and storage folders, and read
+  Root (through Files);
+- with the terminal switched on and admin mode: change Root too.
 
 They couldn't run their own commands, read your files beyond what's above, or
 reach Docker directly. Your user is in the `docker` group, which is as good as

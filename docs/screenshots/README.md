@@ -26,7 +26,8 @@ crop anything private (addresses, names in notifications).
 | `admin-mode.png` | Settings → Admin mode's password dialog | guide, security |
 | `keyboard-help.png` | The `?` keyboard list | keyboard |
 | `keyboard-focus.png` | The desktop with an app selected by keyboard (its white ring) | keyboard |
-| `files.png` | Files, inside a folder with a few kinds of file | guide |
+| `files.png` | Files, inside a folder with a few kinds of file, Desktop, User and Root down the side | guide |
+| `desktop-mode.png` | Desktop mode: two or three windows side by side (Files and an app, say), icons on the desktop | guide |
 | `editor.png` | The text editor with a file open | guide |
 | `terminal.png` | The Terminal window running `htop` | guide |
 | `lock.png` | The lock screen | guide |
