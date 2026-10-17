@@ -144,10 +144,24 @@ async function deskMoveTo(name, folder) {
 
 // Somewhere else on the desktop: that cell, and whatever was there takes
 // this one's old place (or flows back in with the rest).
-function deskPlace(icon, name, e) {
+// The cell of the desktop's grid under a point: [column, row].
+function deskCellAt(x, y) {
   const r = $("desk").getBoundingClientRect();
-  const col = Math.max(1, Math.floor((e.clientX - r.left) / (DESK_CELL.w + DESK_CELL.gapX)) + 1);
-  const row = Math.min(deskRows(), Math.max(1, Math.floor((e.clientY - r.top) / (DESK_CELL.h + DESK_CELL.gapY)) + 1));
+  return [Math.max(1, Math.floor((x - r.left) / (DESK_CELL.w + DESK_CELL.gapX)) + 1),
+    Math.min(deskRows(), Math.max(1, Math.floor((y - r.top) / (DESK_CELL.h + DESK_CELL.gapY)) + 1))];
+}
+
+// A file arriving on the desktop (dragged from Files): there, from now on.
+// Whatever had that cell flows back in with the rest.
+function rememberDeskPlace(name, cell) {
+  const places = deskPlaces();
+  for (const n of Object.keys(places)) if (places[n][0] === cell[0] && places[n][1] === cell[1]) delete places[n];
+  places[name] = cell;
+  saveDeskPlaces(places);
+}
+
+function deskPlace(icon, name, e) {
+  const [col, row] = deskCellAt(e.clientX, e.clientY);
   const places = deskPlaces();
   const before = places[name];
   const there = Object.keys(places).find((n) => n !== name && places[n][0] === col && places[n][1] === row);
