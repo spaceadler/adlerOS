@@ -841,6 +841,7 @@ def app_icon(app_id):
 TERM_DIR = DATA / "agent" / "term"
 TERM_ID = re.compile(r"[a-f0-9]{32}")
 TERM_WAIT = 20  # seconds a read waits for output
+TERM_START_WITHIN = 60  # seconds the terminal host takes a request for (its START_WITHIN)
 TERM_CHUNK = 256 * 1024
 
 
@@ -853,9 +854,19 @@ def terminal_enabled():
 
 
 def terminal_sessions():
+    """Open shells, and requests the terminal host can still take (it refuses
+    them after a minute, so one it never saw doesn't count forever)."""
+    def open_(p):
+        if (p / "ended").exists() or (p / "close").exists():
+            return False
+        if (p / "started.json").exists():
+            return True
+        try:
+            return time.time() - (p / "start.json").stat().st_mtime < TERM_START_WITHIN
+        except OSError:
+            return False
     try:
-        return [p.name for p in TERM_DIR.iterdir()
-                if TERM_ID.fullmatch(p.name) and not (p / "ended").exists() and not (p / "close").exists()]
+        return [p.name for p in TERM_DIR.iterdir() if TERM_ID.fullmatch(p.name) and open_(p)]
     except OSError:
         return []
 
