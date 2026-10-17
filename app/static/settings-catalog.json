@@ -81,6 +81,19 @@
       }
     },
     {
+      "id": "welcome",
+      "category": "account",
+      "icon": "compass",
+      "title": "Welcome tour",
+      "description": "The first-login welcome again: where your apps are (and, on its own, where your compose folders are), and a look around.",
+      "keywords": "welcome tour intro introduction help guide first start compose folders find apps",
+      "control": {
+        "type": "open",
+        "target": "welcome",
+        "label": "Show"
+      }
+    },
+    {
       "id": "web-search",
       "category": "account",
       "icon": "search",

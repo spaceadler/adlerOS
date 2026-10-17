@@ -736,6 +736,7 @@ const ACTIONS = [
   { id: "terminal", name: "Terminal", keywords: "terminal shell console ssh bash command line admin" },
   { id: "files", name: "Files", keywords: "files folders storage documents upload download editor text edit trash desktop mailbox root" },
   { id: "desktop-mode", name: "Desktop mode or home screen", keywords: "desktop mode windows window manager floating side by side home screen switch" },
+  { id: "welcome", name: "Welcome tour", keywords: "welcome tour intro introduction start first help guide find apps compose folders" },
   { id: "logout", name: "Log out", keywords: "log out sign out lock exit" },
 ];
 let results = [];
@@ -798,6 +799,7 @@ function runResult(i) {
   else if (r.action.id === "terminal") openTerminal();
   else if (r.action.id === "files") openFiles();
   else if (r.action.id === "desktop-mode") setDesktopMode(!desktopMode());
+  else if (r.action.id === "welcome") openWelcome();
   else if (r.action.id === "logout") confirmLogout();
 }
 
@@ -884,6 +886,8 @@ async function showDesktop() {
   startWidgets();
   startNotes();
   refreshDesk();
+  // An install's first login: the welcome (unless a link asked for a window).
+  if (!state.welcomed && !location.hash) openWelcome();
   // A link (or reload) to #settings or #settings/<row> opens Settings there;
   // #store, the App Store.
   const match = location.hash.match(/^#settings(?:\/([\w-]+))?$/);
@@ -914,6 +918,7 @@ async function refresh() {
   state.available = result.body.available || [];
   state.admin = Boolean(result.body.admin);
   state.mode = result.body.mode || "homelab";
+  state.welcomed = Boolean(result.body.welcomed);
   state.order = result.body.order || {};
   layout();
   for (const app of state.apps) setStatus(app);

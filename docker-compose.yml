@@ -52,6 +52,8 @@ services:
       - ./registry:/adleros/registry:ro
       - ./catalog:/adleros/catalog:ro
       - ./agent:/adleros/agent:ro
+      # Its own settings as they are now (the helper changes some), for Settings.
+      - ./.env:/adleros/settings.env:ro
       # Your files, read-write, for the Files window: User and the Desktop.
       - ${STORAGE_DIR:?run ./install.sh}:/storage
       - ${DESKTOP_DIR:-./data/no-desktop}:/places/desktop

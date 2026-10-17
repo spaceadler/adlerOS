@@ -11,6 +11,7 @@ const ICONS = {
   key: ["M2.6 18.4 9 12", "M7.5 21.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z", "m21 2-9.6 9.6", "m15.5 7.5 3 3L22 7l-3-3"],
   image: ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "m21 15-5-5L5 21", "M9 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"],
   windows: ["M3 4h11v9H3z", "M3 7h11", "M10 11h11v9H10z", "M10 14h11"],
+  compass: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z", "m15.5 8.5-2 5-5 2 2-5z"],
   globe: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M2 12h20", "M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"],
   clock: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M12 6v6l4 2"],
   lock: ["M7 11h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z", "M8 11V7a4 4 0 0 1 8 0v4"],
@@ -27,7 +28,7 @@ const ICONS = {
 };
 
 // What an "open" row opens.
-const OPENERS = { terminal: () => openTerminal() };
+const OPENERS = { terminal: () => openTerminal(), welcome: () => { closeSettings(); openWelcome(); } };
 
 // Named read-only values for "info" rows.
 const FORMATTERS = {

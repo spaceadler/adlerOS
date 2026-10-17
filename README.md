@@ -44,6 +44,8 @@ Screen*: it opens like an app.
   finished or failed, the disk is filling up, it's running hot.
 - **All apps**, A to Z, and **search** (⌘K, Ctrl+K or `/`) across apps and
   settings.
+- **A welcome** on the first login: where are your containers (it looks there
+  while you watch), or in a homelab the apps you can add, then a short tour.
 - **Keyboard first.** Every part works with arrow keys, Enter and Escape: a
   keyboard and a TV is enough. Press `?` for the keys.
 - **Admin mode.** Restart and shut down, deleting apps, and stopping core

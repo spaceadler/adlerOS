@@ -72,6 +72,7 @@ MODE = "standalone" if os.environ.get("ADLEROS_MODE") == "standalone" else "home
 HOMELAB_MODE = MODE == "homelab"
 ADLEROS = Path(os.environ.get("ADLEROS_ROOT", "/adleros"))  # this repo's catalog/ and agent/
 STORE = ADLEROS / "catalog" / "store"
+STANDALONE_ENV = ADLEROS / "settings.env"  # adlerOS's .env, read-only (standalone)
 CATALOG = Path(os.environ.get("HOMELAB_CATALOG", "/homelab/catalog.tsv"))
 HOMELAB_ENV = Path(os.environ.get("HOMELAB_ENV", "/homelab/homelab.env"))
 ACTION_FILES = [ADLEROS / "agent" / "actions.json"] + (
@@ -1532,8 +1533,10 @@ class Handler(BaseHTTPRequestHandler):
             env = read_env_file(HOMELAB_ENV)
             config = {k: env.get(k, "") for k in ("DOMAIN", "TZ", "URL_SCHEME", "TS_IP", "VAULT_HOST", "STORAGE_DIR")}
         else:
-            # Standalone: what install.sh put in adlerOS's .env, handed in by compose.
-            config = {k: os.environ.get(k, "") for k in ("ADLEROS_HOST", "COMPOSE_ROOTS", "APPS_DIR", "TZ", "STORAGE_DIR")}
+            # Standalone: adlerOS's .env as it is now (the helper changes it,
+            # the welcome's compose folders say), else as compose handed it in.
+            env = read_env_file(STANDALONE_ENV) if STANDALONE_ENV.is_file() else os.environ
+            config = {k: env.get(k, "") for k in ("ADLEROS_HOST", "COMPOSE_ROOTS", "APPS_DIR", "TZ", "STORAGE_DIR")}
         return {
             "mode": MODE,
             "name": display_name(),
@@ -1585,7 +1588,7 @@ class Handler(BaseHTTPRequestHandler):
             status = app_status(apps)
             env = read_env_file(HOMELAB_ENV)
             return self.send_json(200, {"name": display_name(), "searchUrl": search_url(), "dock": dock_pins(),
-                                        "admin": admin_on(), "mode": MODE,
+                                        "admin": admin_on(), "mode": MODE, "welcomed": bool(load_settings().get("welcomed")),
                                         "collections": collections(apps), "order": app_order(),
                                         "host": {"tsIp": env.get("TS_IP", ""), "domain": env.get("DOMAIN", "")},
                                         "apps": [
@@ -1767,6 +1770,11 @@ class Handler(BaseHTTPRequestHandler):
             if not wallpaper_path(body["wallpaper"]):
                 return self.send_json(400, {"error": "no such wallpaper"})
             changes["wallpaper"] = body["wallpaper"]
+        if "welcomed" in body:
+            # The first-run welcome: seen (or skipped), so it doesn't come back.
+            if not isinstance(body["welcomed"], bool):
+                return self.send_json(400, {"error": "welcomed: true or false"})
+            changes["welcomed"] = body["welcomed"]
         if not changes:
             return self.send_json(400, {"error": "nothing to change"})
         save_settings(changes)
