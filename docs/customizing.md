@@ -109,7 +109,11 @@ When it's installed, `.env.example` becomes `.env` with these filled in:
 password each time it appears), `__HEX64__` (a new key), `__TZ__`, `__PUID__`,
 `__PGID__` and `__STORAGE__` (the storage folder). Folders the compose file
 mounts with `./` or `${...}` are made first, as you. `firstRun` is shown on
-its card: what to do on first login.
+its card: what to do on first login. Two more, for apps that need them:
+`"scheme": "https"` for an app that only serves HTTPS (its address starts
+`https://`), and `"window"`: `"https"` opens it in a desktop-mode window only
+when adlerOS is on HTTPS too (Firefox, whose stream needs a secure page),
+`"tab"` never in a window.
 
 Keep a store app simple: one compose file that starts on its own, no config
 file you have to write first, its data in `./`, and no Docker socket.

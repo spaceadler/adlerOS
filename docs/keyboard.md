@@ -58,10 +58,27 @@ opens it.
 
 ## In Files
 
-Arrows move between files; Enter opens one (a folder goes in). **Delete**
-deletes the selected file (to the Trash), **F2** renames it, `m` or the Menu
-key shows its menu. Escape goes back: out of the editor, out of the Trash,
-then out of Files. In the editor, Ctrl+S saves and Tab indents.
+Arrows move between files and the places down the side; Enter opens one (a
+folder goes in). **Delete** deletes the selected file (to the Trash), **F2**
+renames it, **Ctrl+C** copies and **Ctrl+X** cuts it, **Ctrl+V** pastes into
+the folder you're in, and `m` or the Menu key shows its menu. Escape goes
+back: out of the editor, out of the Trash, then out of Files. In the editor,
+Ctrl+S saves and Tab indents. On the desktop in desktop mode, the same keys
+work on its icons.
+
+## In desktop mode
+
+| Key | Does |
+| --- | --- |
+| Ctrl+` | The next window, in the order they opened; after the last, the desktop and dock |
+| Ctrl+Shift+` | The window before |
+| `m` or the Menu key on a title bar | The window's menu: left half, right half, maximize, minimize, close |
+| …then **Move** or **Resize with the arrow keys** | Arrows move (or resize) it 40 px, Shift+arrows 10 px; Enter when it's right |
+| Escape | Closes the window you're in, like on the home screen |
+
+Ctrl+` works even while you type (in the editor, in the terminal). Inside an
+app's own window the keys belong to the app; Tab past its last control, or
+click outside it, to come back.
 
 ## In the terminal
 

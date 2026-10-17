@@ -24,7 +24,7 @@ cd ~/adleros && ./install.sh
 <!-- screenshot: ./install.sh finishing -->
 ![install.sh](screenshots/install.png)
 
-It asks six things, each with a guess you can take by pressing Enter:
+It asks eight things, each with a guess you can take by pressing Enter:
 
 | Question | Becomes | Guess |
 | --- | --- | --- |
@@ -32,7 +32,9 @@ It asks six things, each with a guess you can take by pressing Enter:
 | This machine's address | `ADLEROS_HOST`: apps get `http://<this>:<port>` | its Tailscale IP, else its first IP |
 | Your compose folders | `COMPOSE_ROOTS`, separated by `:` | whichever of `~/docker`, `~/stacks`, `~/compose`, `~/homelab/containers`, `~/containers`, `/opt/stacks`, `/opt/docker`, `/srv/docker` exist |
 | Timezone | `TZ` | the machine's |
-| Your files folder | `STORAGE_DIR`: what Files shows, and where store apps look for media | `~/storage` |
+| Your files folder | `STORAGE_DIR`: Files' User, and where store apps look for media | `~/storage` |
+| Your Desktop folder | `DESKTOP_DIR`: Files' Desktop, shown on the desktop in desktop mode | `STORAGE_DIR/Desktop` |
+| A folder for Root | `FILES_ROOT`: Files' Root, read-only (`-` for none) | `~/homelab`, `~/docker` or `~/stacks`, if there's one |
 | A terminal in adlerOS | `ADLEROS_TERMINAL`: `on` or `off` | `off` |
 
 Then it:
@@ -112,7 +114,9 @@ To add your own, see [customizing](customizing.md#store-apps).
 | `ADLEROS_HOST` | how your browser reaches this machine |
 | `COMPOSE_ROOTS` | your compose folders, `:`-separated |
 | `APPS_DIR` | where store apps go (`./apps`) |
-| `STORAGE_DIR` | your files: Files shows it (read-write), store apps use it (`~/storage`) |
+| `STORAGE_DIR` | your files: Files' User (read-write), and store apps use it (`~/storage`) |
+| `DESKTOP_DIR` | Files' Desktop (read-write), on the desktop in desktop mode (`STORAGE_DIR/Desktop`) |
+| `FILES_ROOT` | Files' Root, read-only: your homelab's folder, say (none) |
 | `ADLEROS_TERMINAL` | `on` lets the Terminal window open shells (admin mode, your password); re-run `./install.sh` after changing it |
 | `ADLEROS_TERMINAL_DIR` | where a new terminal starts, e.g. `~/homelab` (your home folder); takes effect on the next one |
 | `TZ`, `PUID`, `PGID` | timezone, and the user adlerOS and store apps run as |

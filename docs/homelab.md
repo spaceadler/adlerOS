@@ -32,7 +32,10 @@ Everything else (the desktop, dock, widgets, App Store buttons, Live Usage,
 notifications, keyboard, admin mode, the terminal) is the same. The terminal
 is switched on with `ADLEROS_TERMINAL=on` in `homelab.env`, then
 `./install.sh`; it starts in the homelab's folder (`ADLEROS_TERMINAL_DIR`
-picks another). Files shows the homelab's `STORAGE_DIR`.
+picks another). In Files, the Desktop is the homelab's `mailbox/` (so desktop
+mode's desktop is your inbox, synced by Syncthing), User is `STORAGE_DIR`, and
+Root is the homelab itself, read-only unless admin mode is on and
+`ADLEROS_TERMINAL=on`.
 
 ## Changing adlerOS while working on the homelab
 
