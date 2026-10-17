@@ -335,6 +335,9 @@ function onPagesScroll() {
 
 // ------------------------------------------------------------------- dock
 
+// The helper's systemd unit: its name differs between the two kinds of install.
+function helperUnit() { return state.mode === "standalone" ? "adleros-agent.path" : "homelab-agent.path"; }
+
 function appById(id) {
   return state.apps.find((a) => a.id === id);
 }

@@ -598,8 +598,8 @@ function jobDialog(job, { onDone } = {}) {
     if (atBottom) log.scrollTop = log.scrollHeight;
     if (j.status === "queued") {
       note.textContent = Date.now() - since > 15000
-        ? "Still waiting for the homelab helper. It's set up by ./install.sh (without --no-host); check it with: systemctl status homelab-agent.path"
-        : "Waiting for the homelab helper to pick this up…";
+        ? `Still waiting for the helper. It's set up by ./install.sh (without --no-host); check it with: systemctl status ${helperUnit()}`
+        : "Waiting for the helper to pick this up…";
     } else if (j.status === "running") {
       note.textContent = "You can close this; it keeps going in the background.";
     } else if (j.status === "failed") {
