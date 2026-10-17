@@ -685,7 +685,8 @@ button { font: inherit; color: inherit; }
 .search-pill:hover { background: rgb(255 255 255 / 0.1); }
 .search-pill:active { transform: scale(0.97); background: rgb(255 255 255 / 0.05); }
 .kbd { color: rgb(255 255 255 / 0.4); }
-.dock-spacer { flex-shrink: 0; width: 100%; height: calc(var(--dock-h, 74px) + 10px + 24px); }
+/* Under the search pill: the dock, and as much room above it (10px) as below. */
+.dock-spacer { flex-shrink: 0; width: 100%; height: calc(var(--dock-h, 74px) + 10px + 10px); }
 
 /* A little glass sphere with slowly turning colour inside. */
 .orb {
@@ -2309,3 +2310,16 @@ body.wm .app-sheet:not([data-mode="max"]) .app-frame { opacity: 0.92; }
 .desk-app.offline .plate { filter: brightness(0.5); }
 body.wm .desk > .desk-icon { grid-row: span 2; }
 body.wm .desk > .desk-empty { grid-row: span 2; }
+
+/* The search bar widget (desktop mode): a bar, four icons wide and half a row tall. */
+.w-search { display: flex; flex: 1; align-items: center; gap: 10px; min-width: 0; padding: 0 16px; }
+.w-search svg { width: 17px; height: 17px; flex-shrink: 0; fill: none; stroke: rgb(255 255 255 / 0.7); stroke-width: 2.2; stroke-linecap: round; cursor: grab; }
+.w-search-input { flex: 1; min-width: 0; border: 0; background: none; color: #fff; font: inherit; font-size: 15px; font-weight: 500; outline: none; }
+span.w-search-input { color: rgb(255 255 255 / 0.55); }
+.w-search-input::placeholder { color: rgb(255 255 255 / 0.55); }
+.w-search-input::-webkit-search-cancel-button { filter: invert(1); opacity: 0.6; }
+.desk-widget.bar .widget { gap: 0; }
+.desk-widget.bar .widget-label { display: none; }
+.desk-widget.bar .widget-panel { border-radius: 999px; cursor: grab; }
+.desk-widget.bar .widget-panel:focus-within { box-shadow: var(--shine), 0 0 0 3px rgb(255 255 255 / 0.35); }
+.picker-option .widget-panel[data-type="search"] { height: 48px; border-radius: 999px; }

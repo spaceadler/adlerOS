@@ -3,10 +3,12 @@
     "The desktop widgets, as data: add one here to offer it in Edit widgets.",
     "max: how many you can show. default: shown until you pick your own.",
     "type: how it's drawn (four-stats, three-stats, progress, gauges, list,",
-    "      text-button, clock); see TYPES in widgets.js.",
+    "      text-button, clock, search); see TYPES in widgets.js.",
     "value / items[].value: a named value from VALUES in widgets.js, read from",
     "      GET /api/widgets (system, apps, backups).",
-    "open: what clicking it does: live-usage, app-store, settings, settings:<row>."
+    "open: what clicking it does: live-usage, app-store, settings, settings:<row>.",
+    "desk: true: only on the desktop in desktop mode (not in Edit widgets).",
+    "size: [columns, half rows] it takes there; three by three if not given."
   ],
   "max": 3,
   "default": [
@@ -117,6 +119,17 @@
       "label": "Clock",
       "description": "The time and date",
       "type": "clock"
+    },
+    {
+      "id": "web-search",
+      "label": "Search the web",
+      "description": "A search bar: your search engine, in a new tab",
+      "type": "search",
+      "desk": true,
+      "size": [
+        4,
+        1
+      ]
     }
   ]
 }

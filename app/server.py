@@ -1010,10 +1010,41 @@ def terminal_sessions():
             return time.time() - (p / "start.json").stat().st_mtime < TERM_START_WITHIN
         except OSError:
             return False
+    def started(p):
+        try:
+            return (p / "started.json").stat().st_mtime
+        except OSError:
+            return time.time()
     try:
-        return [p.name for p in TERM_DIR.iterdir() if TERM_ID.fullmatch(p.name) and open_(p)]
+        found = [p for p in TERM_DIR.iterdir() if TERM_ID.fullmatch(p.name) and open_(p)]
     except OSError:
         return []
+    return [p.name for p in sorted(found, key=started, reverse=True)]  # newest first
+
+
+TERM_ABANDONED = 60  # seconds no page has read a shell: nobody's looking at it
+
+
+def terminal_seen(folder):
+    """A page is showing this shell (it reads every 20 seconds at most)."""
+    try:
+        (folder / "seen").touch()
+    except OSError:
+        pass
+
+
+def close_abandoned():
+    """Shells no page is showing (a tab closed or reloaded): closed, to make
+    room for a new one."""
+    now = time.time()
+    for sid in terminal_sessions():
+        folder = TERM_DIR / sid
+        try:
+            seen = max((folder / name).stat().st_mtime for name in ("seen", "started.json", "start.json") if (folder / name).exists())
+        except ValueError:
+            continue
+        if now - seen > TERM_ABANDONED:
+            terminal_append(folder / "close", b"")
 
 
 def terminal_folder(sid):
@@ -1679,6 +1710,7 @@ class Handler(BaseHTTPRequestHandler):
                 offset = max(0, int(query.get("offset", ["0"])[0]))
             except ValueError:
                 return self.send_json(400, {"error": "offset: a number"})
+            terminal_seen(folder)
             data, ended, started = terminal_read(folder, offset)
             return self.send_json(200, {"data": base64.b64encode(data).decode(), "offset": offset + len(data),
                                         "ended": ended, "started": started})
@@ -2182,6 +2214,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(403, {"error": "admin mode is off", "admin": True})
         if not terminal_enabled():
             return self.send_json(409, {"error": "the terminal is off: set ADLEROS_TERMINAL=on and re-run install.sh"})
+        if len(terminal_sessions()) >= 3:
+            close_abandoned()
         if len(terminal_sessions()) >= 3:
             return self.send_json(409, {"error": "at most 3 terminals at once; close one"})
         try:

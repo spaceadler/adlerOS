@@ -84,7 +84,7 @@ body.phone .pills,
 body.phone .search-pill {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--dock-h, 88px) + max(10px, env(safe-area-inset-bottom)) + 14px);
+  bottom: calc(var(--dock-h, 88px) + max(10px, env(safe-area-inset-bottom)) + 10px);
   z-index: 46;
   transform: translateX(-50%);
   transition: opacity 0.2s;
@@ -120,7 +120,7 @@ body.phone .pill span { background: rgb(255 255 255 / 0.4); }
 body.phone .pill[aria-selected="true"] span { background: #fff; }
 body.phone.paging .pills:not(.single) { opacity: 1; }
 body.phone.paging .search-pill { opacity: 0; }
-body.phone .dock-spacer { height: calc(var(--dock-h, 88px) + max(10px, env(safe-area-inset-bottom)) + 66px); }
+body.phone .dock-spacer { height: calc(var(--dock-h, 88px) + max(10px, env(safe-area-inset-bottom)) + 62px); }
 
 /* ------------------------------------------------------------------ dock */
 

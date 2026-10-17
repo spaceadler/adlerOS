@@ -20,7 +20,11 @@ const DESK_PLACES_KEY = "adleros.deskPlaces"; // {file name: [column, half row]}
 const DESK_CELL = { w: 96, h: 51, gapX: 10, gapY: 6 }; // as in app.css
 const ICON_ROWS = 2;
 const DESK_WIDGETS_KEY = "adleros.deskWidgets"; // [{key, id, cell: [column, half row]}], this computer's
-const DESK_WIDGET = { cols: 3, rows: 3 };
+const DESK_WIDGET = { cols: 3, rows: 3 }; // unless its catalog entry says ("size": [columns, half rows])
+function widgetSize(id) {
+  const size = widgetDef(id)?.size;
+  return Array.isArray(size) ? { cols: size[0], rows: size[1] } : DESK_WIDGET;
+}
 // From before the half rows: whole rows, once, into half ones.
 try {
   if (localStorage.getItem("adleros.deskGrid") !== "half") {
@@ -94,26 +98,28 @@ function deskCols() {
 }
 // Whether a cell is under one of the desktop's widgets (but `except`).
 function underWidget(cell, except) {
-  return deskWidgetList().some((w) => w.key !== except && cell[0] >= w.cell[0] && cell[0] < w.cell[0] + DESK_WIDGET.cols
-    && cell[1] >= w.cell[1] && cell[1] < w.cell[1] + DESK_WIDGET.rows);
+  return deskWidgetList().some((w) => {
+    const z = widgetSize(w.id);
+    return w.key !== except && cell[0] >= w.cell[0] && cell[0] < w.cell[0] + z.cols && cell[1] >= w.cell[1] && cell[1] < w.cell[1] + z.rows;
+  });
 }
-function fitsWidget(cell, except) {
-  if (cell[0] < 1 || cell[1] < 1 || cell[1] + DESK_WIDGET.rows - 1 > deskRows()) return false;
-  for (let c = 0; c < DESK_WIDGET.cols; c++) for (let r = 0; r < DESK_WIDGET.rows; r++) {
+function fitsWidget(cell, except, size = DESK_WIDGET) {
+  if (cell[0] < 1 || cell[1] < 1 || cell[1] + size.rows - 1 > deskRows()) return false;
+  for (let c = 0; c < size.cols; c++) for (let r = 0; r < size.rows; r++) {
     if (underWidget([cell[0] + c, cell[1] + r], except)) return false;
   }
   return true;
 }
 // The nearest place a widget fits, starting from where you wanted it: up or
 // down that column before another column (a column is wider than a half row).
-function widgetSpot(want, except) {
+function widgetSpot(want, except, size = DESK_WIDGET) {
   const rows = deskRows();
-  const start = [Math.max(1, want[0]), Math.min(Math.max(1, want[1]), Math.max(1, rows - DESK_WIDGET.rows + 1))];
+  const start = [Math.max(1, want[0]), Math.min(Math.max(1, want[1]), Math.max(1, rows - size.rows + 1))];
   let best = null;
-  for (let col = 1; col <= deskCols() + DESK_WIDGET.cols; col++) {
+  for (let col = 1; col <= deskCols() + size.cols; col++) {
     for (let row = 1; row <= rows; row++) {
       const cost = Math.abs(col - start[0]) * 4 + Math.abs(row - start[1]);
-      if ((!best || cost < best.cost) && fitsWidget([col, row], except)) best = { cell: [col, row], cost };
+      if ((!best || cost < best.cost) && fitsWidget([col, row], except, size)) best = { cell: [col, row], cost };
     }
   }
   return best ? best.cell : start;
@@ -137,8 +143,9 @@ function clearUnderWidgets() {
 
 function addDeskWidget(id, cell) {
   const list = deskWidgetList();
-  const want = cell || [Math.max(1, deskCols() - DESK_WIDGET.cols + 1), 1];
-  list.push({ key: Math.random().toString(36).slice(2, 10), id, cell: widgetSpot(want) });
+  const size = widgetSize(id);
+  const want = cell || [Math.max(1, deskCols() - size.cols + 1), 1];
+  list.push({ key: Math.random().toString(36).slice(2, 10), id, cell: widgetSpot(want, undefined, size) });
   saveDeskWidgets(list);
   clearUnderWidgets();
   renderDesk();
@@ -160,12 +167,13 @@ function deskWidgetNodes() {
     if (!made) {
       const widget = widgetNode(def);
       if (!widget) return null;
-      made = { node: el("div", { class: "desk-widget", "data-desk-widget": w.key }, widget.node), update: widget.update };
+      made = { node: el("div", { class: `desk-widget${def.type === "search" ? " bar" : ""}`, "data-desk-widget": w.key }, widget.node), update: widget.update };
       desk.widgets.set(w.key, made);
     }
-    const row = Math.min(w.cell[1], Math.max(1, deskRows() - DESK_WIDGET.rows + 1));
-    made.node.style.gridColumn = `${w.cell[0]} / span ${DESK_WIDGET.cols}`;
-    made.node.style.gridRow = `${row} / span ${DESK_WIDGET.rows}`;
+    const z = widgetSize(w.id);
+    const row = Math.min(w.cell[1], Math.max(1, deskRows() - z.rows + 1));
+    made.node.style.gridColumn = `${w.cell[0]} / span ${z.cols}`;
+    made.node.style.gridRow = `${row} / span ${z.rows}`;
     if (widgets.data) made.update(widgets.data);
     return made.node;
   }).filter(Boolean);
@@ -263,7 +271,8 @@ function renderDesk() {
 
 function deskDown(e) {
   const icon = e.target.closest(".desk-icon, .desk-widget");
-  if (!icon || e.button !== 0 || e.pointerType !== "mouse" || !desktopMode()) return;
+  // Pressing in the search bar's box is for typing; its edge moves it.
+  if (!icon || e.button !== 0 || e.pointerType !== "mouse" || !desktopMode() || e.target.closest("input")) return;
   desk.drag = { icon, widget: icon.dataset.deskWidget || null, pointerId: e.pointerId, x: e.clientX, y: e.clientY, active: false, over: null };
 }
 
@@ -335,7 +344,7 @@ function moveDeskWidget(d, e) {
   const list = deskWidgetList();
   const w = list.find((x) => x.key === d.widget);
   if (!w) return;
-  w.cell = widgetSpot([at[0] - held[0], at[1] - held[1]], w.key);
+  w.cell = widgetSpot([at[0] - held[0], at[1] - held[1]], w.key, widgetSize(w.id));
   saveDeskWidgets(list);
   clearUnderWidgets();
   renderDesk();

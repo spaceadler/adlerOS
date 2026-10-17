@@ -186,6 +186,25 @@ const TYPES = {
       },
     };
   },
+  // A web search bar (the desktop's, in desktop mode): your search engine,
+  // in a new tab. In the picker, just its look.
+  search: (w, preview) => {
+    const input = el(preview ? "span" : "input", preview ? { class: "w-search-input" }
+      : { class: "w-search-input", type: "search", placeholder: "Search the web", "aria-label": "Search the web", autocomplete: "off", enterkeyhint: "search" },
+    preview ? "Search the web" : "");
+    const form = el(preview ? "div" : "form", { class: "w-search", ...(preview ? {} : { role: "search" }) },
+      svg(["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"]), input);
+    if (!preview) {
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const q = input.value.trim();
+        if (!q) return;
+        window.open(state.searchUrl.replaceAll("{QUERY}", encodeURIComponent(q)), "_blank", "noopener,noreferrer");
+        input.value = "";
+      });
+    }
+    return { node: form, update: () => {} };
+  },
   clock: () => {
     const time = el("div", { class: "w-clock" });
     const date = el("div", { class: "w-title" });
@@ -217,9 +236,11 @@ function openWidget(w) {
 function widgetNode(w, { preview = false } = {}) {
   const type = TYPES[w.type];
   if (!type) return null;
-  const body = type(w);
-  const panel = el(preview ? "div" : "button", { class: "widget-panel", "data-widget": w.id, "data-type": w.type }, body.node);
-  if (!preview) {
+  const body = type(w, preview);
+  // A widget you type into (search) isn't a button.
+  const typed = w.type === "search";
+  const panel = el(preview || typed ? "div" : "button", { class: "widget-panel", "data-widget": w.id, "data-type": w.type }, body.node);
+  if (!preview && !typed) {
     panel.type = "button";
     panel.setAttribute("aria-label", w.label);
     if (w.open) panel.addEventListener("click", () => openWidget(w));
@@ -235,7 +256,7 @@ let drawnKey = "";
 function drawWidgets(fit) {
   widgets.slots = fit;
   if (!widgets.catalog || !widgets.selected) return;
-  const chosen = widgets.selected.map(widgetDef).filter(Boolean).slice(0, fit);
+  const chosen = widgets.selected.map(widgetDef).filter((w) => w && !w.desk).slice(0, fit); // "desk": desktop mode's only
   const key = `${fit}:${chosen.map((w) => w.id).join(",")}`;
   if (key === drawnKey) return;
   drawnKey = key;
@@ -337,7 +358,7 @@ async function editWidgets() {
   const grid = el("div", { class: "picker-grid" });
   const draw = () => {
     count.textContent = `${widgets.selected.length} of ${max} chosen`;
-    grid.replaceChildren(...widgets.catalog.widgets.map((w) => {
+    grid.replaceChildren(...widgets.catalog.widgets.filter((w) => !w.desk).map((w) => {
       const made = widgetNode(w, { preview: true });
       if (!made) return "";
       const position = widgets.selected.indexOf(w.id);

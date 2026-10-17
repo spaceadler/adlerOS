@@ -434,14 +434,21 @@ function winDock() {
     }
     running.push(winDockItem(id, w));
   }
-  if (running.length) dock.append(el("span", { class: "dock-divider dock-run", "aria-hidden": "true" }), ...running);
+  // Like a Mac's: after your pinned apps, before the divider (and with no
+  // pins, a divider of their own).
+  if (running.length) {
+    const divider = dock.querySelector(".dock-divider:not(.dock-run)");
+    if (divider) divider.before(...running);
+    else dock.prepend(...running, el("span", { class: "dock-divider dock-run", "aria-hidden": "true" }));
+  }
   sizeDock();
 }
 
 function winDockItem(id, w) {
   const icon = w.app ? el("span", { class: "dock-plate" }, plateFor(w.app))
     : el("img", { src: `/static/dock/${id}.svg`, alt: "", draggable: "false" });
-  const b = el("button", { type: "button", class: `dock-item dock-run open${w.app ? " dock-app" : ""}${wm.active === id ? " active" : ""}`,
+  // Not a pin (no dock-app): it can't be dragged in among them.
+  const b = el("button", { type: "button", class: `dock-item dock-run open${wm.active === id ? " active" : ""}`,
     "aria-label": w.title, "data-window": id }, icon, el("span", { class: "dock-label material" }, w.title));
   b.addEventListener("click", () => toggleWindow(id, () => openWindow(id)));
   return b;
