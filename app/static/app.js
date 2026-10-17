@@ -947,7 +947,9 @@ function collectionOrder(collection) {
 async function saveArrangement(kind, container) {
   let body;
   if (kind === "dock") {
-    const ids = [...container.querySelectorAll(".dock-app")].map((a) => a.dataset.app);
+    // A phone's dock shows four: the pins it doesn't show keep their order, after.
+    const shown = [...container.querySelectorAll(".dock-app")].map((a) => a.dataset.app);
+    const ids = [...shown, ...state.dock.filter((id) => !shown.includes(id))];
     if (ids.join() === state.dock.join()) return;
     body = { dock: ids };
   } else {
