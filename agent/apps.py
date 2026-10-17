@@ -405,6 +405,9 @@ def pre_start(app):
     hook = app["folder"] / "pre-start.sh" if app["folder"] else None
     if not hook or not hook.is_file():
         return 0
+    if untrusted(hook):
+        say(f"! {hook} is in a folder adlerOS can write to, so it isn't run.")
+        return 1
     env = {**docker_env(), **read_env(app["folder"] / ".env"), "DOCKER": "docker"}
     say("$ ./pre-start.sh")
     return subprocess.run(["bash", "./pre-start.sh"], cwd=app["folder"], env=env,

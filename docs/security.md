@@ -123,7 +123,7 @@ shell inside its own container. It has no login unless you add one
   `data/`, and Files' Desktop and User. The same goes for looking for apps,
   and the helper won't start one from there either (it will still stop or
   remove it): otherwise whoever had adlerOS could upload a compose file of
-  their own and run it. It shows you the compose file's text (not its
+  their own and run it. Import shows you the compose file's text (not its
   `.env`).
 - **Logs** show what an app's containers printed, which can include things
   apps log (addresses, usernames).
