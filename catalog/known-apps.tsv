@@ -120,6 +120,7 @@ open-webui/open-webui|open-webui	open-webui	Open WebUI	knowledge	di:open-webui	C
 vikunja/vikunja|vikunja/api|vikunja	vikunja	Vikunja	productivity	di:vikunja	Tasks, Kanban, Gantt	-
 johannesjo/super-productivity|super-productivity	super-productivity	Super Productivity	productivity	di:super-productivity	Time blocking and planning	-
 tomsquest/docker-radicale|cupcakearmy/radicale|radicale	radicale	Radicale	productivity	di:radicale	Calendar and contacts (CalDAV/CardDAV)	-
+linuxserver/firefox|jlesage/firefox	firefox	Firefox	productivity	di:firefox	A real Firefox, in your browser	-
 ckulka/baikal|baikal	baikal	Baïkal	productivity	di:baikal	Calendar and contacts (CalDAV/CardDAV)	-
 paperless-ngx/paperless-ngx|paperless-ngx	paperless-ngx	Paperless-ngx	productivity	di:paperless-ngx	Scanned documents with OCR and search	-
 cryptpad/cryptpad|cryptpad	cryptpad	CryptPad	productivity	di:cryptpad	End-to-end encrypted office suite	-

@@ -15,6 +15,7 @@
   <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/app.js" defer></script>
+  <script src="/static/windows.js" defer></script>
   <script src="/static/settings.js" defer></script>
   <script src="/static/widgets.js" defer></script>
   <script src="/static/store.js" defer></script>
@@ -22,6 +23,7 @@
   <script src="/static/drawer.js" defer></script>
   <script src="/static/terminal.js" defer></script>
   <script src="/static/files.js" defer></script>
+  <script src="/static/desk.js" defer></script>
   <script src="/static/notifications.js" defer></script>
   <script src="/static/keyboard.js" defer></script>
 </head>
@@ -52,6 +54,8 @@
 
   <!-- Desktop -->
   <main id="desktop" class="desktop" hidden>
+    <!-- Desktop mode: your Desktop folder, as icons -->
+    <section class="desk" id="desk" aria-label="Desktop folder"></section>
     <header class="header">
       <h1 id="greeting" class="greeting"></h1>
     </header>
@@ -192,7 +196,7 @@
     <textarea class="term-input" id="term-input" aria-label="Type into the terminal" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
   </section>
 
-  <!-- Files: your storage folder, and a text editor -->
+  <!-- Files: Desktop, User and Root, and a text editor -->
   <section id="files" class="sheet files-sheet" aria-label="Files" hidden>
     <div class="sheet-bg" aria-hidden="true">
       <div class="sheet-wallpaper"></div>
@@ -208,15 +212,21 @@
         </button>
         <nav class="crumbs" id="files-crumbs" aria-label="Folder"></nav>
         <div class="files-tools">
+          <button type="button" class="chip-button primary" id="files-paste" hidden>Paste</button>
           <button type="button" class="chip-button" id="files-new-folder">New folder</button>
           <button type="button" class="chip-button" id="files-new-file">New text file</button>
           <button type="button" class="chip-button primary" id="files-upload">Upload</button>
-          <button type="button" class="chip-button" id="files-trash">Trash</button>
           <input type="file" id="files-picker" multiple hidden>
         </div>
       </div>
-      <div class="files-list" id="files-list" role="list"></div>
-      <div class="uploads" id="files-uploads" aria-live="polite"></div>
+      <div class="files-main">
+        <nav class="files-side" id="files-side" aria-label="Places"></nav>
+        <div class="files-col">
+          <p class="files-note" id="files-note" role="note" hidden></p>
+          <div class="files-list" id="files-list" role="list"></div>
+          <div class="uploads" id="files-uploads" aria-live="polite"></div>
+        </div>
+      </div>
       <div class="editor" id="files-editor">
         <div class="editor-bar">
           <button type="button" class="chip-button" id="editor-back">Back</button>
@@ -228,6 +238,9 @@
       </div>
     </div>
   </section>
+
+  <!-- Desktop mode: where a dragged window will snap to -->
+  <div id="win-snap" class="win-snap" aria-hidden="true" hidden></div>
 
   <!-- Dialogs opened by Settings: confirm, password, progress -->
   <div id="modal" class="dialog-backdrop" hidden></div>

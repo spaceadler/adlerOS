@@ -70,6 +70,17 @@
       }
     },
     {
+      "id": "desktop-mode",
+      "category": "account",
+      "icon": "windows",
+      "title": "Desktop mode",
+      "description": "Windows side by side that you move and resize, your apps in windows of their own, and your Desktop folder on the desktop. Just for this device: the TV can keep the home screen.",
+      "keywords": "windows window manager floating desktop computer laptop multitask side by side split",
+      "control": {
+        "type": "desktop-mode"
+      }
+    },
+    {
       "id": "web-search",
       "category": "account",
       "icon": "search",

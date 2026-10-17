@@ -17,7 +17,7 @@ const SHORTCUTS = [
   { keys: ["/"], label: "Search apps and settings", run: () => openSearch() },
   { keys: ["a"], label: "All apps", run: () => toggleDrawer() },
   { keys: ["g"], label: "App Store", run: () => toggleStore() },
-  { keys: [","], label: "Settings", run: () => (isOpen("settings") ? closeSettings() : openSettings()) },
+  { keys: [","], label: "Settings", run: () => toggleWindow("settings", () => openSettings()) },
   { keys: ["u"], label: "Live Usage", run: () => toggleUsage() },
   { keys: ["w"], label: "Edit widgets", run: () => editWidgets() },
   { keys: ["t"], label: "Terminal (admin mode)", run: () => toggleTerminal() },
@@ -33,6 +33,8 @@ const HELP_ONLY = [
   ["Menu key, Shift+F10 or m", "The menu for what's selected (Keep in Dock, Rearrange…)"],
   ["Tab", "Next control in the open window"],
   ["Rearrange mode: arrows", "Move the selected app; Enter or Escape when done"],
+  ["Desktop mode: Ctrl+`", "The next window (Shift: the one before), then the desktop"],
+  ["Desktop mode: m on a title bar", "The window's menu: halves, maximize, move or resize with the arrows"],
 ];
 
 // ------------------------------------------------------------- layers
@@ -41,7 +43,9 @@ const HELP_ONLY = [
 function topLayer() {
   for (const id of ["modal", "confirm", "menu", "search", "notes"]) if (!$(id).hidden) return $(id);
   if (drawerOpen()) return $("drawer");
-  for (const id of ["settings", "store", "usage", "terminal", "files"]) if (isOpen(id)) return $(id);
+  // Desktop mode: the window in front, if one is; else the desktop and dock.
+  if (desktopMode()) return wm.active && isActive(wm.active) ? $(wm.active) : (!$("lock").hidden ? $("lock") : null);
+  for (const id of wm.windows.keys()) if (isOpen(id)) return $(id);
   if (!$("lock").hidden) return $("lock");
   return null; // the desktop and the dock
 }
@@ -72,7 +76,7 @@ function focusItem(node) {
 function focusStart(layer) {
   const items = focusables(layer);
   if (!layer && kb.last?.isConnected && items.includes(kb.last)) return focusItem(kb.last);
-  const firstApp = !layer && items.find((n) => n.matches("#pages .app"));
+  const firstApp = !layer && items.find((n) => n.matches("#pages .app, .desk-icon"));
   focusItem(firstApp || items[0]);
 }
 
@@ -235,7 +239,7 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (e.ctrlKey || e.metaKey || e.altKey || typing(node) || $("desktop").hidden) return;
-  if (layer && !["drawer", "settings", "store", "usage", "terminal", "files"].includes(layer.id)) return;
+  if (layer && layer.id !== "drawer" && !wm.windows.has(layer.id)) return;
   const shortcut = SHORTCUTS.find((s) => s.keys.includes(e.key));
   if (!shortcut) return;
   e.preventDefault();

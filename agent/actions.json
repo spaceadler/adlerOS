@@ -279,6 +279,27 @@
       }
     ]
   },
+  "files-root": {
+    "label": "Changing Root",
+    "description": "A change in Files' Root, the homelab's own folder (adlerOS sees it read-only). What to change is in data/agent/files/<request>.json; agent/files.py also refuses unless ADLEROS_TERMINAL=on on the machine.",
+    "admin": true,
+    "params": {
+      "request": {
+        "pattern": "^[a-f0-9]{32}$"
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/files.py",
+          "{param:request}"
+        ],
+        "result": true
+      }
+    ]
+  },
   "app-discover": {
     "label": "Looking for apps",
     "description": "Scans your compose folders again: new compose files become apps, sorted into collections.",

@@ -26,25 +26,11 @@ const usage = {
 
 // ------------------------------------------------------- open and close
 
-function toggleUsage() {
-  if (isOpen("usage")) closeUsage();
-  else openUsage();
-}
+function toggleUsage() { toggleWindow("usage", openUsage); }
 
 function openUsage() {
-  closeSearch();
-  closeMenu();
-  closeDrawer();
-  if (isOpen("settings")) closeSettings();
-  if (isOpen("store")) closeStore();
-  hideTerminal();
-  if (filesOpen()) closeFiles();
-  const sheet = $("usage");
-  sheet.classList.remove("closing");
-  sheet.hidden = false;
-  document.body.classList.add("sheet-open");
+  openWindow("usage");
   history.replaceState(null, "", "#usage");
-  markDockOpen("live-usage", true);
   if (!usage.tiles.cpu) buildUsage();
   tickUsage();
   measureApps();
@@ -55,18 +41,11 @@ function openUsage() {
 }
 
 function closeUsage() {
-  const sheet = $("usage");
-  if (sheet.hidden) return;
+  if (!isOpen("usage")) return;
   clearInterval(usage.timer);
   clearInterval(usage.appsTimer);
-  sheet.classList.add("closing");
-  if (!isOpen("settings") && !isOpen("store")) document.body.classList.remove("sheet-open");
+  closeWindow("usage");
   history.replaceState(null, "", location.pathname);
-  markDockOpen("live-usage", false);
-  setTimeout(() => {
-    sheet.hidden = true;
-    sheet.classList.remove("closing");
-  }, 280);
 }
 
 // ------------------------------------------------------------- numbers
@@ -332,9 +311,10 @@ function renderByApp() {
 
 // ------------------------------------------------------------- wiring
 
+registerWindow("usage", { title: "Live Usage", close: closeUsage, dock: "live-usage", size: [1000, 720] });
 $("usage-close").addEventListener("click", closeUsage);
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape" || !isOpen("usage")) return;
+  if (e.key !== "Escape" || !isActive("usage")) return;
   if (!$("modal").hidden || !$("search").hidden || !$("menu").hidden) return;
   e.stopImmediatePropagation();
   closeUsage();

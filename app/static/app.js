@@ -345,7 +345,7 @@ function appById(id) {
 const DOCK_FIXED = [
   { id: "app-drawer", label: "All apps", run: () => toggleDrawer() },
   { id: "app-store", label: "App Store", run: () => toggleStore() },
-  { id: "settings", label: "Settings", run: () => (isOpen("settings") ? closeSettings() : openSettings()) },
+  { id: "settings", label: "Settings", run: () => toggleWindow("settings", () => openSettings()) },
   { id: "live-usage", label: "Live Usage", run: () => toggleUsage() },
 ];
 const DOCK_MAX_PINS = 12;
@@ -379,7 +379,7 @@ function pinnedDockItem(app) {
   el("span", { class: "dock-label material" }, app.up ? app.name : `${app.name} · Offline`));
   link.addEventListener("click", (e) => {
     bounce(link);
-    if (!app.url) {
+    if (!app.url || (desktopMode() && !(e.ctrlKey || e.metaKey || e.shiftKey))) {
       e.preventDefault();
       openApp(app);
     }
@@ -402,7 +402,7 @@ function buildDock() {
   markDockOpen("app-store", isOpen("store"));
   markDockOpen("live-usage", isOpen("usage"));
   markDockOpen("app-drawer", drawerOpen());
-  sizeDock();
+  winDock();
 }
 
 function isPinned(id) { return state.dock.includes(id); }
@@ -505,11 +505,13 @@ function openApp(app) {
     toast(`${app.name} has no web page; here it is in the App Store.`);
     return openStore();
   }
+  if (desktopMode()) return openAppWindow(app);
   window.open(app.url, "_blank", "noopener,noreferrer");
 }
 
 // What a right-click (or a long press) on `target` offers.
 function menuFor(target) {
+  if (desktopMode() && target.closest("#desktop") && !target.closest("[data-app]")) return deskMenu(target);
   const appId = target.closest("[data-app]")?.dataset.app;
   const app = appId && appById(appId);
   const arrange = { label: "Rearrange apps", run: startArranging };
@@ -729,7 +731,8 @@ const ACTIONS = [
   { id: "usage", name: "Live Usage", keywords: "live usage cpu memory ram storage disk temperature stats monitor" },
   { id: "drawer", name: "All apps", keywords: "all apps drawer launchpad list every app alphabetical" },
   { id: "terminal", name: "Terminal", keywords: "terminal shell console ssh bash command line admin" },
-  { id: "files", name: "Files", keywords: "files folders storage documents upload download editor text edit trash" },
+  { id: "files", name: "Files", keywords: "files folders storage documents upload download editor text edit trash desktop mailbox root" },
+  { id: "desktop-mode", name: "Desktop mode or home screen", keywords: "desktop mode windows window manager floating side by side home screen switch" },
   { id: "logout", name: "Log out", keywords: "log out sign out lock exit" },
 ];
 let results = [];
@@ -791,6 +794,7 @@ function runResult(i) {
   else if (r.action.id === "drawer") openDrawer();
   else if (r.action.id === "terminal") openTerminal();
   else if (r.action.id === "files") openFiles();
+  else if (r.action.id === "desktop-mode") setDesktopMode(!desktopMode());
   else if (r.action.id === "logout") confirmLogout();
 }
 
@@ -811,6 +815,7 @@ function showLock() {
   closeTerminal();
   files.editor = null; // logging out: no "unsaved changes" question
   closeFiles();
+  for (const [id, w] of wm.windows) if (w.app && isOpen(id)) w.close();
   $("confirm").hidden = true;
   $("desktop").hidden = true;
   $("dock").hidden = true;
@@ -875,6 +880,7 @@ async function showDesktop() {
   startRefresh();
   startWidgets();
   startNotes();
+  refreshDesk();
   // A link (or reload) to #settings or #settings/<row> opens Settings there;
   // #store, the App Store.
   const match = location.hash.match(/^#settings(?:\/([\w-]+))?$/);
@@ -997,6 +1003,9 @@ $("web-search").addEventListener("submit", (e) => {
 $("kbd").textContent = platformKey();
 loadWallpaper();
 setInterval(() => { if (!$("desktop").hidden) $("greeting").textContent = greeting(); }, 60000);
-api("/api/session")
-  .then(({ body }) => (body?.authenticated ? showDesktop() : showLock()))
-  .catch(showLock);
+// After every script has run (the desktop needs the windows, Files, the dock…).
+document.addEventListener("DOMContentLoaded", () => {
+  api("/api/session")
+    .then(({ body }) => (body?.authenticated ? showDesktop() : showLock()))
+    .catch(showLock);
+});

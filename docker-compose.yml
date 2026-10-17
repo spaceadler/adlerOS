@@ -31,6 +31,10 @@ services:
       COMPOSE_ROOTS: ${COMPOSE_ROOTS:-}
       APPS_DIR: ${APPS_DIR:-}
       STORAGE_DIR: ${STORAGE_DIR:-}
+      # Files' places as they are on this machine, to see one inside another.
+      ADLEROS_HOST_STORAGE: ${STORAGE_DIR:-}
+      ADLEROS_HOST_DESKTOP: ${DESKTOP_DIR:-}
+      ADLEROS_HOST_ROOT: ${FILES_ROOT:-}
       # on: the Terminal window may open shells (admin mode, your password).
       ADLEROS_TERMINAL: ${ADLEROS_TERMINAL:-off}
       PYTHONDONTWRITEBYTECODE: 1
@@ -46,8 +50,11 @@ services:
       - ./registry:/adleros/registry:ro
       - ./catalog:/adleros/catalog:ro
       - ./agent:/adleros/agent:ro
-      # Your files, read-write, for the Files window (and nothing else of yours).
+      # Your files, read-write, for the Files window: User and the Desktop.
       - ${STORAGE_DIR:?run ./install.sh}:/storage
+      - ${DESKTOP_DIR:-./data/no-desktop}:/places/desktop
+      # Files' Root, read-only (changes there go through the helper).
+      - ${FILES_ROOT:-./data/no-root}:/places/root:ro
       - /etc/os-release:/host/os-release:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import os, urllib.request as u; u.urlopen('http://127.0.0.1:' + os.environ['OS_PORT'] + '/healthz', timeout=3)"]
