@@ -78,10 +78,10 @@ by itself, but **Settings → Welcome tour** (or ⌘K "welcome") shows it again.
 
 Pin any app: right-click it (long-press on a phone) → **Keep in Dock**, on
 the page or in All apps, or drag it from All apps onto the dock, where you
-drop it. **Files** and the **Terminal** are pinned from the start, like apps:
-unpin them the same way. Drag pinned apps to reorder them; right-click →
-**Remove from Dock** to unpin. After a divider come adlerOS's own four, which
-always stay:
+drop it. Drag pinned apps to reorder them; right-click → **Remove from Dock**
+to unpin. After a divider come adlerOS's own: four that always stay, then
+**Files** and the **Terminal**, pinned from the start (right-click → Remove
+from Dock to take them out, Keep in Dock in All apps to bring them back):
 
 | | |
 | --- | --- |
@@ -111,7 +111,11 @@ made phone-narrow leaves it until it's wide again.
 - **The desktop** shows your Desktop folder (a homelab's `mailbox/`) as icons.
   Double-click one (Enter, or a tap) to open it; right-click for Copy, Cut,
   Rename, Delete; right-click the desktop itself for New folder, New text
-  file, Paste, Upload. Drop files on it to put them there. Files that arrive
+  file, Paste, Upload. Drag an icon to put it somewhere else on the desktop
+  (each computer remembers where; one already there swaps places), onto a
+  folder's icon to move it into that folder, or onto the Files window to move
+  it to the folder that shows. Drop files from your computer on it to put
+  them there. Files that arrive
   some other way (Syncthing) show up within 15 seconds.
 - **Windows:** Settings, the App Store, Live Usage, Files and the Terminal
   open as windows you can have side by side. Drag one by its title bar; drag

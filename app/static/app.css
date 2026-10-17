@@ -2266,3 +2266,9 @@ body.wm .app-sheet:not(.active) .app-shield { position: absolute; inset: 38px 0 
 /* Dragging an app from All apps: the dock is where it can go. */
 .dock.dock-drop { box-shadow: var(--shine), 0 0 0 3px rgb(255 255 255 / 0.7), 0 10px 20px rgb(0 0 0 / 0.25); }
 .dock-builtin { padding: 0; border: 0; background: none; }
+
+/* Desktop mode: dragging an icon on the desktop (desk.js). */
+body.wm .desk { grid-auto-flow: column dense; }
+.desk-ghost { position: fixed; top: 0; left: 0; z-index: 300; margin: 0; pointer-events: none; opacity: 0.9; background: rgb(255 255 255 / 0.12); }
+.desk-icon.drop-target { background: rgb(255 255 255 / 0.22); box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85); }
+.files-list.drop-here { box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85) inset; }

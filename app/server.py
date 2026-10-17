@@ -2197,11 +2197,15 @@ class Handler(BaseHTTPRequestHandler):
         except (TypeError, ValueError):
             return self.send_json(400, {"error": "rows and cols: numbers"})
         sid = secrets.token_hex(16)
-        folder = TERM_DIR / sid
         TERM_DIR.mkdir(parents=True, exist_ok=True)
-        folder.mkdir(mode=0o700)
-        terminal_append(folder / "in", b"")
-        write_private(folder / "start.json", json.dumps({"sid": sid, "rows": rows, "cols": cols, "created": time.time()}))
+        # Made under a hidden name, then renamed into place whole: systemd's
+        # path unit watches term/ only, so a start.json written into a new
+        # folder after it looked would wait for the next request.
+        ready = TERM_DIR / f".{sid}.new"
+        ready.mkdir(mode=0o700)
+        terminal_append(ready / "in", b"")
+        write_private(ready / "start.json", json.dumps({"sid": sid, "rows": rows, "cols": cols, "created": time.time()}))
+        os.rename(ready, TERM_DIR / sid)
         return self.send_json(200, {"sid": sid})
 
     def terminal_request(self, rest, body):
