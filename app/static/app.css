@@ -1855,8 +1855,10 @@ a.chip-button { text-decoration: none; }
 
 /* ============================================================= terminal */
 
+/* Glass like the other windows, a little darker for the text; --term-bg
+   stays solid for what's drawn in it (inverse text, the cursor). */
 .term-sheet { --term-bg: #0d0f12; --term-fg: #d7dae0; display: flex; flex-direction: column; }
-.term-tint { background: #0d0f12; }
+.term-tint { background: rgb(13 15 18 / 0.8); }
 .term-head {
   position: relative;
   z-index: 2;
@@ -1879,7 +1881,7 @@ a.chip-button { text-decoration: none; }
   margin: 0;
   padding: 8px;
   overflow-y: auto;
-  background: var(--term-bg);
+  background: transparent;
   color: var(--term-fg);
   font: 13px/1.35 ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
   white-space: pre;
@@ -2272,3 +2274,22 @@ body.wm .desk { grid-auto-flow: column dense; }
 .desk-ghost { position: fixed; top: 0; left: 0; z-index: 300; margin: 0; pointer-events: none; opacity: 0.9; background: rgb(255 255 255 / 0.12); }
 .desk-icon.drop-target { background: rgb(255 255 255 / 0.22); box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85); }
 .files-list.drop-here { box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85) inset; }
+
+/* Desktop mode: windows are glass over what's really behind them (other
+   windows, the desktop), not over a copy of the wallpaper; an app's page is
+   a little see-through too. Maximized, a window is solid again. */
+body.wm .sheet:not([data-mode="max"]) {
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  backdrop-filter: blur(28px) saturate(150%);
+}
+body.wm .sheet:not([data-mode="max"]) .sheet-bg { background: transparent; }
+body.wm .sheet:not([data-mode="max"]) .sheet-wallpaper { display: none; }
+body.wm .sheet:not([data-mode="max"]) .sheet-tint { background: rgb(0 0 0 / 0.55); }
+body.wm .sheet:not([data-mode="max"]) .term-tint { background: rgb(13 15 18 / 0.72); }
+body.wm .app-sheet:not([data-mode="max"]) .sheet-tint { background: rgb(0 0 0 / 0.2); }
+body.wm .app-sheet:not([data-mode="max"]) .app-frame { opacity: 0.92; }
+
+/* Dragging a file out of Files (files.js). */
+.file-ghost { position: fixed; top: 0; left: 0; z-index: 300; display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 12px; font-size: 13px; pointer-events: none; }
+.file-row.drag-source { opacity: 0.4; }
+.file-row.drop-target, .files-place.drop-target { background: rgb(255 255 255 / 0.16); box-shadow: 0 0 0 2px rgb(255 255 255 / 0.85) inset; }

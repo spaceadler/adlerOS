@@ -111,7 +111,8 @@ function crumbs() {
 
 function renderPlaces() {
   const item = (id, label, current, run) => {
-    const b = el("button", { type: "button", class: `files-place${current ? " current" : ""}`, "aria-current": current ? "true" : "false" },
+    const b = el("button", { type: "button", class: `files-place${current ? " current" : ""}`, "aria-current": current ? "true" : "false",
+      ...(id === "trash" ? { "data-trash": "1" } : { "data-path": `/${id}` }) },
       el("span", { class: "files-place-icon", "aria-hidden": "true" }, svg(PLACE_ICONS[id])), el("span", {}, label));
     b.addEventListener("click", run);
     return b;
@@ -149,6 +150,7 @@ function renderFiles() {
   const rows = files.entries.filter((e) => hiddenShown() || !e.name.startsWith(".")).map((entry) => {
     const path = entry.place && files.path === "/" ? `/${entry.place}` : join(files.path, entry.name);
     const row = el("button", { type: "button", class: `file-row${entry.outside ? " outside" : ""}`, "data-file": path,
+      ...(entry.dir ? { "data-dir": "1" } : {}), ...(entry.place ? { "data-place": entry.place } : {}),
       title: entry.outside ? "A link to somewhere outside this place" : entry.place ? `${entry.name}: your ${PLACE_NAMES[entry.place]}` : entry.name },
     el("span", { class: `file-icon ${entry.kind}` }, svg(entry.place ? PLACE_ICONS[entry.place] : FILE_ICONS[entry.kind] || FILE_ICONS.file)),
     el("span", { class: "file-name" }, entry.name, entry.place && files.path !== "/" ? el("span", { class: "file-from" }, `Your ${PLACE_NAMES[entry.place]}`) : ""),
@@ -515,10 +517,93 @@ async function leaveEditor() {
   await showFolder(back);
 }
 
+// ------------------------------------------------- dragging a file away
+
+// With a mouse: drop it on a folder in the list, a place down the side, the
+// Trash, or (desktop mode) the desktop. From a folder you can't change
+// (Root), it's a copy; otherwise it moves.
+const fileDrag = { row: null, suppress: false };
+
+function fileDown(e) {
+  const row = e.target.closest("#files-list .file-row[data-file]");
+  if (!row || row.dataset.place || e.button !== 0 || e.pointerType !== "mouse" || files.view !== "folder") return;
+  Object.assign(fileDrag, { row, pointerId: e.pointerId, x: e.clientX, y: e.clientY, active: false, over: null });
+}
+
+function fileDropTarget(e) {
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const row = under?.closest("#files-list .file-row[data-dir]");
+  if (row && row !== fileDrag.row) return { node: row, to: row.dataset.file };
+  const place = under?.closest("#files-side [data-path]");
+  if (place) return { node: place, to: place.dataset.path };
+  const trash = under?.closest("#files-side [data-trash]");
+  if (trash && files.writable) return { node: trash, trash: true };
+  const icon = under?.closest("#desk .desk-icon");
+  const entry = icon && desk.entries.find((x) => `/desktop/${x.name}` === icon.dataset.file);
+  if (entry?.dir) return { node: icon, to: icon.dataset.file };
+  if (under?.closest("#desk") && desktopMode()) return { desk: true, to: "/desktop" };
+  return {};
+}
+
+function fileMove(e) {
+  const d = fileDrag;
+  if (!d.row || e.pointerId !== d.pointerId) return;
+  if (!d.active) {
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) return;
+    d.active = true;
+    d.ghost = el("div", { class: "file-ghost material" }, d.row.querySelector(".file-icon").cloneNode(true),
+      el("span", {}, d.row.querySelector(".file-name").firstChild?.textContent || ""));
+    document.body.append(d.ghost);
+    d.row.classList.add("drag-source");
+    try { d.row.setPointerCapture(e.pointerId); } catch { /* not supported */ }
+  }
+  d.ghost.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 8}px)`;
+  const t = fileDropTarget(e);
+  d.over?.classList.remove("drop-target");
+  d.over = t.node || null;
+  d.over?.classList.add("drop-target");
+  $("desk").classList.toggle("dropping", Boolean(t.desk));
+}
+
+async function fileUp(e) {
+  const d = fileDrag;
+  if (!d.row || e.pointerId !== d.pointerId) return;
+  fileDrag.row = null;
+  if (!d.active) return;
+  d.ghost.remove();
+  d.row.classList.remove("drag-source");
+  d.over?.classList.remove("drop-target");
+  $("desk").classList.remove("dropping");
+  fileDrag.suppress = true; // the click this makes shouldn't open it
+  setTimeout(() => { fileDrag.suppress = false; }, 0);
+  const t = fileDropTarget(e);
+  const path = d.row.dataset.file;
+  const name = path.split("/").pop();
+  if (t.trash) return deletePaths([path]);
+  if (!t.to || t.to === parentOf(path) || t.to === path) return;
+  if (!(await rootOk([t.to, ...(files.writable ? [path] : [])]))) return;
+  const copy = !files.writable;
+  const reply = await filesPost(copy ? "copy" : "move", { paths: [path], to: t.to });
+  if (!reply) return;
+  if (t.desk) rememberDeskPlace(name, deskCellAt(e.clientX, e.clientY));
+  if (reply.task) watchTask(reply.task);
+  else toast(`${copy ? "Copied" : "Moved"} ${name} to ${t.desk ? "the Desktop" : fromLabel(`${t.to}/x`) || "it"}.`);
+  refreshFiles();
+}
+
 // ---------------------------------------------------------------- wiring
 
 registerWindow("files", { title: "Files", close: closeFiles, dock: "files", size: [980, 640] });
 $("files-close").addEventListener("click", closeFiles);
+$("files-list").addEventListener("pointerdown", fileDown);
+document.addEventListener("pointermove", fileMove);
+document.addEventListener("pointerup", fileUp);
+document.addEventListener("pointercancel", fileUp);
+$("files-list").addEventListener("click", (e) => {
+  if (!fileDrag.suppress) return;
+  e.preventDefault();
+  e.stopPropagation();
+}, true);
 $("files-up").addEventListener("click", () => {
   if (files.view !== "folder") return showFolder(files.path);
   showFolder(parentOf(files.path));

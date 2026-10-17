@@ -122,7 +122,9 @@ made phone-narrow leaves it until it's wide again.
   any edge to resize it; drag it to the left or right edge of the screen for
   that half, or to the top to fill the screen (or double-click its bar). The
   buttons on its bar minimize it to the dock, maximize it, and close it.
-  Windows remember where you put them.
+  Windows remember where you put them. They're glass: what's behind them
+  (other windows, the desktop) shows through, blurred, and an app's page is
+  a little see-through too; a maximized window is solid.
 - **Your apps** open in windows of their own, if they allow it: adlerOS asks
   each app whether it may be shown inside another page, and opens the ones
   that say no in a tab, as on the home screen. Ctrl+click opens any app in a
@@ -301,6 +303,10 @@ Desktop and User themselves: opening one takes you there.
 - **New folder**, **New text file**, and per file (right-click, `m`, or its
   [keys](keyboard.md#in-files)): Edit as text, Download, Copy, Cut, Rename,
   Delete.
+- **Drag** a file (with a mouse) onto a folder in the list, onto a place down
+  the side, or onto the Trash; in desktop mode, onto the desktop or a folder
+  on it. It moves there (from Root, where you can't change things, it's a
+  copy).
 - **Copy** or **Cut**, then go to another folder (in any place) and
   **Paste** (the button that appears, or Ctrl+V). Between places it's a real
   copy, so a big one shows its progress under the list and carries on while
