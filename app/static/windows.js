@@ -20,6 +20,12 @@ const WIN_GEOMETRY_KEY = "adleros.windows";
 
 function desktopMode() { return document.body.classList.contains("wm"); }
 
+// Desktop mode is for a computer: a phone-sized screen never has it (it
+// gets the iPhone-style layout instead). The choice is kept per browser, so
+// it comes back when the screen is wide again.
+const NARROW_SCREEN = matchMedia("(max-width: 639px)");
+function computerScreen() { return !NARROW_SCREEN.matches; }
+
 function winLoad(key, fallback) {
   try {
     const value = localStorage.getItem(key);
@@ -35,7 +41,14 @@ function winSave(key, value) {
 // -------------------------------------------------------- the two modes
 
 function setDesktopMode(on) {
+  if (on && !computerScreen()) return toast("Desktop mode is for a computer: a wider screen and a mouse.");
   if (on === desktopMode()) return;
+  switchDesktopMode(on);
+  winSave(DESKTOP_MODE_KEY, on);
+  toast(on ? "Desktop mode: windows side by side, and your Desktop folder." : "Back to the home screen.");
+}
+
+function switchDesktopMode(on) {
   for (const [id, w] of wm.windows) if (isOpen(id)) (w.hide || w.close)();
   // Back to sliding sheets: no window keeps its place or size.
   for (const id of wm.windows.keys()) {
@@ -48,14 +61,11 @@ function setDesktopMode(on) {
   wm.stack = [];
   wm.order = [];
   document.body.classList.toggle("wm", on);
-  winSave(DESKTOP_MODE_KEY, on);
-  applyPhone(); // a phone in desktop mode keeps the plain layout
   wm.active = null;
   dockKey = null;
   buildDock();
   if (on) refreshDesk();
   else layout(true);
-  toast(on ? "Desktop mode: windows side by side, and your Desktop folder." : "Back to the home screen.");
 }
 
 // ------------------------------------------------------------ registry
@@ -488,7 +498,12 @@ function reloadAppWindow(id) {
 // ---------------------------------------------------------------- wiring
 
 wm.geometry = winLoad(WIN_GEOMETRY_KEY, {}) || {};
-if (winLoad(DESKTOP_MODE_KEY, false) === true) document.body.classList.add("wm");
+if (winLoad(DESKTOP_MODE_KEY, false) === true && computerScreen()) document.body.classList.add("wm");
+// The screen got narrow (or wide again): off, or back on if you'd chosen it.
+NARROW_SCREEN.addEventListener("change", () => {
+  const want = computerScreen() && winLoad(DESKTOP_MODE_KEY, false) === true;
+  if (want !== desktopMode()) switchDesktopMode(want);
+});
 
 document.addEventListener("pointermove", winPointerMove);
 document.addEventListener("pointerup", winPointerUp);

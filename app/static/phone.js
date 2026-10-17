@@ -11,9 +11,9 @@
 const PHONE_QUERY = matchMedia("(max-width: 639px)");
 const phone = { swipe: null, home: null, paging: null };
 
-// Desktop mode is for a computer: with it on, a phone keeps the plain layout.
+// (Desktop mode never is on a phone-sized screen: windows.js.)
 function applyPhone() {
-  const on = PHONE_QUERY.matches && !desktopMode();
+  const on = PHONE_QUERY.matches;
   if (on === phoneLayout()) return;
   document.body.classList.toggle("phone", on);
   dockKey = null;
