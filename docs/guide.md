@@ -115,7 +115,16 @@ made phone-narrow leaves it until it's wide again.
   (each computer remembers where; one already there swaps places), onto a
   folder's icon to move it into that folder, or onto the Files window to move
   it to the folder that shows. Drop files from your computer on it to put
-  them there. Files that arrive
+  them there.
+- **Apps on the desktop:** in All apps, right-click an app (or Files, the
+  Terminal) → **Add to desktop**. It's an icon there like the files:
+  double-click to open it, drag it about, right-click → **Remove from
+  desktop**.
+- **Widgets on the desktop:** right-click the desktop → **Add widget…** and
+  pick one (the same ones as the home screen's). It's three icons wide and
+  two tall; drag it where you want it (icons make room), right-click it →
+  **Remove widget**. Each computer keeps its own desktop: where things are,
+  which apps and widgets. Files that arrive
   some other way (Syncthing) show up within 15 seconds.
 - **Windows:** Settings, the App Store, Live Usage, Files and the Terminal
   open as windows you can have side by side. Drag one by its title bar; drag
