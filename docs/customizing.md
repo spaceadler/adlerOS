@@ -88,7 +88,9 @@ deluan/navidrome|navidrome	navidrome	Navidrome	media	di:navidrome	Music streamin
 The image paths (or just last parts) it matches, separated by `|`; a short id;
 the name; the collection (`core`, `system`, `media`, `knowledge`,
 `productivity`, `life`, `files`, `extras`); a `di:` icon or `-`; one line about
-it; and the port it listens on when it shares the host's network (or `-`).
+it; and the port its web page is on inside its container (or `-`), which
+picks the right one when an app publishes several and is where it answers
+when it shares the host's network.
 After adding a line, **Look for new apps** picks it up for new files; for an
 app adlerOS already found, edit its `registry/<app>/app.json` (or remove and
 import it again).

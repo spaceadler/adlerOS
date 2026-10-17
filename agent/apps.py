@@ -97,7 +97,8 @@ COLLECTIONS = ("core", "system", "media", "knowledge", "productivity", "life", "
 BACKING = re.compile(r"postgres|mysql|mariadb|redis|valkey|mongo|couchdb|memcached|elastic|meili|typesense|clickhouse"
                      r"|minio|rabbitmq|nats|pgvecto|immich-machine-learning|(^|[/-])db($|[:-])", re.I)
 # Ports that aren't a web page (SSH, DNS, mail, databases, torrents, games).
-NOT_WEB = {22, 222, 2222, 53, 25, 465, 587, 993, 1883, 3306, 5432, 6379, 6881, 27017, 25565}
+NOT_WEB = {22, 222, 2222, 53, 25, 465, 587, 993, 1883, 6881, 25565}  # SSH, DNS, mail, MQTT, torrents, Minecraft
+DB_PORTS = {3306, 5432, 6379, 27017}  # a database's, usually; some apps serve their page there (last resort)
 TLS_PORTS = {443, 4433, 8443, 9443}  # a web page, but the plain one is the better link
 # Known apps that are often a helper inside someone else's stack: in a file
 # with another app they're part of it, alone they're an app of their own.
@@ -564,12 +565,16 @@ def backing(svc):
     return bool(BACKING.search(svc["image"]) or BACKING.search(svc["name"]))
 
 
-def web_port(svc):
-    """The port most likely to be the web page: plain HTTP before TLS, and
-    never SSH, DNS or a database."""
-    ports = svc.get("ports") or []
-    web = sorted((p for p in ports if p not in NOT_WEB), key=lambda p: p in TLS_PORTS)
-    return (web or ports or [None])[0]
+def web_port(svc, info=None):
+    """The port most likely to be the web page: where the app is known to
+    serve it (Nginx Proxy Manager's 81, not its proxy's 80), else plain HTTP
+    before TLS, a database's port last, never SSH, DNS or a game. None: no
+    web page."""
+    known = (info or {}).get("port")
+    if known and known in (svc.get("targets") or {}):
+        return svc["targets"][known]
+    web = sorted((p for p in svc.get("ports") or [] if p not in NOT_WEB), key=lambda p: (p in DB_PORTS, p in TLS_PORTS))
+    return web[0] if web else None
 
 
 def host_address():
@@ -734,16 +739,19 @@ def record_for(file, folder_name, svc, info, own, apps, svcs=()):
     # The app's own web port; else one of its other services' (a proxy in
     # front of it); else, on host networking, where the app usually listens.
     mine = [s for s in svcs if own is None or s["name"] in own]
-    port = web_port(svc) or next((p for p in map(web_port, [s for s in mine if not backing(s)]) if p), None)
+    port = web_port(svc, info) or next((p for p in map(web_port, [s for s in mine if not backing(s)]) if p), None)
     if not port and (info or {}).get("port") and svc.get("host"):
         port = info["port"]
+    # No web page (a game server, a bot): no address, but its port still
+    # says whether it's up.
+    check = port or next(iter(svc.get("ports") or []), None)
     # Unknown: the folder's name, each word capitalised (spaceadler.com stays as is).
     name = info["name"] if info else " ".join(w[:1].upper() + w[1:] for w in re.split(r"[-_ ]+", folder_name) if w)
     image_base = image_path(svc["image"]).rsplit("/", 1)[-1]
     icon = (info or {}).get("icon") or (f"di:{image_base}" if re.fullmatch(r"[a-z0-9-]+", image_base) else "")
     return new_app_id(name, apps), {
         "name": name[:40], "files": [str(file)], "services": own,
-        "url": f"http://{host_address()}:{port}" if port else "", "icon": icon, "port": port,
+        "url": f"http://{host_address()}:{port}" if port else "", "icon": icon, "port": check,
         "about": (info or {}).get("about") or f"Found in {file.parent}",
         "collection": (info or {}).get("collection", "extras"), "source": "discovered",
         "known": (info or {}).get("id", ""), "added": time.strftime("%Y-%m-%d"), "installed": True}
@@ -827,10 +835,12 @@ def services(file):
     config = json.loads(result.stdout)
     found = []
     for name, svc in (config.get("services") or {}).items():
-        ports = sorted({int(p["published"]) for p in svc.get("ports") or []
-                        if str(p.get("published", "")).isdigit()})
+        mapped = [p for p in svc.get("ports") or [] if str(p.get("published", "")).isdigit()]
+        ports = sorted({int(p["published"]) for p in mapped})
+        # Container port -> the port it's published on, to find a known app's page.
+        targets = {int(p["target"]): int(p["published"]) for p in mapped if str(p.get("target", "")).isdigit()}
         needs = svc.get("depends_on") or {}
-        found.append({"name": name, "image": svc.get("image") or "(built here)", "ports": ports,
+        found.append({"name": name, "image": svc.get("image") or "(built here)", "ports": ports, "targets": targets,
                       "container": svc.get("container_name") or "", "needs": sorted(needs),
                       "host": svc.get("network_mode") == "host"})
     return found
