@@ -12,13 +12,15 @@ Docker, and your compose files stay yours.
 ![adlerOS desktop](docs/screenshots/desktop.png)
 
 ```bash
-git clone https://git.spaceadler.com/spaceadler/adleros.git ~/adleros
-cd ~/adleros && ./install.sh
+cd ~/docker   # wherever your compose folders are: adlerOS is one of them
+git clone https://git.spaceadler.com/spaceadler/adleros.git
+cd adleros && ./install.sh
 ```
 
-It asks four things (your name, this machine's address, where your compose
-files are, your timezone), finds your apps, and prints the address and a
-password: `http://<this machine>:8686`. Open it on your phone and *Add to Home
+It asks a few things (your name, this machine's address, where your compose
+files are, your timezone…), finds your apps, and prints the address and a
+password: `http://<this machine>:8686`. It never lists itself among them, so
+you can't stop it from inside it. Open it on your phone and *Add to Home
 Screen*: it opens like an app.
 
 ## What you get

@@ -767,7 +767,9 @@ def discover():
     apps = every_app()
     known = known_apps()
     used = {os.path.realpath(f) for a in apps.values() for f in a["files"]}
-    skip = [p.resolve() for p in (ADLEROS, apps_dir(), OS_DATA) if p.exists()]
+    # adlerOS never lists itself (even next to your apps, it's not one to stop
+    # from inside it). The store's own apps are already known, by their files.
+    skip = [p.resolve() for p in (ADLEROS, OS_DATA) if p.exists()]
     added = failed = 0
     for root in roots:
         if not root.is_dir():
