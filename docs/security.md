@@ -151,4 +151,8 @@ short, and review what you add to it.
 adlerOS speaks plain HTTP on port 8686 and is meant for your own network or a
 VPN such as Tailscale. **Don't forward it to the internet.** For HTTPS, put it
 behind a reverse proxy you already trust (the homelab's nginx does, when it
-has a certificate).
+has a certificate; see [standalone](standalone.md#https-behind-a-reverse-proxy)
+for any other), at a name that points at your private address. It believes a
+proxy's `X-Real-IP` and `X-Forwarded-Proto` only from this machine and
+`ADLEROS_TRUSTED_PROXIES`, so nobody else can dodge the login lockout by
+claiming to be someone else.

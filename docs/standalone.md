@@ -119,9 +119,43 @@ To add your own, see [customizing](customizing.md#store-apps).
 | `FILES_ROOT` | Files' Root, read-only: your homelab's folder, say (none) |
 | `ADLEROS_TERMINAL` | `on` lets the Terminal window open shells (admin mode, your password); re-run `./install.sh` after changing it |
 | `ADLEROS_TERMINAL_DIR` | where a new terminal starts, e.g. `~/homelab` (your home folder); takes effect on the next one |
+| `ADLEROS_TRUSTED_PROXIES` | your reverse proxy's address or network, when adlerOS is behind one ([HTTPS](#https-behind-a-reverse-proxy)) |
 | `TZ`, `PUID`, `PGID` | timezone, and the user adlerOS and store apps run as |
 
 After editing: `docker compose up -d` in this folder.
+
+## HTTPS, behind a reverse proxy
+
+adlerOS speaks plain HTTP on its port. For HTTPS, at a name like
+`os.example.com`, put it behind a reverse proxy you already run. That's what
+lets Firefox from the store open in a window, and what a phone wants for
+*Add to Home Screen*.
+
+1. **A name for it** that points at this machine, the same way as your other
+   apps' names. Point it at its Tailscale (or LAN) address, never a public
+   one: adlerOS is for your own network.
+2. **A proxy host** for that name, forwarding to `http://<this machine>:8686`,
+   with your certificate. For Nginx Proxy Manager: *Hosts → Proxy Hosts → Add*,
+   scheme `http`, this machine's address, port `8686`, *Websockets Support*
+   on, and on the SSL tab your certificate with *Force SSL*.
+3. **Tell adlerOS to believe the proxy** about who's visiting and over what:
+   `ADLEROS_TRUSTED_PROXIES` in `.env`, its address or network (for Nginx
+   Proxy Manager, its Docker network, e.g. `172.16.7.0/24`: `docker network
+   inspect` on it shows the subnet), then `docker compose up -d`. Without it
+   every visitor looks like the proxy (one wrong password locks everyone out)
+   and the login cookie isn't marked secure.
+
+**Your apps' addresses.** A page on HTTPS can't show a plain-HTTP one, so on
+HTTPS adlerOS opens an app at `http://<this machine>:<port>` in a tab, not a
+window. If Nginx Proxy Manager is one of your apps, adlerOS reads its proxy
+hosts (`data/nginx/proxy_host/` next to its compose file) and gives each app
+behind one its `https://` name instead. That happens whenever it looks for
+apps (**Settings → Look for new apps**), so add a proxy host, then press it.
+
+**Firefox** from the store needs its own proxy host: a name for it, scheme
+`https` (it serves HTTPS itself), this machine's address, the port its App
+Store card shows, and *Websockets Support* on. Then **Look for new apps**, and
+it opens in a window whenever adlerOS is on HTTPS.
 
 ## Updating
 

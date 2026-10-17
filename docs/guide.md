@@ -107,8 +107,9 @@ image](https://docs.linuxserver.io/images/docker-firefox/), so:
 - It serves HTTPS with a certificate it makes itself: open it once in a tab
   and accept it.
 - It needs a secure page around it, so it opens in a window only when adlerOS
-  itself is on HTTPS (a homelab with HTTPS, or `tailscale serve`); otherwise
-  in a tab.
+  itself is on HTTPS, behind a reverse proxy, and Firefox has a proxy host of
+  its own ([standalone](standalone.md#https-behind-a-reverse-proxy));
+  otherwise in a tab.
 - It's heavy: about 1 GB of memory and a good part of the CPU while it runs
   (a Raspberry Pi 4 manages, slowly for video). Stop it in the App Store when
   you're done.
