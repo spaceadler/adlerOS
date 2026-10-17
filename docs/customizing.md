@@ -38,14 +38,15 @@ search keywords, and a `control`:
 | `control.type` | |
 | --- | --- |
 | `setting-text` | edits one of adlerOS's own settings (`key`), saved at once |
-| `password`, `wallpaper`, `admin` | those built-in controls |
-| `open` | a button opening one of adlerOS's windows (`target`: `terminal`) |
+| `password`, `wallpaper`, `admin`, `desktop-mode` | those built-in controls |
+| `open` | a button opening one of adlerOS's windows (`target`: `terminal`, `welcome`) |
 | `config` | a value in the homelab's `homelab.env`, applied by an action that accepts it |
 | `action` | a button running an action (below), after an optional confirmation |
 | `info` | a read-only value: `config.<KEY>`, `device.<field>`, or a named formatter |
 
 `"mode": "homelab"` or `"standalone"` shows a row only in that kind of
-install; `"admin": true` makes it work only in admin mode.
+install; `"device": "computer"` only on screens wider than a phone's;
+`"admin": true` makes it work only in admin mode.
 
 ## Actions
 

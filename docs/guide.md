@@ -42,7 +42,8 @@ by itself, but **Settings → Welcome tour** (or ⌘K "welcome") shows it again.
 - **Widgets:** up to three. Right-click the desktop (long-press on a phone) →
   **Edit widgets**, then tick the ones you want; they fill in from left to
   right in the order you pick them. Click a widget to open what it's about:
-  the system ones open Live Usage, the apps ones the App Store.
+  the system ones open Live Usage, the apps ones the App Store, the backup one
+  Settings.
 
   <!-- screenshot: the widget picker -->
   ![Edit widgets](screenshots/widgets-picker.png)
@@ -100,7 +101,7 @@ made phone-narrow leaves it until it's wide again.
   Double-click one (Enter, or a tap) to open it; right-click for Copy, Cut,
   Rename, Delete; right-click the desktop itself for New folder, New text
   file, Paste, Upload. Drop files on it to put them there. Files that arrive
-  some other way (Syncthing) show up within a few seconds.
+  some other way (Syncthing) show up within 15 seconds.
 - **Windows:** Settings, the App Store, Live Usage, Files and the Terminal
   open as windows you can have side by side. Drag one by its title bar; drag
   any edge to resize it; drag it to the left or right edge of the screen for
@@ -145,7 +146,8 @@ image](https://docs.linuxserver.io/images/docker-firefox/), so:
 ![Search](screenshots/search.png)
 
 ⌘K, Ctrl+K, or `/` opens a search across your apps, every setting ("timezone",
-"back up") and adlerOS's windows. Arrow keys pick, Enter opens.
+"back up") and adlerOS's windows; the last result searches the web for what
+you typed. Arrow keys pick, Enter opens.
 
 ## The App Store
 
@@ -166,7 +168,7 @@ container. The buttons:
 | **Update** | Pulls the newest images and recreates the containers on them; data stays. It's highlighted, and the card says *Update available*, when [Cup](https://github.com/sergi0g/cup) is installed and knows of a newer image. |
 | **Logs** | The last few hundred lines its containers wrote. |
 | **Delete** | Removes its containers and takes it off the desktop. Its data and compose files stay, so **Install** brings it back exactly as it was. Needs admin mode. |
-| **Remove** | (Imported and found apps) takes it out of adlerOS without touching its containers or files. |
+| **Remove** | (An imported or found app, once deleted, under *Not installed*) forgets it altogether, without touching its containers or files. |
 
 <!-- screenshot: an app's Logs window -->
 ![Logs](screenshots/app-logs.png)
@@ -209,7 +211,7 @@ goes in its collection; anything else in Extras.
 ![Live Usage](screenshots/live-usage.png)
 
 CPU, memory, storage and temperature, each with a word for how it's doing
-(*Normal*, *Busy*, *High*), and charts of the last three minutes: hover one for
+(*Normal*, *Busy*, *High*; for the temperature *Normal*, *Warm*, *Hot*), and charts of the last three minutes: hover one for
 the value at any moment. Below, **By app**: every app's share of the CPU or
 memory, busiest first, from `docker stats`. Apps with nothing running are at
 the bottom; containers that aren't part of any app are a line of text.
@@ -220,7 +222,7 @@ the bottom; containers that aren't part of any app are a line of text.
 ![Notifications](screenshots/notifications.png)
 
 The bell, top right, collects what happened while you weren't looking, and new
-ones pop up at the bottom of the screen:
+ones pop up as a message (at the bottom of the screen; on a phone, at the top):
 
 - an app stopped answering (after two checks a minute apart), or came back;
 - a backup, update, install or settings change finished, or anything failed;
@@ -235,12 +237,14 @@ Opening the panel marks them read; click one to go where it's about.
 <!-- screenshot: Settings -->
 ![Settings](screenshots/settings.png)
 
-On the left: the machine at a glance (address, uptime, apps) and its storage,
-memory, CPU and temperature. On the right, the settings, filtered by the tabs
+On the left: the machine at a glance (its address, or in a homelab its domain
+and Tailscale address, uptime, apps) and its storage, memory, CPU and
+temperature. On the right, the settings, filtered by the tabs
 or the search box:
 
 - **Account:** your name for the greeting, the password (other browsers are
-  logged out when it changes), the wallpaper, and where web searches go.
+  logged out when it changes), the wallpaper, **Desktop mode** (on a
+  computer), the **Welcome tour**, and where web searches go.
 - **This machine** (or **Homelab**): its address and compose folders, and
   *Look for new apps* (standalone); the domain, timezone, HTTPS and storage
   folder (homelab).
@@ -279,8 +283,9 @@ Desktop and User themselves: opening one takes you there.
   anything else downloads.
 - **Upload** with the button, or drop files onto the window; big files are
   fine. A file with a name that's taken gets a `(2)`.
-- **New folder**, **New text file**, and per file (right-click, `m`, or the
-  keys below): Edit as text, Download, Copy, Cut, Rename, Delete.
+- **New folder**, **New text file**, and per file (right-click, `m`, or its
+  [keys](keyboard.md#in-files)): Edit as text, Download, Copy, Cut, Rename,
+  Delete.
 - **Copy** or **Cut**, then go to another folder (in any place) and
   **Paste** (the button that appears, or Ctrl+V). Between places it's a real
   copy, so a big one shows its progress under the list and carries on while
