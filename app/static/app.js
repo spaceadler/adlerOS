@@ -553,6 +553,8 @@ function menuFor(target) {
   }
   return [{ label: "Edit widgets", run: editWidgets },
     arrange,
+    // Desktop mode's own menu (desk.js) has the way back.
+    ...(computerScreen() ? [{ label: "Desktop mode", run: () => setDesktopMode(true) }] : []),
     { label: "Change wallpaper", run: () => openSettings("wallpaper") },
     { label: "Log out", run: confirmLogout, destructive: true }];
 }
