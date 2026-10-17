@@ -589,11 +589,14 @@ function menuFor(target) {
     ? { label: "Remove from Dock", run: () => setPinned(id, false) }
     : { label: "Keep in Dock", run: () => setPinned(id, true) });
   // Files and the terminal: pinned or not, like an app.
+  // In desktop mode, any app (or Files, the terminal) can go on the desktop too.
+  const onDesktop = (id) => (!desktopMode() || target.closest("#desk") ? []
+    : [onDesk(id) ? { label: "Remove from desktop", run: () => setOnDesk(id, false) } : { label: "Add to desktop", run: () => setOnDesk(id, true) }]);
   const builtin = appId && BUILTIN_PINS[appId];
-  if (builtin) return [{ label: "Open", run: builtin.open }, pin(appId)];
+  if (builtin) return [{ label: "Open", run: builtin.open }, pin(appId), ...onDesktop(appId)];
   if (app) {
     const inFolder = target.closest("#folder");
-    return [{ label: "Open", run: () => openApp(app) }, pin(app.id),
+    return [{ label: "Open", run: () => openApp(app) }, pin(app.id), ...onDesktop(app.id),
       ...(inFolder ? [{ label: "Remove from folder", run: () => removeFromFolder(folderView.id, app.id) }]
         : target.closest("#pages") ? [{ label: "Add to a folder…", run: () => folderDialog(app) }] : []),
       { label: app.genre === "extras" ? "Put in a collection…" : "Move to another collection…", run: () => collectionDialog(app) },

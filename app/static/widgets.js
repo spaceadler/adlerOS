@@ -286,13 +286,15 @@ async function refreshWidgets() {
     redrawWidgets();
   }
   widgets.live.forEach((update) => update(widgets.data));
+  updateDeskWidgets(widgets.data);
 }
 
 function startWidgets() {
   stopWidgets();
   refreshWidgets();
   widgets.timer = setInterval(() => {
-    if (!document.hidden && !$("desktop").hidden && !document.body.classList.contains("sheet-open")) refreshWidgets();
+    // In desktop mode the desktop's widgets sit beside open windows: still live.
+    if (!document.hidden && !$("desktop").hidden && (desktopMode() || !document.body.classList.contains("sheet-open"))) refreshWidgets();
   }, WIDGET_REFRESH_MS);
 }
 

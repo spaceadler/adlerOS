@@ -2293,3 +2293,15 @@ body.wm .app-sheet:not([data-mode="max"]) .app-frame { opacity: 0.92; }
 .file-ghost { position: fixed; top: 0; left: 0; z-index: 300; display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 12px; font-size: 13px; pointer-events: none; }
 .file-row.drag-source { opacity: 0.4; }
 .file-row.drop-target, .files-place.drop-target { background: rgb(255 255 255 / 0.16); box-shadow: 0 0 0 2px rgb(255 255 255 / 0.85) inset; }
+
+/* Desktop mode: widgets on the desktop, three cells by two (desk.js). */
+.desk-widget { display: flex; min-width: 0; min-height: 0; }
+.desk-widget .widget { width: 100%; height: 100%; gap: 6px; }
+.desk-widget .widget-panel { flex: 1 1 auto; width: 100%; height: auto; min-height: 0; }
+.desk-widget .widget-panel:hover { transform: none; }
+.desk-ghost.desk-widget { background: none; opacity: 0.85; }
+/* An app on the desktop: its own icon, the same squircle as the dock's. */
+.desk-app-glyph { position: relative; overflow: hidden; background: none; -webkit-mask: url("/static/dock/squircle.svg") center / 100% 100% no-repeat; mask: url("/static/dock/squircle.svg") center / 100% 100% no-repeat; }
+.desk-app-glyph.builtin { -webkit-mask: none; mask: none; }
+.desk-app-glyph.builtin img { width: 100%; height: 100%; }
+.desk-app.offline .plate { filter: brightness(0.5); }
