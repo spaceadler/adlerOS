@@ -1,0 +1,308 @@
+/* adlerOS on a phone held upright: an iPhone's home screen, not a Mac's
+   desktop. phone.js puts "phone" on <body> (screens under 640px wide, and
+   not in desktop mode); app.js sizes the grid (four across, as many rows as
+   fit, square widgets) and the dock (four icons) to match. Everything here
+   is under body.phone, so larger screens are untouched. */
+
+.today, .lock-clock { display: none; }
+.menu-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  background: rgb(0 0 0 / 0.18);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  animation: fade-in 0.15s both;
+}
+.result-icon.web svg { stroke: #fff; }
+
+body.phone {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+/* Touch has no hover: nothing stays grown after a tap. */
+body.phone .widget-panel:hover,
+body.phone .app:hover .app-icon { transform: none; box-shadow: none; }
+
+/* ----------------------------------------------------------- home screen */
+
+body.phone .header {
+  align-items: flex-start;
+  width: 100%;
+  gap: 0;
+  padding: calc(env(safe-area-inset-top) + 18px) 76px 0 24px;
+}
+body.phone .today {
+  display: block;
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.72);
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.35);
+}
+body.phone .greeting { font-size: 30px; line-height: 1.15; letter-spacing: -0.03em; text-align: left; }
+body.phone .bell { top: calc(env(safe-area-inset-top) + 22px); right: 22px; width: 38px; height: 38px; }
+body.phone .web-search { display: none; }
+body.phone .stage { justify-content: flex-start; padding-top: 20px; }
+
+/* Widgets: square, two side by side, frosted like an iPhone's. */
+body.phone .widgets { margin-bottom: 16px; }
+body.phone .widget { gap: 6px; }
+body.phone .widget-panel {
+  border-radius: 22px;
+  background: rgb(28 28 30 / 0.4);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  box-shadow: 0 0.5px 0 rgb(255 255 255 / 0.14) inset, 0 8px 24px rgb(0 0 0 / 0.18);
+}
+body.phone .widget-panel:active { transform: scale(0.96); }
+body.phone .widget-label { font-size: 12px; font-weight: 500; }
+body.phone .w-title, body.phone .w-sub { font-size: 12px; }
+body.phone .w-stat, body.phone .w-cell .w-stat, body.phone .w-pill > div { font-size: 13px; }
+body.phone .w-four { gap: 6px; padding: 8px; }
+body.phone .w-cell { border-radius: 12px; }
+
+/* Apps: the iPhone's squircle, a little larger, labels under. */
+body.phone .page-title { font-size: 13px; color: rgb(255 255 255 / 0.85); }
+body.phone .app { gap: 6px; padding: 6px 0 0; }
+body.phone .app-icon {
+  width: 60px;
+  border-radius: 0;
+  -webkit-mask: url("/static/dock/squircle.svg") center / 100% 100% no-repeat;
+  mask: url("/static/dock/squircle.svg") center / 100% 100% no-repeat;
+}
+body.phone .builtin-icon { -webkit-mask: none; mask: none; } /* adlerOS's own: already that shape */
+body.phone .plate.mono { font-size: 22px; }
+body.phone .app-label { font-size: 12px; font-weight: 500; letter-spacing: -0.01em; }
+body.phone .app:active .app-icon { transform: scale(0.92); filter: brightness(0.8); transition-duration: 0.1s; }
+body.phone.arranging .app-icon { -webkit-mask: none; mask: none; border-radius: 14px; }
+
+/* The Search pill over the dock; while you swipe, the page dots instead. */
+body.phone .pills,
+body.phone .search-pill {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--dock-h, 88px) + max(10px, env(safe-area-inset-bottom)) + 14px);
+  z-index: 46;
+  transform: translateX(-50%);
+  transition: opacity 0.2s;
+}
+body.phone .search-pill {
+  gap: 7px;
+  padding: 9px 16px 9px 12px;
+  border: 0;
+  background: rgb(255 255 255 / 0.16);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: none;
+  font-size: 15px;
+  font-weight: 600;
+  animation: none;
+}
+body.phone .search-pill .orb { width: 16px; height: 16px; }
+body.phone .search-pill .kbd { display: none; }
+body.phone .pills {
+  gap: 8px;
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.22);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  opacity: 0;
+  pointer-events: none;
+}
+body.phone .pill { margin: 0; padding: 0; }
+body.phone .pill span, body.phone .pill[aria-selected="true"] span { width: 7px; height: 7px; }
+body.phone .pill span { background: rgb(255 255 255 / 0.4); }
+body.phone .pill[aria-selected="true"] span { background: #fff; }
+body.phone.paging .pills:not(.single) { opacity: 1; }
+body.phone.paging .search-pill { opacity: 0; }
+body.phone .dock-spacer { height: calc(var(--dock-h, 88px) + max(10px, env(safe-area-inset-bottom)) + 66px); }
+
+/* ------------------------------------------------------------------ dock */
+
+body.phone .dock {
+  left: 10px;
+  right: 10px;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  justify-content: space-around;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 34px;
+  background: rgb(255 255 255 / 0.16);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  box-shadow: 0 0.5px 0 rgb(255 255 255 / 0.18) inset;
+  transform: none;
+  animation: phone-dock-in 0.5s cubic-bezier(0.32, 0.72, 0, 1) 0.1s both;
+}
+@keyframes phone-dock-in { from { opacity: 0; transform: translateY(30px); } }
+body.phone .dock-label, body.phone .dock-divider, body.phone .dock-item .glow { display: none; }
+body.phone .dock-item:active { transform: scale(0.92); filter: brightness(0.8); }
+body.phone .dock-item.open::after { bottom: -9px; width: 4px; height: 4px; }
+
+/* ------------------------------------------------- windows: page sheets */
+
+body.phone .sheet {
+  height: calc(100dvh - env(safe-area-inset-top) - 10px);
+  border-radius: 14px 14px 0 0;
+}
+/* The grabber: pull it (or a list that's at its top) down to close. */
+body.phone .sheet::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  z-index: 7;
+  width: 38px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.32);
+  transform: translateX(-50%);
+}
+body.phone .sheet.swiping { transition: none; }
+body.phone .sheet-close { top: 16px; right: 14px; width: 30px; height: 30px; background: rgb(118 118 128 / 0.24); }
+body.phone .sheet-close svg { width: 14px; height: 14px; }
+body.phone .store-title { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
+
+/* Settings: grouped lists, coloured icons, separators that start after them. */
+body.phone .group-title {
+  margin: 26px 0 8px 16px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgb(235 235 245 / 0.6);
+}
+body.phone .group { border: 0; border-radius: 14px; background: rgb(255 255 255 / 0.08); box-shadow: none; }
+body.phone .row { position: relative; min-height: 52px; gap: 8px 12px; padding: 10px 14px; }
+body.phone .row + .row { border-top: 0; }
+body.phone .row + .row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 58px;
+  right: 0;
+  border-top: 0.5px solid rgb(255 255 255 / 0.13);
+}
+body.phone .row-text { gap: 14px; }
+body.phone .row-icon { width: 30px; height: 30px; border: 0; border-radius: 7px; background: #8e8e93; color: #fff; }
+body.phone .group .row:nth-child(7n + 1) .row-icon { background: #0a84ff; }
+body.phone .group .row:nth-child(7n + 2) .row-icon { background: #30d158; }
+body.phone .group .row:nth-child(7n + 3) .row-icon { background: #ff9f0a; }
+body.phone .group .row:nth-child(7n + 4) .row-icon { background: #5e5ce6; }
+body.phone .group .row:nth-child(7n + 5) .row-icon { background: #ff375f; }
+body.phone .group .row:nth-child(7n + 6) .row-icon { background: #32ade6; }
+body.phone .row-title { font-size: 16px; font-weight: 400; }
+body.phone .row-description { font-size: 13px; }
+
+/* ----------------------------------------- long press: a menu over blur */
+
+body.phone .menu {
+  min-width: 240px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 14px;
+  background: rgb(44 44 46 / 0.78);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.35);
+}
+body.phone .menu button { padding: 13px 16px; border-radius: 0; font-size: 16px; font-weight: 400; }
+body.phone .menu button + button { border-top: 0.5px solid rgb(255 255 255 / 0.14); }
+body.phone .menu .destructive { color: #ff453a; }
+
+/* ------------------------------------------- All apps: the App Library */
+
+body.phone .drawer {
+  padding: calc(env(safe-area-inset-top) + 12px) 18px calc(var(--dock-h, 88px) + 40px);
+  background: rgb(0 0 0 / 0.3);
+  -webkit-backdrop-filter: blur(40px) saturate(160%);
+  backdrop-filter: blur(40px) saturate(160%);
+}
+body.phone .drawer-top { margin-bottom: 18px; }
+body.phone .drawer-search { height: 38px; border-radius: 12px; background: rgb(118 118 128 / 0.28); box-shadow: none; }
+body.phone .drawer-count { display: none; }
+body.phone .drawer-grid { grid-template-columns: repeat(4, var(--app-w, 70px)); gap: 6px var(--app-x-gap, 10px); width: auto; }
+body.phone .drawer-grid.library { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 22px; width: 100%; max-width: 380px; }
+.lib-folder { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; }
+.lib-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 14px;
+  border-radius: 28px;
+  background: rgb(255 255 255 / 0.13);
+}
+.lib-icon, .lib-more { display: block; width: 100%; aspect-ratio: 1; padding: 0; border: 0; background: none; cursor: pointer; }
+.lib-icon .app-icon, .lib-more .app-icon { width: 100%; }
+.lib-icon:active { transform: scale(0.92); }
+.lib-more { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; }
+.lib-more .plate.mono { font-size: 8px; }
+.lib-name { max-width: 100%; overflow: hidden; font-size: 12px; font-weight: 500; color: rgb(255 255 255 / 0.85); white-space: nowrap; text-overflow: ellipsis; }
+.lib-head { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-bottom: 10px; }
+.lib-back { padding: 0; border: 0; background: none; color: #0a84ff; font-size: 16px; cursor: pointer; }
+.lib-head h2 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.03em; }
+
+/* --------------------------------------------------- search, the bell */
+
+body.phone .search {
+  padding: calc(env(safe-area-inset-top) + 12px) 12px 12px;
+  background: rgb(0 0 0 / 0.3);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  backdrop-filter: blur(30px) saturate(160%);
+}
+body.phone .search-panel {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+body.phone .search-field { padding: 10px 12px; border-radius: 12px; background: rgb(118 118 128 / 0.28); }
+body.phone .search-field .orb { width: 20px; height: 20px; }
+body.phone .search-results { max-height: calc(100dvh - env(safe-area-inset-top) - 120px); margin-top: 14px; overflow-y: auto; border-radius: 14px; background: rgb(255 255 255 / 0.08); }
+body.phone .search-results li { padding: 10px 12px; border-radius: 0; font-size: 16px; font-weight: 400; }
+body.phone .search-results li + li { border-top: 0.5px solid rgb(255 255 255 / 0.1); }
+body.phone .result-icon { width: 34px; height: 34px; }
+
+body.phone .notes { top: calc(env(safe-area-inset-top) + 68px); left: 8px; right: 8px; width: auto; max-height: 70dvh; border-radius: 24px; }
+body.phone .notes-list { gap: 8px; }
+body.phone .note { padding: 12px; border-radius: 18px; background: rgb(255 255 255 / 0.08); }
+
+/* Messages drop in from the top, like a notification. */
+body.phone .toast {
+  top: calc(env(safe-area-inset-top) + 8px);
+  bottom: auto;
+  max-width: calc(100% - 24px);
+  border-radius: 22px;
+  font-size: 14px;
+  animation: phone-toast-in 0.35s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@keyframes phone-toast-in { from { opacity: 0; transform: translate(-50%, -24px) scale(0.96); } }
+
+body.phone .dialog {
+  border-radius: 18px;
+  background: rgb(44 44 46 / 0.82);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+}
+
+/* ------------------------------------------------------- the lock screen */
+
+body.phone .lock { justify-content: flex-start; gap: 16px; padding-top: calc(env(safe-area-inset-top) + 36px); }
+body.phone .lock-clock { display: flex; flex-direction: column; align-items: center; margin-bottom: 18px; text-shadow: 0 2px 20px rgb(0 0 0 / 0.25); }
+#lock-date { font-size: 19px; font-weight: 600; opacity: 0.9; }
+#lock-time { font-size: 92px; font-weight: 700; letter-spacing: -0.04em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+body.phone .lock-mark { display: none; }
+body.phone .lock .title { font-size: 20px; }
+body.phone .lock .login-form { width: 100%; max-width: 340px; margin-top: auto; margin-bottom: calc(env(safe-area-inset-bottom) + 36px); }

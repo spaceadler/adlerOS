@@ -49,6 +49,7 @@ function setDesktopMode(on) {
   wm.order = [];
   document.body.classList.toggle("wm", on);
   winSave(DESKTOP_MODE_KEY, on);
+  applyPhone(); // a phone in desktop mode keeps the plain layout
   wm.active = null;
   dockKey = null;
   buildDock();

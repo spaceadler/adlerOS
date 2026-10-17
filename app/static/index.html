@@ -14,6 +14,8 @@
   <meta name="apple-mobile-web-app-title" content="adlerOS">
   <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/app.css">
+  <!-- A phone held upright: the iPhone-style layout (phone.js switches it on) -->
+  <link rel="stylesheet" href="/static/ios.css">
   <script src="/static/app.js" defer></script>
   <script src="/static/windows.js" defer></script>
   <script src="/static/settings.js" defer></script>
@@ -25,6 +27,7 @@
   <script src="/static/files.js" defer></script>
   <script src="/static/desk.js" defer></script>
   <script src="/static/welcome.js" defer></script>
+  <script src="/static/phone.js" defer></script>
   <script src="/static/notifications.js" defer></script>
   <script src="/static/keyboard.js" defer></script>
 </head>
@@ -34,6 +37,8 @@
 
   <!-- Lock screen -->
   <main id="lock" class="lock" hidden>
+    <!-- On a phone, the time first, like an iPhone's lock screen -->
+    <div class="lock-clock" aria-hidden="true"><span id="lock-date"></span><span id="lock-time"></span></div>
     <img class="lock-mark" src="/static/mark.svg" alt="">
     <div class="lock-heading">
       <h1 class="title">Welcome back</h1>
@@ -58,6 +63,7 @@
     <!-- Desktop mode: your Desktop folder, as icons -->
     <section class="desk" id="desk" aria-label="Desktop folder"></section>
     <header class="header">
+      <p class="today" id="today"></p>
       <h1 id="greeting" class="greeting"></h1>
     </header>
     <button class="bell" id="bell" type="button" aria-label="Notifications" aria-haspopup="dialog">
@@ -278,6 +284,7 @@
 
   <!-- Right-click menu on the desktop -->
   <!-- Filled in by openMenu() for whatever was right-clicked. -->
+  <div id="menu-veil" class="menu-veil" aria-hidden="true" hidden></div>
   <div id="menu" class="menu material" role="menu" hidden></div>
 
   <!-- Search (⌘K / Ctrl+K) -->
