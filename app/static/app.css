@@ -1725,6 +1725,59 @@ a.chip-button { text-decoration: none; }
 .store-containers .c-name { overflow: hidden; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: nowrap; text-overflow: ellipsis; }
 .store-containers .c-status { margin-left: auto; flex-shrink: 0; color: rgb(255 255 255 / 0.45); }
 
+/* ============================================================= terminal */
+
+.term-sheet { --term-bg: #0d0f12; --term-fg: #d7dae0; display: flex; flex-direction: column; }
+.term-tint { background: #0d0f12; }
+.term-head {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 70px 10px 20px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+}
+.term-title { font-size: 15px; font-weight: 600; }
+.term-status { overflow: hidden; flex: 1; font-size: 12px; color: rgb(255 255 255 / 0.55); white-space: nowrap; text-overflow: ellipsis; }
+.term-hint { flex-shrink: 0; font-size: 11px; color: rgb(255 255 255 / 0.35); }
+.term-close { top: 10px; }
+.term {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  background: var(--term-bg);
+  color: var(--term-fg);
+  font: 13px/1.35 ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  white-space: pre;
+  cursor: text;
+}
+.term.alt .term-back { display: none; }
+.term-row { height: 1.35em; overflow: hidden; }
+.term-row span.b { font-weight: 700; }
+.term-row span.d { opacity: 0.6; }
+.term-row span.i { font-style: italic; }
+.term-row span.u { text-decoration: underline; }
+.term-probe { position: absolute; visibility: hidden; white-space: pre; }
+/* Typed text lands here, out of sight; the screen above shows it. */
+.term-input {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  resize: none;
+}
+@media (max-width: 640px) { .term-hint { display: none; } .term { font-size: 11px; } }
+
 /* =========================================================== live usage */
 
 .u-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 26px; }

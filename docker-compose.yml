@@ -31,6 +31,8 @@ services:
       COMPOSE_ROOTS: ${COMPOSE_ROOTS:-}
       APPS_DIR: ${APPS_DIR:-}
       STORAGE_DIR: ${STORAGE_DIR:-}
+      # on: the Terminal window may open shells (admin mode, your password).
+      ADLEROS_TERMINAL: ${ADLEROS_TERMINAL:-off}
       PYTHONDONTWRITEBYTECODE: 1
     volumes:
       - ./app:/app:ro

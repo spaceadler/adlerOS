@@ -47,6 +47,9 @@ Screen*: it opens like an app.
 - **Admin mode.** Restart and shut down, deleting apps, and stopping core
   apps (DNS, passwords) are off until you switch admin mode on, with your
   password.
+- **A terminal**, if you want one: a real shell in a window (colours, `htop`,
+  `vim`), off unless you switch it on on the machine, admin mode only, and
+  your password each time.
 
 <!-- screenshot: the App Store with a few apps, one card's containers open -->
 ![The App Store](docs/screenshots/app-store.png)
@@ -120,6 +123,7 @@ adleros/
 │   ├── agent.py          # the helper: runs queued requests from the list below
 │   ├── actions.json      # the only things it will do
 │   ├── apps.py           # finds, installs, starts, stops, updates and deletes apps
+│   ├── terminal.py       # the Terminal's shells (only with ADLEROS_TERMINAL=on)
 │   └── power             # restart / shut down, installed root-owned for sudo
 ├── catalog/
 │   ├── known-apps.tsv    # which images are which app, and their collection

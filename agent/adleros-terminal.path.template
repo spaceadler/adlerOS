@@ -1,0 +1,12 @@
+# Rendered by install.sh into /etc/systemd/system/adleros-terminal.path, only
+# when ADLEROS_TERMINAL=on. Starts the terminal host when adlerOS asks for a
+# session (admin mode, after your password).
+[Unit]
+Description=Start adlerOS's terminal host when a session is asked for
+
+[Path]
+PathExistsGlob=${ADLEROS_DATA}/agent/term/*/start.json
+Unit=adleros-terminal.service
+
+[Install]
+WantedBy=multi-user.target

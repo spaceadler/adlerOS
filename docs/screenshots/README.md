@@ -26,6 +26,7 @@ crop anything private (addresses, names in notifications).
 | `admin-mode.png` | Settings → Admin mode's password dialog | guide, security |
 | `keyboard-help.png` | The `?` keyboard list | keyboard |
 | `keyboard-focus.png` | The desktop with an app selected by keyboard (its white ring) | keyboard |
+| `terminal.png` | The Terminal window running `htop` | guide |
 | `lock.png` | The lock screen | guide |
 | `phone-desktop.png` | The desktop on a phone (4×3 apps) | guide |
 | `install.png` | A terminal running `./install.sh`, ending with the address and password | standalone |

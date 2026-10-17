@@ -20,6 +20,7 @@ const SHORTCUTS = [
   { keys: [","], label: "Settings", run: () => (isOpen("settings") ? closeSettings() : openSettings()) },
   { keys: ["u"], label: "Live Usage", run: () => toggleUsage() },
   { keys: ["w"], label: "Edit widgets", run: () => editWidgets() },
+  { keys: ["t"], label: "Terminal (admin mode)", run: () => toggleTerminal() },
   { keys: ["[", "PageUp"], label: "Previous page", run: () => turnPage(-1) },
   { keys: ["]", "PageDown"], label: "Next page", run: () => turnPage(1) },
   { keys: ["?"], label: "This list", run: () => keyboardHelp() },
@@ -39,7 +40,7 @@ const HELP_ONLY = [
 function topLayer() {
   for (const id of ["modal", "confirm", "menu", "search", "notes"]) if (!$(id).hidden) return $(id);
   if (drawerOpen()) return $("drawer");
-  for (const id of ["settings", "store", "usage"]) if (isOpen(id)) return $(id);
+  for (const id of ["settings", "store", "usage", "terminal"]) if (isOpen(id)) return $(id);
   if (!$("lock").hidden) return $("lock");
   return null; // the desktop and the dock
 }
@@ -233,7 +234,7 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (e.ctrlKey || e.metaKey || e.altKey || typing(node) || $("desktop").hidden) return;
-  if (layer && !["drawer", "settings", "store", "usage"].includes(layer.id)) return;
+  if (layer && !["drawer", "settings", "store", "usage", "terminal"].includes(layer.id)) return;
   const shortcut = SHORTCUTS.find((s) => s.keys.includes(e.key));
   if (!shortcut) return;
   e.preventDefault();

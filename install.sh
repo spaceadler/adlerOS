@@ -98,6 +98,7 @@ configure() {
     ask ADLEROS_HOST "This machine's address, as your browser reaches it" "$(guess_host)"
     ask COMPOSE_ROOTS "Your compose folders, separated by :" "$(guess_roots)"
     ask TZ "Timezone" "$(guess_tz)"
+    ask ADLEROS_TERMINAL "A terminal in adlerOS (admin mode only), on or off" "off"
     env_set PUID "$(id -u)"
     env_set PGID "$(id -g)"
     for d in data registry apps wallpaper icons; do mkdir -p "$ADLEROS_DIR/$d"; done
@@ -140,6 +141,37 @@ install_agent() {
     sudo systemctl daemon-reload
     sudo systemctl enable --now adleros-agent.path >/dev/null 2>&1
     info "ready (log: journalctl -u adleros-agent)"
+    install_terminal
+}
+
+# The terminal host: only when ADLEROS_TERMINAL=on, and gone again when off.
+install_terminal() {
+    local units=/etc/systemd/system tmp unit
+    case $(env_get ADLEROS_TERMINAL) in
+    on | yes | true | 1) ;;
+    *)
+        if [ -e "$units/adleros-terminal.path" ]; then
+            sudo systemctl disable --now adleros-terminal.path adleros-terminal.service >/dev/null 2>&1 || true
+            sudo rm -f "$units/adleros-terminal.path" "$units/adleros-terminal.service"
+            sudo systemctl daemon-reload
+            info "terminal: off, and its host removed"
+        fi
+        return
+        ;;
+    esac
+    local data=$ADLEROS_DIR/data
+    tmp=$(mktemp)
+    for unit in service path; do
+        # shellcheck disable=SC2016
+        AGENT_USER=$USER AGENT_GROUP=$(id -gn) ADLEROS_DIR=$ADLEROS_DIR ADLEROS_DATA=$data HOMELAB_DIR="" \
+            envsubst '${AGENT_USER} ${AGENT_GROUP} ${ADLEROS_DIR} ${ADLEROS_DATA} ${HOMELAB_DIR}' \
+            <"$ADLEROS_DIR/agent/adleros-terminal.$unit.template" >"$tmp"
+        sudo install -m 0644 -o root -g root "$tmp" "$units/adleros-terminal.$unit"
+    done
+    rm -f "$tmp"
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now adleros-terminal.path >/dev/null 2>&1
+    info "terminal: on (admin mode and your password; log: journalctl -u adleros-terminal)"
 }
 
 discover() {

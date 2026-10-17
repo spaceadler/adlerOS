@@ -37,6 +37,7 @@ function openUsage() {
   closeDrawer();
   if (isOpen("settings")) closeSettings();
   if (isOpen("store")) closeStore();
+  hideTerminal();
   const sheet = $("usage");
   sheet.classList.remove("closing");
   sheet.hidden = false;

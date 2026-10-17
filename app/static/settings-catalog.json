@@ -12,6 +12,7 @@
     "  info          a read-only value: config.<KEY>, device.<field>, or a named",
     "                formatter from FORMATTERS in settings.js",
     "  admin         the admin mode switch (asks for the password to turn on)",
+    "  open          a button opening one of adlerOS's windows (target: terminal)",
     "admin: true on a row: it only works while admin mode is on.",
     "mode: \"homelab\" or \"standalone\" on a row: only shown in that kind of install.",
     "keywords: extra words the search box matches."
@@ -258,6 +259,20 @@
           "body": "It downloads the newest version and restarts; the page reloads when it's back.",
           "button": "Update"
         }
+      }
+    },
+    {
+      "id": "terminal",
+      "category": "system",
+      "icon": "terminal",
+      "title": "Terminal",
+      "admin": true,
+      "description": "A shell on this machine, in a window. Off unless ADLEROS_TERMINAL=on on the machine; asks for your password each time.",
+      "keywords": "shell console ssh bash command line",
+      "control": {
+        "type": "open",
+        "target": "terminal",
+        "label": "Open"
       }
     },
     {

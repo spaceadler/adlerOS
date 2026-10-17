@@ -24,7 +24,7 @@ cd ~/adleros && ./install.sh
 <!-- screenshot: ./install.sh finishing -->
 ![install.sh](screenshots/install.png)
 
-It asks four things, each with a guess you can take by pressing Enter:
+It asks five things, each with a guess you can take by pressing Enter:
 
 | Question | Becomes | Guess |
 | --- | --- | --- |
@@ -32,6 +32,7 @@ It asks four things, each with a guess you can take by pressing Enter:
 | This machine's address | `ADLEROS_HOST`: apps get `http://<this>:<port>` | its Tailscale IP, else its first IP |
 | Your compose folders | `COMPOSE_ROOTS`, separated by `:` | whichever of `~/docker`, `~/stacks`, `~/compose`, `~/homelab/containers`, `~/containers`, `/opt/stacks`, `/opt/docker`, `/srv/docker` exist |
 | Timezone | `TZ` | the machine's |
+| A terminal in adlerOS | `ADLEROS_TERMINAL`: `on` or `off` | `off` |
 
 Then it:
 
@@ -111,6 +112,7 @@ To add your own, see [customizing](customizing.md#store-apps).
 | `COMPOSE_ROOTS` | your compose folders, `:`-separated |
 | `APPS_DIR` | where store apps go (`./apps`) |
 | `STORAGE_DIR` | your files, for store apps that use them (`~/storage`) |
+| `ADLEROS_TERMINAL` | `on` lets the Terminal window open shells (admin mode, your password); re-run `./install.sh` after changing it |
 | `TZ`, `PUID`, `PGID` | timezone, and the user adlerOS and store apps run as |
 
 After editing: `docker compose up -d` in this folder.
@@ -125,8 +127,8 @@ untouched.
 
 ```bash
 cd ~/adleros && docker compose down
-sudo systemctl disable --now adleros-agent.path
-sudo rm /etc/systemd/system/adleros-agent.{path,service} /etc/sudoers.d/adleros
+sudo systemctl disable --now adleros-agent.path adleros-terminal.path
+sudo rm -f /etc/systemd/system/adleros-{agent,terminal}.{path,service} /etc/sudoers.d/adleros
 sudo rm -r /usr/local/libexec/adleros
 ```
 

@@ -29,7 +29,9 @@ adlerOS as its home screen. There, adlerOS runs in **homelab mode**.
 | Addresses | `http(s)://<sub>.<domain>` from the catalog | `http://<ADLEROS_HOST>:<port>` |
 
 Everything else (the desktop, dock, widgets, App Store buttons, Live Usage,
-notifications, keyboard, admin mode) is the same.
+notifications, keyboard, admin mode, the terminal) is the same. The terminal
+is switched on with `ADLEROS_TERMINAL=on` in `homelab.env`, then
+`./install.sh`.
 
 ## Changing adlerOS while working on the homelab
 

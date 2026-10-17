@@ -728,6 +728,7 @@ const ACTIONS = [
   { id: "store", name: "App Store", keywords: "app store apps containers docker start stop restart delete install import manage" },
   { id: "usage", name: "Live Usage", keywords: "live usage cpu memory ram storage disk temperature stats monitor" },
   { id: "drawer", name: "All apps", keywords: "all apps drawer launchpad list every app alphabetical" },
+  { id: "terminal", name: "Terminal", keywords: "terminal shell console ssh bash command line admin" },
   { id: "logout", name: "Log out", keywords: "log out sign out lock exit" },
 ];
 let results = [];
@@ -758,7 +759,8 @@ function renderResults() {
       ? el("span", { class: "result-icon" }, plateFor(r.app))
       : glyph
         ? el("span", { class: "result-icon dock-glyph" }, el("img", { src: `/api/dock-icon/${glyph}`, alt: "" }))
-        : el("span", { class: "result-icon action" }, svg(["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "m16 17 5-5-5-5", "M21 12H9"]));
+        : el("span", { class: "result-icon action" }, svg(r.action?.id === "terminal" ? ["m4 17 6-6-6-6", "M12 19h8"]
+          : ["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "m16 17 5-5-5-5", "M21 12H9"]));
     const name = r.type === "app" ? r.app.name : r.type === "setting" ? r.row.title : r.action.name;
     const hint = r.type === "app" ? (r.app.up ? "Open" : "Offline") : r.type === "setting" ? "Settings" : "Action";
     const li = el("li", { role: "option", id: `result-${i}` }, icon, el("span", {}, name), el("span", { class: "hint" }, hint));
@@ -785,6 +787,7 @@ function runResult(i) {
   else if (r.action.id === "store") openStore();
   else if (r.action.id === "usage") openUsage();
   else if (r.action.id === "drawer") openDrawer();
+  else if (r.action.id === "terminal") openTerminal();
   else if (r.action.id === "logout") confirmLogout();
 }
 
@@ -802,6 +805,7 @@ function showLock() {
   closeStore();
   closeUsage();
   closeDrawer();
+  closeTerminal();
   $("confirm").hidden = true;
   $("desktop").hidden = true;
   $("dock").hidden = true;
