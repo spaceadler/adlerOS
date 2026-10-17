@@ -523,6 +523,7 @@ function menuFor(target) {
       isPinned(app.id)
         ? { label: "Remove from Dock", run: () => setPinned(app.id, false) }
         : { label: "Keep in Dock", run: () => setPinned(app.id, true) },
+      { label: app.genre === "extras" ? "Put in a collection…" : "Move to another collection…", run: () => collectionDialog(app) },
       arrange];
   }
   const fixed = DOCK_FIXED.find((item) => item.id === target.closest("[data-dock]")?.dataset.dock);
@@ -610,7 +611,8 @@ function onSortDown(e) {
   if (e.button !== 0 || (e.pointerType !== "mouse" && !arranging())) return;
   const found = sortable(e.target);
   if (!found) return;
-  Object.assign(drag, found, { active: false, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY });
+  Object.assign(drag, found, { active: false, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY,
+    from: found.container.dataset.collection, crossed: false, edge: 0 });
 }
 
 function onSortMove(e) {
@@ -627,6 +629,39 @@ function onSortMove(e) {
     return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
   });
   if (over) moveBefore(over);
+  if (drag.kind === "grid") edgeTurn(e);
+}
+
+// Collections are folders: drag an app to the left or right edge and the
+// page turns; drop it on another collection's page to move it there.
+function edgeTurn(e) {
+  const r = $("grid-area").getBoundingClientRect();
+  const dir = e.clientX < r.left + 48 ? -1 : e.clientX > r.right - 48 ? 1 : 0;
+  if (dir === drag.edge) return;
+  clearTimeout(drag.edgeTimer);
+  drag.edge = dir;
+  if (dir) drag.edgeTimer = setTimeout(() => turnWhileDragging(dir), 550);
+}
+
+function turnWhileDragging(dir) {
+  const page = $("pages").children[state.page + dir];
+  drag.edge = 0; // still at the edge: the next move turns again
+  if (!drag.active || !page) return;
+  goToPage(state.page + dir);
+  const grid = page.querySelector(".app-grid");
+  if (grid && grid !== drag.container) {
+    grid.append(drag.item);
+    drag.container = grid;
+    drag.crossed = true;
+  }
+}
+
+// Dropped on another page: that collection's new order (and, if it's not
+// where the app was, the app's new collection), from what's on screen.
+async function dropAcrossPages(appId, collection) {
+  const order = [...document.querySelectorAll(`#pages .app-grid[data-collection="${CSS.escape(collection)}"] .app`)].map((a) => a.dataset.app);
+  const app = appById(appId);
+  await placeApp(app, collection === drag.from ? undefined : collection, order);
 }
 
 function beginDrag(e) {
@@ -674,7 +709,9 @@ function onSortUp(e) {
     // The click this pointerup is about to make shouldn't open the app.
     drag.suppressClick = true;
     setTimeout(() => { drag.suppressClick = false; }, 0);
-    saveArrangement(drag.kind, drag.container);
+    clearTimeout(drag.edgeTimer);
+    if (drag.kind === "grid" && drag.crossed) dropAcrossPages(drag.item.dataset.app, drag.container.dataset.collection);
+    else saveArrangement(drag.kind, drag.container);
   }
   drag.item = null;
   drag.active = false;
@@ -685,6 +722,59 @@ function onSortClick(e) {
     e.preventDefault();
     e.stopPropagation();
   }
+}
+
+// Puts an app in another collection (null: back in its own), optionally with
+// that collection's new order; then shows it there.
+async function placeApp(app, collection, order) {
+  if (!app) return;
+  // The order belongs to where it ends up: where it is now, a new collection,
+  // or (null) its own again.
+  const lands = collection === undefined ? app.genre : collection ?? app.home ?? app.genre;
+  const body = {
+    ...(collection !== undefined ? { place: { app: app.id, collection } } : {}),
+    ...(order ? { order: { [lands]: order } } : {}),
+  };
+  const { status, body: reply } = await api("/api/settings", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  }).catch(() => ({ status: 0 }));
+  if (status === 401) return showLock();
+  if (status !== 200) {
+    toast(reply?.error || "Couldn't move it.");
+    return layout(true);
+  }
+  await refresh();
+  const moved = appById(app.id);
+  const where = (state.choices || []).find((c) => c.id === moved?.genre)?.name;
+  if (collection !== undefined && where) toast(`${app.name} is in ${where} now.`);
+  const page = state.pageTitles?.indexOf(where);
+  if (page >= 0) goToPage(page);
+}
+
+function collectionDialog(app) {
+  const here = app.genre;
+  const choices = (state.choices || []).map((c) => {
+    const b = el("button", { type: "button", class: `chip-button collection-choice${c.id === here ? " current" : ""}` },
+      c.name, c.id === here ? el("span", { class: "faint" }, " · here") : "");
+    b.disabled = c.id === here;
+    b.addEventListener("click", () => { closeModal(); placeApp(app, c.id); });
+    return b;
+  });
+  const cancel = el("button", { type: "button", class: "button-secondary" }, "Cancel");
+  cancel.addEventListener("click", closeModal);
+  const actions = [cancel];
+  if (app.home) {
+    const home = (state.choices || []).find((c) => c.id === app.home)?.name || app.home;
+    const back = el("button", { type: "button", class: "button-secondary" }, `Back to ${home}`);
+    back.addEventListener("click", () => { closeModal(); placeApp(app, null); });
+    actions.push(back);
+  }
+  openModal(el("div", { class: "dialog material", role: "dialog", "aria-modal": "true", "aria-label": `Move ${app.name}` },
+    el("h2", {}, app.genre === "extras" ? `Put ${app.name} in a collection` : `Move ${app.name} to…`),
+    el("p", { class: "dialog-text" }, "Like moving it to another folder: only where adlerOS shows it changes. You can also drag it to the edge of the page, onto another collection."),
+    el("div", { class: "collection-choices" }, ...choices),
+    el("div", { class: "dialog-actions" }, ...actions)));
+  (choices.find((b) => !b.disabled) || cancel).focus();
 }
 
 async function saveArrangement(kind, container) {
@@ -914,6 +1004,7 @@ async function refresh() {
   state.apps = result.body.apps.slice().sort((a, b) => a.name.localeCompare(b.name));
   state.dock = result.body.dock || [];
   state.collections = result.body.collections || [];
+  state.choices = result.body.choices || state.collections;
   state.host = result.body.host || {};
   state.available = result.body.available || [];
   state.admin = Boolean(result.body.admin);

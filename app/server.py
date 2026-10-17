@@ -293,6 +293,30 @@ def collections(apps):
     return [{"id": c, "name": collection_name(c)} for c in ids]
 
 
+def placements():
+    """Collections you've put apps in yourself, like moving a file between
+    folders: {app id: collection}. Only where an app shows, not what it is:
+    a core app stays core (admin mode to stop it) wherever you put it."""
+    placed = load_settings().get("placed")
+    return placed if isinstance(placed, dict) else {}
+
+
+def placed(apps):
+    """The apps with your placements applied; "home" is where one came from."""
+    mine = placements()
+    return [{**a, "genre": mine[a["id"]], "home": a["genre"]} if mine.get(a["id"]) not in (None, a["genre"]) else a
+            for a in apps]
+
+
+def collection_choices():
+    """Every collection an app can be put in, empty ones too, Extras last."""
+    ids = list(COLLECTION_ORDER)
+    for app in read_catalog() if HOMELAB_MODE else []:
+        if app["genre"] not in ids and app["genre"] != EXTRAS:
+            ids.append(app["genre"])
+    return [{"id": c, "name": collection_name(c)} for c in ids + [EXTRAS]]
+
+
 def app_order():
     """Your arrangement of each collection: {collection: [app ids]}."""
     order = load_settings().get("order")
@@ -1584,17 +1608,19 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(401, {"error": "login required"})
 
         if path == "/api/apps":
-            apps = installed_apps()
+            apps = placed(installed_apps())
             status = app_status(apps)
             env = read_env_file(HOMELAB_ENV)
             return self.send_json(200, {"name": display_name(), "searchUrl": search_url(), "dock": dock_pins(),
                                         "admin": admin_on(), "mode": MODE, "welcomed": bool(load_settings().get("welcomed")),
                                         "collections": collections(apps), "order": app_order(),
+                                        "choices": collection_choices(),
                                         "host": {"tsIp": env.get("TS_IP", ""), "domain": env.get("DOMAIN", "")},
                                         "apps": [
                 {"id": a["id"], "name": a["name"], "about": a["about"], "genre": a["genre"],
                  "url": a["url"], "hasIcon": a["icon"].startswith("di:"), "icon": a["icon"],
-                 "imported": bool(a.get("imported")), "note": a.get("note", ""), "up": status[a["id"]]} for a in apps],
+                 "imported": bool(a.get("imported")), "note": a.get("note", ""), "up": status[a["id"]],
+                 "home": a.get("home")} for a in apps],
                 "available": [{"id": a["id"], "name": a["name"], "about": a["about"], "genre": a["genre"],
                                "hasIcon": a["icon"].startswith("di:"), "icon": a["icon"],
                                "imported": bool(a.get("imported")), "store": bool(a.get("store"))}
@@ -1770,6 +1796,20 @@ class Handler(BaseHTTPRequestHandler):
             if not wallpaper_path(body["wallpaper"]):
                 return self.send_json(400, {"error": "no such wallpaper"})
             changes["wallpaper"] = body["wallpaper"]
+        if "place" in body:
+            # {"app": id, "collection": c}: the app shows in c from now on;
+            # null (or its own collection) puts it back.
+            place, apps = body["place"], {a["id"]: a for a in installed_apps()}
+            choices = {c["id"] for c in collection_choices()}
+            if (not isinstance(place, dict) or place.get("app") not in apps
+                    or not (place.get("collection") is None or place.get("collection") in choices)):
+                return self.send_json(400, {"error": "place: {app: an installed app, collection: one of the collections, or null}"})
+            mine = placements()
+            if place["collection"] in (None, apps[place["app"]]["genre"]):
+                mine.pop(place["app"], None)
+            else:
+                mine[place["app"]] = place["collection"]
+            changes["placed"] = mine
         if "welcomed" in body:
             # The first-run welcome: seen (or skipped), so it doesn't come back.
             if not isinstance(body["welcomed"], bool):

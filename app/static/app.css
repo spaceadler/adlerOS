@@ -2202,3 +2202,9 @@ body.wm .app-sheet:not(.active) .app-shield { position: absolute; inset: 38px 0 
 /* What a tour step is about. */
 .tour-spot { outline: 3px solid rgb(255 255 255 / 0.9); outline-offset: 6px; border-radius: 18px; animation: tour-pulse 1.6s ease-in-out infinite; }
 @keyframes tour-pulse { 50% { outline-color: rgb(255 255 255 / 0.35); } }
+
+/* Move to another collection (app.js collectionDialog). */
+.dialog-text { margin: -10px 0 16px; font-size: 13px; line-height: 1.5; color: rgb(255 255 255 / 0.65); }
+.collection-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.collection-choice.current { opacity: 0.6; }
+.collection-choice .faint { color: rgb(255 255 255 / 0.5); }

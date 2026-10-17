@@ -93,4 +93,6 @@ again. To paste, Ctrl+Shift+V (⌘V on a Mac).
 
 Select an app, open its menu (`m`) → **Rearrange apps**, then the arrow keys
 move the selected app within its page (or a pinned app along the dock).
-Enter or Escape when you're done. The new order is saved as you go.
+Enter or Escape when you're done. The new order is saved as you go. To move
+an app to another collection, its menu (`m`) → **Move to another
+collection…**, then pick one.

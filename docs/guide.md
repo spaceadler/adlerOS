@@ -54,6 +54,12 @@ by itself, but **Settings → Welcome tour** (or ⌘K "welcome") shows it again.
 - **Rearranging:** drag an app to a new place on its page. On a touch screen,
   long-press → **Rearrange apps**, drag, then **Done**. From the keyboard,
   the same menu, then the arrow keys move the app.
+- **Collections are folders:** drag an app to the left or right edge and the
+  page turns; drop it on another collection's page to move it there. Or
+  right-click it → **Move to another collection…** (on an Extras app, **Put
+  in a collection…**), which also lists the empty collections, and **Back
+  to** where it came from. Only where adlerOS shows it changes: a core app
+  stays core (admin mode to stop it) wherever you put it.
 - **The bell**, top right: notifications (below).
 
 ## The dock
