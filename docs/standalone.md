@@ -17,9 +17,14 @@ manage them, without moving or changing anything.
 ## Installing
 
 ```bash
-git clone https://git.spaceadler.com/spaceadler/adleros.git ~/adleros
-cd ~/adleros && ./install.sh
+cd ~/docker   # wherever your compose folders are: adlerOS is one of them
+git clone https://git.spaceadler.com/spaceadler/adleros.git
+cd adleros && ./install.sh
 ```
+
+Any folder works (`~/adleros` too). Next to your other apps it's one of them:
+its compose file, settings and data in its own folder. It never lists itself,
+though, so you can't stop it from inside it.
 
 <!-- screenshot: ./install.sh finishing -->
 ![install.sh](screenshots/install.png)
@@ -166,7 +171,7 @@ untouched.
 ## Removing it
 
 ```bash
-cd ~/adleros && docker compose down
+cd adleros && docker compose down   # in its folder
 sudo systemctl disable --now adleros-agent.path adleros-terminal.path
 sudo rm -f /etc/systemd/system/adleros-{agent,terminal}.{path,service} /etc/sudoers.d/adleros
 sudo rm -r /usr/local/libexec/adleros
