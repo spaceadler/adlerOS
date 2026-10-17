@@ -283,6 +283,10 @@ def docker_env():
 
 def compose(file, *args):
     """`docker compose <args>` for one file, from its folder; output goes to the job."""
+    if args and args[0] in ("up", "start", "restart", "create", "run", "pull") and untrusted(file):
+        # Taking things down still works, to clean up.
+        say(f"! {file} is in a folder adlerOS can write to (its data, your Desktop or storage), so it isn't started from here. Move it next to your other apps.")
+        return 1
     say(f"$ docker compose {' '.join(args)}    ({file.parent})")
     return subprocess.run(["docker", "compose", "-f", str(file), *args], cwd=file.parent, env=docker_env(),
                           stdin=subprocess.DEVNULL, check=False).returncode
@@ -769,7 +773,7 @@ def discover():
     used = {os.path.realpath(f) for a in apps.values() for f in a["files"]}
     # adlerOS never lists itself (even next to your apps, it's not one to stop
     # from inside it). The store's own apps are already known, by their files.
-    skip = [p.resolve() for p in (ADLEROS, OS_DATA) if p.exists()]
+    skip = [p.resolve() for p in (ADLEROS, OS_DATA) if p.exists()] + web_writable()
     added = failed = 0
     for root in roots:
         if not root.is_dir():
@@ -875,13 +879,30 @@ COMMANDS = {"start": start, "stop": stop, "restart": restart, "update": update, 
 
 # ---------------------------------------------------------------- import
 
+def web_writable():
+    """Folders adlerOS's web app can write: its own data, and Files' Desktop
+    and User. A compose file in one might be the web app's own doing, so none
+    is ever imported, found or started (starting containers is as good as
+    root)."""
+    if HOMELAB:
+        folders = [OS_DATA, HOMELAB / "mailbox", Path(setting("STORAGE_DIR") or HOMELAB / "storage")]
+    else:
+        folders = [OS_DATA] + [Path(os.path.expanduser(v)) for v in (setting("STORAGE_DIR"), setting("DESKTOP_DIR")) if v]
+    return [f.resolve() for f in folders if str(f).startswith("/")]
+
+
+def untrusted(path):
+    real = Path(os.path.realpath(path))
+    return any(real.is_relative_to(f) for f in web_writable())
+
+
 def importable(path):
     """The real path of a compose file we may import, or an error."""
     real = Path(os.path.realpath(path))
     if not real.is_relative_to(HOME):
         return None, "only compose files under your home folder"
-    if real.is_relative_to(OS_DATA.resolve()):
-        return None, "not from the home screen's own data"
+    if untrusted(real):
+        return None, "not from a folder adlerOS can write to (its data, your Desktop or storage)"
     if real.name not in COMPOSE_NAMES and not re.fullmatch(r"(docker-)?compose[\w.-]*\.ya?ml", real.name):
         return None, "not a compose file name"
     if not real.is_file():
