@@ -69,6 +69,13 @@ def ours(path):
     return info.st_uid == os.getuid() and (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode))
 
 
+def write_ended(folder, why, code=None):
+    """Tells the page the session is over, and why."""
+    fd = os.open(folder / "ended", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"why": why, "code": code, "at": time.time()}, f)
+
+
 def read_small(path, limit=4096):
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     with os.fdopen(fd, "rb") as f:
@@ -188,10 +195,7 @@ class Session:
                 os.close(fd)
             except OSError:
                 pass
-        ended = self.folder / "ended"
-        fd = os.open(ended, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(fd, "w") as f:
-            json.dump({"why": why, "code": code, "at": time.time()}, f)
+        write_ended(self.folder, why, code)
         log(f"{self.sid}: ended ({why})")
 
 
@@ -208,12 +212,19 @@ def new_requests(sessions):
             if not ours(start):
                 raise ValueError("not a file of ours")
             request = json.loads(read_small(start))
-            if request.get("sid") != folder.name or time.time() - float(request.get("created", 0)) > START_WITHIN:
-                raise ValueError("stale or mismatched")
+            if request.get("sid") != folder.name:
+                raise ValueError("mismatched")
+            if time.time() - float(request.get("created", 0)) > START_WITHIN:
+                raise ValueError("too old: the terminal host wasn't running")
             rows, cols = int(request.get("rows", 24)), int(request.get("cols", 80))
         except (OSError, ValueError, TypeError) as e:
             log(f"{folder.name}: refused ({e})")
             start.unlink(missing_ok=True)
+            # So the page stops waiting, and it no longer counts as open.
+            try:
+                write_ended(folder, f"refused ({e})")
+            except OSError:
+                pass
             continue
         # Taken: so systemd's path unit doesn't start us again for it.
         os.replace(start, folder / "started.json")
@@ -245,9 +256,7 @@ def main():
     if not enabled():
         # Refuse every request, so the page says so instead of waiting.
         for sid, folder, _, _ in new_requests({}):
-            fd = os.open(folder / "ended", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
-            with os.fdopen(fd, "w") as f:
-                json.dump({"why": "the terminal is off (ADLEROS_TERMINAL)", "code": None, "at": time.time()}, f)
+            write_ended(folder, "the terminal is off (ADLEROS_TERMINAL)")
         sys.exit("the terminal is off: set ADLEROS_TERMINAL=on in the settings file to allow it")
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     sessions = {}
@@ -256,9 +265,7 @@ def main():
         while True:
             for sid, folder, rows, cols in new_requests(sessions):
                 if len(sessions) >= MAX_SESSIONS:
-                    fd = os.open(folder / "ended", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
-                    with os.fdopen(fd, "w") as f:
-                        json.dump({"why": f"at most {MAX_SESSIONS} terminals at once", "code": None, "at": time.time()}, f)
+                    write_ended(folder, f"at most {MAX_SESSIONS} terminals at once")
                     continue
                 try:
                     sessions[sid] = Session(sid, folder, rows, cols)

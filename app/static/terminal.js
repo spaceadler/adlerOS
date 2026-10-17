@@ -565,7 +565,7 @@ function startTerminal(sid) {
 }
 
 async function readTerminal(sid) {
-  let waited = 0;
+  const asked = Date.now();
   while (term.sid === sid) {
     let result;
     try {
@@ -586,8 +586,13 @@ async function readTerminal(sid) {
     }
     term.offset = offset;
     if (ended) return endTerminal(`Session ended: ${ended.why || "done"}.`);
-    if (!started && (waited += 1) > 1) {
-      $("term-status").textContent = "Waiting for the terminal host… (systemctl status adleros-terminal.path)";
+    if (!started) {
+      // The host takes a request for a minute; after that it never will.
+      if (Date.now() - asked > 60000) {
+        api(`/api/terminal/${sid}/close`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
+        return endTerminal("The terminal host didn't answer. On the machine: systemctl status adleros-terminal.path");
+      }
+      $("term-status").textContent = "Waiting for the terminal host…";
     }
   }
 }
