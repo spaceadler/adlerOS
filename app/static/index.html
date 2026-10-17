@@ -24,6 +24,7 @@
   <script src="/static/terminal.js" defer></script>
   <script src="/static/files.js" defer></script>
   <script src="/static/desk.js" defer></script>
+  <script src="/static/welcome.js" defer></script>
   <script src="/static/notifications.js" defer></script>
   <script src="/static/keyboard.js" defer></script>
 </head>
@@ -300,6 +301,11 @@
         <button type="button" class="button-destructive" id="confirm-ok">Log out</button>
       </div>
     </div>
+  </div>
+
+  <!-- The welcome: first login, or Settings → Welcome tour -->
+  <div id="welcome" class="welcome" hidden>
+    <div class="welcome-card material" id="welcome-card" role="dialog" aria-modal="true" aria-labelledby="welcome-title"></div>
   </div>
 
   <div id="toast" class="toast material" role="status" hidden></div>

@@ -315,6 +315,35 @@
       }
     ]
   },
+  "app-folders": {
+    "label": "Looking in your compose folders",
+    "description": "Sets where adlerOS looks for apps (COMPOSE_ROOTS: folders that exist, in your home folder or /opt, /srv, /mnt, /media, /data), then looks there.",
+    "mode": "standalone",
+    "params": {
+      "roots": {
+        "pattern": "^/[A-Za-z0-9._ /+@~-]{0,300}(:/[A-Za-z0-9._ /+@~-]{0,300}){0,9}$"
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "set-roots",
+          "{param:roots}"
+        ]
+      },
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "discover"
+        ]
+      }
+    ]
+  },
   "reboot": {
     "label": "Restarting",
     "admin": true,

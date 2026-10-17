@@ -42,7 +42,8 @@ It asks eight things, each with a guess you can take by pressing Enter:
 | A folder for Root | `FILES_ROOT`: Files' Root, read-only (`-` for none) | `~/homelab`, `~/docker` or `~/stacks`, if there's one |
 | A terminal in adlerOS | `ADLEROS_TERMINAL`: `on` or `off` | `off` |
 
-Then it:
+(The folders can also be set from the page: the first login's welcome asks
+for them, and looks there.) Then it:
 
 1. writes `.env` (only you can read it) with a new password and session key,
 2. installs **the helper**: `/etc/systemd/system/adleros-agent.path` and

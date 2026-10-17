@@ -486,6 +486,41 @@ def set_chosen(app_id, chosen):
     rewrite(CONFIG, "\n".join(lines) + "\n")
 
 
+def set_setting(key, value):
+    """KEY=value in the settings file, in place (see rewrite)."""
+    lines = CONFIG.read_text().splitlines() if CONFIG.exists() else []
+    for i, existing in enumerate(lines):
+        if existing.startswith(f"{key}="):
+            lines[i] = f"{key}={value}"
+            break
+    else:
+        lines.append(f"{key}={value}")
+    rewrite(CONFIG, "\n".join(lines) + "\n")
+
+
+ROOT_PLACES = (Path("/opt"), Path("/srv"), Path("/mnt"), Path("/media"), Path("/data"))
+
+
+def set_roots(value):
+    """COMPOSE_ROOTS from the page (adlerOS's welcome): folders that exist,
+    under your home folder or where Docker stacks usually live, and none that
+    adlerOS can write to itself."""
+    roots = [r.strip() for r in value.split(":") if r.strip()]
+    if not 0 < len(roots) <= 10:
+        sys.exit("one to ten folders, separated by :")
+    for root in roots:
+        real = Path(os.path.realpath(os.path.expanduser(root)))
+        if not real.is_dir():
+            sys.exit(f"{root} isn't a folder here")
+        if not (real.is_relative_to(HOME) or any(real.is_relative_to(p) for p in ROOT_PLACES)):
+            sys.exit(f"{root}: pick folders in your home folder ({HOME}) or under /opt, /srv, /mnt, /media or /data")
+        if untrusted(real) or real == HOME:
+            sys.exit(f"{root}: not your whole home folder, nor one adlerOS can write to (its data, your Desktop or storage)")
+    set_setting("COMPOSE_ROOTS", ":".join(roots))
+    say(f"Compose folders: {', '.join(roots)}")
+    return 0
+
+
 def write_record(app_id, info):
     folder = REGISTRY / app_id
     folder.mkdir(parents=True, exist_ok=True, mode=0o755)
@@ -1072,6 +1107,8 @@ def main(argv):
     if len(argv) == 2 and argv[0] == "scan":
         print(json.dumps(scan(argv[1])))
         return 0
+    if len(argv) == 2 and argv[0] == "set-roots" and not HOMELAB:
+        return set_roots(argv[1])
     if len(argv) == 7 and argv[0] == "import":
         return import_app(*argv[1:])
     if len(argv) == 2 and argv[0] == "forget":
@@ -1101,7 +1138,7 @@ def main(argv):
         print(json.dumps({"apps": report}))
         return 0
     if len(argv) != 2 or argv[0] not in COMMANDS or not APP_ID.fullmatch(argv[1]):
-        sys.exit(f"usage: apps.py status | usage | discover | logs APP | {{{'|'.join(COMMANDS)}}} APP | scan PATH | forget APP"
+        sys.exit(f"usage: apps.py status | usage | discover | set-roots FOLDERS | logs APP | {{{'|'.join(COMMANDS)}}} APP | scan PATH | forget APP"
                  " | import NAME FILE SERVICES URL ICON PORT")
     app = every_app().get(argv[1])
     if not app:

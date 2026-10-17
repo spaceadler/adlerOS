@@ -14,6 +14,21 @@ Settings). A login lasts 30 days in that browser. Too many wrong tries locks
 that address out for a while. Log out from the desktop's right-click menu, or
 Settings.
 
+## The welcome
+
+<!-- screenshot: the welcome asking where the compose folders are -->
+![The welcome](screenshots/welcome.png)
+
+The first time anyone logs in, adlerOS welcomes you. On its own it asks
+**where your containers are**: the folders holding your compose files, one
+per line (filled in with what `install.sh` was told). **Look for apps** sets
+them and looks there while you watch, then says what it found, collection by
+collection. In a homelab it shows instead **the apps you can add**: the
+catalog's, by collection, each with a button to its App Store card. Then a
+short look around: your apps, the dock, search, the bell, and where Files and
+desktop mode are. **Skip the tour** (or Escape) ends it; it doesn't come back
+by itself, but **Settings → Welcome tour** (or ⌘K "welcome") shows it again.
+
 ## The desktop
 
 <!-- screenshot: the desktop -->

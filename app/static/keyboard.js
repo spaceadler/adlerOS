@@ -41,7 +41,7 @@ const HELP_ONLY = [
 
 // What's on top: only things inside it can take focus.
 function topLayer() {
-  for (const id of ["modal", "confirm", "menu", "search", "notes"]) if (!$(id).hidden) return $(id);
+  for (const id of ["modal", "confirm", "menu", "search", "notes", "welcome"]) if (!$(id).hidden) return $(id);
   if (drawerOpen()) return $("drawer");
   // Desktop mode: the window in front, if one is; else the desktop and dock.
   if (desktopMode()) return wm.active && isActive(wm.active) ? $(wm.active) : (!$("lock").hidden ? $("lock") : null);
