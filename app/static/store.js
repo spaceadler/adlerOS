@@ -103,7 +103,7 @@ async function waitForJob(job, onUpdate) {
     if (job.status === "queued" && Date.now() - since > 20000) {
       const { body } = await api("/api/jobs").catch(() => ({ body: null }));
       if (body?.jobs?.some((j) => j.status === "running")) since = Date.now();
-      else return { ...job, status: "failed", error: "the homelab helper didn't pick it up (check: systemctl status homelab-agent.path)" };
+      else return { ...job, status: "failed", error: `the helper didn't pick it up (check: systemctl status ${helperUnit()})` };
     }
     await new Promise((r) => setTimeout(r, 1000));
     try {
