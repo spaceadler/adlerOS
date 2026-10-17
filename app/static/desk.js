@@ -174,7 +174,7 @@ async function deskWidgetPicker(cell) {
   cancel.addEventListener("click", closeModal);
   openModal(el("div", { class: "dialog material widget-picker", role: "dialog", "aria-modal": "true", "aria-label": "Add a widget" },
     el("div", { class: "picker-head" }, el("h2", {}, "Add a widget")),
-    el("p", { class: "picker-note" }, "It goes on the desktop, three icons wide and two tall: drag it where you want it."),
+    el("p", { class: "picker-note" }, "It goes on the desktop, three icons wide, in the room of two rows: drag it where you want it."),
     grid, el("div", { class: "dialog-actions" }, cancel)));
   grid.querySelector("button")?.focus();
 }
