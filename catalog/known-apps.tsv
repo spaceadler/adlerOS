@@ -10,8 +10,9 @@
 #               or extras
 #   icon        di:<name> from dashboard-icons, or - for a lettered tile
 #   about       one line
-#   port        where it answers when it shares the host's network (no ports
-#               published), or -
+#   port        the port its web page is on inside its container (also where
+#               it answers on the host's network), or -: picks that page when
+#               it publishes several (Nginx Proxy Manager: 81, not 80)
 #
 # Databases and caches (postgres, redis...) are never an app: they belong to the
 # app that needs them. Anything not in this list goes in extras, named after
@@ -22,7 +23,7 @@
 # core: network, DNS, proxies, VPN, sign-in, passwords
 pihole/pihole|pihole	pihole	Pi-hole	core	di:pi-hole	DNS and ad blocking for every device	80
 adguard/adguardhome|adguardhome	adguardhome	AdGuard Home	core	di:adguard-home	DNS and ad blocking	80
-jc21/nginx-proxy-manager|nginx-proxy-manager	nginx-proxy-manager	Nginx Proxy Manager	core	di:nginx-proxy-manager	Reverse proxy with a web UI	-
+jc21/nginx-proxy-manager|nginx-proxy-manager	nginx-proxy-manager	Nginx Proxy Manager	core	di:nginx-proxy-manager	Reverse proxy with a web UI	81
 traefik	traefik	Traefik	core	di:traefik	Reverse proxy that configures itself	-
 caddy	caddy	Caddy	core	di:caddy	Web server and reverse proxy with automatic HTTPS	-
 wg-easy/wg-easy|wg-easy	wg-easy	WireGuard Easy	core	di:wireguard	WireGuard VPN with a web UI	51821
