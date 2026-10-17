@@ -794,7 +794,70 @@ def discover():
                 added += 1
             used.add(str(real))
     say(f"{added} app{'' if added == 1 else 's'} added{f', {failed} file(s) skipped' if failed else ''}.")
+    use_proxy_addresses()
     return 0
+
+
+# ------------------------------------------------------ proxy addresses
+
+def proxy_hosts():
+    """{port: "https://name"}: the HTTPS proxy hosts of Nginx Proxy Manager
+    (if it's one of your apps) that forward to this machine. They're files in
+    its data folder (data/nginx/proxy_host/*.conf, next to its compose file)."""
+    here = {host_address(), "127.0.0.1", "localhost", socket.gethostname()}
+    found = {}
+    for app in registry_apps().values():
+        if app["info"].get("known") != "nginx-proxy-manager":
+            continue
+        for file in app["files"]:
+            confs = (file.parent / "data" / "nginx" / "proxy_host").glob("*.conf")
+            for conf in sorted(confs, key=lambda c: int(c.stem) if c.stem.isdigit() else 0):
+                try:
+                    text = conf.read_text(errors="replace")
+                except OSError:
+                    continue
+                names = re.search(r"^\s*server_name\s+([^;]+);", text, re.M)
+                server = re.search(r'set \$server\s+"?([^";\s]+)"?;', text)
+                port = re.search(r"set \$port\s+(\d+);", text)
+                if not (names and server and port and server[1] in here and re.search(r"listen\s+443\s+ssl", text)):
+                    continue
+                name = names[1].split()[0]
+                if re.fullmatch(r"[a-z0-9.-]+", name):
+                    found.setdefault(int(port[1]), f"https://{name}")  # the oldest host for a port
+    return found
+
+
+def use_proxy_addresses():
+    """Apps behind one of those hosts get its https:// address instead of
+    http://<ADLEROS_HOST>:<port>, which a page on HTTPS can't show (adlerOS's
+    windows, when adlerOS itself is on HTTPS). Addresses you set yourself stay."""
+    hosts = proxy_hosts()
+    if not hosts:
+        return
+    changed = 0
+    for app in registry_apps().values():
+        info = app["info"]
+        port = info.get("port")
+        if info.get("url") not in (f"http://{host_address()}:{port}", f"https://{host_address()}:{port}"):
+            continue  # no address, or one of its own (yours, or a proxy's already)
+        if port not in hosts:
+            # The proxy may know better which of its ports is the page
+            # (Fluxer: 8443, not 8442): if just one of them has a host, that.
+            ports = set()
+            for file in app["files"]:
+                try:
+                    ports |= {q for svc in services(file) if app["services"] is None or svc["name"] in app["services"]
+                              for q in svc["ports"]}
+                except (OSError, ValueError, subprocess.TimeoutExpired):
+                    continue
+            hits = sorted(q for q in ports if q in hosts)
+            if len(hits) != 1:
+                continue
+            port = hits[0]
+        write_record(app["id"], {**info, "url": hosts[port], "port": port})
+        changed += 1
+    if changed:
+        say(f"{changed} app{'' if changed == 1 else 's'} now use{'s' if changed == 1 else ''} their HTTPS address from Nginx Proxy Manager.")
 
 
 def first_failure(codes):

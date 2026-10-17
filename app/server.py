@@ -46,6 +46,7 @@ scripts/agent/actions.json (see that folder).
 import base64
 import hashlib
 import hmac
+import ipaddress
 import json
 import os
 import re
@@ -741,10 +742,15 @@ FRAME_TTL = 600
 
 
 def frame_headers(app):
-    """The headers of the app's page, asked at its own port where we know it
-    (no DNS needed), else at its address. None if it doesn't answer."""
-    urls = ([f"http://127.0.0.1:{app['port']}/", f"https://127.0.0.1:{app['port']}/"] if app.get("port")
-            else [app["url"]])
+    """The headers of the app's page, as the browser will get them: from its
+    address when that's a name of its own (through your reverse proxy, which
+    can add headers), else at its port on this machine (no DNS needed). None
+    if it doesn't answer."""
+    host = urllib.parse.urlsplit(app["url"]).hostname or ""
+    own_name = host not in ("127.0.0.1", "localhost", os.environ.get("ADLEROS_HOST", ""))
+    urls = [app["url"]] if own_name or not app.get("port") else []
+    if app.get("port"):
+        urls += [f"http://127.0.0.1:{app['port']}/", f"https://127.0.0.1:{app['port']}/"]
     context = ssl.create_default_context()
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE  # only to read its headers: its own certificate, often
@@ -1428,14 +1434,35 @@ class Watcher:
 
 # ------------------------------------------------------------------ server
 
+def trusted_proxies():
+    """Who may tell adlerOS a visitor's real address and scheme (X-Real-IP,
+    X-Forwarded-Proto): this machine, and ADLEROS_TRUSTED_PROXIES (addresses or
+    networks, comma-separated: your reverse proxy's, e.g. its Docker network)."""
+    found = []
+    for item in ["127.0.0.1", "::1", *os.environ.get("ADLEROS_TRUSTED_PROXIES", "").replace(" ", ",").split(",")]:
+        try:
+            found.append(ipaddress.ip_network(item.strip(), strict=False))
+        except ValueError:
+            continue
+    return found
+
+
+TRUSTED_PROXIES = trusted_proxies()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "homelab"
     sys_version = ""
 
-    # Requests come through nginx on 127.0.0.1, which passes the real client
-    # and scheme along; anything else is talking to us directly.
+    # Through a reverse proxy we trust, it passes the real client and scheme
+    # along; anything else is talking to us directly, and its headers count
+    # for nothing (they'd let anyone dodge the login lockout).
     def _from_proxy(self):
-        return self.client_address[0] in ("127.0.0.1", "::1")
+        try:
+            peer = ipaddress.ip_address(self.client_address[0])
+        except ValueError:
+            return False
+        return any(peer in network for network in TRUSTED_PROXIES)
 
     def client(self):
         if self._from_proxy():
