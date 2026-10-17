@@ -472,6 +472,9 @@ async function openTerminal() {
   if (status !== 200) return toast("Can't reach adlerOS right now.");
   if (!body.enabled) return terminalOffDialog();
   if (!body.admin) return toast("The terminal is only there in admin mode (Settings).");
+  // A shell still running from before (the page reloaded, another tab):
+  // back into it, its screen as it was, rather than one more.
+  if (body.sessions?.length) return startTerminal(body.sessions[0]);
   newTerminal();
 }
 

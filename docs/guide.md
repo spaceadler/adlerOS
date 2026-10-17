@@ -123,8 +123,9 @@ made phone-narrow leaves it until it's wide again.
 - **Widgets on the desktop:** right-click the desktop → **Add widget…** and
   pick one (the same ones as the home screen's). It's three icons wide and a
   row and a half tall; drag it where you want it (icons make room), right-click it →
-  **Remove widget**. Each computer keeps its own desktop: where things are,
-  which apps and widgets. Files that arrive
+  **Remove widget**. One is only for the desktop: **Search the web**, a bar
+  four icons wide (drag it by its edge; inside it, you type). Each computer
+  keeps its own desktop: where things are, which apps and widgets. Files that arrive
   some other way (Syncthing) show up within 15 seconds.
 - **Windows:** Settings, the App Store, Live Usage, Files and the Terminal
   open as windows you can have side by side. Drag one by its title bar; drag
@@ -139,9 +140,9 @@ made phone-narrow leaves it until it's wide again.
   that say no in a tab, as on the home screen. Ctrl+click opens any app in a
   tab. An app's window has Reload and *Open in a new tab* on its bar.
 - **The dock** shows what's open: a mark under pinned apps and adlerOS's own
-  items with a window, and, after a divider at the end, the windows that have
-  no place in the dock otherwise (Files, the Terminal, apps you haven't
-  pinned). Click one to bring it forward, again to minimize it; right-click
+  items with a window, and, after your pinned apps (like a Mac's), the windows
+  that have no place in the dock otherwise (apps you haven't pinned, Files or
+  the Terminal when they aren't). Click one to bring it forward, again to minimize it; right-click
   one whose window is open for **Close**.
 - **Keys:** Ctrl+` goes to the next window, then the desktop; Ctrl+Shift+`
   goes back. On a title bar, `m` (or the Menu key) opens its menu: left or
@@ -370,7 +371,9 @@ It's a real terminal: colours, `htop`, `nano`, `vim`, Tab completion,
 scrollback (scroll up), copy (select) and paste. While you're typing in it,
 every key goes to the shell, Escape included; **Ctrl+Shift+Q** or ✕ closes it
 and ends the session. Opening another window only puts it away: `t` brings
-the same session back. A session also ends when the shell exits, after 30
+the same session back, and so does opening the terminal after a reload (or
+in another tab): it joins the shell that's still running, its screen as it
+was. Shells no page is showing are closed when a fourth is wanted. A session also ends when the shell exits, after 30
 minutes without typing, or when admin mode is switched off. Up to three at
 once.
 
