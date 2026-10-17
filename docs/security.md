@@ -103,7 +103,9 @@ the app's own page, on its own address, with its own login: adlerOS can't see
 into it, and it can't see into adlerOS (they're different origins). adlerOS
 only asks the app's server for its headers first, to honour an app that
 forbids being framed (`X-Frame-Options`, CSP `frame-ancestors`); those open in
-a tab instead.
+a tab instead. adlerOS's own page may frame any web page (`frame-src http:
+https:`), since an app's page can redirect to its login or to HTTPS; it still
+runs only its own scripts.
 
 **Firefox** from the store is a whole browser on the machine: whoever reaches
 its port can browse as the machine, and its web interface can give a root
