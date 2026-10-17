@@ -14,7 +14,7 @@ folder mounted read-only.
     GET  /api/widgets      the desktop widgets you chose, and what they show
     GET  /api/updates      images with a newer version, from Cup if it's installed
     GET  /api/terminal     whether the terminal is on, and its open sessions
-    POST /api/terminal     {"password", "rows", "cols"} -> a new shell (admin mode)
+    POST /api/terminal     {"rows", "cols"} -> a new shell (admin mode)
     GET  /api/terminal/<id>?offset=N  its output from N (waits for some)
     POST /api/terminal/<id>/input|size|close
     GET  /api/files?path=   a folder (the Files window): /desktop, /user or /root/...
@@ -1919,7 +1919,7 @@ class Handler(BaseHTTPRequestHandler):
                 entries = [{"name": PLACE_LABELS[p], "dir": True, "size": None, "mtime": None, "kind": "folder",
                             "link": False, "outside": False, "place": p} for p in on]
                 return self.send_json(200, {"path": "/", "place": None, "places": places, "entries": entries,
-                                            "writable": False})
+                                            "writable": False, "admin": admin_on()})
             place, real = locate(rel)
             if not real or not real.is_dir():
                 return self.send_json(404, {"error": "no such folder"})
@@ -2176,20 +2176,12 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_json(200, {"ok": True, "path": place_path(place, target), "name": target.name})
 
     def open_terminal(self, body):
-        """A new shell: admin mode, the terminal switched on, and your password again."""
+        """A new shell: admin mode (your password turned it on) and the
+        terminal switched on, on the machine."""
         if not admin_on():
             return self.send_json(403, {"error": "admin mode is off", "admin": True})
         if not terminal_enabled():
             return self.send_json(409, {"error": "the terminal is off: set ADLEROS_TERMINAL=on and re-run install.sh"})
-        client = self.client()
-        wait = lockout_remaining(client)
-        if wait:
-            return self.send_json(429, {"error": "too many attempts", "retryAfter": wait})
-        password = body.get("password")
-        if not isinstance(password, str) or len(password) > 200 or not password_ok(password):
-            record_failure(client)
-            time.sleep(1)
-            return self.send_json(401, {"error": "wrong password"})
         if len(terminal_sessions()) >= 3:
             return self.send_json(409, {"error": "at most 3 terminals at once; close one"})
         try:

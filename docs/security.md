@@ -46,16 +46,17 @@ for every browser until you switch it off, so switch it off when you're done.
 ## The terminal
 
 The Terminal window is a real shell on the machine, as you, and you're in
-the `docker` group, so it's as good as root. That's why it has three locks:
+the `docker` group, so it's as good as root. That's why it has two locks:
 
 1. **It's off unless you switch it on on the machine**: `ADLEROS_TERMINAL=on`
    in `.env` (or `homelab.env`), then `./install.sh`, which installs its host
    (`adleros-terminal.path` and `.service`). adlerOS can't change that file,
    and with it off the host isn't even installed.
-2. **Admin mode**, checked by the server on every keystroke it passes on;
-   switching admin mode off closes every open shell.
-3. **Your password**, typed again for each session (the same lockout as
-   logging in).
+2. **Admin mode**, which only your password turns on, checked by the server
+   on every keystroke it passes on. With it off the terminal isn't even
+   shown, and switching it off closes every open shell. Opening one asks for
+   nothing more, so admin mode left on is a shell for anyone at that login:
+   switch it off when you're done.
 
 The shells run in `agent/terminal.py` on the host, started by systemd when a
 session is asked for and stopped when the last one ends. What you type and
@@ -64,9 +65,8 @@ readable only by you. Sessions end after 30 minutes without typing, at 20 MB
 of output, or when closed; three at most.
 
 The honest limit: with the terminal on, someone who took over the web app
-itself (not just a login) could ask the host for a shell without your
-password, since the host trusts adlerOS's requests. Leave it off unless you
-use it.
+itself (not just a login) could ask the host for a shell, since the host
+trusts adlerOS's requests. Leave it off unless you use it.
 
 ## Files
 

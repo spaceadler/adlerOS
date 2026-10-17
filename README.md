@@ -62,8 +62,8 @@ Screen*: it opens like an app.
   browser. With Files and the terminal, an old laptop is enough to work on
   your homelab.
 - **A terminal**, if you want one: a real shell in a window (colours, `htop`,
-  `vim`), off unless you switch it on on the machine, admin mode only, and
-  your password each time.
+  `vim`), off unless you switch it on on the machine, and only there in
+  admin mode.
 
 <!-- screenshot: the App Store with a few apps, one card's containers open -->
 ![The App Store](docs/screenshots/app-store.png)

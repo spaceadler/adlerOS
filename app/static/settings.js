@@ -209,8 +209,10 @@ function renderSide() {
 // Rows for the other kind of install (homelab or standalone) aren't shown.
 function forMode(row) {
   const mode = settings.data?.mode || state.mode || "homelab";
-  // "device": "computer": not on a phone (desktop mode).
-  return (!row.mode || row.mode === mode) && (row.device !== "computer" || computerScreen());
+  // "device": "computer": not on a phone (desktop mode). "admin": "hide":
+  // only there in admin mode (the terminal).
+  const admin = settings.data?.admin ?? state.admin;
+  return (!row.mode || row.mode === mode) && (row.device !== "computer" || computerScreen()) && (row.admin !== "hide" || admin);
 }
 
 function categoryLabel(c) {
@@ -475,6 +477,12 @@ async function setAdmin(on, password) {
     settings.data.admin = state.admin = on;
     renderRows();
     renderSide();
+    // What only admin mode shows: the terminal (closed when it goes), hidden files.
+    if (!on) closeTerminal();
+    dockKey = null;
+    buildDock();
+    if (drawerOpen()) renderDrawer();
+    if (filesOpen() && files.view === "folder") showFolder(files.path);
     toast(on ? "Admin mode is on. Turn it off when you're done." : "Admin mode is off.");
   }
   return { status, body };

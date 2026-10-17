@@ -20,7 +20,7 @@ const SHORTCUTS = [
   { keys: [","], label: "Settings", run: () => toggleWindow("settings", () => openSettings()) },
   { keys: ["u"], label: "Live Usage", run: () => toggleUsage() },
   { keys: ["w"], label: "Edit widgets", run: () => editWidgets() },
-  { keys: ["t"], label: "Terminal (admin mode)", run: () => toggleTerminal() },
+  { keys: ["t"], label: "Terminal", run: () => toggleTerminal() },
   { keys: ["f"], label: "Files", run: () => toggleFiles() },
   { keys: ["[", "PageUp"], label: "Previous page", run: () => turnPage(-1) },
   { keys: ["]", "PageDown"], label: "Next page", run: () => turnPage(1) },
@@ -189,7 +189,7 @@ function menuForFocused() {
 
 function keyboardHelp() {
   const rows = [
-    ...SHORTCUTS.map((s) => [s.keys.join(" or "), s.label]),
+    ...SHORTCUTS.filter((s) => !s.keys.includes("t") || state.admin).map((s) => [s.keys.join(" or "), s.label]),
     ...HELP_ONLY,
   ].map(([keys, what]) => el("div", { class: "kb-row" }, el("kbd", {}, keys), el("span", {}, what)));
   const close = el("button", { type: "button", class: "button-primary wide" }, "Done");
