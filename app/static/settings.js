@@ -22,7 +22,11 @@ const ICONS = {
   power: ["M12 2v10", "M18.4 6.6a9 9 0 1 1-12.8 0"],
   search: ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"],
   shield: ["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z", "m9 12 2 2 4-4"],
+  terminal: ["m4 17 6-6-6-6", "M12 19h8"],
 };
+
+// What an "open" row opens.
+const OPENERS = { terminal: () => openTerminal() };
 
 // Named read-only values for "info" rows.
 const FORMATTERS = {
@@ -93,6 +97,7 @@ async function openSettings(rowId) {
   history.replaceState(null, "", rowId ? `#settings/${rowId}` : "#settings");
   if (isOpen("store")) closeStore();
   if (isOpen("usage")) closeUsage();
+  hideTerminal();
   markDockOpen("settings", true);
   if (!(await loadSettings())) return;
   settings.query = "";
@@ -293,6 +298,15 @@ function buildRow(row) {
     control.append(configInput(row, c));
   } else if (c.type === "admin") {
     control.append(adminSwitch());
+  } else if (c.type === "open") {
+    // Opens one of adlerOS's windows (the terminal, say).
+    const b = el("button", { type: "button", class: "chip-button" }, c.label || "Open");
+    b.addEventListener("click", () => OPENERS[c.target]?.());
+    if (row.admin && !d.admin) {
+      b.disabled = true;
+      textBlock.append(el("div", { class: "row-detail locked" }, "Turn on admin mode (above) to use this."));
+    }
+    control.append(b);
   } else if (c.type === "action") {
     const b = el("button", { type: "button", class: `chip-button${c.destructive ? " destructive" : ""}` }, c.label || row.title);
     b.addEventListener("click", () => runAction(row));

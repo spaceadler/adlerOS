@@ -13,6 +13,10 @@ folder mounted read-only.
     GET  /api/dock-icon/<name>  a dock icon: yours from ./icons, or the built-in
     GET  /api/widgets      the desktop widgets you chose, and what they show
     GET  /api/updates      images with a newer version, from Cup if it's installed
+    GET  /api/terminal     whether the terminal is on, and its open sessions
+    POST /api/terminal     {"password", "rows", "cols"} -> a new shell (admin mode)
+    GET  /api/terminal/<id>?offset=N  its output from N (waits for some)
+    POST /api/terminal/<id>/input|size|close
     GET  /api/notifications           what happened: apps offline, jobs, warnings
     POST /api/notifications           {"read": "all"} or {"clear": true}
     GET  /api/settings     everything the Settings page shows
@@ -33,6 +37,7 @@ one) is written as a request into /data/agent/queue, where the homelab helper
 on the host picks it up and runs it from the fixed list in
 scripts/agent/actions.json (see that folder).
 """
+import base64
 import hashlib
 import hmac
 import json
@@ -826,6 +831,76 @@ def app_icon(app_id):
     return None
 
 
+# --------------------------------------------------------------- terminal
+
+TERM_DIR = DATA / "agent" / "term"
+TERM_ID = re.compile(r"[a-f0-9]{32}")
+TERM_WAIT = 20  # seconds a read waits for output
+TERM_CHUNK = 256 * 1024
+
+
+def terminal_enabled():
+    """ADLEROS_TERMINAL=on in the settings file: set on the host, so adlerOS
+    can't turn its own terminal on."""
+    value = (read_env_file(HOMELAB_ENV).get("ADLEROS_TERMINAL", "") if HOMELAB_MODE
+             else os.environ.get("ADLEROS_TERMINAL", ""))
+    return value.strip().lower() in ("on", "yes", "true", "1")
+
+
+def terminal_sessions():
+    try:
+        return [p.name for p in TERM_DIR.iterdir()
+                if TERM_ID.fullmatch(p.name) and not (p / "ended").exists() and not (p / "close").exists()]
+    except OSError:
+        return []
+
+
+def terminal_folder(sid):
+    folder = TERM_DIR / sid
+    return folder if TERM_ID.fullmatch(sid) and folder.is_dir() and not folder.is_symlink() else None
+
+
+def terminal_append(path, data):
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+    try:
+        os.write(fd, data)
+    finally:
+        os.close(fd)
+
+
+def close_terminals():
+    for sid in terminal_sessions():
+        terminal_append(TERM_DIR / sid / "close", b"")
+
+
+def terminal_read(folder, offset):
+    """(bytes from offset, ended info or None, started?), waiting up to
+    TERM_WAIT seconds for something new."""
+    deadline = time.monotonic() + TERM_WAIT
+    out, ended = folder / "out", folder / "ended"
+    while True:
+        size = out.stat().st_size if out.exists() else 0
+        if size > offset or ended.exists() or time.monotonic() > deadline:
+            break
+        time.sleep(0.04)
+    data = b""
+    if size > offset:
+        fd = os.open(out, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            os.lseek(fd, offset, os.SEEK_SET)
+            data = os.read(fd, TERM_CHUNK)
+        finally:
+            os.close(fd)
+    info = None
+    if ended.exists() and offset + len(data) >= size:
+        try:
+            info = json.loads(ended.read_text())
+        except (OSError, ValueError):
+            info = {"why": "ended"}
+    started = (folder / "started.json").exists() or out.exists()
+    return data, info, started
+
+
 # ----------------------------------------------------------- notifications
 
 KEEP_NOTIFICATIONS = 100
@@ -1108,6 +1183,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, data, ctype, [("Cache-Control", "private, max-age=604800")], csp=ICON_CSP)
         if path == "/api/settings":
             return self.send_json(200, self.settings_payload())
+        if path == "/api/terminal":
+            return self.send_json(200, {"enabled": terminal_enabled(), "admin": admin_on(), "sessions": terminal_sessions()})
+        if path.startswith("/api/terminal/"):
+            if not admin_on():
+                return self.send_json(403, {"error": "admin mode is off", "admin": True})
+            folder = terminal_folder(path[len("/api/terminal/"):])
+            if not folder:
+                return self.send_json(404, {"error": "no such terminal"})
+            try:
+                offset = max(0, int(query.get("offset", ["0"])[0]))
+            except ValueError:
+                return self.send_json(400, {"error": "offset: a number"})
+            data, ended, started = terminal_read(folder, offset)
+            return self.send_json(200, {"data": base64.b64encode(data).decode(), "offset": offset + len(data),
+                                        "ended": ended, "started": started})
         if path == "/api/notifications":
             items = load_notifications()[::-1]
             return self.send_json(200, {"items": items, "unread": sum(not n.get("read") for n in items)})
@@ -1164,6 +1254,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.change_password(body)
         if path == "/api/admin":
             return self.set_admin(body)
+        if path == "/api/terminal":
+            return self.open_terminal(body)
+        if path.startswith("/api/terminal/"):
+            return self.terminal_request(path[len("/api/terminal/"):], body)
         if path == "/api/notifications":
             if body.get("read") == "all":
                 update_notifications("read")
@@ -1264,6 +1358,60 @@ class Handler(BaseHTTPRequestHandler):
         # Every other session is now signed with the old key; this one carries on.
         return self.send_json(200, {"ok": True}, [self.cookie_header(new_session(), SESSION_SECONDS)])
 
+    def open_terminal(self, body):
+        """A new shell: admin mode, the terminal switched on, and your password again."""
+        if not admin_on():
+            return self.send_json(403, {"error": "admin mode is off", "admin": True})
+        if not terminal_enabled():
+            return self.send_json(409, {"error": "the terminal is off: set ADLEROS_TERMINAL=on and re-run install.sh"})
+        client = self.client()
+        wait = lockout_remaining(client)
+        if wait:
+            return self.send_json(429, {"error": "too many attempts", "retryAfter": wait})
+        password = body.get("password")
+        if not isinstance(password, str) or len(password) > 200 or not password_ok(password):
+            record_failure(client)
+            time.sleep(1)
+            return self.send_json(401, {"error": "wrong password"})
+        if len(terminal_sessions()) >= 3:
+            return self.send_json(409, {"error": "at most 3 terminals at once; close one"})
+        try:
+            rows, cols = int(body.get("rows", 24)), int(body.get("cols", 80))
+        except (TypeError, ValueError):
+            return self.send_json(400, {"error": "rows and cols: numbers"})
+        sid = secrets.token_hex(16)
+        folder = TERM_DIR / sid
+        TERM_DIR.mkdir(parents=True, exist_ok=True)
+        folder.mkdir(mode=0o700)
+        terminal_append(folder / "in", b"")
+        write_private(folder / "start.json", json.dumps({"sid": sid, "rows": rows, "cols": cols, "created": time.time()}))
+        return self.send_json(200, {"sid": sid})
+
+    def terminal_request(self, rest, body):
+        sid, _, what = rest.partition("/")
+        if not admin_on():
+            return self.send_json(403, {"error": "admin mode is off", "admin": True})
+        folder = terminal_folder(sid)
+        if not folder:
+            return self.send_json(404, {"error": "no such terminal"})
+        if what == "input":
+            try:
+                data = base64.b64decode(body.get("data", ""), validate=True)
+            except (ValueError, TypeError):
+                return self.send_json(400, {"error": "data: base64"})
+            terminal_append(folder / "in", data)
+        elif what == "size":
+            try:
+                rows, cols = int(body["rows"]), int(body["cols"])
+            except (KeyError, TypeError, ValueError):
+                return self.send_json(400, {"error": "rows and cols: numbers"})
+            write_private(folder / "size", f"{rows} {cols}\n")
+        elif what == "close":
+            terminal_append(folder / "close", b"")
+        else:
+            return self.send(404, b"not found")
+        return self.send_json(200, {"ok": True})
+
     def set_admin(self, body):
         """Turning admin mode on takes your password, like sudo; off doesn't."""
         on = body.get("on")
@@ -1280,6 +1428,8 @@ class Handler(BaseHTTPRequestHandler):
                 time.sleep(1)
                 return self.send_json(401, {"error": "wrong password"})
         save_settings({"admin": on})
+        if not on:
+            close_terminals()  # a shell needs admin mode for as long as it's open
         return self.send_json(200, {"ok": True, "admin": on})
 
     def log_message(self, fmt, *args):

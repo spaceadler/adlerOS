@@ -167,8 +167,8 @@ or the search box:
 - **This machine** (or **Homelab**): its address and compose folders, and
   *Look for new apps* (standalone); the domain, timezone, HTTPS and storage
   folder (homelab).
-- **System:** **Admin mode**, updating, the device, **Restart** and **Shut
-  down**.
+- **System:** **Admin mode**, updating, the **Terminal**, the device,
+  **Restart** and **Shut down**.
 
 **Admin mode** is off until you switch it on, which asks for your password:
 
@@ -178,6 +178,25 @@ or the search box:
 Only while it's on can you restart or shut down the machine, delete apps, or
 stop core apps. adlerOS's server checks it on every request, not just the
 buttons on the page. It stays on, for every browser, until you switch it off.
+
+## Terminal
+
+<!-- screenshot: the Terminal window running htop -->
+![Terminal](screenshots/terminal.png)
+
+A shell on this machine, as you, in a window: **Settings → System →
+Terminal**, ⌘K "terminal", or `t`. It's off unless it's switched on *on the
+machine itself* (`ADLEROS_TERMINAL=on`, see
+[standalone](standalone.md#settings-in-env) or [homelab](homelab.md)), it opens
+only in admin mode, and it asks for your password every time.
+
+It's a real terminal: colours, `htop`, `nano`, `vim`, Tab completion,
+scrollback (scroll up), copy (select) and paste. While you're typing in it,
+every key goes to the shell, Escape included; **Ctrl+Shift+Q** or ✕ closes it
+and ends the session. Opening another window only puts it away: `t` brings
+the same session back. A session also ends when the shell exits, after 30
+minutes without typing, or when admin mode is switched off. Up to three at
+once.
 
 ## On a phone
 

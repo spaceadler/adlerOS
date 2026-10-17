@@ -1,0 +1,13 @@
+# Rendered by install.sh into /etc/systemd/system/adleros-terminal.service.
+# Runs shells for adlerOS's Terminal window, as you, and stops when the last
+# one ends.
+[Unit]
+Description=adlerOS terminal host: shells for the Terminal window
+
+[Service]
+Type=simple
+User=${AGENT_USER}
+Group=${AGENT_GROUP}
+WorkingDirectory=~
+Environment=HOMELAB_DIR=${HOMELAB_DIR}
+ExecStart=/usr/bin/python3 -I ${ADLEROS_DIR}/agent/terminal.py

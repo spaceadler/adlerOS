@@ -41,6 +41,7 @@ These work anywhere except while you're typing in a text box.
 | `,` | Settings |
 | `u` | Live Usage |
 | `w` | Edit widgets |
+| `t` | Terminal (admin mode) |
 | `[` or Page Up | Previous page of apps |
 | `]` or Page Down | Next page |
 | `?` | The list of keys |
@@ -53,6 +54,15 @@ Text boxes keep their keys: Left and Right move the cursor, letters type.
 Up and Down still move you out of a one-line box (so you can leave the search
 bar for the widgets below it). In search, Up and Down pick a result and Enter
 opens it.
+
+## In the terminal
+
+While you're typing in the Terminal, every key goes to the shell, including
+Escape, Tab and the arrows, so `vim` and Tab completion work as usual.
+**Ctrl+Shift+Q** closes the window (and ends the session). To copy, select
+text with the mouse and press Ctrl+C (selecting takes the keyboard away from
+the shell, so it copies instead of interrupting); click the screen to type
+again. To paste, Ctrl+Shift+V (⌘V on a Mac).
 
 ## Rearranging from the keyboard
 

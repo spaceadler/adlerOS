@@ -39,6 +39,7 @@ search keywords, and a `control`:
 | --- | --- |
 | `setting-text` | edits one of adlerOS's own settings (`key`), saved at once |
 | `password`, `wallpaper`, `admin` | those built-in controls |
+| `open` | a button opening one of adlerOS's windows (`target`: `terminal`) |
 | `config` | a value in the homelab's `homelab.env`, applied by an action that accepts it |
 | `action` | a button running an action (below), after an optional confirmation |
 | `info` | a read-only value: `config.<KEY>`, `device.<field>`, or a named formatter |
