@@ -5,8 +5,10 @@ or homelab.env in a homelab), which adlerOS itself can't change.
 
 systemd starts this (adleros-terminal.path) when adlerOS asks for a session
 by writing data/agent/term/<id>/start.json; adlerOS only does that in admin
-mode, after you type your password again. Each session is a login shell, as
-you, in your home folder. What you type arrives in the session's `in` file and
+mode, after you type your password again. Each session is your login shell
+(fish, zsh, bash: whatever your account has), as you, starting in
+ADLEROS_TERMINAL_DIR, else the homelab's folder in a homelab, else your home
+folder. What you type arrives in the session's `in` file and
 goes to the shell; what the shell writes goes to its `out` file for adlerOS to
 show. A session ends when its shell exits, when adlerOS writes `close`, after
 30 minutes without typing, or at 20 MB of output. This exits when no session
@@ -19,6 +21,7 @@ import fcntl
 import json
 import os
 import pty
+import pwd
 import re
 import select
 import shutil
@@ -49,15 +52,43 @@ def log(message):
     print(message, flush=True)  # the journal: journalctl -u adleros-terminal
 
 
-def enabled():
+def setting(key):
+    """KEY's value in the settings file (the last one, like install.sh), or ''."""
+    found = ""
     try:
         for line in CONFIG.read_text().splitlines():
-            key, _, value = line.partition("=")
-            if key.strip() == "ADLEROS_TERMINAL":
-                return value.strip().strip("\"'").lower() in ("on", "yes", "true", "1")
+            name, _, value = line.partition("=")
+            if name.strip() == key:
+                found = value.strip().strip("\"'")
     except OSError:
         pass
-    return False
+    return found
+
+
+def enabled():
+    return setting("ADLEROS_TERMINAL").lower() in ("on", "yes", "true", "1")
+
+
+def login_shell():
+    """Your account's shell, as in /etc/passwd: not $SHELL, which is whatever
+    started this."""
+    try:
+        shells = [pwd.getpwuid(os.getuid()).pw_shell]
+    except KeyError:
+        shells = []
+    for shell in shells + [os.environ.get("SHELL", ""), "/bin/bash", "/bin/sh"]:
+        if shell and not shell.endswith(("/nologin", "/false")) and os.access(shell, os.X_OK):
+            return shell
+    return "/bin/sh"
+
+
+def start_folder():
+    """ADLEROS_TERMINAL_DIR (~/ or relative to your home folder), else the
+    homelab's folder in a homelab, else your home folder."""
+    home = os.path.expanduser("~")
+    wanted = setting("ADLEROS_TERMINAL_DIR")
+    folder = os.path.join(home, os.path.expanduser(wanted)) if wanted else str(HOMELAB or home)
+    return folder if os.path.isdir(folder) else home
 
 
 def ours(path):
@@ -95,16 +126,13 @@ class Session:
         self.size = None
         self.written = 0
         self.last_input = time.monotonic()
-        shell = os.environ.get("SHELL") or "/bin/bash"
-        if not os.path.exists(shell):
-            shell = "/bin/sh"
-        env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "SHELL")}
-        env.update(TERM="xterm-256color", COLORTERM="truecolor")
-        env.pop("HOMELAB_DIR", None)
+        shell, cwd = login_shell(), start_folder()
+        env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL")}
+        env.update(TERM="xterm-256color", COLORTERM="truecolor", SHELL=shell)
         self.pid, self.fd = pty.fork()
         if self.pid == 0:  # the shell
             try:
-                os.chdir(os.path.expanduser("~"))
+                os.chdir(cwd)
             except OSError:
                 pass
             try:
@@ -115,7 +143,7 @@ class Session:
         os.set_blocking(self.fd, False)
         flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW
         self.out = os.open(folder / "out", flags, 0o600)
-        log(f"{sid}: started {shell} (pid {self.pid})")
+        log(f"{sid}: started {shell} in {cwd} (pid {self.pid})")
 
     def pump_output(self):
         try:
