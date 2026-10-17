@@ -220,6 +220,10 @@ machine itself* (`ADLEROS_TERMINAL=on`, see
 [standalone](standalone.md#settings-in-env) or [homelab](homelab.md)), it opens
 only in admin mode, and it asks for your password every time.
 
+The shell is your account's own (fish, zsh, bash…; `chsh` changes it). It
+starts in `ADLEROS_TERMINAL_DIR` if that's set, else the homelab's folder in a
+homelab, else your home folder.
+
 It's a real terminal: colours, `htop`, `nano`, `vim`, Tab completion,
 scrollback (scroll up), copy (select) and paste. While you're typing in it,
 every key goes to the shell, Escape included; **Ctrl+Shift+Q** or ✕ closes it

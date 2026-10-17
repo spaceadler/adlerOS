@@ -114,6 +114,7 @@ To add your own, see [customizing](customizing.md#store-apps).
 | `APPS_DIR` | where store apps go (`./apps`) |
 | `STORAGE_DIR` | your files: Files shows it (read-write), store apps use it (`~/storage`) |
 | `ADLEROS_TERMINAL` | `on` lets the Terminal window open shells (admin mode, your password); re-run `./install.sh` after changing it |
+| `ADLEROS_TERMINAL_DIR` | where a new terminal starts, e.g. `~/homelab` (your home folder); takes effect on the next one |
 | `TZ`, `PUID`, `PGID` | timezone, and the user adlerOS and store apps run as |
 
 After editing: `docker compose up -d` in this folder.

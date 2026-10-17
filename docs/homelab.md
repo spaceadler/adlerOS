@@ -31,7 +31,8 @@ adlerOS as its home screen. There, adlerOS runs in **homelab mode**.
 Everything else (the desktop, dock, widgets, App Store buttons, Live Usage,
 notifications, keyboard, admin mode, the terminal) is the same. The terminal
 is switched on with `ADLEROS_TERMINAL=on` in `homelab.env`, then
-`./install.sh`. Files shows the homelab's `STORAGE_DIR`.
+`./install.sh`; it starts in the homelab's folder (`ADLEROS_TERMINAL_DIR`
+picks another). Files shows the homelab's `STORAGE_DIR`.
 
 ## Changing adlerOS while working on the homelab
 
