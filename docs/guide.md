@@ -334,9 +334,32 @@ once.
 
 ## On a phone
 
-<!-- screenshot: the desktop on a phone -->
+<!-- screenshot: the home screen on a phone held upright -->
 ![On a phone](screenshots/phone-desktop.png)
 
-Same as on a computer, sized for it: 4×3 apps a page, swipe between pages,
-long-press for menus. *Share → Add to Home Screen* makes it open full-screen,
-like an app.
+<!-- screenshot: the App Library on a phone -->
+![The App Library](screenshots/phone-library.png)
+
+Held upright, a phone gets adlerOS laid out like an iPhone's home screen
+(a computer, or a phone on its side, keeps the Mac-like one):
+
+- **The home screen:** the date and your greeting at the top, square widgets
+  two side by side, then your apps four across, as many rows as fit. Swipe
+  between pages; while you do, their dots take the place of the **Search**
+  pill over the dock. Pull down anywhere on it to search; search also offers
+  the web.
+- **The dock** holds four: the apps you pin, then the App Store, Settings,
+  All apps and Live Usage, as many as there's room for.
+- **Long-press** an app: the screen blurs behind its menu (Keep in Dock,
+  Move to another collection, Rearrange).
+- **The App Library:** swipe left past the last page (or All apps). Each
+  collection is a folder of four; tap an app to open it, or the corner of
+  small ones to see the whole collection. adlerOS's own (App Store,
+  Settings, Live Usage, Files, Terminal) have a folder too. Type to get the
+  A to Z list.
+- **Windows** come up as cards with a grabber at the top: pull it down, or
+  pull down a list that's at its top, to close one. Settings is grouped
+  lists, like an iPhone's.
+- Messages drop in from the top, and the lock screen shows the time.
+
+*Share → Add to Home Screen* makes it open full-screen, like an app.

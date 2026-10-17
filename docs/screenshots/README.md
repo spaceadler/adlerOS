@@ -32,5 +32,6 @@ crop anything private (addresses, names in notifications).
 | `terminal.png` | The Terminal window running `htop` | guide |
 | `lock.png` | The lock screen | guide |
 | `welcome.png` | The first login's welcome, on its "Where are your containers?" step, after Look for apps | guide |
-| `phone-desktop.png` | The desktop on a phone (4×3 apps) | guide |
+| `phone-desktop.png` | The home screen on a phone held upright: widgets, apps four across, the Search pill and the dock | guide |
+| `phone-library.png` | The App Library on a phone: collections as folders of four | guide |
 | `install.png` | A terminal running `./install.sh`, ending with the address and password | standalone |

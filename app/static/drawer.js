@@ -4,7 +4,7 @@
 // Uses $, el, state, plateFor, openApp, closeSearch, closeMenu from app.js.
 "use strict";
 
-const drawer = { opener: null };
+const drawer = { opener: null, folder: null }; // folder: a collection opened in the App Library
 
 function drawerOpen() { return !$("drawer").hidden; }
 
@@ -17,7 +17,9 @@ function openDrawer() {
   closeSearch();
   closeMenu();
   drawer.opener = document.activeElement;
+  drawer.folder = null;
   $("drawer").hidden = false;
+  $("drawer-search").placeholder = phoneLayout() ? "App Library" : "Search apps";
   document.body.classList.add("drawer-open");
   markDockOpen("app-drawer", true);
   $("drawer-search").value = "";
@@ -44,7 +46,12 @@ function drawerMatches() {
 const BUILT_IN = [
   { id: "files", name: "Files", about: "Your storage folder, and a text editor", open: () => openFiles(), keywords: "files folders storage documents editor" },
   { id: "terminal", name: "Terminal", about: "A shell on this machine (admin mode)", open: () => openTerminal(), keywords: "terminal shell console ssh" },
+  // On a phone the dock holds four, so adlerOS's own are here too.
+  { id: "app-store", name: "App Store", about: "Your apps, and more to install", open: () => openStore(), keywords: "store apps install", phone: true },
+  { id: "settings", name: "Settings", about: "adlerOS and this machine", open: () => openSettings(), keywords: "settings preferences", phone: true },
+  { id: "live-usage", name: "Live Usage", about: "CPU, memory, storage, temperature", open: () => openUsage(), keywords: "usage cpu memory stats", phone: true },
 ];
+const builtIns = () => BUILT_IN.filter((b) => !b.phone || phoneLayout());
 
 function builtInTile(b) {
   const tile = el("button", { type: "button", class: "app drawer-app built-in", title: b.about, "aria-label": b.name },
@@ -58,8 +65,46 @@ function builtInTile(b) {
   return tile;
 }
 
+// ------------------------------------------------------ the App Library
+
+// A phone, with nothing typed: each collection a folder of four, like the
+// iPhone's App Library. Three apps open from it; the fourth corner, when
+// there are more, opens the whole collection.
+function renderLibrary() {
+  const open = (run) => () => { closeDrawer(); run(); };
+  const icon = (item) => {
+    const b = el("button", { type: "button", class: "lib-icon", "aria-label": item.name, title: item.name },
+      item.app ? el("span", { class: "app-icon" }, plateFor(item.app))
+        : el("span", { class: "app-icon builtin-icon" }, el("img", { src: `/static/dock/${item.id}.svg`, alt: "", draggable: "false" })));
+    b.addEventListener("click", open(() => (item.app ? openApp(item.app) : item.open())));
+    return b;
+  };
+  const folder = (name, items, id) => {
+    const shown = items.length > 4 ? items.slice(0, 3) : items;
+    const tiles = shown.map(icon);
+    if (items.length > 4) {
+      const more = el("button", { type: "button", class: "lib-more", "aria-label": `All of ${name} (${items.length})` },
+        ...items.slice(3, 7).map((item) => el("span", { class: "app-icon" }, item.app ? plateFor(item.app)
+          : el("img", { src: `/static/dock/${item.id}.svg`, alt: "" }))));
+      more.addEventListener("click", () => { drawer.folder = id; renderDrawer(); });
+      tiles.push(more);
+    }
+    return el("div", { class: "lib-folder" }, el("div", { class: "lib-tiles" }, ...tiles), el("span", { class: "lib-name" }, name));
+  };
+  const own = builtIns().map((b) => ({ ...b }));
+  const folders = [folder("adlerOS", own, "adleros"),
+    ...groupApps().map((c) => folder(c.name, c.apps.map((app) => ({ app, name: app.name })), c.id))];
+  $("drawer-grid").classList.add("library");
+  $("drawer-grid").replaceChildren(...folders);
+  $("drawer-empty").hidden = true;
+  $("drawer-count").textContent = "";
+}
+
 function renderDrawer() {
-  const apps = drawerMatches();
+  $("drawer-grid").classList.remove("library");
+  if (phoneLayout() && !$("drawer-search").value.trim() && !drawer.folder) return renderLibrary();
+  let apps = drawerMatches();
+  if (drawer.folder && drawer.folder !== "adleros") apps = apps.filter((a) => groupApps().find((c) => c.id === drawer.folder)?.apps.includes(a));
   let letter = "";
   const items = [];
   for (const app of apps) {
@@ -78,9 +123,18 @@ function renderDrawer() {
     el("span", { class: "app-label" }, app.up ? app.name : `${app.name} · Offline`)));
   }
   const q = $("drawer-search").value.trim().toLowerCase();
-  const builtIns = BUILT_IN.filter((b) => !q || `${b.name} ${b.keywords}`.toLowerCase().includes(q)).map(builtInTile);
-  $("drawer-grid").replaceChildren(...builtIns, ...items);
-  $("drawer-empty").hidden = apps.length + builtIns.length > 0;
+  const own = (drawer.folder && drawer.folder !== "adleros" ? [] : builtIns())
+    .filter((b) => !q || `${b.name} ${b.keywords}`.toLowerCase().includes(q)).map(builtInTile);
+  if (drawer.folder === "adleros") items.length = 0;
+  // An opened folder: its name, and the way back to the App Library.
+  const head = drawer.folder ? [(() => {
+    const back = el("button", { type: "button", class: "lib-back" }, "‹ App Library");
+    back.addEventListener("click", () => { drawer.folder = null; renderDrawer(); });
+    const name = drawer.folder === "adleros" ? "adlerOS" : groupApps().find((c) => c.id === drawer.folder)?.name || "";
+    return el("div", { class: "lib-head" }, back, el("h2", {}, name));
+  })()] : [];
+  $("drawer-grid").replaceChildren(...head, ...own, ...items);
+  $("drawer-empty").hidden = items.length + own.length > 0;
   $("drawer-count").textContent = `${apps.length} app${apps.length === 1 ? "" : "s"}`;
 }
 
@@ -90,7 +144,7 @@ $("drawer-search").addEventListener("keydown", (e) => {
     e.preventDefault();
     const first = drawerMatches()[0];
     const q = $("drawer-search").value.trim().toLowerCase();
-    const builtIn = q && BUILT_IN.find((b) => `${b.name} ${b.keywords}`.toLowerCase().includes(q));
+    const builtIn = q && builtIns().find((b) => `${b.name} ${b.keywords}`.toLowerCase().includes(q));
     if (first) {
       openApp(first);
       closeDrawer();

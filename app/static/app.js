@@ -7,17 +7,19 @@
 const $ = (id) => document.getElementById(id);
 const REFRESH_MS = 30000;
 
-// Grid geometry per breakpoint, from umbrelOS's usePager: [phone, larger].
+// Grid geometry per breakpoint: [phone, larger]. Larger screens follow
+// umbrelOS's usePager (6×2 apps a page); a phone follows the iPhone's home
+// screen (phone.js, ios.css): four across, as many rows as fit, and square
+// widgets two app columns wide.
 const GEOMETRY = {
   appW: [70, 120],
   appH: [90, 110],
-  appXGap: [20, 30],
-  appYGap: [0, 12],
+  appXGap: [10, 30],
+  appYGap: [6, 12],
   appsPerRowMax: [4, 6],
-  // Rows per page: 6×2 on larger screens, 4×3 on phones, 12 apps either way.
-  rowsMax: [3, 2],
-  paddingX: [10, 32],
-  widgetH: [110, 150],
+  rowsMax: [6, 2],
+  paddingX: [20, 32],
+  widgetH: [null, 150], // a phone's are square
 };
 // Widget slots above the apps, each two app columns wide (widgets.js).
 const WIDGET_SLOTS = 3;
@@ -183,6 +185,7 @@ function geometry() {
   const g = Object.fromEntries(Object.entries(GEOMETRY).map(([k, v]) => [k, v[i]]));
   g.appsMaxW = (g.appW + g.appXGap) * g.appsPerRowMax - g.appXGap + g.paddingX * 2;
   g.widgetW = g.appW * 2 + g.appXGap;
+  g.widgetH ??= g.widgetW;
   return g;
 }
 
@@ -208,7 +211,8 @@ function layout(force = false) {
   // Rows that fit under the widgets, capped at rowsMax. Short screens drop
   // the widgets before they drop to a single row of apps.
   // The collection title takes the place of the page's 8px top padding.
-  const pillsH = 32 + PAGE_TITLE_H - 8;
+  // A phone's page dots sit over the dock (phone.js), not under the apps.
+  const pillsH = (phoneLayout() ? 0 : 32) + PAGE_TITLE_H - 8;
   const rowsIn = (h) => Math.floor((h - 8 + g.appYGap) / (g.appH + g.appYGap));
   const stageH = stage.clientHeight - parseFloat(getComputedStyle(stage).paddingTop);
   const widgetsH = g.widgetH + 8 + 20 + 20; // panel, gap, label, margin
@@ -352,6 +356,10 @@ const DOCK_FIXED = [
   { id: "live-usage", label: "Live Usage", run: () => toggleUsage() },
 ];
 const DOCK_MAX_PINS = 12;
+const PHONE_DOCK = 4;
+
+// Phones in portrait get the iPhone-style layout (phone.js, ios.css).
+function phoneLayout() { return document.body.classList.contains("phone"); }
 
 function bounce(item) {
   item.classList.remove("bounce");
@@ -393,14 +401,21 @@ function pinnedDockItem(app) {
 let dockKey = null;
 const dockKeyFor = (pinned) => pinned.map((a) => `${a.id}:${a.icon}:${a.up}`).join(",");
 function buildDock() {
-  const pinned = state.dock.map(appById).filter(Boolean);
+  let pinned = state.dock.map(appById).filter(Boolean);
+  let fixed = DOCK_FIXED;
+  // A phone's dock holds four, like an iPhone's: your pins first, then
+  // adlerOS's own (all of them are in the App Library too).
+  if (phoneLayout()) {
+    pinned = pinned.slice(0, PHONE_DOCK);
+    fixed = DOCK_FIXED.slice(0, PHONE_DOCK - pinned.length);
+  }
   // Rebuilt only when the pins, their icons or their status change.
-  const key = dockKeyFor(pinned);
+  const key = `${dockKeyFor(pinned)}|${fixed.length}`;
   if (key === dockKey) return;
   dockKey = key;
   $("dock").replaceChildren(...pinned.map(pinnedDockItem),
-    ...(pinned.length ? [el("span", { class: "dock-divider", "aria-hidden": "true" })] : []),
-    ...DOCK_FIXED.map(fixedDockItem));
+    ...(pinned.length && fixed.length && !phoneLayout() ? [el("span", { class: "dock-divider", "aria-hidden": "true" })] : []),
+    ...fixed.map(fixedDockItem));
   markDockOpen("settings", isOpen("settings"));
   markDockOpen("app-store", isOpen("store"));
   markDockOpen("live-usage", isOpen("usage"));
@@ -431,6 +446,8 @@ async function setPinned(id, pinned) {
 }
 
 function dockDims() {
+  // A phone's: four icons, the size of the apps above them, no magnifying.
+  if (phoneLayout()) return { size: 60, zoomed: 60, pad: 14, gap: 0 };
   const base = window.innerWidth < 768 ? DOCK.mobile : DOCK.desktop;
   // Many pins on a narrow screen: shrink every icon so the dock still fits.
   const items = $("dock").querySelectorAll(".dock-item").length;
@@ -453,7 +470,7 @@ function sizeDock() {
 
 // macOS-style magnification: each icon grows with the pointer's closeness.
 function magnify(event) {
-  if (event.pointerType !== "mouse") return;
+  if (event.pointerType !== "mouse" || phoneLayout()) return;
   const d = dockDims();
   for (const item of $("dock").querySelectorAll(".dock-item")) {
     const rect = item.getBoundingClientRect();
@@ -561,6 +578,7 @@ function onPressStart(event) {
     const items = menuFor(pressStart.target);
     if (!items) return;
     pressed = true;
+    navigator.vibrate?.(8); // a tap you feel, where the phone can
     openMenu(pressStart.x, pressStart.y, items);
   }, 550);
 }
@@ -846,7 +864,9 @@ function renderResults() {
   const apps = state.apps.filter((a) => !q || a.name.toLowerCase().includes(q) || a.about.toLowerCase().includes(q));
   const actions = q ? ACTIONS.filter((a) => a.name.toLowerCase().includes(q) || a.keywords.includes(q)) : [];
   results = [...apps.slice(0, 8).map((app) => ({ type: "app", app })), ...settingsSearchResults(q),
-    ...actions.map((action) => ({ type: "action", action }))];
+    ...actions.map((action) => ({ type: "action", action })),
+    // Last: the web, for anything else (a phone has no search bar of its own).
+    ...(q ? [{ type: "web", query: $("search-input").value.trim() }] : [])];
   selected = 0;
   const list = $("search-results");
   list.replaceChildren(...results.map((r, i) => {
@@ -855,13 +875,17 @@ function renderResults() {
       : { settings: "settings", store: "app-store", usage: "live-usage", drawer: "app-drawer" }[r.action?.id] || null;
     const icon = r.type === "app"
       ? el("span", { class: "result-icon" }, plateFor(r.app))
+      : r.type === "web"
+        ? el("span", { class: "result-icon action web" }, svg(["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"]))
       : glyph
         ? el("span", { class: "result-icon dock-glyph" }, el("img", { src: `/api/dock-icon/${glyph}`, alt: "" }))
         : el("span", { class: "result-icon action" }, svg(r.action?.id === "terminal" ? ["m4 17 6-6-6-6", "M12 19h8"]
           : r.action?.id === "files" ? ["M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"]
           : ["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "m16 17 5-5-5-5", "M21 12H9"]));
-    const name = r.type === "app" ? r.app.name : r.type === "setting" ? r.row.title : r.action.name;
-    const hint = r.type === "app" ? (r.app.up ? "Open" : "Offline") : r.type === "setting" ? "Settings" : "Action";
+    const name = r.type === "app" ? r.app.name : r.type === "setting" ? r.row.title
+      : r.type === "web" ? `Search the web for “${r.query}”` : r.action.name;
+    const hint = r.type === "app" ? (r.app.up ? "Open" : "Offline") : r.type === "setting" ? "Settings"
+      : r.type === "web" ? "Web" : "Action";
     const li = el("li", { role: "option", id: `result-${i}` }, icon, el("span", {}, name), el("span", { class: "hint" }, hint));
     li.addEventListener("pointermove", () => select(i));
     li.addEventListener("click", () => runResult(i));
@@ -882,6 +906,7 @@ function runResult(i) {
   closeSearch();
   if (r.type === "app") openApp(r.app);
   else if (r.type === "setting") openSettings(r.row.id);
+  else if (r.type === "web") window.open(state.searchUrl.replaceAll("{QUERY}", encodeURIComponent(r.query)), "_blank", "noopener,noreferrer");
   else if (r.action.id === "settings") openSettings();
   else if (r.action.id === "store") openStore();
   else if (r.action.id === "usage") openUsage();
