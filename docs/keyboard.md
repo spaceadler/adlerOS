@@ -95,4 +95,6 @@ Select an app, open its menu (`m`) → **Rearrange apps**, then the arrow keys
 move the selected app within its page (or a pinned app along the dock).
 Enter or Escape when you're done. The new order is saved as you go. To move
 an app to another collection, its menu (`m`) → **Move to another
-collection…**, then pick one.
+collection…**, then pick one; to a folder, **Add to a folder…**. A folder
+opens with Enter; inside, an app's menu has **Remove from folder**, and
+Escape closes it.

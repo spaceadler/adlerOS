@@ -405,10 +405,43 @@ def search_url():
     return "https://duckduckgo.com/?q={QUERY}"
 
 
+# adlerOS's own windows you can pin like an app (and unpin): pre-pinned,
+# once, after whatever you'd pinned already.
+BUILTIN_PINS = ("adleros:files", "adleros:terminal")
+
+
 def dock_pins():
-    """Apps pinned to the dock, in order, that are still installed."""
+    """Pinned to the dock, in order: installed apps, and adlerOS's Files and
+    Terminal (there from the start, until you take them out)."""
+    settings = load_settings()
+    pins = settings.get("dock", [])
+    if not isinstance(pins, list):
+        pins = []
+    if not settings.get("dockSeeded"):
+        pins = [*pins, *(p for p in BUILTIN_PINS if p not in pins)]
+        save_settings({"dock": pins, "dockSeeded": True})
     installed = {a["id"] for a in installed_apps()}
-    return [a for a in load_settings().get("dock", []) if a in installed]
+    return [p for p in pins if p in installed or p in BUILTIN_PINS]
+
+
+FOLDER_ID = re.compile(r"[a-z0-9]{1,16}")
+
+
+def app_folders(installed=None):
+    """Your folders on the home screen, {id: {name, collection, apps}}: apps
+    that are gone left out, and a folder with none left gone too."""
+    raw = load_settings().get("folders")
+    if not isinstance(raw, dict):
+        return {}
+    ids = installed if installed is not None else {a["id"] for a in installed_apps()}
+    found = {}
+    for fid, f in raw.items():
+        if not (isinstance(fid, str) and FOLDER_ID.fullmatch(fid) and isinstance(f, dict)):
+            continue
+        apps = [a for a in f.get("apps", []) if a in ids]
+        if apps:
+            found[fid] = {"name": str(f.get("name", "Folder"))[:30], "collection": f.get("collection"), "apps": apps}
+    return found
 
 
 def widget_catalog():
@@ -1612,6 +1645,7 @@ class Handler(BaseHTTPRequestHandler):
             status = app_status(apps)
             env = read_env_file(HOMELAB_ENV)
             return self.send_json(200, {"name": display_name(), "searchUrl": search_url(), "dock": dock_pins(),
+                                        "folders": app_folders({a["id"] for a in apps}),
                                         "admin": admin_on(), "mode": MODE, "welcomed": bool(load_settings().get("welcomed")),
                                         "collections": collections(apps), "order": app_order(),
                                         "choices": collection_choices(),
@@ -1768,13 +1802,35 @@ class Handler(BaseHTTPRequestHandler):
             pins, installed = body["dock"], {a["id"] for a in installed_apps()}
             if not isinstance(pins, list) or len(pins) > DOCK_MAX_PINS or len(set(map(str, pins))) != len(pins):
                 return self.send_json(400, {"error": f"dock: up to {DOCK_MAX_PINS} different apps"})
-            if not all(isinstance(a, str) and a in installed for a in pins):
-                return self.send_json(400, {"error": "dock: only installed apps can be pinned"})
+            if not all(isinstance(a, str) and (a in installed or a in BUILTIN_PINS) for a in pins):
+                return self.send_json(400, {"error": "dock: only installed apps (and Files, Terminal) can be pinned"})
             changes["dock"] = pins
+        if "folders" in body:
+            # Every folder at once: {id: {name, collection, apps}}; an app in
+            # one folder at most.
+            folders, ids = body["folders"], {a["id"] for a in installed_apps()}
+            choices = {c["id"] for c in collection_choices()}
+            seen, ok = set(), isinstance(folders, dict) and len(folders) <= 60
+            for fid, f in folders.items() if ok else []:
+                apps = f.get("apps") if isinstance(f, dict) else None
+                name = f.get("name") if isinstance(f, dict) else None
+                ok = (isinstance(fid, str) and bool(FOLDER_ID.fullmatch(fid)) and isinstance(name, str)
+                      and 0 < len(name.strip()) <= 30 and name.isprintable() and f.get("collection") in choices
+                      and isinstance(apps, list) and 0 < len(apps) <= 100 and len(set(map(str, apps))) == len(apps)
+                      and all(isinstance(a, str) and a in ids and a not in seen for a in apps))
+                if not ok:
+                    break
+                seen |= set(apps)
+            if not ok:
+                return self.send_json(400, {"error": "folders: {id: {name: up to 30 characters, collection, apps: installed apps, each in one folder}}"})
+            changes["folders"] = {fid: {"name": f["name"].strip(), "collection": f["collection"], "apps": f["apps"]}
+                                  for fid, f in folders.items()}
         if "order" in body:
             # One or more collections' new arrangement, merged into the rest.
+            # A folder takes its place as "folder:<id>".
             order = body["order"]
-            ids = {a["id"] for a in installed_apps()}
+            folder_ids = set(changes["folders"] if "folders" in changes else app_folders())
+            ids = {a["id"] for a in installed_apps()} | {f"folder:{f}" for f in folder_ids}
             if (not isinstance(order, dict) or not order or len(order) > 50
                     or not all(isinstance(c, str) and re.fullmatch(r"[a-z0-9-]{1,40}", c) for c in order)
                     or not all(isinstance(v, list) and len(v) <= 200 and len(set(map(str, v))) == len(v)
@@ -1810,6 +1866,13 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 mine[place["app"]] = place["collection"]
             changes["placed"] = mine
+            # Out of any folder of where it was (a folder lives in one collection).
+            if "folders" not in body:
+                folders = app_folders()
+                for f in folders.values():
+                    if place["app"] in f["apps"]:
+                        f["apps"].remove(place["app"])
+                changes["folders"] = {k: f for k, f in folders.items() if f["apps"]}
         if "welcomed" in body:
             # The first-run welcome: seen (or skipped), so it doesn't come back.
             if not isinstance(body["welcomed"], bool):

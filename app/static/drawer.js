@@ -54,7 +54,9 @@ const BUILT_IN = [
 const builtIns = () => BUILT_IN.filter((b) => !b.phone || phoneLayout());
 
 function builtInTile(b) {
-  const tile = el("button", { type: "button", class: "app drawer-app built-in", title: b.about, "aria-label": b.name },
+  // Files and the terminal can be pinned: they carry their pin's id.
+  const pinId = BUILTIN_PINS[`adleros:${b.id}`] ? { "data-app": `adleros:${b.id}` } : {};
+  const tile = el("button", { type: "button", class: "app drawer-app built-in", title: b.about, "aria-label": b.name, ...pinId },
     el("span", { class: "drawer-letter", "aria-hidden": "true" }),
     el("span", { class: "app-icon builtin-icon" }, el("img", { src: `/static/dock/${b.id}.svg`, alt: "", draggable: "false" })),
     el("span", { class: "app-label" }, b.name));
@@ -73,7 +75,8 @@ function builtInTile(b) {
 function renderLibrary() {
   const open = (run) => () => { closeDrawer(); run(); };
   const icon = (item) => {
-    const b = el("button", { type: "button", class: "lib-icon", "aria-label": item.name, title: item.name },
+    const pinId = item.app ? item.app.id : BUILTIN_PINS[`adleros:${item.id}`] ? `adleros:${item.id}` : null;
+    const b = el("button", { type: "button", class: "lib-icon", "aria-label": item.name, title: item.name, ...(pinId ? { "data-app": pinId } : {}) },
       item.app ? el("span", { class: "app-icon" }, plateFor(item.app))
         : el("span", { class: "app-icon builtin-icon" }, el("img", { src: `/static/dock/${item.id}.svg`, alt: "", draggable: "false" })));
     b.addEventListener("click", open(() => (item.app ? openApp(item.app) : item.open())));

@@ -53,8 +53,16 @@ by itself, but **Settings → Welcome tour** (or ⌘K "welcome") shows it again.
   that doesn't answer turns dim and says *Offline*. An app with no web page
   (a game server, a bot) opens its App Store card instead.
 - **Rearranging:** drag an app to a new place on its page. On a touch screen,
-  long-press → **Rearrange apps**, drag, then **Done**. From the keyboard,
-  the same menu, then the arrow keys move the app.
+  long-press it and, without letting go, drag: the menu gives way and the
+  apps start to wiggle; **Done** when you've finished. From the keyboard, its
+  menu → **Rearrange apps**, then the arrow keys move it.
+- **Folders,** like an iPhone's: drag an app onto another and hold a moment
+  (the one under it grows), then let go: they're a folder. Drop more apps on
+  it to add them. Tap it to open it; tap its name to rename it. Drag an app
+  out past its edge to put it back on the page, or use its menu: **Remove
+  from folder**. An app's menu also has **Add to a folder…** (a folder on its
+  page, or a new one), and a folder's has **Rename…** and **Remove folder**
+  (its apps stay). A folder belongs to its collection's page.
 - **Collections are folders:** drag an app to the left or right edge and the
   page turns; drop it on another collection's page to move it there. Or
   right-click it → **Move to another collection…** (on an Extras app, **Put
@@ -68,9 +76,12 @@ by itself, but **Settings → Welcome tour** (or ⌘K "welcome") shows it again.
 <!-- screenshot: the right-click menu on an app, with Keep in Dock -->
 ![An app's menu](screenshots/dock-menu.png)
 
-Pin any app: right-click it (long-press on a phone) → **Keep in Dock**. Drag
-pinned apps to reorder them; right-click → **Remove from Dock** to unpin.
-After a divider come adlerOS's own four, which always stay:
+Pin any app: right-click it (long-press on a phone) → **Keep in Dock**, on
+the page or in All apps, or drag it from All apps onto the dock, where you
+drop it. **Files** and the **Terminal** are pinned from the start, like apps:
+unpin them the same way. Drag pinned apps to reorder them; right-click →
+**Remove from Dock** to unpin. After a divider come adlerOS's own four, which
+always stay:
 
 | | |
 | --- | --- |
@@ -358,7 +369,8 @@ Held upright, a phone gets adlerOS laid out like an iPhone's home screen
 - **The dock** holds four: the apps you pin, then the App Store, Settings,
   All apps and Live Usage, as many as there's room for.
 - **Long-press** an app: the screen blurs behind its menu (Keep in Dock,
-  Move to another collection, Rearrange).
+  Add to a folder, Move to another collection, Rearrange); keep holding and
+  drag to move it instead, onto another app to make a folder.
 - **The App Library:** swipe left past the last page (or All apps). Each
   collection is a folder of four; tap an app to open it, or the corner of
   small ones to see the whole collection. adlerOS's own (App Store,

@@ -507,7 +507,7 @@ async function leaveEditor() {
 
 // ---------------------------------------------------------------- wiring
 
-registerWindow("files", { title: "Files", close: closeFiles, dock: null, size: [980, 640] });
+registerWindow("files", { title: "Files", close: closeFiles, dock: "files", size: [980, 640] });
 $("files-close").addEventListener("click", closeFiles);
 $("files-up").addEventListener("click", () => {
   if (files.view !== "folder") return showFolder(files.path);
