@@ -306,3 +306,9 @@ body.phone .lock-clock { display: flex; flex-direction: column; align-items: cen
 body.phone .lock-mark { display: none; }
 body.phone .lock .title { font-size: 20px; }
 body.phone .lock .login-form { width: 100%; max-width: 340px; margin-top: auto; margin-bottom: calc(env(safe-area-inset-bottom) + 36px); }
+
+/* Folders, iPhone-sized. */
+body.phone .folder-panel { width: min(340px, 100%); padding: 16px 14px 20px; border-radius: 38px; background: rgb(255 255 255 / 0.16); }
+body.phone .folder-apps { grid-template-columns: repeat(3, var(--app-w, 70px)); gap: 6px 18px; }
+body.phone .folder-name { font-size: 26px; }
+body.phone .folder-icon { padding: 6px; }

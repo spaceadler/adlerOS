@@ -2208,3 +2208,61 @@ body.wm .app-sheet:not(.active) .app-shield { position: absolute; inset: 38px 0 
 .collection-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
 .collection-choice.current { opacity: 0.6; }
 .collection-choice .faint { color: rgb(255 255 255 / 0.5); }
+
+/* ============================================================== folders
+   On the home screen (folders.js): a tile of tiny icons, opened over a
+   blur. While dragging, the app you hold over turns into a folder. */
+
+.app.folder { border: 0; background: none; font: inherit; cursor: pointer; }
+.folder-icon { padding: 7px; background: rgb(255 255 255 / 0.22); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); }
+.folder-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 1fr; gap: 3px; width: 100%; height: 100%; }
+.folder-mini { position: relative; overflow: hidden; border-radius: 22%; }
+.folder-mini .plate img { width: 80%; height: 80%; }
+.folder-mini .plate.mono { font-size: 6px; }
+.app.merge-target .app-icon { transform: scale(1.18); box-shadow: 0 0 0 5px rgb(255 255 255 / 0.45); }
+.folder-view {
+  position: fixed;
+  inset: 0;
+  z-index: 108;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.2);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+  animation: fade-in 0.15s both;
+}
+.folder-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(520px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 18px 18px 22px;
+  border-radius: 34px;
+  animation: menu-in 0.18s ease-out both;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.folder-view.dragging-out .folder-panel { opacity: 0.35; transform: scale(0.96); }
+.folder-name {
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: #fff;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-align: center;
+  outline: none;
+}
+.folder-name:focus { background: rgb(255 255 255 / 0.1); }
+.folder-apps { display: grid; grid-template-columns: repeat(auto-fill, var(--app-w, 110px)); justify-content: center; gap: 6px var(--app-x-gap, 20px); width: 100%; }
+.folder-apps .app { animation: none; }
+/* Dragging an app from All apps: the dock is where it can go. */
+.dock.dock-drop { box-shadow: var(--shine), 0 0 0 3px rgb(255 255 255 / 0.7), 0 10px 20px rgb(0 0 0 / 0.25); }
+.dock-builtin { padding: 0; border: 0; background: none; }

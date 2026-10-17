@@ -425,7 +425,8 @@ function winDock() {
   const running = [];
   for (const id of wm.order) {
     const w = wm.windows.get(id);
-    if (!w || !isOpen(id) || w.dock) continue;
+    // Its own item in the dock (Files and Terminal only while pinned): that.
+    if (!w || !isOpen(id) || (w.dock && dock.querySelector(`[data-dock="${w.dock}"]:not(.dock-run)`))) continue;
     const pinned = w.app && dock.querySelector(`.dock-app[data-app="${CSS.escape(w.app.id)}"]`);
     if (pinned) {
       pinned.classList.add("open");

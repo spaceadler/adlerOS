@@ -677,7 +677,7 @@ $("term-screen").addEventListener("scroll", () => {
   const s = $("term-screen");
   if (term.screen) term.screen.follow = s.scrollTop + s.clientHeight >= s.scrollHeight - 4;
 });
-registerWindow("terminal", { title: "Terminal", close: closeTerminal, hide: hideTerminal, size: [920, 580] });
+registerWindow("terminal", { title: "Terminal", close: closeTerminal, hide: hideTerminal, dock: "terminal", size: [920, 580] });
 $("term-close").addEventListener("click", closeTerminal);
 // The window's size changes with the screen, or (desktop mode) by dragging.
 new ResizeObserver(resizeTerminal).observe($("term-screen"));

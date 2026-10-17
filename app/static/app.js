@@ -241,7 +241,8 @@ function layout(force = false) {
 
 function gridKey(groups) {
   const { perRow, perCol } = state.grid || {};
-  return `${perRow}x${perCol}:${groups.map((c) => `${c.id}=${c.apps.map((a) => a.id).join(",")}`).join("|")}`;
+  const folders = Object.entries(state.folders || {}).map(([id, f]) => `${id}:${f.name}:${f.apps.join("+")}`).join(";");
+  return `${perRow}x${perCol}:${groups.map((c) => `${c.id}=${c.items.map((i) => i.key).join(",")}`).join("|")}#${folders}`;
 }
 
 // ------------------------------------------------------------ collections
@@ -261,7 +262,21 @@ function groupApps() {
     };
     const apps = state.apps.filter((a) => a.genre === c.id || (c.id === "extras" && !known.has(a.genre)))
       .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
-    return { ...c, apps };
+    // What the page shows: its folders (of its own apps), and the apps in none.
+    const here = new Set(apps.map((a) => a.id));
+    const folders = Object.entries(state.folders || {})
+      .filter(([, f]) => f.collection === c.id)
+      .map(([id, f]) => ({ id, name: f.name, apps: f.apps.filter((a) => here.has(a)).map(appById) }))
+      .filter((f) => f.apps.length);
+    const inFolders = new Set(folders.flatMap((f) => f.apps.map((a) => a.id)));
+    const where = (key) => {
+      const i = saved.indexOf(key);
+      return i < 0 ? Infinity : i;
+    };
+    const items = [...apps.filter((a) => !inFolders.has(a.id)).map((app) => ({ key: app.id, app })),
+      ...folders.map((folder) => ({ key: `folder:${folder.id}`, folder }))]
+      .sort((x, y) => where(x.key) - where(y.key) || (x.app || x.folder).name.localeCompare((y.app || y.folder).name));
+    return { ...c, apps, items };
   }).filter((c) => c.apps.length);
 }
 
@@ -278,10 +293,10 @@ function draw(groups, perRow, perPage) {
   let index = 0;
   const titles = [];
   for (const c of groups) {
-    for (let start = 0; start < c.apps.length; start += perPage) {
-      const slice = c.apps.slice(start, start + perPage);
+    for (let start = 0; start < c.items.length; start += perPage) {
+      const slice = c.items.slice(start, start + perPage);
       const grid = el("div", { class: "app-grid", "data-collection": c.id, "data-start": String(start) },
-        ...slice.map((app) => tile(app, index++)));
+        ...slice.map((item) => (item.app ? tile(item.app, index++) : folderTile(item.folder, index++))));
       // A short collection sits centred, like a folder; a full one fills the row.
       grid.style.gridTemplateColumns = `repeat(${Math.min(perRow, slice.length)}, var(--app-w))`;
       pages.append(el("div", { class: "page" }, el("div", { class: "page-inner" },
@@ -356,6 +371,13 @@ const DOCK_FIXED = [
   { id: "live-usage", label: "Live Usage", run: () => toggleUsage() },
 ];
 const DOCK_MAX_PINS = 12;
+// adlerOS's own windows you can pin (and unpin) like an app.
+const BUILTIN_PINS = {
+  "adleros:files": { name: "Files", icon: "files", dock: "files", open: () => toggleFiles() },
+  "adleros:terminal": { name: "Terminal", icon: "terminal", dock: "terminal", open: () => toggleTerminal() },
+};
+// A pin: an installed app, or one of those.
+const pinFor = (id) => appById(id) || (BUILTIN_PINS[id] && { id, builtin: BUILTIN_PINS[id] });
 const PHONE_DOCK = 4;
 
 // Phones in portrait get the iPhone-style layout (phone.js, ios.css).
@@ -382,7 +404,23 @@ function fixedDockItem(item) {
   return button;
 }
 
+function builtinDockItem(pin) {
+  const b = pin.builtin;
+  const src = `/static/dock/${b.icon}.svg`;
+  const button = el("button", { class: "dock-item dock-app dock-builtin", type: "button", "aria-label": b.name,
+    "data-app": pin.id, "data-dock": b.dock },
+  el("img", { class: "glow", src, alt: "", draggable: "false" }),
+  el("img", { src, alt: "", draggable: "false" }),
+  el("span", { class: "dock-label material" }, b.name));
+  button.addEventListener("click", () => {
+    bounce(button);
+    b.open();
+  });
+  return button;
+}
+
 function pinnedDockItem(app) {
+  if (app.builtin) return builtinDockItem(app);
   const link = el("a", { class: `dock-item dock-app${app.up ? "" : " offline"}`, href: app.url || "#store", target: "_blank",
     rel: "noopener noreferrer", draggable: "false", "data-app": app.id,
     "aria-label": app.up ? app.name : `${app.name} (offline)` },
@@ -401,7 +439,7 @@ function pinnedDockItem(app) {
 let dockKey = null;
 const dockKeyFor = (pinned) => pinned.map((a) => `${a.id}:${a.icon}:${a.up}`).join(",");
 function buildDock() {
-  let pinned = state.dock.map(appById).filter(Boolean);
+  let pinned = state.dock.map(pinFor).filter(Boolean);
   let fixed = DOCK_FIXED;
   // A phone's dock holds four, like an iPhone's: your pins first, then
   // adlerOS's own (all of them are in the App Library too).
@@ -420,13 +458,17 @@ function buildDock() {
   markDockOpen("app-store", isOpen("store"));
   markDockOpen("live-usage", isOpen("usage"));
   markDockOpen("app-drawer", drawerOpen());
+  markDockOpen("files", isOpen("files"));
+  markDockOpen("terminal", isOpen("terminal"));
   winDock();
 }
 
 function isPinned(id) { return state.dock.includes(id); }
 
-async function setPinned(id, pinned) {
-  const next = pinned ? [...state.dock.filter((a) => a !== id), id] : state.dock.filter((a) => a !== id);
+// Pins (or unpins) an app; `at`: where in the dock (dropped there), else the end.
+async function setPinned(id, pinned, at) {
+  const rest = state.dock.filter((a) => a !== id);
+  const next = !pinned ? rest : at === undefined ? [...rest, id] : [...rest.slice(0, at), id, ...rest.slice(at)];
   if (next.length > DOCK_MAX_PINS) return toast(`The dock holds up to ${DOCK_MAX_PINS} apps.`);
   let result;
   try {
@@ -535,12 +577,28 @@ function menuFor(target) {
   const appId = target.closest("[data-app]")?.dataset.app;
   const app = appId && appById(appId);
   const arrange = { label: "Rearrange apps", run: startArranging };
+  const pin = (id) => (isPinned(id)
+    ? { label: "Remove from Dock", run: () => setPinned(id, false) }
+    : { label: "Keep in Dock", run: () => setPinned(id, true) });
+  // Files and the terminal: pinned or not, like an app.
+  const builtin = appId && BUILTIN_PINS[appId];
+  if (builtin) return [{ label: "Open", run: builtin.open }, pin(appId)];
   if (app) {
-    return [{ label: "Open", run: () => openApp(app) },
-      isPinned(app.id)
-        ? { label: "Remove from Dock", run: () => setPinned(app.id, false) }
-        : { label: "Keep in Dock", run: () => setPinned(app.id, true) },
+    const inFolder = target.closest("#folder");
+    return [{ label: "Open", run: () => openApp(app) }, pin(app.id),
+      ...(inFolder ? [{ label: "Remove from folder", run: () => removeFromFolder(folderView.id, app.id) }]
+        : target.closest("#pages") ? [{ label: "Add to a folder…", run: () => folderDialog(app) }] : []),
       { label: app.genre === "extras" ? "Put in a collection…" : "Move to another collection…", run: () => collectionDialog(app) },
+      ...(inFolder ? [] : [arrange])];
+  }
+  const folderId = target.closest("#pages [data-folder]")?.dataset.folder;
+  if (folderId && state.folders?.[folderId]) {
+    return [{ label: "Open", run: () => openFolder(folderId) },
+      { label: "Rename…", run: async () => {
+        const name = await nameDialog({ title: "Rename the folder", value: state.folders[folderId].name, button: "Rename" });
+        if (name) renameFolder(folderId, name);
+      } },
+      { label: "Remove folder (its apps stay)", run: () => dissolveFolder(folderId) },
       arrange];
   }
   const fixed = DOCK_FIXED.find((item) => item.id === target.closest("[data-dock]")?.dataset.dock);
@@ -585,7 +643,22 @@ function onPressStart(event) {
   }, 550);
 }
 function onPressMove(event) {
-  if (pressStart && Math.hypot(event.clientX - pressStart.x, event.clientY - pressStart.y) > 10) clearTimeout(pressTimer);
+  if (!pressStart) return;
+  const moved = Math.hypot(event.clientX - pressStart.x, event.clientY - pressStart.y) > 10;
+  if (!pressed) {
+    if (moved) clearTimeout(pressTimer);
+    return;
+  }
+  // Held, then moved: it's picked up (the menu goes), like on an iPhone.
+  if (moved && !drag.item) {
+    const found = sortable(pressStart.target);
+    if (!found) return;
+    closeMenu();
+    if (found.kind === "grid" || found.kind === "dock") startArranging();
+    Object.assign(drag, found, { active: false, pointerId: event.pointerId, startX: pressStart.x, startY: pressStart.y,
+      from: found.container.dataset.collection, crossed: false, edge: 0 });
+    beginDrag(event);
+  }
 }
 function onPressEnd() { clearTimeout(pressTimer); }
 // The click that ends a long press shouldn't also open the app.
@@ -619,12 +692,56 @@ function stopArranging() {
   $("arrange-done").hidden = true;
 }
 
+// What a drag picks up: a pin along the dock, an app (or folder) on a page,
+// an app in an open folder, or an app from All apps (to drop on the dock).
 function sortable(target) {
   const pin = target.closest("#dock .dock-app");
   if (pin) return { item: pin, container: $("dock"), selector: ".dock-app", kind: "dock" };
+  const inFolder = target.closest("#folder-apps .app");
+  if (inFolder) return { item: inFolder, container: $("folder-apps"), selector: ".app", kind: "folder" };
+  const fromDrawer = target.closest("#drawer [data-app]");
+  if (fromDrawer) return { item: fromDrawer, container: fromDrawer.parentElement, selector: "[data-app]", kind: "drawer" };
   const app = target.closest("#pages .app");
   if (app) return { item: app, container: app.parentElement, selector: ".app", kind: "grid" };
   return null;
+}
+
+// Held over the middle of another app (or a folder) for a moment: dropping
+// there makes (or adds to) a folder. Anywhere else on it: it moves there.
+function mergeZone(over, e) {
+  if (!drag.item.dataset.app || drag.kind !== "grid") return false;
+  const icon = over.querySelector(".app-icon")?.getBoundingClientRect();
+  if (!icon) return false;
+  const inset = icon.width * 0.2;
+  return e.clientX > icon.left + inset && e.clientX < icon.right - inset && e.clientY > icon.top + inset && e.clientY < icon.bottom - inset;
+}
+
+function holdOver(over) {
+  if (drag.hover === over) return;
+  clearMerge();
+  drag.hover = over;
+  drag.hoverTimer = setTimeout(() => {
+    drag.merge = over;
+    over.classList.add("merge-target");
+  }, 450);
+}
+
+function clearMerge() {
+  clearTimeout(drag.hoverTimer);
+  drag.merge?.classList.remove("merge-target");
+  drag.merge = drag.hover = null;
+}
+
+// From All apps onto the dock: pinned where it's dropped.
+function overDock(e) {
+  const r = $("dock").getBoundingClientRect();
+  return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top - 24 && e.clientY <= r.bottom;
+}
+
+function dropOnDock(id, x) {
+  const pins = [...$("dock").querySelectorAll(".dock-app")].filter((p) => p.dataset.app !== id);
+  const at = pins.filter((p) => { const b = p.getBoundingClientRect(); return b.left + b.width / 2 < x; }).length;
+  setPinned(id, true, at).then(() => { if (pinFor(id)) toast(`${pinFor(id).name || pinFor(id).builtin.name} is in the dock.`); });
 }
 
 function onSortDown(e) {
@@ -643,13 +760,28 @@ function onSortMove(e) {
   }
   e.preventDefault();
   drag.ghost.style.transform = `translate(${e.clientX - drag.offX}px, ${e.clientY - drag.offY}px) scale(1.08)`;
+  drag.x = e.clientX;
+  drag.y = e.clientY;
+  if (drag.kind === "drawer") {
+    $("dock").classList.toggle("dock-drop", overDock(e));
+    return;
+  }
+  if (drag.kind === "folder") {
+    // Out past the folder's edge: dropped there, it's back on the page.
+    const r = $("folder").querySelector(".folder-panel").getBoundingClientRect();
+    drag.out = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    $("folder").classList.toggle("dragging-out", drag.out);
+    if (drag.out) return;
+  }
+  if (drag.kind === "grid") edgeTurn(e);
   const over = [...drag.container.querySelectorAll(drag.selector)].find((it) => {
     if (it === drag.item) return false;
     const r = it.getBoundingClientRect();
     return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
   });
+  if (over && mergeZone(over, e)) return holdOver(over);
+  clearMerge();
   if (over) moveBefore(over);
-  if (drag.kind === "grid") edgeTurn(e);
 }
 
 // Collections are folders: drag an app to the left or right edge and the
@@ -666,7 +798,8 @@ function edgeTurn(e) {
 function turnWhileDragging(dir) {
   const page = $("pages").children[state.page + dir];
   drag.edge = 0; // still at the edge: the next move turns again
-  if (!drag.active || !page) return;
+  // A folder stays in its collection (its apps can move, one by one).
+  if (!drag.active || !page || drag.item.dataset.folder) return;
   goToPage(state.page + dir);
   const grid = page.querySelector(".app-grid");
   if (grid && grid !== drag.container) {
@@ -679,7 +812,7 @@ function turnWhileDragging(dir) {
 // Dropped on another page: that collection's new order (and, if it's not
 // where the app was, the app's new collection), from what's on screen.
 async function dropAcrossPages(appId, collection) {
-  const order = [...document.querySelectorAll(`#pages .app-grid[data-collection="${CSS.escape(collection)}"] .app`)].map((a) => a.dataset.app);
+  const order = collectionOrder(collection);
   const app = appById(appId);
   await placeApp(app, collection === drag.from ? undefined : collection, order);
 }
@@ -730,11 +863,18 @@ function onSortUp(e) {
     drag.suppressClick = true;
     setTimeout(() => { drag.suppressClick = false; }, 0);
     clearTimeout(drag.edgeTimer);
-    if (drag.kind === "grid" && drag.crossed) dropAcrossPages(drag.item.dataset.app, drag.container.dataset.collection);
+    const merge = drag.merge;
+    clearMerge();
+    $("dock").classList.remove("dock-drop");
+    if (drag.kind === "grid" && merge) mergeOnto(merge, drag.item.dataset.app, drag.container.dataset.collection);
+    else if (drag.kind === "drawer") { if (overDock({ clientX: drag.x, clientY: drag.y })) dropOnDock(drag.item.dataset.app, drag.x); }
+    else if (drag.kind === "folder") folderDragEnd(drag.item.dataset.app, drag.out);
+    else if (drag.kind === "grid" && drag.crossed) dropAcrossPages(drag.item.dataset.app, drag.container.dataset.collection);
     else saveArrangement(drag.kind, drag.container);
   }
   drag.item = null;
   drag.active = false;
+  drag.out = false;
 }
 
 function onSortClick(e) {
@@ -797,6 +937,13 @@ function collectionDialog(app) {
   (choices.find((b) => !b.disabled) || cancel).focus();
 }
 
+// A collection's order as the screen shows it, across its pages: apps by
+// id, folders as "folder:<id>".
+function collectionOrder(collection) {
+  return [...document.querySelectorAll(`#pages .app-grid[data-collection="${CSS.escape(collection)}"] > .app`)]
+    .map((a) => (a.dataset.folder ? `folder:${a.dataset.folder}` : a.dataset.app));
+}
+
 async function saveArrangement(kind, container) {
   let body;
   if (kind === "dock") {
@@ -805,12 +952,8 @@ async function saveArrangement(kind, container) {
     body = { dock: ids };
   } else {
     const collection = container.dataset.collection;
-    const start = Number(container.dataset.start) || 0;
-    const page = [...container.querySelectorAll(".app")].map((a) => a.dataset.app);
-    const all = (groupApps().find((c) => c.id === collection)?.apps || []).map((a) => a.id);
-    const next = [...all];
-    next.splice(start, page.length, ...page);
-    if (next.join() === all.join()) return;
+    const next = collectionOrder(collection);
+    if (next.join() === (state.order[collection] || []).join()) return;
     body = { order: { [collection]: next } };
   }
   const { status, body: reply } = await api("/api/settings", {
@@ -828,7 +971,8 @@ async function saveArrangement(kind, container) {
   // The page already shows the new order: record it without redrawing.
   if (body.dock) {
     state.dock = body.dock;
-    dockKey = dockKeyFor(state.dock.map(appById).filter(Boolean));
+    dockKey = null;
+    buildDock();
   } else {
     Object.assign(state.order, body.order);
     state.layoutKey = gridKey(groupApps());
@@ -1031,6 +1175,7 @@ async function refresh() {
   // Alphabetical, like the umbrelOS desktop.
   state.apps = result.body.apps.slice().sort((a, b) => a.name.localeCompare(b.name));
   state.dock = result.body.dock || [];
+  state.folders = result.body.folders || {};
   state.collections = result.body.collections || [];
   state.choices = result.body.choices || state.collections;
   state.host = result.body.host || {};
@@ -1091,8 +1236,10 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("pointerdown", (e) => {
   if (!$("menu").hidden && !$("menu").contains(e.target)) closeMenu();
 });
-for (const area of [$("desktop"), $("dock")]) {
-  area.addEventListener("contextmenu", onContextMenu);
+// Long-press (and right-click) menus, and long-press-to-drag, wherever
+// apps are: the pages, the dock, All apps, an open folder.
+for (const area of [$("desktop"), $("dock"), $("drawer"), $("folder")]) {
+  if (area !== $("drawer") && area !== $("folder")) area.addEventListener("contextmenu", onContextMenu);
   area.addEventListener("pointerdown", onPressStart);
   area.addEventListener("pointermove", onPressMove, { passive: true });
   area.addEventListener("pointerup", onPressEnd);
@@ -1109,6 +1256,10 @@ $("pages").addEventListener("scroll", onPagesScroll, { passive: true });
 $("prev").addEventListener("click", () => goToPage(state.page - 1));
 $("next").addEventListener("click", () => goToPage(state.page + 1));
 document.addEventListener("pointerdown", onSortDown);
+// Held (or being dragged): the page mustn't scroll under the finger. A new
+// touch, anywhere, is a new start.
+document.addEventListener("pointerdown", () => { pressed = false; }, true);
+document.addEventListener("touchmove", (e) => { if (pressed || drag.active) e.preventDefault(); }, { passive: false });
 document.addEventListener("pointermove", onSortMove);
 document.addEventListener("pointerup", onSortUp);
 document.addEventListener("pointercancel", onSortUp);

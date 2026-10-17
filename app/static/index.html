@@ -26,6 +26,7 @@
   <script src="/static/terminal.js" defer></script>
   <script src="/static/files.js" defer></script>
   <script src="/static/desk.js" defer></script>
+  <script src="/static/folders.js" defer></script>
   <script src="/static/welcome.js" defer></script>
   <script src="/static/phone.js" defer></script>
   <script src="/static/notifications.js" defer></script>
@@ -251,6 +252,14 @@
 
   <!-- Dialogs opened by Settings: confirm, password, progress -->
   <div id="modal" class="dialog-backdrop" hidden></div>
+
+  <!-- An open folder on the home screen (folders.js) -->
+  <div id="folder" class="folder-view" hidden>
+    <div class="folder-panel material" role="dialog" aria-modal="true" aria-label="Folder">
+      <input id="folder-name" class="folder-name" type="text" maxlength="30" spellcheck="false" autocomplete="off" aria-label="Folder name">
+      <div id="folder-apps" class="folder-apps"></div>
+    </div>
+  </div>
 
   <!-- All apps, A to Z -->
   <div id="drawer" class="drawer" role="dialog" aria-label="All apps" hidden>
