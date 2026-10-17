@@ -119,8 +119,11 @@ shell inside its own container. It has no login unless you add one
   keeps only service names, images, published ports and `depends_on`; never
   environment values or secrets.
 - **Import** from the browser only takes compose files under your home
-  folder, and never one in adlerOS's own `data/` folder, where the web app
-  could have written it. It shows you the compose file's text (not its
+  folder, and never one in a folder the web app can write to: its own
+  `data/`, and Files' Desktop and User. The same goes for looking for apps,
+  and the helper won't start one from there either (it will still stop or
+  remove it): otherwise whoever had adlerOS could upload a compose file of
+  their own and run it. It shows you the compose file's text (not its
   `.env`).
 - **Logs** show what an app's containers printed, which can include things
   apps log (addresses, usernames).
