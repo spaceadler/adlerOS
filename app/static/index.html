@@ -21,6 +21,7 @@
   <script src="/static/usage.js" defer></script>
   <script src="/static/drawer.js" defer></script>
   <script src="/static/terminal.js" defer></script>
+  <script src="/static/files.js" defer></script>
   <script src="/static/notifications.js" defer></script>
   <script src="/static/keyboard.js" defer></script>
 </head>
@@ -189,6 +190,43 @@
     </div>
     <div class="term" id="term-screen" role="log" aria-label="Terminal output"></div>
     <textarea class="term-input" id="term-input" aria-label="Type into the terminal" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+  </section>
+
+  <!-- Files: your storage folder, and a text editor -->
+  <section id="files" class="sheet files-sheet" aria-label="Files" hidden>
+    <div class="sheet-bg" aria-hidden="true">
+      <div class="sheet-wallpaper"></div>
+      <div class="sheet-tint"></div>
+    </div>
+    <button class="sheet-close" id="files-close" type="button" aria-label="Close Files">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+    <div class="files-body">
+      <div class="files-bar">
+        <button type="button" class="chip-button" id="files-up" aria-label="Up one folder">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <nav class="crumbs" id="files-crumbs" aria-label="Folder"></nav>
+        <div class="files-tools">
+          <button type="button" class="chip-button" id="files-new-folder">New folder</button>
+          <button type="button" class="chip-button" id="files-new-file">New text file</button>
+          <button type="button" class="chip-button primary" id="files-upload">Upload</button>
+          <button type="button" class="chip-button" id="files-trash">Trash</button>
+          <input type="file" id="files-picker" multiple hidden>
+        </div>
+      </div>
+      <div class="files-list" id="files-list" role="list"></div>
+      <div class="uploads" id="files-uploads" aria-live="polite"></div>
+      <div class="editor" id="files-editor">
+        <div class="editor-bar">
+          <button type="button" class="chip-button" id="editor-back">Back</button>
+          <div class="editor-title"><span id="editor-name"></span><span class="editor-path" id="editor-path"></span></div>
+          <span class="editor-state" id="editor-state">Saved</span>
+          <button type="button" class="chip-button primary" id="editor-save">Save</button>
+        </div>
+        <textarea class="editor-text" id="editor-text" spellcheck="false" autocapitalize="off" aria-label="File contents"></textarea>
+      </div>
+    </div>
   </section>
 
   <!-- Dialogs opened by Settings: confirm, password, progress -->

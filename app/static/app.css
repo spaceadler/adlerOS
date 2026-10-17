@@ -925,6 +925,9 @@ button { font: inherit; color: inherit; }
   width: min(1100px, 100%);
 }
 .drawer-app { position: relative; animation: none; }
+button.drawer-app { border: 0; background: none; font: inherit; cursor: pointer; }
+.builtin-icon { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; overflow: visible; }
+.builtin-icon img { width: 116%; height: 116%; margin: -8%; }
 .drawer-letter { position: absolute; top: 2px; left: 4px; font-size: 11px; font-weight: 700; color: rgb(255 255 255 / 0.45); }
 .drawer-empty { margin-top: 40px; color: rgb(255 255 255 / 0.65); }
 body.drawer-open .desktop { opacity: 0.25; transition: opacity 0.15s; }
@@ -1724,6 +1727,102 @@ a.chip-button { text-decoration: none; }
 .store-containers li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
 .store-containers .c-name { overflow: hidden; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: nowrap; text-overflow: ellipsis; }
 .store-containers .c-status { margin-left: auto; flex-shrink: 0; color: rgb(255 255 255 / 0.45); }
+
+/* ================================================================ files */
+
+.files-body {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  padding: 24px 12px 30px;
+}
+.files-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-right: 48px; }
+.files-bar #files-up svg { width: 16px; height: 16px; }
+.crumbs { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.crumb { padding: 4px 8px; border: 0; border-radius: 8px; background: none; color: #fff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.crumb:hover { background: rgb(255 255 255 / 0.08); }
+.crumb.current { cursor: default; }
+.crumb-sep { color: rgb(255 255 255 / 0.35); }
+.files-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.files-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-radius: 20px;
+  background: rgb(255 255 255 / 0.03);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.08) inset;
+  padding: 6px;
+}
+.file-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 90px 120px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.file-row:hover { background: rgb(255 255 255 / 0.06); }
+.file-row:focus-visible { outline: none; background: rgb(255 255 255 / 0.12); box-shadow: 0 0 0 3px rgb(255 255 255 / 0.9); }
+.file-row.outside { opacity: 0.45; }
+.trash-row { grid-template-columns: 30px minmax(0, 1fr) 120px auto; cursor: default; }
+.file-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: rgb(255 255 255 / 0.08); }
+.file-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.file-icon.folder { color: #6cb8ff; }
+.file-icon.image { color: #a5e075; }
+.file-icon.video, .file-icon.audio { color: #d68fff; }
+.file-icon.pdf { color: #ff6b78; }
+.file-icon.text { color: #f0d080; }
+.file-name { display: flex; flex-direction: column; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.file-from { overflow: hidden; font-size: 12px; color: rgb(255 255 255 / 0.45); text-overflow: ellipsis; }
+.file-size, .file-date { font-size: 12px; color: rgb(255 255 255 / 0.5); text-align: right; font-variant-numeric: tabular-nums; }
+.trash-actions { display: flex; justify-content: flex-end; padding: 10px 6px 4px; }
+.uploads { display: flex; flex-direction: column; gap: 4px; }
+.uploads:empty { display: none; }
+.upload { display: flex; justify-content: space-between; gap: 12px; padding: 6px 12px; border-radius: 10px; background: rgb(255 255 255 / 0.06); font-size: 12px; }
+.files-sheet.dropping .files-list { box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85) inset; }
+.wide-input { width: 100%; }
+.dialog.preview { width: min(980px, 100%); }
+.preview-media { display: block; max-width: 100%; max-height: 70vh; margin: 0 auto 18px; border-radius: 12px; }
+/* The editor takes the window's place while it's open. */
+.editor { display: none; flex: 1; flex-direction: column; gap: 10px; min-height: 0; }
+.files-sheet.editing .editor { display: flex; }
+.files-sheet.editing .files-bar, .files-sheet.editing .files-list, .files-sheet.editing .uploads { display: none; }
+.editor-bar { display: flex; align-items: center; gap: 10px; padding-right: 48px; }
+.editor-title { display: flex; flex: 1; flex-direction: column; min-width: 0; font-size: 15px; font-weight: 600; }
+.editor-path { overflow: hidden; font-size: 12px; font-weight: 400; color: rgb(255 255 255 / 0.45); white-space: nowrap; text-overflow: ellipsis; }
+.editor-state { font-size: 12px; color: rgb(255 255 255 / 0.5); }
+.editor-state.dirty { color: #fbbf24; }
+.editor-text {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 16px;
+  background: rgb(0 0 0 / 0.45);
+  color: #e8eaed;
+  font: 13px/1.5 ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  tab-size: 4;
+  resize: none;
+  outline: none;
+}
+.editor-text:focus-visible { box-shadow: 0 0 0 2px rgb(255 255 255 / 0.5); }
+@media (min-width: 768px) { .files-body { padding: 40px 40px 34px; } }
+@media (max-width: 640px) {
+  .file-row { grid-template-columns: 28px minmax(0, 1fr) 70px; }
+  .file-date { display: none; }
+  .trash-row { grid-template-columns: 28px minmax(0, 1fr) auto; }
+}
 
 /* ============================================================= terminal */
 

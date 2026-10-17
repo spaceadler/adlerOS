@@ -82,6 +82,7 @@ function openStore() {
   if (isOpen("settings")) closeSettings();
   if (isOpen("usage")) closeUsage();
   hideTerminal();
+  if (filesOpen()) closeFiles();
   const sheet = $("store");
   sheet.classList.remove("closing");
   sheet.hidden = false;

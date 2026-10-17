@@ -46,6 +46,8 @@ services:
       - ./registry:/adleros/registry:ro
       - ./catalog:/adleros/catalog:ro
       - ./agent:/adleros/agent:ro
+      # Your files, read-write, for the Files window (and nothing else of yours).
+      - ${STORAGE_DIR:?run ./install.sh}:/storage
       - /etc/os-release:/host/os-release:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import os, urllib.request as u; u.urlopen('http://127.0.0.1:' + os.environ['OS_PORT'] + '/healthz', timeout=3)"]

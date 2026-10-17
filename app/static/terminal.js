@@ -540,6 +540,7 @@ function measureTerminal() {
 }
 
 function showTerminalWindow() {
+  if (filesOpen()) closeFiles();
   if (isOpen("settings")) closeSettings();
   if (isOpen("store")) closeStore();
   if (isOpen("usage")) closeUsage();

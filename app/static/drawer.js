@@ -40,6 +40,24 @@ function drawerMatches() {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// adlerOS's own apps, first: Files, and the Terminal (admin mode).
+const BUILT_IN = [
+  { id: "files", name: "Files", about: "Your storage folder, and a text editor", open: () => openFiles(), keywords: "files folders storage documents editor" },
+  { id: "terminal", name: "Terminal", about: "A shell on this machine (admin mode)", open: () => openTerminal(), keywords: "terminal shell console ssh" },
+];
+
+function builtInTile(b) {
+  const tile = el("button", { type: "button", class: "app drawer-app built-in", title: b.about, "aria-label": b.name },
+    el("span", { class: "drawer-letter", "aria-hidden": "true" }),
+    el("span", { class: "app-icon builtin-icon" }, el("img", { src: `/static/dock/${b.id}.svg`, alt: "", draggable: "false" })),
+    el("span", { class: "app-label" }, b.name));
+  tile.addEventListener("click", () => {
+    closeDrawer();
+    b.open();
+  });
+  return tile;
+}
+
 function renderDrawer() {
   const apps = drawerMatches();
   let letter = "";
@@ -59,8 +77,10 @@ function renderDrawer() {
     el("span", { class: "app-icon" }, plateFor(app), warning),
     el("span", { class: "app-label" }, app.up ? app.name : `${app.name} · Offline`)));
   }
-  $("drawer-grid").replaceChildren(...items);
-  $("drawer-empty").hidden = apps.length > 0;
+  const q = $("drawer-search").value.trim().toLowerCase();
+  const builtIns = BUILT_IN.filter((b) => !q || `${b.name} ${b.keywords}`.toLowerCase().includes(q)).map(builtInTile);
+  $("drawer-grid").replaceChildren(...builtIns, ...items);
+  $("drawer-empty").hidden = apps.length + builtIns.length > 0;
   $("drawer-count").textContent = `${apps.length} app${apps.length === 1 ? "" : "s"}`;
 }
 
@@ -69,9 +89,14 @@ $("drawer-search").addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
     const first = drawerMatches()[0];
+    const q = $("drawer-search").value.trim().toLowerCase();
+    const builtIn = q && BUILT_IN.find((b) => `${b.name} ${b.keywords}`.toLowerCase().includes(q));
     if (first) {
       openApp(first);
       closeDrawer();
+    } else if (builtIn) {
+      closeDrawer();
+      builtIn.open();
     }
   }
 });

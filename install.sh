@@ -97,11 +97,13 @@ configure() {
     ask OS_NAME "Your first name, for the greeting" ""
     ask ADLEROS_HOST "This machine's address, as your browser reaches it" "$(guess_host)"
     ask COMPOSE_ROOTS "Your compose folders, separated by :" "$(guess_roots)"
+    ask STORAGE_DIR "Your files folder (for Files and store apps)" "$HOME/storage"
     ask TZ "Timezone" "$(guess_tz)"
     ask ADLEROS_TERMINAL "A terminal in adlerOS (admin mode only), on or off" "off"
     env_set PUID "$(id -u)"
     env_set PGID "$(id -g)"
     for d in data registry apps wallpaper icons; do mkdir -p "$ADLEROS_DIR/$d"; done
+    mkdir -p "$(env_get STORAGE_DIR)" || warn "can't create $(env_get STORAGE_DIR); make it, or pick another"
     info "saved to .env (only you can read it)"
 }
 

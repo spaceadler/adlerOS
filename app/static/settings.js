@@ -98,6 +98,7 @@ async function openSettings(rowId) {
   if (isOpen("store")) closeStore();
   if (isOpen("usage")) closeUsage();
   hideTerminal();
+  if (filesOpen()) closeFiles();
   markDockOpen("settings", true);
   if (!(await loadSettings())) return;
   settings.query = "";

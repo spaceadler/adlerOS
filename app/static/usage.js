@@ -38,6 +38,7 @@ function openUsage() {
   if (isOpen("settings")) closeSettings();
   if (isOpen("store")) closeStore();
   hideTerminal();
+  if (filesOpen()) closeFiles();
   const sheet = $("usage");
   sheet.classList.remove("closing");
   sheet.hidden = false;
