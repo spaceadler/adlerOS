@@ -1,15 +1,34 @@
 // The desktop in desktop mode: your Desktop folder (a homelab's mailbox/) as
 // icons, in columns from the top left like any desktop. Double-click (or
-// Enter, or a tap) opens one; right-click (or m) has the rest. Drop files on
-// it to put them there. It looks again every so often, so files that arrive
-// another way (Syncthing) show up.
+// Enter, or a tap) opens one; right-click (or m) has the rest. Drag one to
+// put it somewhere else (each computer remembers where), onto a folder to
+// move it in there, or onto the Files window to move it to the folder that
+// shows. Drop files from your computer on it to put them there. It looks
+// again every so often, so files that arrive another way (Syncthing) show up.
 // Uses $, el, svg, api, toast, desktopMode, openFiles, openEntry, editFile,
 // downloadFile, clip, paste, renamePath, deletePaths, newFolder, newTextFile,
-// uploadFiles, openMenu, menuFor, FILE_ICONS, files.
+// uploadFiles, openMenu, menuFor, FILE_ICONS, files, filesPost, watchTask,
+// refreshFiles.
 "use strict";
 
-const desk = { entries: [], on: false, timer: null, at: 0 };
+const desk = { entries: [], on: false, timer: null, at: 0, drag: null };
 const DESK_REFRESH_MS = 15000;
+const DESK_PLACES_KEY = "adleros.deskPlaces"; // {file name: [column, row]}, this computer's
+const DESK_CELL = { w: 96, h: 108, gapX: 10, gapY: 6 }; // as in app.css
+
+function deskPlaces() {
+  try { return JSON.parse(localStorage.getItem(DESK_PLACES_KEY)) || {}; } catch { return {}; }
+}
+function saveDeskPlaces(places) {
+  try { localStorage.setItem(DESK_PLACES_KEY, JSON.stringify(places)); } catch { /* private window: not kept */ }
+}
+function deskRows() {
+  return Math.max(1, Math.floor(($("desk").clientHeight + DESK_CELL.gapY) / (DESK_CELL.h + DESK_CELL.gapY)));
+}
+function placeIcon(icon, at) {
+  icon.style.gridColumn = at ? String(at[0]) : "";
+  icon.style.gridRow = at ? String(at[1]) : "";
+}
 
 async function refreshDesk() {
   if (!desktopMode()) return;
@@ -34,6 +53,8 @@ function renderDesk() {
     const icon = el("button", { type: "button", class: `desk-icon${entry.outside ? " outside" : ""}`, "data-file": path, title: entry.name },
       el("span", { class: `desk-glyph file-icon ${entry.kind}` }, svg(FILE_ICONS[entry.kind] || FILE_ICONS.file)),
       el("span", { class: "desk-name" }, entry.name));
+    const at = deskPlaces()[entry.name];
+    if (at && at[1] <= deskRows()) placeIcon(icon, at);
     icon.addEventListener("dblclick", () => openEntry(entry, path));
     icon.addEventListener("click", () => { if (matchMedia("(pointer: coarse)").matches) openEntry(entry, path); });
     icon.addEventListener("keydown", (e) => {
@@ -46,6 +67,101 @@ function renderDesk() {
     return icon;
   }));
   if (had) grid.querySelector(`[data-file="${CSS.escape(had)}"]`)?.focus({ preventScroll: true });
+}
+
+// ------------------------------------------------------------ dragging
+
+function deskDown(e) {
+  const icon = e.target.closest(".desk-icon");
+  if (!icon || e.button !== 0 || e.pointerType !== "mouse" || !desktopMode()) return;
+  desk.drag = { icon, pointerId: e.pointerId, x: e.clientX, y: e.clientY, active: false, over: null };
+}
+
+// What's under the pointer: a folder on the desktop, the Files window's
+// folder, or a free place on the desktop.
+function deskTarget(e) {
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const icon = under?.closest(".desk-icon");
+  const entry = icon && desk.entries.find((x) => `/desktop/${x.name}` === icon.dataset.file);
+  if (icon && icon !== desk.drag.icon && entry?.dir) return { folder: icon };
+  if (under?.closest("#files .files-list") && files.view === "folder" && files.writable && files.path !== "/desktop") return { files: true };
+  if (under?.closest("#desk")) return { cell: true };
+  return {};
+}
+
+function deskMove(e) {
+  const d = desk.drag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  if (!d.active) {
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5) return;
+    d.active = true;
+    const r = d.icon.getBoundingClientRect();
+    d.offX = d.x - r.left;
+    d.offY = d.y - r.top;
+    d.ghost = d.icon.cloneNode(true);
+    d.ghost.classList.add("desk-ghost");
+    Object.assign(d.ghost.style, { width: `${r.width}px`, height: `${r.height}px`, gridColumn: "", gridRow: "" });
+    document.body.append(d.ghost);
+    d.icon.classList.add("drag-source");
+    try { d.icon.setPointerCapture(e.pointerId); } catch { /* not supported */ }
+  }
+  d.ghost.style.transform = `translate(${e.clientX - d.offX}px, ${e.clientY - d.offY}px)`;
+  const t = deskTarget(e);
+  d.over?.classList.remove("drop-target");
+  $("files-list").classList.remove("drop-here");
+  d.over = t.folder || null;
+  d.over?.classList.add("drop-target");
+  if (t.files) $("files-list").classList.add("drop-here");
+}
+
+function deskUp(e) {
+  const d = desk.drag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  desk.drag = null;
+  if (!d.active) return;
+  d.ghost.remove();
+  d.icon.classList.remove("drag-source");
+  d.over?.classList.remove("drop-target");
+  $("files-list").classList.remove("drop-here");
+  const name = d.icon.dataset.file.slice("/desktop/".length);
+  const t = deskTarget(e);
+  if (t.folder) return deskMoveTo(name, t.folder.dataset.file);
+  if (t.files) return deskMoveTo(name, files.path);
+  if (t.cell) deskPlace(d.icon, name, e);
+}
+
+// Into a folder: moved there (the desktop and Files look again).
+async function deskMoveTo(name, folder) {
+  const reply = await filesPost("move", { paths: [`/desktop/${name}`], to: folder });
+  if (!reply) return;
+  const places = deskPlaces();
+  delete places[name];
+  saveDeskPlaces(places);
+  if (reply.task) watchTask(reply.task);
+  else toast(`Moved ${name}.`);
+  refreshFiles();
+}
+
+// Somewhere else on the desktop: that cell, and whatever was there takes
+// this one's old place (or flows back in with the rest).
+function deskPlace(icon, name, e) {
+  const r = $("desk").getBoundingClientRect();
+  const col = Math.max(1, Math.floor((e.clientX - r.left) / (DESK_CELL.w + DESK_CELL.gapX)) + 1);
+  const row = Math.min(deskRows(), Math.max(1, Math.floor((e.clientY - r.top) / (DESK_CELL.h + DESK_CELL.gapY)) + 1));
+  const places = deskPlaces();
+  const before = places[name];
+  const there = Object.keys(places).find((n) => n !== name && places[n][0] === col && places[n][1] === row);
+  if (there) {
+    if (before) places[there] = before;
+    else delete places[there];
+    const other = $("desk").querySelector(`[data-file="${CSS.escape(`/desktop/${there}`)}"]`);
+    if (other) placeIcon(other, places[there]);
+  }
+  places[name] = [col, row];
+  // Only what's on the desktop now is remembered.
+  const names = new Set(desk.entries.map((x) => x.name));
+  saveDeskPlaces(Object.fromEntries(Object.entries(places).filter(([n]) => names.has(n))));
+  placeIcon(icon, [col, row]);
 }
 
 // The right-click menu on the desktop, in desktop mode.
@@ -81,6 +197,10 @@ function deskMenu(target) {
 // ---------------------------------------------------------------- wiring
 
 const deskGrid = $("desk");
+deskGrid.addEventListener("pointerdown", deskDown);
+document.addEventListener("pointermove", deskMove);
+document.addEventListener("pointerup", deskUp);
+document.addEventListener("pointercancel", deskUp);
 deskGrid.addEventListener("dragover", (e) => {
   if (!desktopMode() || !desk.on || !e.dataTransfer?.types.includes("Files")) return;
   e.preventDefault();

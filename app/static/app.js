@@ -407,7 +407,7 @@ function fixedDockItem(item) {
 function builtinDockItem(pin) {
   const b = pin.builtin;
   const src = `/static/dock/${b.icon}.svg`;
-  const button = el("button", { class: "dock-item dock-app dock-builtin", type: "button", "aria-label": b.name,
+  const button = el("button", { class: "dock-item dock-builtin", type: "button", "aria-label": b.name,
     "data-app": pin.id, "data-dock": b.dock },
   el("img", { class: "glow", src, alt: "", draggable: "false" }),
   el("img", { src, alt: "", draggable: "false" }),
@@ -439,21 +439,24 @@ function pinnedDockItem(app) {
 let dockKey = null;
 const dockKeyFor = (pinned) => pinned.map((a) => `${a.id}:${a.icon}:${a.up}`).join(",");
 function buildDock() {
-  let pinned = state.dock.map(pinFor).filter(Boolean);
-  let fixed = DOCK_FIXED;
+  // Your apps on the left; after the divider adlerOS's own: the four that
+  // always stay, then Files and the Terminal while they're pinned.
+  const all = state.dock.map(pinFor).filter(Boolean);
+  let pinned = all.filter((p) => !p.builtin);
+  let fixed = [...DOCK_FIXED.map((item) => ({ item })), ...all.filter((p) => p.builtin).map((pin) => ({ pin }))];
   // A phone's dock holds four, like an iPhone's: your pins first, then
   // adlerOS's own (all of them are in the App Library too).
   if (phoneLayout()) {
     pinned = pinned.slice(0, PHONE_DOCK);
-    fixed = DOCK_FIXED.slice(0, PHONE_DOCK - pinned.length);
+    fixed = fixed.slice(0, PHONE_DOCK - pinned.length);
   }
   // Rebuilt only when the pins, their icons or their status change.
-  const key = `${dockKeyFor(pinned)}|${fixed.length}`;
+  const key = `${dockKeyFor(pinned)}|${fixed.map((f) => f.item?.id || f.pin.id).join(",")}`;
   if (key === dockKey) return;
   dockKey = key;
   $("dock").replaceChildren(...pinned.map(pinnedDockItem),
     ...(pinned.length && fixed.length && !phoneLayout() ? [el("span", { class: "dock-divider", "aria-hidden": "true" })] : []),
-    ...fixed.map(fixedDockItem));
+    ...fixed.map((f) => (f.item ? fixedDockItem(f.item) : builtinDockItem(f.pin))));
   markDockOpen("settings", isOpen("settings"));
   markDockOpen("app-store", isOpen("store"));
   markDockOpen("live-usage", isOpen("usage"));
@@ -468,7 +471,11 @@ function isPinned(id) { return state.dock.includes(id); }
 // Pins (or unpins) an app; `at`: where in the dock (dropped there), else the end.
 async function setPinned(id, pinned, at) {
   const rest = state.dock.filter((a) => a !== id);
-  const next = !pinned ? rest : at === undefined ? [...rest, id] : [...rest.slice(0, at), id, ...rest.slice(at)];
+  const apps = rest.filter((p) => !BUILTIN_PINS[p]);
+  const own = rest.filter((p) => BUILTIN_PINS[p]);
+  let next = rest;
+  if (pinned && BUILTIN_PINS[id]) next = [...apps, ...own, id];
+  else if (pinned) next = [...(at === undefined ? [...apps, id] : [...apps.slice(0, at), id, ...apps.slice(at)]), ...own];
   if (next.length > DOCK_MAX_PINS) return toast(`The dock holds up to ${DOCK_MAX_PINS} apps.`);
   let result;
   try {
