@@ -580,8 +580,27 @@ function openApp(app) {
 }
 
 // What a right-click (or a long press) on `target` offers.
+// The window a dock item opens, if it's open: its id, for Close.
+const DOCK_WINDOWS = { "app-store": "store", settings: "settings", "live-usage": "usage", files: "files", terminal: "terminal" };
+function openWindowFor(item) {
+  const id = item?.dataset.window || DOCK_WINDOWS[item?.dataset.dock] || (item?.dataset.app && !BUILTIN_PINS[item.dataset.app] ? `app-${item.dataset.app}` : null);
+  return id && wm.windows.has(id) && isOpen(id) ? id : null;
+}
+const closeItem = (id) => ({ label: "Close", run: () => wm.windows.get(id)?.close() });
+
 function menuFor(target) {
   if (desktopMode() && target.closest("#desktop") && !target.closest("[data-app]")) return deskMenu(target);
+  // An item in the dock whose window is open: Close, at the end of its menu.
+  const docked = target.closest("#dock .dock-item");
+  const open = docked && openWindowFor(docked);
+  if (open && docked.dataset.window) {
+    return [{ label: "Show", run: () => raiseWindow(open, true) }, closeItem(open)]; // open, not in the dock otherwise
+  }
+  const items = menuForItem(target);
+  return open && items ? [...items, closeItem(open)] : items;
+}
+
+function menuForItem(target) {
   const appId = target.closest("[data-app]")?.dataset.app;
   const app = appId && appById(appId);
   const arrange = { label: "Rearrange apps", run: startArranging };

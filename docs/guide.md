@@ -141,7 +141,8 @@ made phone-narrow leaves it until it's wide again.
 - **The dock** shows what's open: a mark under pinned apps and adlerOS's own
   items with a window, and, after a divider at the end, the windows that have
   no place in the dock otherwise (Files, the Terminal, apps you haven't
-  pinned). Click one to bring it forward, again to minimize it.
+  pinned). Click one to bring it forward, again to minimize it; right-click
+  one whose window is open for **Close**.
 - **Keys:** Ctrl+` goes to the next window, then the desktop; Ctrl+Shift+`
   goes back. On a title bar, `m` (or the Menu key) opens its menu: left or
   right half, maximize, minimize, close, or move and resize it with the
