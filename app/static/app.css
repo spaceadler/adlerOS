@@ -499,6 +499,7 @@ button { font: inherit; color: inherit; }
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
+  touch-action: pan-y; /* sideways is adlerOS's (onPagesDown), the same in every browser */
 }
 .pages::-webkit-scrollbar { display: none; }
 /* While swiping, the grid fades out at its edges. */

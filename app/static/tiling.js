@@ -324,8 +324,9 @@ function closeActive() {
 const openOrNew = (open, again, ids) => () => (desktopMode() && [...ids()].some((id) => isOpen(id)) ? again() : open());
 const ALT_KEYS = {
   Space: () => toggleSearch(),
-  Enter: openOrNew(openTerminal, newTerminalWindow, () => terms.keys()),
-  KeyT: openOrNew(openTerminal, newTerminalWindow, () => terms.keys()),
+  // (Each wrapped: terminal.js and files.js load after this one.)
+  Enter: openOrNew(() => openTerminal(), () => newTerminalWindow(), () => terms.keys()),
+  KeyT: openOrNew(() => openTerminal(), () => newTerminalWindow(), () => terms.keys()),
   KeyE: openOrNew(() => openFiles(filesHome()), () => newFilesWindow(), () => fileWins.keys()),
   "Shift+KeyP": () => openSettings("wallpaper"),
   Escape: () => powerMenu(),
