@@ -219,9 +219,10 @@ function layout(force = false) {
   const rowsIn = (h) => Math.floor((h - 8 + g.appYGap) / (g.appH + g.appYGap));
   const stageH = stage.clientHeight - parseFloat(getComputedStyle(stage).paddingTop);
   const widgetsH = g.widgetH + 8 + 20 + 20; // panel, gap, label, margin
-  // The web search bar: a quarter of a widget tall (but tappable on phones).
+  // The web search bar: a quarter of a widget tall (a phone has none on the
+  // page: its search is the pill over the dock).
   const searchH = Math.max(38, Math.round(g.widgetH / 4));
-  const searchBlockH = searchH + 18;
+  const searchBlockH = phoneLayout() ? 0 : searchH + 18;
   const showWidgets = rowsIn(stageH - pillsH - searchBlockH - widgetsH) >= Math.min(2, g.rowsMax);
   const perCol = Math.max(1, Math.min(g.rowsMax, rowsIn(stageH - pillsH - searchBlockH - (showWidgets ? widgetsH : 0))));
   const widgetsFit = Math.max(1, Math.floor((pageW + g.appXGap) / (g.widgetW + g.appXGap)));
@@ -355,10 +356,14 @@ function onPagesScroll() {
   }
 }
 
-// With a mouse or a trackpad the pages turn one at a time: a wheel (up,
-// down or sideways), a sideways swipe (its momentum doesn't turn another),
-// or a drag across them. A touch screen swipes them itself (scroll snap).
-const pageTurn = { acc: 0, last: 0, held: false, drag: null };
+// The pages turn one at a time: a wheel (up, down or sideways), a sideways
+// swipe on a trackpad (its momentum doesn't turn another), or a drag across
+// them: a finger anywhere (apps are picked up with a long press), a mouse
+// anywhere but an app (it drags apps to rearrange them). The drag follows
+// you and settles on the nearer page, or the next one if flicked; adlerOS
+// does it rather than the browser (touch-action: pan-y), so an iPhone and
+// an Android swipe alike.
+const pageTurn = { acc: 0, last: 0, held: false, drag: null, suppress: false };
 function onPagesWheel(e) {
   if (state.pageCount < 2 || e.ctrlKey || arranging()) return;
   e.preventDefault();
@@ -378,33 +383,49 @@ function onPagesWheel(e) {
 }
 
 function onPagesDown(e) {
-  if (e.pointerType !== "mouse" || e.button !== 0 || state.pageCount < 2 || arranging()
-    || e.target.closest(".app, button, a, input, [data-widget], [data-folder]")) return;
-  pageTurn.drag = { x: e.clientX, left: $("pages").scrollLeft, page: state.page, id: e.pointerId, moved: false };
+  if (e.button !== 0 || state.pageCount < 2 || arranging()) return;
+  const mouse = e.pointerType === "mouse";
+  if (e.target.closest(mouse ? ".app, button, a, input, [data-widget], [data-folder]" : "button, input")) return;
+  pageTurn.drag = { x: e.clientX, y: e.clientY, left: $("pages").scrollLeft, page: state.page, id: e.pointerId, moved: false,
+    trail: [[e.clientX, performance.now()]] };
 }
 function onPagesMove(e) {
   const d = pageTurn.drag;
   if (!d || e.pointerId !== d.id) return;
   const dx = e.clientX - d.x;
-  if (!d.moved && Math.abs(dx) < 6) return;
+  const dy = e.clientY - d.y;
   const pages = $("pages");
   if (!d.moved) {
+    if (Math.abs(dx) < 8) {
+      if (Math.abs(dy) > 12) pageTurn.drag = null; // up or down: not a page turn (pulled down: search)
+      return;
+    }
+    if (pressed || drag.item) { pageTurn.drag = null; return; } // held first: an app picked up
     d.moved = true;
-    pages.style.scrollSnapType = "none"; // follows the pointer; snaps when you let go
+    clearTimeout(pressTimer);
+    pages.style.scrollSnapType = "none"; // follows you; snaps when you let go
     pages.setPointerCapture(e.pointerId);
   }
   pages.scrollLeft = d.left - dx;
+  d.trail.push([e.clientX, performance.now()]);
+  if (d.trail.length > 5) d.trail.shift();
 }
 function onPagesUp(e) {
   const d = pageTurn.drag;
   if (!d || e.pointerId !== d.id) return;
   pageTurn.drag = null;
-  if (!d.moved) return;
   const pages = $("pages");
   pages.style.scrollSnapType = "";
+  if (!d.moved) return;
   const dx = e.clientX - d.x;
-  const far = Math.abs(dx) > Math.min(160, pages.clientWidth * 0.15);
-  goToPage(far ? d.page - Math.sign(dx) : d.page);
+  const [x0, t0] = d.trail[0];
+  const speed = (e.clientX - x0) / Math.max(1, performance.now() - t0); // px/ms, lately
+  const flick = Math.abs(speed) > 0.35 && Math.sign(speed) === Math.sign(dx);
+  const far = Math.abs(dx) > pages.clientWidth * 0.3;
+  goToPage(far || flick ? d.page - Math.sign(dx) : d.page);
+  // The click this lifting makes doesn't open the app it ended on.
+  pageTurn.suppress = true;
+  setTimeout(() => { pageTurn.suppress = false; }, 0);
 }
 
 // ------------------------------------------------------------------- dock
@@ -1396,6 +1417,11 @@ $("pages").addEventListener("pointerdown", onPagesDown);
 $("pages").addEventListener("pointermove", onPagesMove);
 $("pages").addEventListener("pointerup", onPagesUp);
 $("pages").addEventListener("pointercancel", onPagesUp);
+$("pages").addEventListener("click", (e) => {
+  if (!pageTurn.suppress) return;
+  e.preventDefault();
+  e.stopPropagation();
+}, true);
 $("prev").addEventListener("click", () => goToPage(state.page - 1));
 $("next").addEventListener("click", () => goToPage(state.page + 1));
 document.addEventListener("pointerdown", onSortDown);
