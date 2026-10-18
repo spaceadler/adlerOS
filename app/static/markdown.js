@@ -153,8 +153,12 @@ function mdRender(text, ctx = {}) {
   const lines = front.body.split(/\r?\n/).map((t, n) => ({ t, n: n + front.lines }));
   const state = { footnotes: new Map(), ctx };
   const frag = document.createDocumentFragment();
-  if (front.data && Object.keys(front.data).length && ctx.properties !== false) frag.append(mdProperties(front.data, ctx));
-  frag.append(...mdBlocks(lines, state));
+  if (front.data && Object.keys(front.data).length && ctx.properties !== false) {
+    frag.append(mdProperties(front.data, ctx));
+    frag.lastChild.dataset.from = 0;
+    frag.lastChild.dataset.to = front.lines;
+  }
+  frag.append(...mdBlocks(lines, state, true));
   if (state.footnotes.size) {
     frag.append(el("section", { class: "md-footnotes" }, el("hr"), el("ol", {}, ...[...state.footnotes].map(([id, body]) =>
       el("li", { id: `fn-${mdSlug(id)}` }, ...mdInline(body, state))))));
@@ -169,12 +173,25 @@ function mdProperties(data, ctx) {
     el("div", { class: "md-prop" }, el("span", { class: "md-prop-key" }, k), el("span", { class: "md-prop-value" }, value(v)))));
 }
 
-function mdBlocks(lines, state) {
+// top: the note's own blocks (not a quote's or a list's), each told the
+// lines it's from (data-from, data-to: Live mode edits them).
+function mdBlocks(lines, state, top = false) {
   const out = [];
   let i = 0;
+  let start = 0;
+  let marked = 0;
+  const mark = () => {
+    for (; top && marked < out.length; marked++) {
+      if (out[marked].nodeType !== Node.ELEMENT_NODE) continue;
+      out[marked].dataset.from = lines[start].n;
+      out[marked].dataset.to = lines[i - 1].n + 1;
+    }
+  };
   const startsBlock = (t) => MD_FENCE.test(t) || /^\s{0,3}#{1,6}(\s|$)/.test(t) || MD_HR.test(t) || /^\s{0,3}>/.test(t)
     || MD_LIST.test(t) || /^\s*\$\$/.test(t) || /^\s*%%/.test(t) || MD_HTML_BLOCK.test(t);
   while (i < lines.length) {
+    mark();
+    start = i;
     const { t, n } = lines[i];
     if (t.trim() === "") { i++; continue; }
     let m;
@@ -272,6 +289,7 @@ function mdBlocks(lines, state) {
     }
     out.push(el("p", { "data-line": String(first) }, ...mdInline(joined, state)));
   }
+  mark();
   return out;
 }
 

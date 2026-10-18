@@ -283,7 +283,7 @@ function mdKeys(e) {
   const k = e.key.toLowerCase();
   if (k === "o") { e.preventDefault(); return mdSwitcher(); }
   if (k === "s") { e.preventDefault(); return mdSave(mdTab()); }
-  if (k === "e") { e.preventDefault(); const t = mdTab(); if (t?.kind === "note") mdSetMode(t, t.mode === "read" ? "edit" : "read"); return; }
+  if (k === "e") { e.preventDefault(); const t = mdTab(); if (t?.kind === "note") mdSetMode(t, t.mode === "read" ? t.editMode || "live" : "read"); return; }
   if (k === "g") { e.preventDefault(); return mdOpenGraph(); }
   if (k === "f" && e.shiftKey) { e.preventDefault(); mdPane("search"); return $("md-search-input")?.focus(); }
 }
@@ -481,7 +481,7 @@ function mdSearchFor(q) {
 
 function mdNewTab(kind, path) {
   return { kind, path, text: null, mtime: null, dirty: false, saving: false, writable: true,
-    mode: kind === "note" ? winLoad(MD_MODE_KEY, "read") : "read", timer: null, scroll: 0 };
+    mode: kind === "note" ? winLoad(MD_MODE_KEY, "live") : "read", timer: null, scroll: 0 };
 }
 
 // A file in a tab: the tab it's in already, else this one (unless its note
@@ -492,7 +492,8 @@ async function mdOpen(path, { newTab = false, line = null, mode = null } = {}) {
   let i = adler.tabs.findIndex((t) => t.path === path && t.kind === kind);
   if (i < 0) {
     const tab = mdNewTab(kind, path);
-    if (mode) tab.mode = mode;
+    // A new note, to write in: Live, unless you edit in Source (or Both).
+    if (mode) tab.mode = mode === "edit" && tab.mode !== "edit" && tab.mode !== "split" ? "live" : mode;
     const here = mdTab();
     if (!newTab && here && !here.dirty && here.kind !== "graph") {
       await mdSave(here);
@@ -557,7 +558,7 @@ async function mdLoadTab(tab) {
     tab.text = "";
     tab.writable = false;
   } else {
-    Object.assign(tab, { text: body.text, mtime: body.mtime, writable: body.writable !== false && adler.index.writable, dirty: false });
+    Object.assign(tab, { text: body.text, mtime: body.mtime, writable: body.writable !== false && adler.index.writable, dirty: false, crlf: undefined });
   }
   if (tab === mdTab()) { mdRenderMain(); mdRenderRight(); mdRenderTabs(); }
 }
@@ -591,7 +592,7 @@ function mdNoteView(tab) {
     const folder = mdFolderOf(tab.path);
     mdRename(tab.path, `${folder ? `${folder}/` : ""}${name}.md`);
   });
-  const modes = el("div", { class: "md-modes", role: "group", "aria-label": "View" }, ...[["edit", "Edit"], ["split", "Both"], ["read", "Read"]].map(([m, label]) => {
+  const modes = el("div", { class: "md-modes", role: "group", "aria-label": "View" }, ...[["live", "Live"], ["edit", "Source"], ["split", "Both"], ["read", "Read"]].map(([m, label]) => {
     const b = el("button", { type: "button", class: `md-mode${tab.mode === m ? " on" : ""}`, "aria-pressed": String(tab.mode === m) }, label);
     b.addEventListener("click", () => mdSetMode(tab, m));
     return b;
@@ -601,28 +602,27 @@ function mdNoteView(tab) {
   const crumbs = el("span", { class: "md-crumbs" }, mdFolderOf(tab.path).replace(/\//g, " › "));
   const head = el("div", { class: "md-note-head" }, crumbs, el("span", { class: "md-note-state" }, !tab.writable ? "Read-only" : tab.saving ? "Saving…" : tab.dirty ? "Not saved yet" : ""), modes, more);
 
+  const read = el("div", { class: "md-read md-view", tabindex: "0" });
+  if (tab.mode === "live") return mdLiveNote(tab, title, head, read);
   const source = el("textarea", { class: "md-source", spellcheck: "true", "aria-label": "The note", ...(tab.writable ? {} : { readonly: "" }) });
   source.value = tab.text;
-  const read = el("div", { class: "md-read md-view", tabindex: "0" });
+  tab.crlf ??= mdLiveCRLF(tab.text.split("\n")); // a text box has only \n: Windows' line ends go back on as it saves
   const body = el("div", { class: `md-note-body mode-${tab.mode}` }, source, read);
   const scroll = el("div", { class: "md-scroll" }, el("div", { class: "md-page" }, title, body));
   const draw = () => { read.replaceChildren(mdRender(source.value, mdCtx(tab))); };
   if (tab.mode !== "edit") draw();
   source.addEventListener("input", () => {
-    tab.text = source.value;
+    tab.text = tab.crlf ? source.value.replace(/\n/g, "\r\n") : source.value;
     mdDirty(tab);
     if (tab.mode !== "edit") { clearTimeout(tab.drawTimer); tab.drawTimer = setTimeout(draw, 150); }
-    mdComplete(source, tab);
   });
-  source.addEventListener("keydown", (e) => mdSourceKeys(e, source, tab));
+  mdWireEditor(source, tab);
   source.addEventListener("blur", () => mdSave(tab));
-  source.addEventListener("paste", (e) => mdPasteFiles(e, e.clipboardData?.files, source, tab));
-  source.addEventListener("drop", (e) => mdPasteFiles(e, e.dataTransfer?.files, source, tab));
   // Reading: a double click edits there.
   read.addEventListener("dblclick", (e) => {
     if (!tab.writable || e.target.closest("a, input, summary")) return;
-    const line = e.target.closest("[data-line]")?.dataset.line;
-    mdSetMode(tab, tab.mode === "read" ? "edit" : tab.mode, line === undefined ? null : Number(line));
+    const line = e.target.closest("[data-from]")?.dataset.from;
+    mdSetMode(tab, tab.mode === "read" ? tab.editMode || "live" : tab.mode, line === undefined ? null : Number(line));
   });
   requestAnimationFrame(() => {
     scroll.scrollTop = tab.scroll || 0;
@@ -630,10 +630,42 @@ function mdNoteView(tab) {
       mdCaretToLine(source, tab.gotoLine);
       tab.gotoLine = null;
     } else if (tab.mode === "edit" && tab.writable) source.focus({ preventScroll: true });
+    else if (document.activeElement === document.body) read.focus({ preventScroll: true }); // so its keys (Ctrl+E) still reach adlerMD
     mdFit(source);
   });
   source.addEventListener("input", () => mdFit(source));
   return el("div", { class: "md-note" }, head, scroll);
+}
+
+// Live: the note as it reads, edited where you click (mdlive.js).
+function mdLiveNote(tab, title, head, read) {
+  const scroll = el("div", { class: "md-scroll" }, el("div", { class: "md-page" }, title, el("div", { class: "md-note-body mode-live" }, read)));
+  const live = mdLive(read, {
+    text: () => tab.text,
+    set: (text) => { tab.text = text; mdDirty(tab); },
+    ctx: () => mdCtx(tab),
+    writable: () => tab.writable,
+    wire: (area) => mdWireEditor(area, tab),
+    left: () => mdSave(tab),
+  });
+  requestAnimationFrame(() => {
+    scroll.scrollTop = tab.scroll || 0;
+    if (tab.gotoLine !== undefined && tab.gotoLine !== null) {
+      mdLiveGoto(live, tab.gotoLine);
+      tab.gotoLine = null;
+    } else if (tab.writable && !mdFrontmatter(tab.text).body.trim()) mdLiveAtEnd(live, null, { focus: false }); // somewhere to start
+    if (document.activeElement === document.body) read.focus({ preventScroll: true }); // so its keys (Ctrl+E) still reach adlerMD
+  });
+  return el("div", { class: "md-note" }, head, scroll);
+}
+
+// What an editor of a note does besides hold its text: [[ to link, list
+// keys, pictures pasted in.
+function mdWireEditor(area, tab) {
+  area.addEventListener("input", () => mdComplete(area, tab));
+  area.addEventListener("keydown", (e) => mdSourceKeys(e, area, tab));
+  area.addEventListener("paste", (e) => mdPasteFiles(e, e.clipboardData?.files, area, tab));
+  area.addEventListener("drop", (e) => mdPasteFiles(e, e.dataTransfer?.files, area, tab));
 }
 
 // The editor grows with its text: the page scrolls, not the box.
@@ -653,6 +685,7 @@ function mdCaretToLine(area, line) {
 
 function mdSetMode(tab, mode, line = null) {
   tab.mode = mode;
+  if (mode !== "read") tab.editMode = mode; // Ctrl+E comes back to it
   if (tab.kind === "note") winSave(MD_MODE_KEY, mode); // the next note opens the way you last chose
   if (line !== null) tab.gotoLine = line;
   mdRenderMain();
@@ -1197,7 +1230,7 @@ async function mdInsertTemplate(tab) {
   const r = $("md-main").getBoundingClientRect();
   openMenu(r.left + 80, r.top + 60, list.map((p) => ({ label: mdNoteName(p), run: async () => {
     const text = mdFill(await mdText(p), mdNoteName(tab.path));
-    const src = $("md-main").querySelector(".md-source");
+    const src = $("md-main").querySelector(".md-live-area, .md-source");
     if (src && tab.mode !== "read") {
       src.focus();
       document.execCommand("insertText", false, text);

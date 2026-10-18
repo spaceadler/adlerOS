@@ -89,13 +89,16 @@ wallpaper is Alt+Shift+P.
 | Key | Does |
 | --- | --- |
 | Ctrl+O | Find a note (or make one) |
-| Ctrl+E | Edit, or read |
+| Ctrl+E | Edit (Live, or how you last edited), or read |
 | Ctrl+S | Save now (it saves as you go anyway) |
 | Ctrl+G | The graph |
 | Ctrl+Shift+F | Search the vault |
 | Ctrl+B, Ctrl+I | Bold, italic |
 | Tab, Shift+Tab | A list item in, or out |
 | Enter | The next list item (in an empty one: out of the list) |
+| ↑, ↓ (Live) | Past a block's first or last line: into the one above or below |
+| Backspace, Delete (Live) | At a block's start or end: join it with the one before or after |
+| Escape (Live) | Done with the block: it reads again |
 
 ## Typing
 
