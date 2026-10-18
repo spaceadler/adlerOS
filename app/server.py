@@ -1578,6 +1578,18 @@ class Handler(BaseHTTPRequestHandler):
     def https(self):
         return self._from_proxy() and self.headers.get("X-Forwarded-Proto") == "https"
 
+    # SameSite cookies don't stop your other apps: every port of this machine,
+    # and every name under your domain, is the same "site" to a browser. So a
+    # change has to come from adlerOS's own page, which the browser vouches for.
+    def cross_site(self):
+        site = self.headers.get("Sec-Fetch-Site")
+        if site is not None:
+            return site not in ("same-origin", "none")
+        origin = self.headers.get("Origin")
+        if not origin:
+            return False  # not a browser (curl, a script), or one too old to say
+        return urllib.parse.urlsplit(origin).netloc != self.headers.get("Host", "")
+
     def session_token(self):
         try:
             cookie = SimpleCookie(self.headers.get("Cookie", ""))
@@ -1672,8 +1684,11 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/static/"):
             return self.serve_static(path[len("/static/"):])
         if path == "/api/wallpaper":
-            # Public: the lock screen shows it too, blurred.
+            # The chosen one is public: the lock screen shows it too, blurred.
+            # Any other is a picture in your storage, so only once you're in.
             wanted = query.get("id", [None])[0]
+            if wanted and wanted != selected_wallpaper_id() and not self.logged_in():
+                return self.send_json(401, {"error": "login required"})
             image = wallpaper_path(wanted or selected_wallpaper_id())
             return self.serve_file(image) if image else self.send(404, b"no such wallpaper")
         if path.startswith("/api/dock-icon/"):
@@ -1772,6 +1787,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
+        if self.cross_site():
+            return self.send_json(403, {"error": "only adlerOS's own page can do that"})
         if path == "/api/login":
             return self.login()
         if path == "/api/logout":
@@ -1783,8 +1800,6 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(404, b"not found")
         if not self.logged_in():
             return self.send_json(401, {"error": "login required"})
-        # JSON only: a plain cross-site form can't send it, so with SameSite
-        # cookies these can't be triggered from another site.
         # Saving a file from the editor is the one big body.
         body = self.read_json(TEXT_LIMIT * 2 + 4096 if path == "/api/files/text"
                               else 256 * 1024 if path.startswith("/api/files/") else 4096)
@@ -2189,6 +2204,8 @@ class Handler(BaseHTTPRequestHandler):
         query = urllib.parse.parse_qs(url.query)
         if url.path != "/api/files/upload":
             return self.send(404, b"not found")
+        if self.cross_site():
+            return self.send_json(403, {"error": "only adlerOS's own page can do that"})
         if not self.logged_in():
             return self.send_json(401, {"error": "login required"})
         if not places_on():
