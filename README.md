@@ -54,12 +54,12 @@ Screen*: it opens like an app.
 - **Desktop mode**, for a computer with a mouse (each device chooses):
   windows side by side that you drag, resize and snap to half the screen,
   your apps in windows of their own, and your Desktop folder on the desktop.
-- **Files**: your Desktop, your storage folder and (read-only) your
+- **My Computer**: your Desktop, your storage folder and (read-only) your
   homelab's own folder, in a window. Upload, download, cut, copy and paste
   between them, rename, delete into a Trash you can restore from, preview
   photos and videos, and edit text files.
 - **Firefox** in the store: a real browser running on the machine, in your
-  browser. With Files and the terminal, an old laptop is enough to work on
+  browser. With My Computer and the terminal, an old laptop is enough to work on
   your homelab.
 - **A terminal**, if you want one: a real shell in a window (colours, `htop`,
   `vim`), off unless you switch it on on the machine, and only there in

@@ -43,19 +43,20 @@ function drawerMatches() {
 }
 
 // adlerOS's own apps, first: Files, and the Terminal (admin mode).
+// adlerOS's own, here like any app: pinned to the dock or put on the desktop
+// from here (their menus), opened from here.
 const BUILT_IN = [
-  { id: "files", name: "Files", about: "Your storage folder, and a text editor", open: () => openFiles(), keywords: "files folders storage documents editor" },
+  { id: "files", name: "My Computer", about: "Your files, and a text editor", open: () => openFiles(), keywords: "files folders storage documents editor computer finder explorer" },
+  { id: "app-store", name: "App Store", about: "Your apps, and more to install", open: () => openStore(), keywords: "store apps install" },
+  { id: "settings", name: "Settings", about: "adlerOS and this machine", open: () => openSettings(), keywords: "settings preferences" },
+  { id: "live-usage", name: "Live Usage", about: "CPU, memory, storage, temperature", open: () => openUsage(), keywords: "usage cpu memory stats" },
   { id: "terminal", name: "Terminal", about: "A shell on this machine (admin mode)", open: () => openTerminal(), keywords: "terminal shell console ssh" },
-  // On a phone the dock holds four, so adlerOS's own are here too.
-  { id: "app-store", name: "App Store", about: "Your apps, and more to install", open: () => openStore(), keywords: "store apps install", phone: true },
-  { id: "settings", name: "Settings", about: "adlerOS and this machine", open: () => openSettings(), keywords: "settings preferences", phone: true },
-  { id: "live-usage", name: "Live Usage", about: "CPU, memory, storage, temperature", open: () => openUsage(), keywords: "usage cpu memory stats", phone: true },
 ];
 // The terminal only in admin mode.
-const builtIns = () => BUILT_IN.filter((b) => (!b.phone || phoneLayout()) && (b.id !== "terminal" || state.admin));
+const builtIns = () => BUILT_IN.filter((b) => b.id !== "terminal" || state.admin);
 
 function builtInTile(b) {
-  // Files and the terminal can be pinned: they carry their pin's id.
+  // Each carries its pin's id, for its menu and for dragging to the dock.
   const pinId = BUILTIN_PINS[`adleros:${b.id}`] ? { "data-app": `adleros:${b.id}` } : {};
   const tile = el("button", { type: "button", class: "app drawer-app built-in", title: b.about, "aria-label": b.name, ...pinId },
     el("span", { class: "drawer-letter", "aria-hidden": "true" }),

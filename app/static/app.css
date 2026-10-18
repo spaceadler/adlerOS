@@ -1499,7 +1499,9 @@ body.sheet-open .desktop { opacity: 0; transition: opacity 0.15s; }
 .switch:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.35); }
 .store-admin-note { margin: 0 4px 14px; font-size: 12px; color: rgb(255 255 255 / 0.5); }
 .row-control { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 1 auto; min-width: 0; }
-.row-value { max-width: 320px; overflow: hidden; font-size: 13px; font-weight: 500; color: rgb(255 255 255 / 0.75); text-align: right; text-overflow: ellipsis; white-space: nowrap; user-select: all; }
+/* One line, or one per part when a value has several (the Device's model,
+   then its OS); each that's too long ends in an ellipsis. */
+.row-value { max-width: 320px; overflow: hidden; font-size: 13px; font-weight: 500; line-height: 1.4; color: rgb(255 255 255 / 0.75); text-align: right; text-overflow: ellipsis; white-space: pre; user-select: all; }
 .no-results { padding: 40px 0; font-size: 14px; color: rgb(255 255 255 / 0.5); text-align: center; }
 
 .field-input {
@@ -2162,11 +2164,22 @@ body.wm .win-bar {
   touch-action: none;
 }
 body.wm .sheet:not(.active) .win-bar { color: rgb(255 255 255 / 0.55); background: rgb(255 255 255 / 0.03); }
-.win-title { flex: 1; overflow: hidden; padding: 3px 6px; border-radius: 6px; font-size: 13px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.win-title { flex: 1; overflow: hidden; padding: 3px 6px; border-radius: 6px; font-size: 13px; font-weight: 600; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
 .win-title:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.9); }
 .win-button { display: grid; place-items: center; width: 30px; height: 28px; padding: 0; border: 0; border-radius: 8px; background: none; color: inherit; cursor: pointer; }
 .win-button:hover { background: rgb(255 255 255 / 0.12); }
 .win-button.close:hover { background: #e5484d; color: #fff; }
+/* Close, minimize, maximize: a Mac's three lights, their marks under the
+   pointer; grey on a window that isn't in front. */
+.win-lights { display: flex; flex-shrink: 0; align-items: center; gap: 8px; min-width: 64px; padding-left: 4px; }
+.win-lights .win-button { width: 13px; height: 13px; border-radius: 50%; color: rgb(0 0 0 / 0.6); box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.2); }
+.win-lights .win-button.close, .win-lights .win-button.close:hover { background: #ff5f57; color: rgb(0 0 0 / 0.6); }
+.win-lights .win-button.min, .win-lights .win-button.min:hover { background: #febc2e; }
+.win-lights .win-button.max, .win-lights .win-button.max:hover { background: #28c840; }
+.win-lights .win-button svg { width: 9px; height: 9px; stroke-width: 2.6; opacity: 0; }
+.win-lights:hover .win-button svg, .win-lights .win-button:focus-visible svg { opacity: 1; }
+body.wm .sheet:not(.active) .win-lights:not(:hover) .win-button { background: rgb(255 255 255 / 0.2); box-shadow: none; }
+.win-extras { display: flex; flex-shrink: 0; justify-content: flex-end; gap: 2px; min-width: 64px; }
 .win-button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.9); }
 .win-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 /* Resize from any edge (inside it: the window clips what's outside). */

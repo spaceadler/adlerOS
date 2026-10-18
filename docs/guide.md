@@ -1,6 +1,6 @@
 # Using adlerOS
 
-A tour of everything on the screen, and the two built-in apps, Files and the
+A tour of everything on the screen, and the two built-in apps, My Computer and the
 Terminal. Every part works with a mouse, a touch
 screen, or a keyboard alone ([docs/keyboard.md](keyboard.md)).
 
@@ -25,7 +25,7 @@ per line (filled in with what `install.sh` was told). **Look for apps** sets
 them and looks there while you watch, then says what it found, collection by
 collection. In a homelab it shows instead **the apps you can add**: the
 catalog's, by collection, each with a button to its App Store card. Then a
-short look around: your apps, the dock, search, the bell, and where Files and
+short look around: your apps, the dock, search, the bell, and where My Computer and
 desktop mode are. **Skip the tour** (or Escape) ends it; it doesn't come back
 by itself, but **Settings → Welcome tour** (or ⌘K "welcome") shows it again.
 
@@ -85,29 +85,33 @@ by itself, but **Settings → Welcome tour** (or ⌘K "welcome") shows it again.
 <!-- screenshot: the right-click menu on an app, with Keep in Dock -->
 ![An app's menu](screenshots/dock-menu.png)
 
-Pin any app: right-click it (long-press on a phone) → **Keep in Dock**, on
-the page or in All apps, or drag it from All apps onto the dock, where you
-drop it. Drag pinned apps to reorder them; right-click → **Remove from Dock**
-to unpin. After a divider come adlerOS's own: four that always stay, then
-**Files** and the **Terminal**, pinned from the start (right-click → Remove
-from Dock to take them out, Keep in Dock in All apps to bring them back):
+Like a Mac's. Pin any app: right-click it (long-press on a phone) → **Keep
+in Dock**, on the page, on the desktop or in All apps, or drag it from All
+apps onto the dock, where you drop it. Drag pinned apps to reorder them;
+right-click → **Remove from Dock** to unpin. adlerOS's own are apps like any
+other, pinned from the start (Remove from Dock takes one out; Keep in Dock
+in All apps, or a drag from there, brings it back), and in All apps:
 
 | | |
 | --- | --- |
-| **All apps** | Every app, A to Z, with a search box. Type to narrow it down; Enter opens the first match. |
 | **App Store** | Your apps and their containers; apps to install. |
 | **Settings** | Your name, password, wallpaper, admin mode, the machine. |
 | **Live Usage** | CPU, memory, storage and temperature, and every app's share. |
+| **My Computer** | Your files ([below](#my-computer)). |
+| **Terminal** | A shell on the machine, in admin mode ([below](#terminal)). |
 
-Click one again to close its window. Put your own icon for any of the four in
-`icons/` ([customizing](customizing.md#dock-icons)).
+After your pins come the windows that are open but not pinned, then a
+divider and **All apps**, which always stays: every app, A to Z, with a
+search box (type to narrow it down; Enter opens the first match). Click a
+pinned one whose window is open to put it away again. Put your own icon for
+any of adlerOS's in `icons/` ([customizing](customizing.md#dock-icons)).
 
 <!-- screenshot: the All apps drawer -->
 ![All apps](screenshots/all-apps.png)
 
 ## Desktop mode
 
-<!-- screenshot: desktop mode, Files and an app side by side, icons on the desktop -->
+<!-- screenshot: desktop mode, My Computer and an app side by side, icons on the desktop -->
 ![Desktop mode](screenshots/desktop-mode.png)
 
 For a computer with a mouse: windows side by side, like any desktop. Switch it
@@ -122,13 +126,16 @@ made phone-narrow leaves it until it's wide again.
   Rename, Delete; right-click the desktop itself for New folder, New text
   file, Paste, Upload. Drag an icon to put it somewhere else on the desktop
   (each computer remembers where; one already there swaps places), onto a
-  folder's icon to move it into that folder, or onto the Files window to move
+  folder's icon to move it into that folder, or onto the My Computer window to move
   it to the folder that shows. Drop files from your computer on it to put
   them there.
-- **Apps on the desktop:** in All apps, right-click an app (or Files, the
-  Terminal) → **Add to desktop**. It's an icon there like the files:
-  double-click to open it, drag it about, right-click → **Remove from
-  desktop**.
+- **Your folder**, named after you (Settings → Name), is always on the
+  desktop: double-click it for User (your storage) in My Computer. It moves
+  about like any icon but doesn't go.
+- **Apps on the desktop:** right-click any app (in All apps, on the page, in
+  the dock; adlerOS's own too) → **Add to desktop**. It's an icon there like
+  the files: double-click to open it, drag it about, right-click →
+  **Remove from desktop**.
 - **Widgets on the desktop:** right-click the desktop → **Add widget…** and
   pick one (the same ones as the home screen's). It's three icons wide and a
   row and a half tall; drag it where you want it (icons make room), right-click it →
@@ -137,14 +144,14 @@ made phone-narrow leaves it until it's wide again.
   it, you type). Each computer
   keeps its own desktop: where things are, which apps and widgets. Files that arrive
   some other way (Syncthing) show up within 15 seconds.
-- **Windows:** Settings, the App Store, Live Usage, Files and the Terminal
+- **Windows:** Settings, the App Store, Live Usage, My Computer and the Terminal
   open as windows you can have side by side. Drag one by its title bar; drag
   any edge to resize it; drag it to the left or right edge of the screen for
   that half, or to the top to fill the screen (or double-click its bar). The
   buttons on its bar minimize it to the dock, maximize it, and close it.
   Windows remember where you put them. They're glass over the desktop: the
   wallpaper behind them shows through, blurred, but never another window, so
-  Files over the Terminal is just Files. How much shows is **Settings →
+  My Computer over the Terminal is just My Computer. How much shows is **Settings →
   Window transparency**, from 0.00 (solid) to 1.00, the same on the home
   screen; an app's own page lets a little through, except maximized. The
   Search pill sits at the top, level with the bell.
@@ -155,7 +162,7 @@ made phone-narrow leaves it until it's wide again.
   does the same as the app's icon.
 - **The dock** shows what's open: a mark under pinned apps and adlerOS's own
   items with a window, and, after your pinned apps (like a Mac's), the windows
-  that have no place in the dock otherwise (apps you haven't pinned, Files or
+  that have no place in the dock otherwise (apps you haven't pinned, My Computer or
   the Terminal when they aren't). Click one to bring it forward, again to minimize it; right-click
   one whose window is open for **Close**.
 - **Keys:** Ctrl+` goes to the next window, then the desktop; Ctrl+Shift+`
@@ -305,12 +312,13 @@ checks it on every request, not just the buttons on the page. It's on for
 every browser until you switch it off, or for 8 hours: then it switches
 itself off, and a terminal you had keeps running for when it's back on.
 
-## Files
+## My Computer
 
-<!-- screenshot: Files, a folder of documents, the places down the side -->
-![Files](screenshots/files.png)
+<!-- screenshot: My Computer, a folder of documents, the places down the side -->
+![My Computer](screenshots/files.png)
 
-Your files, in a window: **All apps → Files**, ⌘K "files", or `f`. Down the
+Your files, in a window: the dock, **All apps → My Computer**, ⌘K "files",
+or `f`. It starts in Root in admin mode, in User otherwise. Down the
 side are three places, and the Trash:
 
 | | | |
@@ -327,21 +335,18 @@ Desktop and User themselves: opening one takes you there.
   tap opens it; Enter too); the path at the top takes you back up. A text
   file opens in the editor; anything else that opens gets a window of its
   own, so the rest of adlerOS stays usable while it's open:
-  - a **picture or video**: the **Viewer** (in desktop mode, drag and resize
-    it like any window; over the home screen it floats over Files);
+  - a **picture, video or PDF**: the **Viewer** (in desktop mode, drag and
+    resize it like any window; over the home screen it floats over My Computer),
+    a PDF in your browser's own PDF viewer;
   - a **song**: **Music**, a small window above the dock that keeps playing
     while you do other things, minimized too; the next song takes its place,
     closing it stops it;
-  - a **PDF**: in **Firefox**, if you have the App Store's (adlerOS hands it
-    the file and shows Firefox's window, starting Firefox again if it had
-    closed); without it, in the Viewer. With *Open apps → In a new tab*,
-    a tab of your browser.
 
   Anything else downloads.
 - **Upload** with the button, or drop files onto the window; big files are
   fine. A file with a name that's taken gets a `(2)`.
 - **New folder**, **New text file**, and per file (right-click, `m`, or its
-  [keys](keyboard.md#in-files)): Edit as text, Download, Copy, Cut, Rename,
+  [keys](keyboard.md#in-my-computer)): Edit as text, Download, Copy, Cut, Rename,
   Delete.
 - **Drag** a file (with a mouse) onto a folder in the list, onto a place down
   the side, or onto the Trash; in desktop mode, onto the desktop or a folder
@@ -430,7 +435,7 @@ Held upright, a phone gets adlerOS laid out like an iPhone's home screen
 - **The App Library:** swipe left past the last page (or All apps). Each
   collection is a folder of four; tap an app to open it, or the corner of
   small ones to see the whole collection. adlerOS's own (App Store,
-  Settings, Live Usage, Files, Terminal) have a folder too. Type to get the
+  Settings, Live Usage, My Computer, Terminal) have a folder too. Type to get the
   A to Z list.
 - **Windows** come up as cards with a grabber at the top: pull it down, or
   pull down a list that's at its top, to close one. Settings is grouped

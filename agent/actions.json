@@ -282,29 +282,6 @@
       }
     ]
   },
-  "firefox-open": {
-    "label": "Opening in Firefox",
-    "description": "Opens a PDF from Files in the Firefox app from the store: a copy goes into its own folder (config/adleros-open next to its compose file, cleared after a day) and Firefox opens it in a new tab, starting again if it had closed.",
-    "quiet": true,
-    "params": {
-      "path": {
-        "pattern": "^/(user|desktop|root)/[^\\u0000-\\u001f]{1,1000}$",
-        "maxLength": 1010
-      }
-    },
-    "steps": [
-      {
-        "run": [
-          "python3",
-          "-I",
-          "{adleros}/agent/apps.py",
-          "firefox-open",
-          "{param:path}"
-        ],
-        "result": true
-      }
-    ]
-  },
   "files-root": {
     "label": "Changing Root",
     "description": "A change in Files' Root, the homelab's own folder (adlerOS sees it read-only). What to change is in data/agent/files/<request>.json; agent/files.py also refuses unless ADLEROS_TERMINAL=on on the machine.",

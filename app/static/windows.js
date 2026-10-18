@@ -104,11 +104,14 @@ function winFrame(id, title, extras) {
     return b;
   };
   const name = el("span", { class: "win-title", tabindex: "0", title: "m: this window's menu" }, title);
-  const bar = el("div", { class: "win-bar" }, name,
-    ...extras.map((x) => button(x.kind, x.label, x.run, x.icon)),
+  // Like a Mac's: close, minimize and maximize on the left; the title in the
+  // middle; the window's own buttons (an app's Reload) on the right.
+  const lights = el("div", { class: "win-lights" },
+    button("close", "Close", () => wm.windows.get(id)?.close(), ["M17 7 7 17", "m7 7 10 10"]),
     button("min", "Minimize", () => minimizeWindow(id), ["M6 12h12"]),
-    button("max", "Maximize", () => toggleMaximize(id), ["M6 6h12v12H6z"]),
-    button("close", "Close", () => wm.windows.get(id)?.close(), ["M18 6 6 18", "m6 6 12 12"]));
+    button("max", "Maximize", () => toggleMaximize(id), ["M12 6v12", "M6 12h12"]));
+  const bar = el("div", { class: "win-bar" }, lights, name,
+    el("div", { class: "win-extras" }, ...extras.map((x) => button(x.kind, x.label, x.run, x.icon))));
   bar.addEventListener("pointerdown", (e) => winPointerDown(e, id, "move"));
   bar.addEventListener("dblclick", (e) => { if (!e.target.closest("button")) toggleMaximize(id); });
   bar.addEventListener("contextmenu", (e) => {
@@ -455,7 +458,7 @@ function winDock() {
   const dock = $("dock");
   if (!dock) return;
   dock.querySelectorAll(".dock-run").forEach((n) => n.remove());
-  dock.querySelectorAll(".dock-app.open").forEach((n) => n.classList.remove("open"));
+  dock.querySelectorAll(".dock-app:not(.dock-builtin).open").forEach((n) => n.classList.remove("open")); // adlerOS's own: markDockOpen
   if (!desktopMode()) return sizeDock();
   const running = [];
   for (const id of wm.order) {
@@ -481,7 +484,7 @@ function winDock() {
 
 function winDockItem(id, w) {
   const icon = w.app ? el("span", { class: "dock-plate" }, plateFor(w.app))
-    : el("img", { src: `/static/dock/${id}.svg`, alt: "", draggable: "false" });
+    : el("img", { src: `/static/dock/${w.dock || id}.svg`, alt: "", draggable: "false" });
   // Not a pin (no dock-app): it can't be dragged in among them.
   const b = el("button", { type: "button", class: `dock-item dock-run open${wm.active === id ? " active" : ""}`,
     "aria-label": w.title, "data-window": id }, icon, el("span", { class: "dock-label material" }, w.title));
