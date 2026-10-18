@@ -188,6 +188,10 @@ function renderPadPreview(pad) {
         if (!r.path || !/\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i.test(r.path)) return null;
         return el("img", { class: "md-embed-image", src: fileUrl(r.path, true), alt: opts.alt || "", ...(opts.width ? { width: opts.width } : {}) });
       },
+      media: (src) => {
+        const r = resolve(src);
+        return r.path ? fileUrl(r.path, true) : null;
+      },
       toggleTask: (line, done) => {
         const lines = pad.area.value.split("\n");
         lines[line] = lines[line].replace(/\[(.)\]/, done ? "[x]" : "[ ]");

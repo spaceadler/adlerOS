@@ -1,10 +1,11 @@
 // Markdown the way Obsidian writes it, made into page elements: headings,
 // emphasis, lists and tasks, quotes and callouts, code, tables, rules,
-// links ([text](path) and [[wikilinks]]), embeds (pictures, other notes),
-// #tags, ==highlights==, footnotes, %%comments%%, $math$ (as written), and
-// the frontmatter's properties. Never the note's own HTML: a <tag> in a
-// note shows as text, so a note can't run anything here. ctx says where a
-// link goes and what an embed shows (adlermd.js).
+// links ([text](path) and [[wikilinks]]), embeds (pictures, other notes,
+// pictures from the internet), #tags, ==highlights==, footnotes,
+// %%comments%%, $math$ (as written), the frontmatter's properties, and
+// HTML: what formats a note (tags, tables, <details>, pictures, videos'
+// iframes), never what could run or reach into adlerOS (mdHtml). ctx says
+// where a link goes and what an embed shows (adlermd.js).
 // Also a small YAML reader, for frontmatter and Bases files.
 // Uses el, svg.
 "use strict";
@@ -172,7 +173,7 @@ function mdBlocks(lines, state) {
   const out = [];
   let i = 0;
   const startsBlock = (t) => MD_FENCE.test(t) || /^\s{0,3}#{1,6}(\s|$)/.test(t) || MD_HR.test(t) || /^\s{0,3}>/.test(t)
-    || MD_LIST.test(t) || /^\s*\$\$/.test(t) || /^\s*%%/.test(t);
+    || MD_LIST.test(t) || /^\s*\$\$/.test(t) || /^\s*%%/.test(t) || MD_HTML_BLOCK.test(t);
   while (i < lines.length) {
     const { t, n } = lines[i];
     if (t.trim() === "") { i++; continue; }
@@ -193,6 +194,20 @@ function mdBlocks(lines, state) {
       i++;
       while (i < lines.length && !/\$\$\s*$/.test(body[body.length - 1])) body.push(lines[i++].t);
       out.push(el("div", { class: "md-math" }, body.join("\n").replace(/\$\$\s*$/, "").trim()));
+      continue;
+    }
+    if (MD_HTML_BLOCK.test(t)) {
+      // HTML, as CommonMark has it: to a blank line (<pre>, <script> and
+      // <style>, and comments: to their end), Markdown inside left alone.
+      const html = [t];
+      const closer = { pre: /<\/pre>/i, script: /<\/script>/i, style: /<\/style>/i, "!--": /-->/ }[t.match(MD_HTML_BLOCK)[1].toLowerCase()];
+      i++;
+      if (closer) {
+        while (!closer.test(html[html.length - 1]) && i < lines.length) html.push(lines[i++].t);
+      } else {
+        while (i < lines.length && lines[i].t.trim() !== "") html.push(lines[i++].t);
+      }
+      out.push(...mdHtml(html.join("\n"), state));
       continue;
     }
     if (/^\s*%%/.test(t)) {
@@ -368,6 +383,9 @@ const MD_INLINE = [
     return [tag];
   }],
   ["break", /^( {2,}|\\)\n/, () => [el("br")]],
+  ["htmlcomment", /^<!--[\s\S]*?-->/, () => []],
+  ["htmlclose", /^<\/([a-zA-Z][\w-]*)\s*>/, (m) => (MD_HTML_TAGS.has(m[1].toLowerCase()) || MD_HTML_GONE.has(m[1].toLowerCase()) ? [] : null)],
+  ["html", /^<([a-zA-Z][\w-]*)((?:\s+[\w:-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?)*)\s*(\/?)>/, (m, s, rest) => mdInlineHtml(m, s, rest)],
 ];
 
 function mdInline(text, state) {
@@ -382,14 +400,17 @@ function mdInline(text, state) {
     const prev = k ? s[k - 1] : " ";
     let done = false;
     for (const [name, re, make] of MD_INLINE) {
+      if (name.startsWith("html") && rest[0] !== "<") continue;
       if (name === "tag" && !/[\s([{,]/.test(prev)) continue;
       if ((name === "italic" || name === "bold" || name === "bolditalic") && rest[0] === "_" && /[\p{L}\p{N}]/u.test(prev)) continue;
       if (name === "url" && /[\w/]/.test(prev)) continue;
       const m = rest.match(re);
       if (!m) continue;
       flush();
-      out.push(...make(m, state));
-      k += m[0].length;
+      const made = make(m, state, rest);
+      if (made === null) { buf += s[k++]; done = true; break; } // not HTML after all: a "<"
+      out.push(...(Array.isArray(made) ? made : made.nodes));
+      k += Array.isArray(made) ? m[0].length : made.length;
       done = true;
       break;
     }
@@ -429,9 +450,162 @@ function mdEmbed(target, opts, state) {
   const [name, size] = (opts.wiki ? target : target).split("|");
   const width = /^\d+(x\d+)?$/.test(size || "") ? size.split("x")[0] : /\|(\d+)$/.exec(opts.alt || "")?.[1];
   if (external) {
-    // Pictures from elsewhere aren't loaded here (adlerOS shows only its own): a link instead.
-    return [mdLink(target, opts.alt || target, { wiki: false }, state)];
+    // From the internet: a picture, over https (anything else, a link).
+    if (!/^https:\/\//i.test(name)) return [mdLink(target, opts.alt || target, { wiki: false }, state)];
+    return [el("img", { class: "md-embed-image", src: name, alt: (opts.alt || "").replace(/\|\d+$/, ""), loading: "lazy", referrerpolicy: "no-referrer",
+      ...(width ? { width } : {}) })];
   }
   const node = state.ctx.embed?.(name, { ...opts, width, depth: (state.depth || 0) + 1 });
   return [node || mdLink(name, opts.alt || name, opts, state)];
+}
+
+// --------------------------------------------------------------- HTML
+
+const MD_HTML_BLOCK = /^\s{0,3}<\/?(address|article|aside|blockquote|center|details|div|dl|figure|figcaption|footer|h[1-6]|header|hr|iframe|main|nav|ol|p|pre|script|section|style|summary|table|ul|video|audio|!--)(?=[\s/>]|$)/i;
+// What a note's HTML keeps: tags that format, and these attributes. The
+// rest goes (scripts, styles, forms, embeds of other kinds, ids and classes
+// that could look like adlerOS's own), its words kept unless it's a script
+// or a style.
+const MD_HTML_TAGS = new Set(["a", "abbr", "address", "article", "aside", "audio", "b", "bdi", "bdo", "blockquote", "br", "caption", "center",
+  "cite", "code", "col", "colgroup", "dd", "del", "details", "dfn", "div", "dl", "dt", "em", "figcaption", "figure", "font", "footer", "h1",
+  "h2", "h3", "h4", "h5", "h6", "header", "hr", "i", "iframe", "img", "ins", "kbd", "li", "main", "mark", "nav", "ol", "p", "pre", "q", "rp",
+  "rt", "ruby", "s", "samp", "section", "small", "source", "span", "strike", "strong", "sub", "summary", "sup", "table", "tbody", "td",
+  "tfoot", "th", "thead", "time", "tr", "u", "ul", "var", "video", "wbr"]);
+const MD_HTML_GONE = new Set(["script", "style", "noscript", "template", "object", "embed", "form", "input", "button", "select", "option",
+  "textarea", "link", "meta", "base", "svg", "math", "frame", "frameset", "applet", "head", "title"]);
+const MD_HTML_VOID = new Set(["br", "hr", "img", "wbr", "col", "source"]);
+const MD_HTML_ATTRS = {
+  "*": ["title", "align", "dir", "lang", "style"], a: ["href"], img: ["src", "alt", "width", "height"],
+  iframe: ["src", "width", "height", "title", "allowfullscreen"], video: ["src", "controls", "width", "height", "loop", "muted"],
+  audio: ["src", "controls", "loop"], source: ["src", "type"], td: ["colspan", "rowspan"], th: ["colspan", "rowspan", "scope"],
+  ol: ["start", "type"], details: ["open"], font: ["color", "size", "face"], time: ["datetime"], col: ["span"], colgroup: ["span"],
+};
+// Style that formats and doesn't move anything over the page (no position,
+// z-index or transform) nor loads anything (no url()).
+const MD_CSS = /^(color|background(-color)?|font(-weight|-style|-size|-family|-variant)?|text-(decoration|align|transform|indent)|letter-spacing|word-spacing|line-height|white-space|vertical-align|opacity|border(-(top|right|bottom|left|radius|color|width|style|collapse|spacing))?|(padding|margin)(-(top|right|bottom|left))?|(max-|min-)?(width|height)|display|float|clear|list-style(-type)?|columns|column-gap|gap|flex(-direction|-wrap|-grow|-shrink|-basis)?|justify-content|align-items|align-self|grid-template-columns|object-fit|overflow-wrap|word-break|caption-side|table-layout|aspect-ratio|outline)$/;
+
+function mdHtml(html, state) {
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
+  return mdHtmlNodes(doc.body.childNodes, state);
+}
+
+function mdHtmlNodes(list, state) {
+  const out = [];
+  for (const node of list) {
+    if (node.nodeType === Node.TEXT_NODE) { out.push(document.createTextNode(node.data)); continue; }
+    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+    const tag = node.localName;
+    if (MD_HTML_GONE.has(tag)) {
+      if (tag !== "script" && tag !== "style" && tag !== "noscript" && tag !== "template") out.push(...mdHtmlNodes(node.childNodes, state));
+      continue;
+    }
+    if (!MD_HTML_TAGS.has(tag)) { out.push(...mdHtmlNodes(node.childNodes, state)); continue; } // its words, not it
+    const made = mdHtmlElement(tag, (name) => node.getAttribute(name), state);
+    if (!made) continue;
+    if (!MD_HTML_VOID.has(tag)) made.append(...mdHtmlNodes(node.childNodes, state));
+    out.push(made);
+  }
+  return out;
+}
+
+// One element of a note's HTML, rebuilt with only what it may keep.
+function mdHtmlElement(tag, attr, state) {
+  const keep = [...MD_HTML_ATTRS["*"], ...(MD_HTML_ATTRS[tag] || [])];
+  const node = document.createElement(tag);
+  for (const name of keep) {
+    const value = attr(name);
+    if (value === null || value === undefined) continue;
+    if (name === "style") mdHtmlStyle(node, value);
+    else if (name === "href") {
+      // As a Markdown link: elsewhere in a new tab, a note through ctx.
+      const href = value.trim();
+      if (!href || /^(javascript|data|vbscript|file):/i.test(href)) continue;
+      const external = /^[a-z][a-z0-9+.-]*:/i.test(href);
+      const target = external ? null : state.ctx.resolve?.(href, false);
+      node.setAttribute("href", external ? href : "#");
+      if (external) { node.target = "_blank"; node.rel = "noopener noreferrer"; }
+      node.className = `md-link${external ? " external" : ""}${!external && target && !target.exists ? " unresolved" : ""}`;
+      node.addEventListener("click", (e) => {
+        if (!state.ctx.open) return;
+        e.preventDefault();
+        state.ctx.open({ href, external, target, wiki: false }, e);
+      });
+    } else if (name === "src") {
+      const src = mdHtmlSrc(tag, value.trim(), state);
+      if (!src) return tag === "iframe" || tag === "img" ? null : node;
+      node.setAttribute("src", src);
+    } else node.setAttribute(name, value);
+  }
+  if (tag === "iframe") {
+    // Someone else's page (a video's), walled off from this one.
+    node.setAttribute("sandbox", "allow-scripts allow-same-origin allow-popups allow-presentation");
+    node.setAttribute("referrerpolicy", "no-referrer");
+    node.setAttribute("loading", "lazy");
+    node.classList.add("md-embed-frame");
+  }
+  if (tag === "img") {
+    node.setAttribute("loading", "lazy");
+    node.setAttribute("referrerpolicy", "no-referrer");
+  }
+  return node;
+}
+
+// A picture's (or video's, or iframe's) address: the vault's own files by
+// their link (ctx.media); from the internet, over https, a picture or
+// another site's page (an iframe).
+function mdHtmlSrc(tag, src, state) {
+  if (/^data:image\//i.test(src)) return tag === "img" ? src : null;
+  if (/^https:\/\//i.test(src)) {
+    if (tag !== "img" && tag !== "iframe") return null;
+    try { return new URL(src).origin === location.origin ? null : src; } catch { return null; }
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(src) || tag === "iframe") return null;
+  return state.ctx.media?.(src) || null;
+}
+
+function mdHtmlStyle(node, text) {
+  for (const decl of String(text).split(";")) {
+    const at = decl.indexOf(":");
+    if (at < 0) continue;
+    const prop = decl.slice(0, at).trim().toLowerCase();
+    const value = decl.slice(at + 1).trim();
+    if (!MD_CSS.test(prop) || /url\s*\(|expression\s*\(|javascript:|!important|fixed|sticky/i.test(value)) continue;
+    node.style.setProperty(prop, value);
+  }
+}
+
+// HTML in a line: <u>…</u>, <span style="…">…</span>, <br>, <img …>. Its
+// words still Markdown. null: no closing tag, so it was just a "<".
+function mdInlineHtml(m, state, rest) {
+  const tag = m[1].toLowerCase();
+  const attrs = {};
+  for (const a of m[2].matchAll(/([\w:-]+)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+))?/g)) attrs[a[1].toLowerCase()] = (a[2] ?? "").replace(/^["']|["']$/g, "");
+  const get = (name) => (name in attrs ? attrs[name] : null);
+  if (MD_HTML_GONE.has(tag)) {
+    const close = rest.slice(m[0].length).search(new RegExp(`</${tag}\\s*>`, "i"));
+    return { nodes: [], length: close < 0 ? m[0].length : m[0].length + close + rest.slice(m[0].length + close).indexOf(">") + 1 };
+  }
+  if (!MD_HTML_TAGS.has(tag)) return null; // <like this>: words, as written
+  if (MD_HTML_VOID.has(tag) || m[3]) {
+    const node = mdHtmlElement(tag, get, state);
+    return { nodes: node ? [node] : [], length: m[0].length };
+  }
+  // Its closing tag, past any of the same nested inside.
+  const open = new RegExp(`<${tag}(?=[\\s/>])`, "gi");
+  const shut = new RegExp(`</${tag}\\s*>`, "gi");
+  let depth = 1;
+  let at = m[0].length;
+  let end = -1;
+  while (depth > 0) {
+    open.lastIndex = shut.lastIndex = at;
+    const o = open.exec(rest);
+    const c = shut.exec(rest);
+    if (!c) break;
+    if (o && o.index < c.index) { depth++; at = o.index + 1; } else { depth--; at = c.index + c[0].length; if (!depth) end = c.index; }
+  }
+  if (end < 0) return null;
+  const node = mdHtmlElement(tag, get, state);
+  const inner = rest.slice(m[0].length, end);
+  if (node) node.append(...mdInline(inner, state));
+  return { nodes: node ? [node] : mdInline(inner, state), length: at };
 }

@@ -464,8 +464,12 @@ vault**.
   `+`/`-`), code, tables, footnotes, `%%comments%%`, properties (the
   frontmatter), `#tags`, links both ways (`[text](path.md)` and
   `[[name]]`), and embeds: pictures, other notes (or a section), PDFs,
-  video, songs and Bases. A note's own HTML shows as text, and pictures from
-  the internet as links (adlerOS only loads its own).
+  video, songs and Bases. Pictures from the internet show (over https). A
+  note's own HTML formats it too: `<u>`, `<span style="color: …">`, `<br>`,
+  `<details>`, tables, `<div align="center">`, pictures and videos (the
+  vault's, or a picture from the internet) and a video site's `<iframe>`.
+  What could run or reach into adlerOS (scripts, forms, event handlers,
+  styles that move things over the page) is left out.
 - **Writing links**: `[[` offers the notes whose names match, and writes the
   link the way the vault says (`useMarkdownLinks`, `newLinkFormat`). A link
   to a note that isn't there yet makes it when you click it. A picture

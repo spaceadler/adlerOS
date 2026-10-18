@@ -140,8 +140,9 @@ STATIC_TYPES = {
 IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".avif")
 # frame-src: your apps' own pages, in desktop mode's windows. Any web page,
 # since an app may redirect elsewhere (its login, https); whether it may be
-# framed is the app's call, and adlerOS asks it first (/api/frame).
-PAGE_CSP = ("default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
+# framed is the app's call, and adlerOS asks it first (/api/frame). img-src
+# https: pictures from the internet, in a note (adlerMD, Notepad).
+PAGE_CSP = ("default-src 'self'; img-src 'self' data: https:; style-src 'self'; script-src 'self'; "
             "connect-src 'self'; frame-src http: https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 # Icons come from a third party: even opened directly, an SVG can't run code.
 ICON_CSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox"

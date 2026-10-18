@@ -126,6 +126,15 @@ a tab instead. adlerOS's own page may frame any web page (`frame-src http:
 https:`), since an app's page can redirect to its login or to HTTPS; it still
 runs only its own scripts.
 
+**Notes** (adlerMD, Notepad) are yours, but may come from anywhere (a vault
+someone shared). Their HTML is rebuilt from an allowlist, never inserted as
+is: formatting tags and their plain attributes, with no scripts, forms,
+event handlers, ids or classes, and style only for how text looks (no
+`position`, `url()` or `!important`). Links go where Markdown links go. A
+picture may come from the internet (`img-src https:`), which tells that
+site you opened the note (no referrer is sent). An `<iframe>` must be
+another site over HTTPS, and is sandboxed.
+
 **Firefox** from the store is a whole browser on the machine: whoever reaches
 its port can browse as the machine, and its web interface can give a root
 shell inside its own container. It has no login unless you add one
