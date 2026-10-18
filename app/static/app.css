@@ -2597,7 +2597,26 @@ body:not(.wm) .md-tabs { padding-right: 56px; }
 .md-main { position: relative; flex: 1; min-height: 0; }
 .md-note { display: flex; flex-direction: column; height: 100%; }
 .md-note-head { display: flex; flex-shrink: 0; align-items: center; gap: 8px; padding: 6px 12px; }
-.md-crumbs { flex: 1; overflow: hidden; font-size: 12px; color: rgb(255 255 255 / 0.45); white-space: nowrap; text-overflow: ellipsis; }
+/* The path over a note: the vault and each folder, to click (adlermd.js's mdCrumbs). */
+.md-crumbs { display: flex; flex: 1; align-items: center; gap: 1px; min-width: 0; overflow: hidden; font-size: 12px; color: rgb(255 255 255 / 0.45); white-space: nowrap; }
+.md-crumb { flex: 0 1 auto; min-width: 0; overflow: hidden; padding: 3px 6px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+button.md-crumb:hover, button.md-crumb:focus-visible { background: rgb(255 255 255 / 0.08); color: #fff; outline: none; }
+.md-crumb.current { color: rgb(255 255 255 / 0.8); cursor: default; }
+.md-crumb-sep { flex-shrink: 0; opacity: 0.6; }
+.md-icon-button.md-up { flex-shrink: 0; width: 28px; height: 28px; }
+.md-icon-button.md-up svg { width: 16px; height: 16px; }
+.md-icon-button.md-up:hover:not(:disabled) { background: rgb(255 255 255 / 0.08); color: #fff; }
+.md-icon-button.md-up:disabled { opacity: 0.3; cursor: default; }
+/* A folder in a tab: what's in it. */
+.md-folder-title { margin: 6px 0 14px; font-size: 2em; font-weight: 700; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.md-folder-list { display: flex; flex-direction: column; gap: 1px; min-height: 40vh; }
+.md-folder-row { display: flex; align-items: center; gap: 12px; padding: 6px 10px; border-radius: 9px; cursor: pointer; user-select: none; }
+.md-folder-row:hover, .md-folder-row:focus-visible { background: rgb(255 255 255 / 0.07); outline: none; }
+.md-folder-row.drop-target { background: color-mix(in srgb, var(--md-accent) 30%, transparent); }
+.md-folder-row .file-icon { flex-shrink: 0; }
+.md-folder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.md-folder-detail { flex-shrink: 0; font-size: 12px; color: rgb(255 255 255 / 0.45); font-variant-numeric: tabular-nums; }
+.md-folder:focus { outline: none; }
 .md-note-state { font-size: 12px; color: rgb(255 255 255 / 0.45); }
 .md-modes { display: flex; padding: 2px; border-radius: 8px; background: rgb(255 255 255 / 0.06); }
 .md-mode { padding: 3px 10px; border: 0; border-radius: 6px; background: none; color: rgb(255 255 255 / 0.65); font: inherit; font-size: 12px; cursor: pointer; }

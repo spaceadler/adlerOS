@@ -456,7 +456,10 @@ vault**.
   delete to the Trash; drag one onto a folder to move it), **search**
   (words, or `tag:#name`, `path:folder`) and **tags**.
 - **Notes in tabs**: a click opens one in the tab you're on, Ctrl+click (or
-  the middle button) in a new one. It saves as you go. If Obsidian (or
+  the middle button) in a new one. Over a note is the path to it, the vault
+  first: click a folder in it to see what's in that folder (its folders,
+  notes and files, to open, drag or right-click), and **↑** (or Backspace)
+  goes up a folder. It saves as you go. If Obsidian (or
   anything) changed the note meanwhile, you choose: keep yours, theirs, or
   both.
 - **Live** (Obsidian's Live Preview): the note as it reads, and you edit it

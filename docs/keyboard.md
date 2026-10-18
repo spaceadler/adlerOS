@@ -99,6 +99,7 @@ wallpaper is Alt+Shift+P.
 | ↑, ↓ (Live) | Past a block's first or last line: into the one above or below |
 | Backspace, Delete (Live) | At a block's start or end: join it with the one before or after |
 | Escape (Live) | Done with the block: it reads again |
+| Backspace (a folder) | Up a folder |
 
 ## Typing
 

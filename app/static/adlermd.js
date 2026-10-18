@@ -113,7 +113,9 @@ async function mdLoadVault(vault) {
     adler.expanded = new Set(winLoad(`adleros.mdFolders:${vault}`, []) || []);
     api("/api/notes/vaults", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ use: vault }) }).catch(() => {});
     const saved = winLoad(`adleros.mdTabs:${vault}`, null);
-    for (const t of saved?.tabs || []) if (t.kind === "graph" || adler.names.has(t.path)) adler.tabs.push(mdNewTab(t.kind, t.path));
+    for (const t of saved?.tabs || []) {
+      if (t.kind === "graph" || adler.names.has(t.path) || (t.kind === "folder" && mdFolderThere(t.path))) adler.tabs.push(mdNewTab(t.kind, t.path));
+    }
     adler.active = Math.min(saved?.active ?? 0, adler.tabs.length - 1);
   }
   mdApplyLook();
@@ -139,6 +141,8 @@ async function mdRefreshIndex() {
   // Not while you're typing a search: it'd start over under you.
   if (document.activeElement?.id !== "md-search-input") mdRenderSide();
   mdRenderRight();
+  const tab = mdTab();
+  if (tab?.kind === "folder" && tab.sig !== mdFolderSig(tab.path)) mdRenderMain();
 }
 
 // What the index says, ready to use: names, each note's properties, tags
@@ -345,12 +349,13 @@ function mdTree() {
   for (const folder of adler.index.folders) at(folder);
   for (const f of adler.index.files) at(mdFolderOf(f.path)).files.push(f.path);
   const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
-  const current = mdTab()?.path;
+  const current = mdTab()?.kind === "folder" ? null : mdTab()?.path;
+  const currentFolder = mdTab()?.kind === "folder" ? mdTab().path : null;
   const draw = (node, prefix, depth) => [
     ...[...node.folders.keys()].sort(byName).map((name) => {
       const path = prefix ? `${prefix}/${name}` : name;
       const open = adler.expanded.has(path);
-      const row = el("div", { class: `md-tree-row md-tree-folder${open ? " open" : ""}`, style: `--depth:${depth}`, draggable: "true", "data-path": path, tabindex: "0" },
+      const row = el("div", { class: `md-tree-row md-tree-folder${open ? " open" : ""}${path === currentFolder ? " current" : ""}`, style: `--depth:${depth}`, draggable: "true", "data-path": path, tabindex: "0" },
         el("span", { class: "md-tree-caret", "aria-hidden": "true" }, "›"), el("span", { class: "md-tree-name" }, name));
       row.addEventListener("click", () => {
         if (open) adler.expanded.delete(path); else adler.expanded.add(path);
@@ -412,6 +417,7 @@ function mdFileMenu(path) {
 
 function mdFolderMenu(path) {
   return [
+    { label: "Open", run: () => mdOpenFolder(path) }, { label: "Open in a new tab", run: () => mdOpenFolder(path, { newTab: true }) },
     ...(adler.index.writable ? [{ label: "New note here", run: () => mdNewNote(path) }, { label: "New folder here", run: () => mdNewFolder(path) },
       { label: "Rename…", run: () => mdRenameDialog(path) }, { label: "Delete", run: () => mdDelete(path), destructive: true }] : []),
     { label: "Show in My Computer", run: () => openFiles(mdFull(path)) },
@@ -480,7 +486,7 @@ function mdSearchFor(q) {
 // ---------------------------------------------------------------- tabs
 
 function mdNewTab(kind, path) {
-  return { kind, path, text: null, mtime: null, dirty: false, saving: false, writable: true,
+  return { kind, path, text: kind === "folder" ? "" : null, mtime: null, dirty: false, saving: false, writable: true,
     mode: kind === "note" ? winLoad(MD_MODE_KEY, "live") : "read", timer: null, scroll: 0 };
 }
 
@@ -538,16 +544,23 @@ async function mdCloseTab(i) {
 
 function mdRenderTabs() {
   $("md-tabs").replaceChildren(...adler.tabs.map((t, i) => {
-    const name = t.kind === "graph" ? "Graph" : t.kind === "note" ? mdNoteName(t.path) : t.path.split("/").pop();
+    const name = mdTabName(t);
     const close = el("button", { type: "button", class: "md-tab-close", "aria-label": `Close ${name}` }, "×");
     close.addEventListener("click", (e) => { e.stopPropagation(); mdCloseTab(i); });
-    const tab = el("div", { class: `md-tab${i === adler.active ? " active" : ""}`, role: "tab", "aria-selected": String(i === adler.active), title: t.path || "Graph" },
+    const tab = el("div", { class: `md-tab${i === adler.active ? " active" : ""}`, role: "tab", "aria-selected": String(i === adler.active), title: t.kind === "graph" ? "Graph" : t.path || adler.index.name },
       el("span", { class: "md-tab-name" }, `${t.dirty ? "● " : ""}${name}`), close);
     tab.addEventListener("click", () => mdActivate(i));
     tab.addEventListener("auxclick", (e) => { if (e.button === 1) mdCloseTab(i); });
     return tab;
   }));
-  titleWindow("adlermd", mdTab()?.path ? `${mdTab().kind === "note" ? mdNoteName(mdTab().path) : mdTab().path.split("/").pop()} — adlerMD` : "adlerMD");
+  const now = mdTab();
+  titleWindow("adlermd", now && now.kind !== "graph" ? `${mdTabName(now)} — adlerMD` : "adlerMD");
+}
+
+function mdTabName(t) {
+  if (t.kind === "graph") return "Graph";
+  if (t.kind === "folder") return t.path ? t.path.split("/").pop() : adler.index.name;
+  return t.kind === "note" ? mdNoteName(t.path) : t.path.split("/").pop();
 }
 
 async function mdLoadTab(tab) {
@@ -577,6 +590,7 @@ function mdRenderMain() {
     return main.replaceChildren(el("div", { class: "md-empty" }, el("p", {}, `${adler.notes.size} notes in ${adler.index.name}.`), el("div", { class: "md-welcome-actions" }, make, find)));
   }
   if (tab.kind === "graph") return main.replaceChildren(mdGraphView(tab));
+  if (tab.kind === "folder") return main.replaceChildren(mdFolderView(tab));
   if (tab.kind === "file") return main.replaceChildren(mdFileView(tab));
   if (tab.text === null) return main.replaceChildren(el("p", { class: "md-loading" }, "Opening…"));
   if (tab.kind === "base") return main.replaceChildren(mdBaseView(tab));
@@ -599,8 +613,7 @@ function mdNoteView(tab) {
   }));
   const more = el("button", { type: "button", class: "md-icon-button", title: "More", "aria-label": "More" }, svg(["M12 12h.01", "M19 12h.01", "M5 12h.01"]));
   more.addEventListener("click", () => { const r = more.getBoundingClientRect(); openMenu(r.left, r.bottom + 4, mdNoteMenu(tab)); });
-  const crumbs = el("span", { class: "md-crumbs" }, mdFolderOf(tab.path).replace(/\//g, " › "));
-  const head = el("div", { class: "md-note-head" }, crumbs, el("span", { class: "md-note-state" }, !tab.writable ? "Read-only" : tab.saving ? "Saving…" : tab.dirty ? "Not saved yet" : ""), modes, more);
+  const head = el("div", { class: "md-note-head" }, ...mdCrumbs(tab), el("span", { class: "md-note-state" }, !tab.writable ? "Read-only" : tab.saving ? "Saving…" : tab.dirty ? "Not saved yet" : ""), modes, more);
 
   const read = el("div", { class: "md-read md-view", tabindex: "0" });
   if (tab.mode === "live") return mdLiveNote(tab, title, head, read);
@@ -807,6 +820,135 @@ async function mdText(rel) {
   const text = status === 200 ? body.text : "";
   adler.texts.set(key, text);
   return text;
+}
+
+// ------------------------------------------------------------- folders
+
+const mdFolderThere = (path) => path === "" || adler.index.folders.includes(path);
+
+// The path over a note (a folder, a Base): the vault, then each folder it's
+// in, a click away (Ctrl: a new tab); ↑, the folder one up (from a note,
+// its own).
+function mdCrumbs(tab) {
+  const folder = tab.kind === "folder" ? tab.path : mdFolderOf(tab.path);
+  const parts = folder ? folder.split("/") : [];
+  const above = tab.kind !== "folder" ? folder : folder ? mdFolderOf(folder) : null;
+  const up = el("button", { type: "button", class: "md-icon-button md-up", title: "Up one folder", "aria-label": "Up one folder" }, svg(["M12 19V5", "m5 12 7-7 7 7"]));
+  if (above === null) up.disabled = true;
+  else up.addEventListener("click", (e) => mdOpenFolder(above, { newTab: e.ctrlKey || e.metaKey }));
+  const crumb = (label, path, here) => {
+    if (here) return el("span", { class: "md-crumb current", "aria-current": "page" }, label);
+    const b = el("button", { type: "button", class: "md-crumb", title: path || adler.index.name }, label);
+    b.addEventListener("click", (e) => mdOpenFolder(path, { newTab: e.ctrlKey || e.metaKey }));
+    b.addEventListener("auxclick", (e) => { if (e.button === 1) mdOpenFolder(path, { newTab: true }); });
+    return b;
+  };
+  const sep = () => el("span", { class: "md-crumb-sep", "aria-hidden": "true" }, "›");
+  const items = [crumb(adler.index.name, "", tab.kind === "folder" && !folder)];
+  parts.forEach((name, i) => items.push(sep(), crumb(name, parts.slice(0, i + 1).join("/"), tab.kind === "folder" && i === parts.length - 1)));
+  if (tab.kind === "base") items.push(sep(), crumb(tab.path.split("/").pop(), null, true));
+  return [up, el("nav", { class: "md-crumbs", "aria-label": "Folder" }, ...items)];
+}
+
+// A folder in a tab (this one, unless its note has changes not saved):
+// what's in it, to open. Its folders open in the side's tree too.
+async function mdOpenFolder(path, { newTab = false } = {}) {
+  if (!adler.index || path === null || path === undefined) return;
+  const parts = path ? path.split("/") : [];
+  for (let k = 1; k < parts.length; k++) adler.expanded.add(parts.slice(0, k).join("/"));
+  winSave(`adleros.mdFolders:${adler.vault}`, [...adler.expanded]);
+  let i = adler.tabs.findIndex((t) => t.kind === "folder" && t.path === path);
+  if (i < 0) {
+    const tab = mdNewTab("folder", path);
+    const here = mdTab();
+    if (!newTab && here && !here.dirty && here.kind !== "graph") {
+      await mdSave(here);
+      adler.tabs[adler.active] = tab;
+      i = adler.active;
+    } else {
+      adler.tabs.splice(adler.active + 1, 0, tab);
+      i = adler.active + 1;
+    }
+  }
+  mdActivate(i);
+}
+
+// What's in a folder, right in it: folders first, then its files, by name.
+function mdFolderItems(path) {
+  const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+  const folders = adler.index.folders.filter((f) => f !== path && mdFolderOf(f) === path).sort(byName);
+  const files = adler.index.files.filter((f) => mdFolderOf(f.path) === path).sort((a, b) => byName(a.path.split("/").pop(), b.path.split("/").pop()));
+  return { folders, files };
+}
+const mdFolderSig = (path) => {
+  const { folders, files } = mdFolderItems(path);
+  return JSON.stringify([folders, files.map((f) => [f.path, f.mtime])]);
+};
+
+function mdFolderView(tab) {
+  const path = tab.path;
+  const name = mdTabName(tab);
+  const up = path ? mdFolderOf(path) : null;
+  const more = el("button", { type: "button", class: "md-icon-button", title: "More", "aria-label": "More" }, svg(["M12 12h.01", "M19 12h.01", "M5 12h.01"]));
+  more.addEventListener("click", () => {
+    const r = more.getBoundingClientRect();
+    openMenu(r.left, r.bottom + 4, path ? mdFolderMenu(path).slice(2) : [
+      ...(adler.index.writable ? [{ label: "New note here", run: () => mdNewNote("") }, { label: "New folder here", run: () => mdNewFolder("") }] : []),
+      { label: "Show in My Computer", run: () => openFiles(adler.vault) },
+    ]);
+  });
+  const make = el("button", { type: "button", class: "chip-button" }, "New note");
+  make.addEventListener("click", () => mdNewNote(path));
+  const exists = mdFolderThere(path);
+  const { folders, files } = exists ? mdFolderItems(path) : { folders: [], files: [] };
+  tab.sig = mdFolderSig(path);
+  const count = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  const head = el("div", { class: "md-note-head" }, ...mdCrumbs(tab),
+    el("span", { class: "md-note-state" }, exists ? [folders.length && count(folders.length, "folder"), count(files.length, "file")].filter(Boolean).join(", ") : ""),
+    ...(adler.index.writable && exists ? [make] : []), ...(exists ? [more] : []));
+
+  const row = (icon, label, detail, target, isFolder) => {
+    const open = (newTab) => (isFolder ? mdOpenFolder(target, { newTab }) : mdOpen(target, { newTab }));
+    const r = el("div", { class: "md-folder-row", role: "link", tabindex: "0", draggable: "true", "data-path": target, title: target },
+      el("span", { class: `file-icon ${icon}` }, svg(FILE_ICONS[icon] || FILE_ICONS.file)),
+      el("span", { class: "md-folder-name" }, label), el("span", { class: "md-folder-detail" }, detail));
+    r.addEventListener("click", (e) => open(e.ctrlKey || e.metaKey));
+    r.addEventListener("auxclick", (e) => { if (e.button === 1) open(true); });
+    r.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); open(e.ctrlKey || e.metaKey); } });
+    r.addEventListener("contextmenu", (e) => { e.preventDefault(); openMenu(e.clientX, e.clientY, isFolder ? mdFolderMenu(target) : mdFileMenu(target)); });
+    mdDragRow(r, target, isFolder);
+    return r;
+  };
+  const inside = (folder) => adler.index.files.reduce((n, f) => n + (f.path.startsWith(`${folder}/`) ? 1 : 0), 0);
+  const rows = [
+    ...folders.map((f) => row("folder", f.split("/").pop(), count(inside(f), "file"), f, true)),
+    ...files.map((f) => {
+      const note = mdIsNote(f.path);
+      return row(note ? "text" : /\.base$/i.test(f.path) ? "file" : padKind(f.path), note ? mdNoteName(f.path) : f.path.split("/").pop(), when(f.mtime), f.path, false);
+    }),
+  ];
+  const list = el("div", { class: "md-folder-list" }, ...(rows.length ? rows
+    : [el("p", { class: "md-right-empty" }, exists ? "Nothing in this folder yet." : "This folder isn't in the vault any more.")]));
+  // Dropped on the list (not on a folder in it): moved into this folder.
+  list.addEventListener("dragover", (e) => { if (exists && !e.target.closest(".md-folder-row") && e.dataTransfer.types.includes("text/x-adlermd")) e.preventDefault(); });
+  list.addEventListener("drop", (e) => {
+    if (e.target.closest(".md-folder-row")) return;
+    e.preventDefault();
+    mdMoveInto(e.dataTransfer.getData("text/x-adlermd"), path);
+  });
+  const view = el("div", { class: "md-note md-folder", tabindex: "-1" }, head,
+    el("div", { class: "md-scroll" }, el("div", { class: "md-page" }, el("h1", { class: "md-folder-title" }, name), list)));
+  // Backspace: up a folder, as in My Computer.
+  view.addEventListener("keydown", (e) => {
+    if (e.key !== "Backspace" || up === null || e.target.closest("input, textarea, [contenteditable]")) return;
+    e.preventDefault();
+    mdOpenFolder(up);
+  });
+  requestAnimationFrame(() => {
+    const active = document.activeElement;
+    if (!active || active === document.body || !active.isConnected) (view.querySelector(".md-folder-row") || view).focus({ preventScroll: true });
+  });
+  return view;
 }
 
 function mdFileView(tab) {
@@ -1023,7 +1165,7 @@ async function mdCreate(rel, text) {
 
 async function mdNewNote(folder = null) {
   if (!adler.index?.writable) return toast("This vault is read-only here.");
-  const dir = folder ?? mdNewNoteDir(mdTab()?.path);
+  const dir = folder ?? mdNewNoteDir(mdTab());
   if (dir) adler.expanded.add(dir);
   const made = await mdCreate(`${dir ? `${dir}/` : ""}Untitled.md`, "");
   if (!made) return;
@@ -1031,9 +1173,11 @@ async function mdNewNote(folder = null) {
   requestAnimationFrame(() => { const t = $("md-main").querySelector(".md-title"); t?.focus(); t?.select(); });
 }
 
-function mdNewNoteDir(from) {
+// Where a new note goes (Obsidian's newFileLocation): "current", the folder
+// of what's open (a folder, itself).
+function mdNewNoteDir(tab) {
   const app = mdSetting("app");
-  if (app.newFileLocation === "current" && from) return mdFolderOf(from);
+  if (app.newFileLocation === "current" && tab?.path != null) return tab.kind === "folder" ? tab.path : mdFolderOf(tab.path);
   if (app.newFileLocation === "folder") return String(app.newFileFolderPath || "").replace(/^\/+|\/+$/g, "");
   return "";
 }
@@ -1059,12 +1203,12 @@ async function mdRename(from, to) {
     if (!answer) return;
     links = answer === "yes";
   }
-  for (const t of adler.tabs) if (t.path === from || t.path.startsWith(`${from}/`)) await mdSave(t);
+  for (const t of adler.tabs) if (t.path === from || t.path?.startsWith(`${from}/`)) await mdSave(t);
   const reply = await mdPost("rename", { vault: adler.vault, from, to, links });
   if (!reply) return;
   for (const t of adler.tabs) {
     if (t.path === from) t.path = to;
-    else if (t.path.startsWith(`${from}/`)) t.path = to + t.path.slice(from.length);
+    else if (t.path?.startsWith(`${from}/`)) t.path = to + t.path.slice(from.length);
   }
   if (reply.updated) toast(`Moved; ${reply.updated} note${reply.updated === 1 ? "" : "s"} with links to it updated.`);
   await mdRefreshIndex();
@@ -1176,7 +1320,7 @@ function mdSwitcher() {
     if (!r) return;
     closeModal();
     if (r.create) {
-      const dir = mdNewNoteDir(mdTab()?.path);
+      const dir = mdNewNoteDir(mdTab());
       const made = await mdCreate(`${dir ? `${dir}/` : ""}${r.create.replace(/[\\/:]/g, "-")}.md`, "");
       if (made) mdOpen(made, { mode: "edit" });
     } else mdOpen(r.path);
@@ -1318,7 +1462,7 @@ function mdBaseView(tab) {
   src.addEventListener("input", () => { tab.text = src.value; mdDirty(tab); clearTimeout(tab.drawTimer); tab.drawTimer = setTimeout(draw, 300); });
   src.addEventListener("blur", () => mdSave(tab));
   draw();
-  return el("div", { class: "md-note" }, el("div", { class: "md-note-head" }, el("span", { class: "md-crumbs" }, tab.path), ...(tab.writable ? [toggle] : [])),
+  return el("div", { class: "md-note" }, el("div", { class: "md-note-head" }, ...mdCrumbs(tab), ...(tab.writable ? [toggle] : [])),
     el("div", { class: "md-scroll" }, el("div", { class: "md-page wide" }, ...(tab.mode === "edit" ? [src] : []), box)));
 }
 
