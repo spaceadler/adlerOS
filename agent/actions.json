@@ -113,6 +113,7 @@
   },
   "app-restart": {
     "label": "Restarting",
+    "admin": "core",
     "description": "Restarts every container of the app.",
     "params": {
       "app": {
@@ -133,6 +134,7 @@
   },
   "app-update": {
     "label": "Updating",
+    "admin": "core",
     "description": "Pulls the app's newest images and recreates its containers on them (docker compose pull, then up -d). Data stays.",
     "params": {
       "app": {
@@ -261,6 +263,7 @@
   },
   "app-forget": {
     "label": "Removing from adlerOS",
+    "admin": "core",
     "description": "Un-imports an imported app. Its containers and files aren't touched.",
     "params": {
       "app": {

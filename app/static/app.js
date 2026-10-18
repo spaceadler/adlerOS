@@ -1212,7 +1212,7 @@ async function refresh() {
   state.choices = result.body.choices || state.collections;
   state.host = result.body.host || {};
   state.available = result.body.available || [];
-  state.admin = Boolean(result.body.admin);
+  noteAdmin(Boolean(result.body.admin), result.body.adminLeft);
   state.mode = result.body.mode || "homelab";
   state.welcomed = Boolean(result.body.welcomed);
   state.order = result.body.order || {};

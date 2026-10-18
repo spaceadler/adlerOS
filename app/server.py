@@ -373,10 +373,28 @@ def save_settings(changes):
         write_private(SETTINGS_FILE, json.dumps(data, indent=2))
 
 
+ADMIN_SECONDS = 8 * 3600
+
+
+def admin_until():
+    """When admin mode turns itself off (a time.time()), or 0 when it's off."""
+    s = load_settings()
+    until = s.get("adminUntil")
+    return until if s.get("admin") is True and isinstance(until, (int, float)) and until > time.time() else 0
+
+
+def admin_left():
+    """Seconds until admin mode turns itself off (0: it's off), for the page:
+    its clock needn't agree with this one."""
+    return max(0, round(admin_until() - time.time()))
+
+
 def admin_on():
-    """Admin mode: restart and shut down, delete apps, stop core apps. Off
-    until you turn it on in Settings, with your password."""
-    return load_settings().get("admin") is True
+    """Admin mode: restart and shut down, delete apps, stop core and network
+    apps, the terminal. Off until you turn it on in Settings, with your
+    password, and off again ADMIN_SECONDS later, in case you forget. Its
+    shells keep running meanwhile, out of reach until it's back on."""
+    return admin_until() > 0
 
 
 def needs_admin(spec, params):
@@ -1555,6 +1573,39 @@ def trusted_proxies():
 
 TRUSTED_PROXIES = trusted_proxies()
 
+TAILNET = ("100.64.0.0/10", "fd7a:115c:a1e0::/48")
+
+
+def allowed_networks():
+    """Who may use adlerOS (ADLEROS_NETWORKS): "tailscale" (your tailnet),
+    addresses or networks, comma-separated; "anyone" or empty: whoever can
+    reach this machine. This machine itself always may. Through a trusted
+    proxy, it's the visitor it names that counts."""
+    items = [i.strip().lower() for i in os.environ.get("ADLEROS_NETWORKS", "").replace(" ", ",").split(",") if i.strip()]
+    if not items or "anyone" in items:
+        return None
+    found = [ipaddress.ip_network("127.0.0.0/8"), ipaddress.ip_network("::1/128")]
+    for item in items:
+        try:
+            found += [ipaddress.ip_network(n) for n in TAILNET] if item == "tailscale" else [ipaddress.ip_network(item, strict=False)]
+        except ValueError:
+            print(f"ADLEROS_NETWORKS: {item!r} isn't an address or a network; skipped", file=sys.stderr, flush=True)
+    return found
+
+
+ALLOWED_NETWORKS = allowed_networks()
+_refused = {}
+
+
+def note_refused(address):
+    """Logged once an hour per address, not once a request."""
+    now = time.monotonic()
+    if len(_refused) > 1000:
+        _refused.clear()
+    if now - _refused.get(address, -3600.0) >= 3600:
+        _refused[address] = now
+        print(f"{address} isn't on ADLEROS_NETWORKS: no answer", file=sys.stderr, flush=True)
+
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "homelab"
@@ -1577,6 +1628,26 @@ class Handler(BaseHTTPRequestHandler):
 
     def https(self):
         return self._from_proxy() and self.headers.get("X-Forwarded-Proto") == "https"
+
+    def allowed(self):
+        if ALLOWED_NETWORKS is None:
+            return True
+        try:
+            who = ipaddress.ip_address(self.client())
+        except ValueError:
+            return False
+        who = getattr(who, "ipv4_mapped", None) or who
+        return any(who in network for network in ALLOWED_NETWORKS)
+
+    # Not one of ADLEROS_NETWORKS: no answer at all, not even the lock screen.
+    def parse_request(self):
+        if not super().parse_request():
+            return False
+        if self.allowed():
+            return True
+        note_refused(self.client())
+        self.close_connection = True
+        return False
 
     # SameSite cookies don't stop your other apps: every port of this machine,
     # and every name under your domain, is the same "site" to a browser. So a
@@ -1667,6 +1738,7 @@ class Handler(BaseHTTPRequestHandler):
             "jobs": recent_jobs(),
             "passwordChanged": bool(load_settings().get("passwordHash")),
             "admin": admin_on(),
+            "adminLeft": admin_left(),
         }
 
     # --------------------------------------------------------------- GET
@@ -1709,7 +1781,7 @@ class Handler(BaseHTTPRequestHandler):
             env = read_env_file(HOMELAB_ENV)
             return self.send_json(200, {"name": display_name(), "searchUrl": search_url(), "dock": dock_pins(),
                                         "folders": app_folders({a["id"] for a in apps}),
-                                        "admin": admin_on(), "mode": MODE, "welcomed": bool(load_settings().get("welcomed")),
+                                        "admin": admin_on(), "adminLeft": admin_left(), "mode": MODE, "welcomed": bool(load_settings().get("welcomed")),
                                         "collections": collections(apps), "order": app_order(),
                                         "choices": collection_choices(),
                                         "host": {"tsIp": env.get("TS_IP", ""), "domain": env.get("DOMAIN", "")},
@@ -2308,10 +2380,10 @@ class Handler(BaseHTTPRequestHandler):
                 record_failure(client)
                 time.sleep(1)
                 return self.send_json(401, {"error": "wrong password"})
-        save_settings({"admin": on})
+        save_settings({"admin": on, "adminUntil": time.time() + ADMIN_SECONDS if on else 0})
         if not on:
-            close_terminals()  # a shell needs admin mode for as long as it's open
-        return self.send_json(200, {"ok": True, "admin": on})
+            close_terminals()  # you turned it off: its shells go too
+        return self.send_json(200, {"ok": True, "admin": on, "adminLeft": admin_left()})
 
     def log_message(self, fmt, *args):
         sys.stderr.write(f"{self.client()} {fmt % args}\n")
@@ -2321,10 +2393,14 @@ def main():
     for folder in (ICONS, QUEUE, JOBS):
         folder.mkdir(parents=True, exist_ok=True)
     cpu_usage()  # first sample, so the first Settings view has a reading
+    settings = load_settings()
+    if settings.get("admin") is True and "adminUntil" not in settings:
+        save_settings({"adminUntil": time.time() + ADMIN_SECONDS})  # on from before it timed out: from now
     threading.Thread(target=Watcher().run, name="watcher", daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     server.daemon_threads = True
-    print(f"adlerOS on :{PORT}", flush=True)
+    print(f"adlerOS on :{PORT}, for {os.environ.get('ADLEROS_NETWORKS') or 'anyone'}" if ALLOWED_NETWORKS
+          else f"adlerOS on :{PORT}", flush=True)
     server.serve_forever()
 
 

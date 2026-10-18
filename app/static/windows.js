@@ -72,8 +72,10 @@ function switchDesktopMode(on) {
 
 // Each window: its section's id, a title, close() (and hide(), if closing
 // would lose something, like the terminal's session), its dock item, a size.
-function registerWindow(id, { title, close, hide = null, dock = null, size = [1000, 700], app = null, extras = [] }) {
-  wm.windows.set(id, { id, title, close, hide, dock, size, app });
+// A float one (Music) is small: on the home screen it sits over the others
+// instead of taking their place.
+function registerWindow(id, { title, close, hide = null, dock = null, size = [1000, 700], app = null, extras = [], float = false }) {
+  wm.windows.set(id, { id, title, close, hide, dock, size, app, float });
   if (!$(id).querySelector(":scope > .win-bar")) winFrame(id, title, extras);
 }
 
@@ -123,15 +125,15 @@ function openWindow(id) {
   closeSearch();
   closeMenu();
   closeDrawer();
-  if (!desktopMode()) {
-    for (const [other, w] of wm.windows) if (other !== id && isOpen(other)) (w.hide || w.close)();
+  const w = wm.windows.get(id);
+  if (!desktopMode() && !w?.float) {
+    for (const [other, o] of wm.windows) if (other !== id && !o.float && isOpen(other)) (o.hide || o.close)();
   }
   const sheet = $(id);
   const fresh = sheet.hidden || sheet.classList.contains("closing");
   sheet.classList.remove("closing", "minimized");
   sheet.hidden = false;
-  document.body.classList.add("sheet-open");
-  const w = wm.windows.get(id);
+  if (!w?.float) document.body.classList.add("sheet-open");
   if (w?.dock) markDockOpen(w.dock, true);
   if (!wm.order.includes(id)) wm.order.push(id);
   if (desktopMode()) {
@@ -149,7 +151,7 @@ function closeWindow(id) {
   sheet.classList.add("closing");
   sheet.classList.remove("active");
   if (w?.dock) markDockOpen(w.dock, false);
-  if (![...wm.windows.keys()].some((other) => other !== id && isOpen(other))) document.body.classList.remove("sheet-open");
+  if (![...wm.windows].some(([other, o]) => other !== id && !o.float && isOpen(other))) document.body.classList.remove("sheet-open");
   wm.order = wm.order.filter((o) => o !== id);
   if (wm.active === id) winActivateTop();
   if (hadFocus && desktopMode()) winFocusNext();

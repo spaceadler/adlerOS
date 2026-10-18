@@ -266,7 +266,10 @@ function renderStore() {
   const nodes = [];
   let shown = 0;
   if (store.error) nodes.push(el("p", { class: "store-error" }, store.error));
-  if (!state.admin) nodes.push(el("p", { class: "store-admin-note" }, "Deleting apps, and stopping Pi-hole or Vaultwarden, needs admin mode: Settings → System → Admin mode."));
+  if (!state.admin) {
+    const core = state.apps.filter((a) => (a.home || a.genre) === "core").map((a) => a.name);
+    nodes.push(el("p", { class: "store-admin-note" }, `Deleting apps${core.length ? `, and stopping, restarting or updating ${core.join(", ")} (what your network needs),` : ""} needs admin mode: Settings → System → Admin mode.`));
+  }
   for (const g of groups) {
     if (store.filter !== "all" && store.filter !== g.id) continue;
     const apps = g.apps.filter(storeMatches);
@@ -308,12 +311,14 @@ function storeCard(app) {
   if (busy) {
     actions.append(button("Details", "", () => jobDialog(busy.job, {})));
   } else {
-    // Stopping a core app (DNS, passwords) needs admin mode; so does Delete.
-    const core = app.genre === "core";
-    if (running && (!core || state.admin)) actions.append(button("Stop", "", () => appAction(app, "app-stop")));
+    // A core app (DNS, your proxy, passwords) is only stopped, restarted or
+    // updated in admin mode, wherever you've put it; Delete always is.
+    const core = (app.home || app.genre) === "core";
+    const locked = core && !state.admin;
+    if (running && !locked) actions.append(button("Stop", "", () => appAction(app, "app-stop")));
     if (s && !running && s.state !== "no-compose") actions.append(button("Start", "primary", () => appAction(app, "app-start")));
-    if (s && s.state !== "no-compose") actions.append(button("Restart", "", () => appAction(app, "app-restart")));
-    if (s && s.state !== "no-compose") actions.append(button("Update", update ? "primary" : "", () => appAction(app, "app-update")));
+    if (s && s.state !== "no-compose" && !locked) actions.append(button("Restart", "", () => appAction(app, "app-restart")));
+    if (s && s.state !== "no-compose" && !locked) actions.append(button("Update", update ? "primary" : "", () => appAction(app, "app-update")));
     if (s?.containers.length) actions.append(button("Logs", "", () => logsDialog(app)));
     // Core apps (Pi-hole, Vaultwarden) are always installed.
     if (s && !core && state.admin) actions.append(button("Delete", "destructive", () => appAction(app, "app-delete")));
