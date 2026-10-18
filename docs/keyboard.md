@@ -84,6 +84,19 @@ Three of Hyprland's had two jobs there (C: clipboard and centre, J: emoji
 and down, P: wallpaper and wider); here they move windows, and the
 wallpaper is Alt+Shift+P.
 
+## In adlerMD
+
+| Key | Does |
+| --- | --- |
+| Ctrl+O | Find a note (or make one) |
+| Ctrl+E | Edit, or read |
+| Ctrl+S | Save now (it saves as you go anyway) |
+| Ctrl+G | The graph |
+| Ctrl+Shift+F | Search the vault |
+| Ctrl+B, Ctrl+I | Bold, italic |
+| Tab, Shift+Tab | A list item in, or out |
+| Enter | The next list item (in an empty one: out of the list) |
+
 ## Typing
 
 Text boxes keep their keys: Left and Right move the cursor, letters type.

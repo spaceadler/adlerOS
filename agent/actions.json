@@ -305,6 +305,38 @@
       }
     ]
   },
+  "firefox-wake": {
+    "label": "Opening Firefox",
+    "description": "Starts the Firefox app's browser again if it had quit (its window closed in adlerOS), when you open the app itself.",
+    "quiet": true,
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "firefox-wake"
+        ],
+        "result": true
+      }
+    ]
+  },
+  "firefox-quit": {
+    "label": "Closing Firefox",
+    "description": "Its window closed in adlerOS: the Firefox app's browser quits (its tabs go, its memory comes back); its container keeps running.",
+    "quiet": true,
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "firefox-quit"
+        ],
+        "result": true
+      }
+    ]
+  },
   "files-root": {
     "label": "Changing Root",
     "description": "A change in Files' Root, the homelab's own folder (adlerOS sees it read-only). What to change is in data/agent/files/<request>.json; agent/files.py also refuses unless ADLEROS_TERMINAL=on on the machine.",

@@ -127,6 +127,7 @@ To add your own, see [customizing](customizing.md#store-apps).
 | `DESKTOP_DIR` | Files' Desktop (read-write), on the desktop in desktop mode (`STORAGE_DIR/Desktop`) |
 | `FILES_ROOT` | Files' Root, read-only: your homelab's folder, say (none) |
 | `WALLPAPER_DIR` | a folder in `STORAGE_DIR` with your wallpapers (`Other/Wallpapers`) |
+| `NOTES_DIR` | adlerMD's first vault, a folder in `STORAGE_DIR` (none: adlerMD asks you to make or open one) |
 | `ADLEROS_TERMINAL` | `on` lets the Terminal window open shells (in admin mode); re-run `./install.sh` after changing it |
 | `ADLEROS_TERMINAL_DIR` | where a new terminal starts, e.g. `~/homelab` (your home folder); takes effect on the next one |
 | `ADLEROS_NETWORKS` | who it answers: `tailscale`, `anyone`, or addresses and networks; everyone else gets nothing ([security](security.md#who-it-answers)) |

@@ -56,8 +56,11 @@ Screen*: it opens like an app.
   your apps in windows of their own, and your Desktop folder on the desktop.
 - **My Computer**: your Desktop, your storage folder and (read-only) your
   homelab's own folder, in a window. Upload, download, cut, copy and paste
-  between them, rename, delete into a Trash you can restore from, preview
-  photos and videos, and edit text files.
+  between them, rename, delete into a Trash you can restore from; photos,
+  videos, PDFs and songs open in windows of their own.
+- **Notepad** for text files, and **adlerMD** for notes: Markdown in vaults,
+  Obsidian's way (an Obsidian vault works in both), with links, embeds,
+  callouts, backlinks, the graph and Bases.
 - **Firefox** in the store: a real browser running on the machine, in your
   browser. With My Computer and the terminal, an old laptop is enough to work on
   your homelab.

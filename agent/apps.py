@@ -1121,20 +1121,61 @@ def firefox_container(app):
             info = json.loads(found.stdout)[0]
             if "firefox" in info["Config"]["Image"]:
                 env = dict(e.split("=", 1) for e in info["Config"].get("Env") or [] if "=" in e)
+                config = next((m["Source"] for m in info.get("Mounts") or []
+                               if m.get("Destination") == "/config" and m.get("Type") == "bind"), None)
                 started = info.get("State", {}).get("StartedAt", "")
                 try:  # a container that's just started starts Firefox itself
                     age = time.time() - datetime.datetime.fromisoformat(started[:26].rstrip("Z") + "+00:00").timestamp()
                 except ValueError:
                     age = 3600
-                return cid, env.get("PUID") or "abc", age
+                return cid, env.get("PUID") or "abc", age, Path(config) if config else None
     return None
 
 
-def firefox_url(url):
-    """A web page (a search from adlerOS) in a new tab of the Firefox app
-    from the store; a Firefox that had closed (its screen black) starts
-    again with it. One command in its container, as its user."""
-    if not re.fullmatch(r"https?://[^\s\"'<>\\]{1,2000}", url):
+FIREFOX_PREFS = """
+// adlerOS (agent/apps.py): what it opens comes in the tab you're on, not a
+// new one; and a Firefox it closed (its window closed in adlerOS) starts
+// with just the page you open next, nothing from before.
+user_pref("browser.link.open_newwindow.override.external", 1);
+user_pref("browser.sessionstore.resume_from_crash", false);
+user_pref("browser.tabs.warnOnClose", false);
+user_pref("browser.warnOnQuit", false);
+"""
+
+
+def firefox_prefs(config):
+    """FIREFOX_PREFS in each of its profiles' user.js (read when it starts)."""
+    if not config or not config.is_dir() or config.stat().st_uid != os.getuid():
+        return
+    for root in (config / ".config" / "mozilla" / "firefox", config / ".mozilla" / "firefox"):
+        for profile in root.glob("*/prefs.js") if root.is_dir() else []:
+            user = profile.parent / "user.js"
+            text = user.read_text() if user.is_file() else ""
+            if "browser.link.open_newwindow.override.external" not in text:
+                rewrite(user, text.rstrip("\n") + ("\n" if text else "") + FIREFOX_PREFS.lstrip("\n"))
+
+
+def firefox_quit():
+    """Its window closed in adlerOS: the browser quits (its tabs go, and the
+    memory it held comes back); the container stays, for the next time."""
+    app = next((a for a in registry_apps().values() if a["info"].get("known") == "firefox" and a["installed"]), None)
+    found = app and firefox_container(app)
+    if not found:
+        return {"ok": True}
+    cid, user, _, config = found
+    firefox_prefs(config)
+    subprocess.run(["docker", "exec", "-u", user, cid, "pkill", "-TERM", "-x", "firefox"], env=docker_env(),
+                   stdin=subprocess.DEVNULL, capture_output=True, timeout=30, check=False)
+    return {"ok": True}
+
+
+def firefox_url(url=None):
+    """A web page (an app that won't be framed, a search) in the Firefox app
+    from the store: in the tab it's on (FIREFOX_PREFS), or, Firefox not
+    running (its window closed, its screen black), a Firefox started with
+    just that page. One command in its container, as its user. No url: only
+    that a browser's running (opening the Firefox app itself)."""
+    if url is not None and not re.fullmatch(r"https?://[^\s\"'<>\\]{1,2000}", url):
         return {"error": "not a web address"}
     app = next((a for a in registry_apps().values() if a["info"].get("known") == "firefox" and a["installed"]), None)
     if not app:
@@ -1142,7 +1183,8 @@ def firefox_url(url):
     found = firefox_container(app)
     if not found:
         return {"error": "Firefox isn't running: start it in the App Store"}
-    cid, user, age = found
+    cid, user, age, config = found
+    firefox_prefs(config)
     # Its display and profile, as the running Firefox has them. A container
     # that just started starts Firefox itself in a moment: wait for that one
     # (a second would find its profile in use) before starting one here.
@@ -1157,10 +1199,12 @@ def firefox_url(url):
         if running or age > 60:
             break
         time.sleep(1)
+    if url is None and running:
+        return {"ok": True, "app": app["id"], "started": False}
     env = {"HOME": "/config", "DISPLAY": ":0", "XDG_RUNTIME_DIR": "/config/.XDG"}
     env.update({k: running[k] for k in env if running.get(k)})
     started = subprocess.run(["docker", "exec", "-d", "-u", user, *[a for k, v in env.items() for a in ("-e", f"{k}={v}")],
-                              cid, "firefox", "--new-tab", url], env=docker_env(), stdin=subprocess.DEVNULL,
+                              cid, "firefox", *([url] if url else [])], env=docker_env(), stdin=subprocess.DEVNULL,
                              capture_output=True, text=True, timeout=30, check=False)
     if started.returncode:
         return {"error": f"Firefox didn't take it: {started.stderr.strip()[-200:]}"}
@@ -1168,6 +1212,18 @@ def firefox_url(url):
 
 
 def main(argv):
+    if argv == ["firefox-wake"]:
+        try:
+            print(json.dumps(firefox_url()))
+        except (OSError, subprocess.TimeoutExpired) as e:
+            print(json.dumps({"error": f"couldn't reach Firefox: {e}"}))
+        return 0
+    if argv == ["firefox-quit"]:
+        try:
+            print(json.dumps(firefox_quit()))
+        except (OSError, subprocess.TimeoutExpired) as e:
+            print(json.dumps({"error": f"couldn't reach Firefox: {e}"}))
+        return 0
     if len(argv) == 2 and argv[0] == "firefox-url":
         try:
             print(json.dumps(firefox_url(argv[1])))
