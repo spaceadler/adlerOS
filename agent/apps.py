@@ -686,7 +686,8 @@ def make_mount_dirs(target, env_text):
         path = source
         for key, value in env.items():
             path = path.replace("${" + key + "}", value)
-        if "${" in path:
+        # Unfilled, or not a path at all: "${PORT}:3001" is a port.
+        if "${" in path or not path.startswith(("./", "/", "~")):
             continue
         folder = (target / path).resolve() if path.startswith("./") else Path(path).expanduser().resolve()
         if folder.is_relative_to(target.resolve()) or folder.is_relative_to(HOME):
