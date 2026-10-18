@@ -628,6 +628,56 @@ function reloadAppWindow(id) {
   if (frame) frame.src = frame.src;
 }
 
+// ---------------------------------------------------- back and forward
+
+// The mouse's side buttons: back (the one nearer your palm) and forward,
+// in the window under the pointer (else the one in front) that has
+// somewhere to go back to: My Computer's folders, Settings' categories,
+// adlerMD's notes and folders (registerNav). Never the page itself, which
+// would leave adlerOS: the browser's own back is cancelled, and for one
+// that goes anyway (or its own back: Alt+Left, its button), adlerOS keeps a
+// step of history of its own, and going back from it goes back in the
+// window in front instead.
+const winNavs = new Map(); // window id → go(-1 back, 1 forward)
+const navTrap = { armed: false, at: 0 };
+
+function registerNav(id, go) { winNavs.set(id, go); }
+
+function navWindow(node) {
+  const sheet = node?.closest?.(".sheet");
+  if (sheet) return winNavs.has(sheet.id) && isOpen(sheet.id) ? sheet.id : null;
+  if (wm.active && winNavs.has(wm.active) && isActive(wm.active)) return wm.active;
+  return [...winNavs.keys()].find((id) => isActive(id)) || null;
+}
+
+function navGo(node, dir) {
+  const id = navWindow(node);
+  if (id) winNavs.get(id)(dir);
+}
+
+const sideButton = (e) => e.button === 3 || e.button === 4;
+// The step of history, once you've done something (a browser skips one a
+// page made on its own).
+function navArm(e) {
+  if (navTrap.armed || !e.isTrusted) return;
+  navTrap.armed = true;
+  history.pushState(null, "", location.href);
+}
+document.addEventListener("pointerdown", navArm, true);
+document.addEventListener("keydown", navArm, true);
+document.addEventListener("mousedown", (e) => { if (sideButton(e)) e.preventDefault(); }, true);
+document.addEventListener("auxclick", (e) => { if (sideButton(e)) e.preventDefault(); }, true);
+document.addEventListener("mouseup", (e) => {
+  if (!sideButton(e)) return;
+  e.preventDefault();
+  navTrap.at = Date.now();
+  navGo(e.target, e.button === 3 ? -1 : 1);
+}, true);
+window.addEventListener("popstate", () => {
+  navTrap.armed = false; // again at the next thing you do
+  if (Date.now() - navTrap.at > 500) navGo(document.activeElement, -1); // not the side button's (that's done)
+});
+
 // ---------------------------------------------------------------- wiring
 
 wm.geometry = winLoad(WIN_GEOMETRY_KEY, {}) || {};

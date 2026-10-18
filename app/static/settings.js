@@ -44,6 +44,8 @@ const settings = {
   pending: {}, // homelab.env key -> new value, not applied yet
   live: [], // functions that refresh the parts of rows that change on their own
   timer: null,
+  back: [], // the categories you looked at before (the mouse's back button), and after
+  fwd: [],
 };
 
 // ------------------------------------------------------------- helpers
@@ -88,13 +90,14 @@ async function loadCatalog() {
 
 async function openSettings(rowId) {
   await loadCatalog();
+  if (!isOpen("settings")) Object.assign(settings, { back: [], fwd: [] });
   openWindow("settings");
   // #settings in the address: a reload comes back here, and it can be linked.
   history.replaceState(null, "", rowId ? `#settings/${rowId}` : "#settings");
   if (!(await loadSettings())) return;
   settings.query = "";
   $("settings-search").value = "";
-  if (rowId) settings.filter = "all";
+  if (rowId) settingsFilter("all");
   renderFilters();
   renderRows();
   clearInterval(settings.timer);
@@ -224,13 +227,30 @@ function renderFilters() {
   $("settings-filters").replaceChildren(...tabs.map((t) => {
     const b = el("button", { type: "button", class: "filter", role: "tab", "aria-selected": String(settings.filter === t.id) }, t.label);
     b.addEventListener("click", () => {
-      settings.filter = t.id;
+      settingsFilter(t.id);
       renderFilters();
       renderRows();
     });
     return b;
   }));
 }
+
+// A category, and back and forward through the ones you've looked at (the
+// mouse's side buttons).
+function settingsFilter(id) {
+  if (id === settings.filter) return;
+  settings.back = [...settings.back, settings.filter].slice(-50);
+  settings.fwd = [];
+  settings.filter = id;
+}
+registerNav("settings", (dir) => {
+  const to = (dir < 0 ? settings.back : settings.fwd).pop();
+  if (to === undefined) return;
+  (dir < 0 ? settings.fwd : settings.back).push(settings.filter);
+  settings.filter = to;
+  renderFilters();
+  renderRows();
+});
 
 function matches(row) {
   if (!forMode(row)) return false;

@@ -29,6 +29,14 @@ room.
 | Menu key, Shift+F10, or `m` | The menu for what's selected: Open, Keep in Dock, Rearrange… |
 | Tab / Shift+Tab | Next / previous control in the open window |
 
+### Back and forward
+
+The mouse's **side buttons** go back (the one nearer your palm) and
+forward, in the window under the pointer: My Computer's folders, Settings'
+categories, adlerMD's notes and folders (each tab its own). They never take
+the browser off adlerOS; nor does its own back (Alt+Left, its button), which
+goes back in the window in front instead.
+
 ## Shortcuts
 
 These work anywhere except while you're typing in a text box.
@@ -114,9 +122,9 @@ Arrows move between files and the places down the side; Enter opens one (a
 folder goes in). **Delete** deletes the selected file (to the Trash), **F2**
 renames it, **Ctrl+C** copies and **Ctrl+X** cuts it, **Ctrl+V** pastes into
 the folder you're in, and `m` or the Menu key shows its menu. Escape goes
-back: out of the editor, out of the Trash, then out of My Computer. In the editor,
-Ctrl+S saves and Tab indents. On the desktop in desktop mode, the same keys
-work on its icons.
+back: out of the Trash, then out of My Computer. The mouse's side buttons go
+back and forward through the folders you've been in. On the desktop in
+desktop mode, the same keys work on its icons.
 
 ## In desktop mode
 
@@ -128,7 +136,7 @@ work on its icons.
 | …then **Move** or **Resize with the arrow keys** | Arrows move (or resize) it 40 px, Shift+arrows 10 px; Enter when it's right |
 | Escape | Closes the window you're in, like on the home screen |
 
-Ctrl+` works even while you type (in the editor, in the terminal). Inside an
+Ctrl+` works even while you type (in Notepad, in the terminal). Inside an
 app's own window the keys belong to the app; Tab past its last control, or
 click outside it, to come back.
 

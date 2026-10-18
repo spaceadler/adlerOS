@@ -369,8 +369,9 @@ shown greyed out and won't open. Root's `mailbox/` and `storage/` are the
 Desktop and User themselves: opening one takes you there.
 
 - **Double-click** a folder to go in (a click picks it; on a touch screen a
-  tap opens it; Enter too); the path at the top takes you back up. A text
-  file opens in the editor; anything else that opens gets a window of its
+  tap opens it; Enter too); the path at the top takes you back up, and the
+  mouse's side buttons back and forward through where you've been. A text
+  file opens in Notepad (a Markdown one in adlerMD's quick look); anything else that opens gets a window of its
   own, so the rest of adlerOS stays usable while it's open:
   - a **picture, video or PDF**: the **Viewer** (in desktop mode, drag and
     resize it like any window; over the home screen it floats over My Computer),
@@ -459,7 +460,8 @@ vault**.
   the middle button) in a new one. Over a note is the path to it, the vault
   first: click a folder in it to see what's in that folder (its folders,
   notes and files, to open, drag or right-click), and **↑** (or Backspace)
-  goes up a folder. It saves as you go. If Obsidian (or
+  goes up a folder; the mouse's side buttons go back and forward through
+  where the tab has been. It saves as you go. If Obsidian (or
   anything) changed the note meanwhile, you choose: keep yours, theirs, or
   both.
 - **Live** (Obsidian's Live Preview): the note as it reads, and you edit it

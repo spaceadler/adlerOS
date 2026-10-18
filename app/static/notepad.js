@@ -72,7 +72,7 @@ function makePad({ markdown }) {
   pads.set(id, pad);
   // Closing it (its ✕, Alt+W) asks about unsaved changes and then goes;
   // another window over it on the home screen only hides it.
-  registerWindow(id, { title: "Notepad", close: () => closePad(pad), hide: () => closeWindow(id), dock: markdown ? null : "notepad",
+  registerWindow(id, { title: markdown ? "adlerMD" : "Notepad", close: () => closePad(pad), hide: () => closeWindow(id), dock: markdown ? null : "notepad",
     icon: markdown ? "adlermd" : "notepad", size: [820, 600] });
   area.addEventListener("input", () => {
     setPadDirty(pad, true);
