@@ -123,6 +123,7 @@ To add your own, see [customizing](customizing.md#store-apps).
 | `STORAGE_DIR` | your files: Files' User (read-write), and store apps use it (`~/storage`) |
 | `DESKTOP_DIR` | Files' Desktop (read-write), on the desktop in desktop mode (`STORAGE_DIR/Desktop`) |
 | `FILES_ROOT` | Files' Root, read-only: your homelab's folder, say (none) |
+| `WALLPAPER_DIR` | a folder in `STORAGE_DIR` with your wallpapers (`Other/Wallpapers`) |
 | `ADLEROS_TERMINAL` | `on` lets the Terminal window open shells (in admin mode); re-run `./install.sh` after changing it |
 | `ADLEROS_TERMINAL_DIR` | where a new terminal starts, e.g. `~/homelab` (your home folder); takes effect on the next one |
 | `ADLEROS_TRUSTED_PROXIES` | your reverse proxy's address or network, when adlerOS is behind one ([HTTPS](#https-behind-a-reverse-proxy)) |
