@@ -56,6 +56,10 @@ ask() {
     env_set "$key" "${ans:-$default}"
 }
 
+guess_networks() {
+    if tailscale ip -4 >/dev/null 2>&1; then printf tailscale; else printf anyone; fi
+}
+
 guess_host() {
     local ip
     ip=$(tailscale ip -4 2>/dev/null | head -n1 || true)
@@ -111,6 +115,7 @@ configure() {
     ask FILES_ROOT "A folder Files shows read-only as Root, or - for none" "$(guess_root)"
     case $(env_get FILES_ROOT) in -* | none) env_set FILES_ROOT "" ;; esac
     ask TZ "Timezone" "$(guess_tz)"
+    ask ADLEROS_NETWORKS "Who may open adlerOS: tailscale (your tailnet only) or anyone on your network" "$(guess_networks)"
     ask ADLEROS_TERMINAL "A terminal in adlerOS (admin mode only), on or off" "off"
     env_set PUID "$(id -u)"
     env_set PGID "$(id -g)"

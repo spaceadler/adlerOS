@@ -222,7 +222,7 @@
       "category": "system",
       "icon": "shield",
       "title": "Admin mode",
-      "description": "Lets you restart and shut down this machine, delete apps, and stop core apps (Pi-hole, Vaultwarden). Off until you turn it on.",
+      "description": "Lets you restart and shut down this machine, delete apps, use the terminal, and stop, restart or update core apps (Pi-hole, your proxy, Vaultwarden). Off until you turn it on, and off again by itself after 8 hours.",
       "keywords": "administrator sudo power delete danger advanced",
       "control": {
         "type": "admin"

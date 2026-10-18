@@ -230,7 +230,8 @@ function openEntry(entry, path) {
   if (entry.outside) return toast("That link leads outside its place, so adlerOS won't open it.");
   if (entry.dir) return isOpen("files") ? showFolder(path) : openFiles(path);
   if (entry.kind === "text") return editFile(path);
-  if (["image", "video", "audio", "pdf"].includes(entry.kind)) return previewFile(entry, path);
+  if (entry.kind === "audio") return playSong(entry, path);
+  if (["image", "video", "pdf"].includes(entry.kind)) return previewFile(entry, path);
   return downloadFile(path);
 }
 
@@ -253,6 +254,26 @@ function previewFile(entry, path) {
   openModal(el("div", { class: "dialog material preview", role: "dialog", "aria-modal": "true", "aria-label": entry.name },
     el("h2", {}, entry.name), media, el("div", { class: "dialog-actions" }, close, download)));
   close.focus();
+}
+
+// A song plays in a window of its own, so the rest of adlerOS stays yours
+// meanwhile: minimized it keeps playing, another song takes its place, and
+// closing it stops it.
+function playSong(entry, path) {
+  const audio = $("music-audio");
+  $("music-name").textContent = entry.name;
+  $("music").dataset.path = path;
+  audio.src = fileUrl(path, true);
+  openWindow("music");
+  audio.play().catch(() => {}); // the browser may want a click on play first
+}
+
+function closeMusic() {
+  const audio = $("music-audio");
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
+  closeWindow("music");
 }
 
 // ------------------------------------------------------------- changing
@@ -605,7 +626,12 @@ async function fileUp(e) {
 // ---------------------------------------------------------------- wiring
 
 registerWindow("files", { title: "Files", close: closeFiles, dock: "files", size: [980, 640] });
+// Half the width of a picture's preview and a quarter taller; over the home
+// screen it floats above the dock (float), with everything else still open.
+registerWindow("music", { title: "Music", close: closeMusic, size: [490, 260], float: true });
 $("files-close").addEventListener("click", closeFiles);
+$("music-close").addEventListener("click", closeMusic);
+$("music-download").addEventListener("click", () => downloadFile($("music").dataset.path));
 $("files-list").addEventListener("pointerdown", fileDown);
 document.addEventListener("pointermove", fileMove);
 document.addEventListener("pointerup", fileUp);

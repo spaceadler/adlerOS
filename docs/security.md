@@ -32,16 +32,33 @@ do with it.
 - Wrong passwords are slowed down (a second each), and too many lock that
   address out for a while.
 - Changing the password logs out every other browser.
-- Every change is a JSON request, which a page on another site can't send with
-  your cookie.
+- A change only counts when it comes from adlerOS's own page: the browser
+  says where a request started (`Sec-Fetch-Site`, or `Origin` in older
+  ones), and anything another page started is refused. Cookies alone don't
+  stop that, since every port of this machine and every name under your
+  domain is the same "site" to a browser, so a page in any of your apps
+  could otherwise post to adlerOS while you're logged in.
+
+## Who it answers
+
+`ADLEROS_NETWORKS` decides who even gets the lock screen: `tailscale` (your
+tailnet's devices), `anyone` (anyone who can reach the machine, your Wi-Fi
+included), or addresses and networks. Anyone else gets no answer at all;
+through your reverse proxy, it's the visitor the proxy names that counts, so
+the proxy isn't a way around it. `install.sh` picks `tailscale` when the
+machine is on a tailnet. In a homelab it's `tailscale`, and ufw keeps port
+8686 shut on the LAN as well.
 
 ## Admin mode
 
-Restart, shut down, deleting apps, and stopping core apps (DNS, proxies,
-passwords) need **admin mode**, which only your password turns on. The server
+Restart, shut down, deleting apps, and stopping, restarting, updating or
+removing core apps (DNS, your reverse proxy, passwords: Pi-hole, Nginx Proxy
+Manager, Vaultwarden…) need **admin mode**, which only your password turns
+on. A core app stays one wherever you put it on the home screen. The server
 checks it on every request, so it isn't just hidden buttons: a stolen login
-cookie alone can't reboot the machine or delete an app. Once on, it stays on
-for every browser until you switch it off, so switch it off when you're done.
+cookie alone can't reboot the machine or delete an app. Once on, it's on for
+every browser, until you switch it off or **8 hours** pass, whichever comes
+first.
 
 ## The terminal
 
@@ -56,7 +73,9 @@ the `docker` group, so it's as good as root. That's why it has two locks:
    on every keystroke it passes on. With it off the terminal isn't even
    shown, and switching it off closes every open shell. Opening one asks for
    nothing more, so admin mode left on is a shell for anyone at that login:
-   switch it off when you're done.
+   switch it off when you're done. If you don't, it goes off by itself after
+   8 hours; then your shells keep running, out of reach, until you turn it
+   on again and Terminal takes you back to them.
 
 The shells run in `agent/terminal.py` on the host, started by systemd when a
 session is asked for and stopped when the last one ends. What you type and

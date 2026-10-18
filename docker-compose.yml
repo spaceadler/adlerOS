@@ -39,6 +39,8 @@ services:
       ADLEROS_TERMINAL: ${ADLEROS_TERMINAL:-off}
       # Your reverse proxy, when adlerOS is behind one (HTTPS).
       ADLEROS_TRUSTED_PROXIES: ${ADLEROS_TRUSTED_PROXIES:-}
+      # Who it answers: tailscale, anyone, or addresses and networks.
+      ADLEROS_NETWORKS: ${ADLEROS_NETWORKS:-}
       PYTHONDONTWRITEBYTECODE: 1
     volumes:
       - ./app:/app:ro

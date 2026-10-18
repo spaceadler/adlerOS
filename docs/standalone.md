@@ -29,7 +29,7 @@ though, so you can't stop it from inside it.
 <!-- screenshot: ./install.sh finishing -->
 ![install.sh](screenshots/install.png)
 
-It asks eight things, each with a guess you can take by pressing Enter:
+It asks nine things, each with a guess you can take by pressing Enter:
 
 | Question | Becomes | Guess |
 | --- | --- | --- |
@@ -40,6 +40,7 @@ It asks eight things, each with a guess you can take by pressing Enter:
 | Your files folder | `STORAGE_DIR`: Files' User, and where store apps look for media | `~/storage` |
 | Your Desktop folder | `DESKTOP_DIR`: Files' Desktop, shown on the desktop in desktop mode | `STORAGE_DIR/Desktop` |
 | A folder for Root | `FILES_ROOT`: Files' Root, read-only (`-` for none) | `~/homelab`, `~/docker` or `~/stacks`, if there's one |
+| Who may open adlerOS | `ADLEROS_NETWORKS`: `tailscale` (your tailnet only) or `anyone` on your network | `tailscale` if this machine is on one |
 | A terminal in adlerOS | `ADLEROS_TERMINAL`: `on` or `off` | `off` |
 
 (The folders can also be set from the page: the first login's welcome asks
@@ -126,6 +127,7 @@ To add your own, see [customizing](customizing.md#store-apps).
 | `WALLPAPER_DIR` | a folder in `STORAGE_DIR` with your wallpapers (`Other/Wallpapers`) |
 | `ADLEROS_TERMINAL` | `on` lets the Terminal window open shells (in admin mode); re-run `./install.sh` after changing it |
 | `ADLEROS_TERMINAL_DIR` | where a new terminal starts, e.g. `~/homelab` (your home folder); takes effect on the next one |
+| `ADLEROS_NETWORKS` | who it answers: `tailscale`, `anyone`, or addresses and networks; everyone else gets nothing ([security](security.md#who-it-answers)) |
 | `ADLEROS_TRUSTED_PROXIES` | your reverse proxy's address or network, when adlerOS is behind one ([HTTPS](#https-behind-a-reverse-proxy)) |
 | `TZ`, `PUID`, `PGID` | timezone, and the user adlerOS and store apps run as |
 

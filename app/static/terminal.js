@@ -544,7 +544,7 @@ async function readTerminal(sid) {
     }
     if (term.sid !== sid) return;
     if (result.status === 401) return showLock();
-    if (result.status === 403) return endTerminal("Admin mode was switched off.");
+    if (result.status === 403) return endTerminal("Admin mode is off. If it timed out, this shell is still running: turn it on again and open Terminal to get back to it.");
     if (result.status !== 200 || !result.body) return endTerminal("This terminal is gone.");
     const { data, offset, ended, started } = result.body;
     if (data) {

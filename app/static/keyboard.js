@@ -45,7 +45,7 @@ function topLayer() {
   if (drawerOpen()) return $("drawer");
   // Desktop mode: the window in front, if one is; else the desktop and dock.
   if (desktopMode()) return wm.active && isActive(wm.active) ? $(wm.active) : (!$("lock").hidden ? $("lock") : null);
-  for (const id of wm.windows.keys()) if (isOpen(id)) return $(id);
+  for (const [id, w] of wm.windows) if (!w.float && isOpen(id)) return $(id); // Music doesn't hold the keys
   if (!$("lock").hidden) return $("lock");
   return null; // the desktop and the dock
 }

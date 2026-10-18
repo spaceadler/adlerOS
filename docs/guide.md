@@ -208,8 +208,9 @@ Installing or deleting can take a minute or two; **Details** on the card shows
 it working.
 
 A few things need **admin mode** (Settings → System): deleting apps, and
-stopping core apps (DNS, proxies, the password manager), since your network
-and logins depend on them.
+stopping, restarting or updating core apps (DNS, your reverse proxy, the
+password manager), since your network and logins depend on them. Without
+it, their cards only offer Start and Logs.
 
 ### Importing apps adlerOS didn't find
 
@@ -284,9 +285,11 @@ or the search box:
 <!-- screenshot: the admin mode dialog -->
 ![Admin mode](screenshots/admin-mode.png)
 
-Only while it's on can you restart or shut down the machine, delete apps, or
-stop core apps. adlerOS's server checks it on every request, not just the
-buttons on the page. It stays on, for every browser, until you switch it off.
+Only while it's on can you restart or shut down the machine, delete apps,
+stop, restart or update core apps, or use the Terminal. adlerOS's server
+checks it on every request, not just the buttons on the page. It's on for
+every browser until you switch it off, or for 8 hours: then it switches
+itself off, and a terminal you had keeps running for when it's back on.
 
 ## Files
 
