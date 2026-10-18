@@ -150,7 +150,8 @@ function renderFiles() {
   if (files.view === "editor") return;
   $("files-crumbs").replaceChildren(...crumbs());
   $("files-up").disabled = files.path.split("/").filter(Boolean).length < 2;
-  const rows = files.entries.filter((e) => hiddenShown() || !e.name.startsWith(".")).map((entry) => {
+  const shown = files.entries.filter((e) => hiddenShown() || !e.name.startsWith("."));
+  const rows = (files.path === "/" ? shown : sortEntries(shown)).map((entry) => {
     const path = entry.place && files.path === "/" ? `/${entry.place}` : join(files.path, entry.name);
     const row = el("button", { type: "button", class: `file-row${entry.outside ? " outside" : ""}`, "data-file": path,
       ...(entry.dir ? { "data-dir": "1" } : {}), ...(entry.place ? { "data-place": entry.place } : {}),
@@ -178,8 +179,35 @@ function renderFiles() {
   $("files-list").replaceChildren(...(rows.length ? rows : [el("p", { class: "no-results" }, empty)]));
 }
 
+// Sorted by name, type or size, A to Z (smallest first) unless you turn it
+// round; folders always first, by name. This device remembers.
+const FILES_SORT_KEY = "adleros.filesSort";
+const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+const extOf = (name) => (name.includes(".") && !name.startsWith(".") ? name.split(".").pop().toLowerCase() : "");
+function filesSort() {
+  const s = winLoad(FILES_SORT_KEY, null);
+  return { by: ["name", "type", "size"].includes(s?.by) ? s.by : "name", desc: s?.desc === true };
+}
+function sortEntries(entries) {
+  const { by, desc } = filesSort();
+  const order = desc ? -1 : 1;
+  const compare = by === "size" ? (a, b) => (a.size || 0) - (b.size || 0) || byName(a, b)
+    : by === "type" ? (a, b) => a.kind.localeCompare(b.kind) || extOf(a.name).localeCompare(extOf(b.name)) || byName(a, b)
+      : byName;
+  return [...entries].sort((a, b) => (a.dir !== b.dir ? (a.dir ? -1 : 1) : a.dir ? byName(a, b) * order : compare(a, b) * order));
+}
+function setFilesSort(change) {
+  winSave(FILES_SORT_KEY, { ...filesSort(), ...change });
+  renderFiles();
+}
+
 function renderTools() {
   const inFolder = files.view === "folder" && files.path !== "/";
+  const sort = filesSort();
+  $("files-sort").hidden = $("files-order").hidden = !inFolder;
+  $("files-sort").value = sort.by;
+  $("files-order").textContent = sort.desc ? "↓ Descending" : "↑ Ascending";
+  $("files-order").setAttribute("aria-label", `Sorted ${sort.desc ? "descending" : "ascending"}; change it`);
   const canChange = inFolder && files.writable;
   $("files-new-folder").hidden = $("files-new-file").hidden = !canChange;
   $("files-upload").hidden = !canChange || files.place === "root";
@@ -640,6 +668,8 @@ registerWindow("files", { title: "My Computer", close: closeFiles, dock: "files"
 registerWindow("music", { title: "Music", close: closeMusic, size: [490, 260], float: true });
 registerWindow("viewer", { title: "Viewer", close: closeViewer, size: [980, 680], float: true });
 $("files-close").addEventListener("click", closeFiles);
+$("files-sort").addEventListener("change", () => setFilesSort({ by: $("files-sort").value }));
+$("files-order").addEventListener("click", () => setFilesSort({ desc: !filesSort().desc }));
 $("music-close").addEventListener("click", closeMusic);
 $("viewer-close").addEventListener("click", closeViewer);
 $("viewer-download").addEventListener("click", () => downloadFile($("viewer").dataset.path));

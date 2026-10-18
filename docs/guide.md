@@ -165,6 +165,18 @@ made phone-narrow leaves it until it's wide again.
   that have no place in the dock otherwise (apps you haven't pinned, My Computer or
   the Terminal when they aren't). Click one to bring it forward, again to minimize it; right-click
   one whose window is open for **Close**.
+- **Tiling:** **Settings → Window layout → Tiling** (each computer its own)
+  and windows share the screen, like Hyprland's: a new one takes half of the
+  one in front, along its longer side, and closing one gives its space back.
+  Drag a window by its bar onto another to swap them; Alt+V floats one (and
+  back), Alt+U/P/I/O move the line it shares with its neighbour. Floating is
+  the default.
+- **Workspaces:** ten, Alt+1 to Alt+0; Alt+Shift and a number takes the
+  window in front there. The windows slide over as you go, and a dot row
+  says where you are. The desktop and its icons are the same on all of them.
+- **Moving** is on the curves of a Hyprland config: windows glide to where
+  they go, pop in and fade, and the window in front has a gradient border
+  that turns once. Every Alt key is in [keyboard](keyboard.md#alt-keys).
 - **Keys:** Ctrl+` goes to the next window, then the desktop; Ctrl+Shift+`
   goes back. On a title bar, `m` (or the Menu key) opens its menu: left or
   right half, maximize, minimize, close, or move and resize it with the
@@ -345,6 +357,9 @@ Desktop and User themselves: opening one takes you there.
   Anything else downloads.
 - **Upload** with the button, or drop files onto the window; big files are
   fine. A file with a name that's taken gets a `(2)`.
+- **Sort** by name, type or size, ascending (the default) or descending:
+  the two buttons at the top. Folders come first either way. Each device
+  keeps its choice.
 - **New folder**, **New text file**, and per file (right-click, `m`, or its
   [keys](keyboard.md#in-my-computer)): Edit as text, Download, Copy, Cut, Rename,
   Delete.
@@ -402,7 +417,10 @@ starts in `ADLEROS_TERMINAL_DIR` if that's set, else the homelab's folder in a
 homelab, else your home folder.
 
 It's a real terminal: colours, `htop`, `nano`, `vim`, Tab completion,
-scrollback (scroll up), copy (select) and paste. While you're typing in it,
+scrollback (scroll up), copy (select) and paste. A program that takes the
+mouse (Claude Code, htop, vim with the mouse on) gets the wheel and
+scrolls itself; `less` and `man` get it as arrow keys; Shift+wheel always
+scrolls the scrollback. While you're typing in it,
 every key goes to the shell, Escape included; **Ctrl+Shift+Q** or ✕ closes it
 and ends the session. Opening another window only puts it away: `t` brings
 the same session back, and so does opening the terminal after a reload (or

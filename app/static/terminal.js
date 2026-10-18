@@ -51,6 +51,8 @@ class TermScreen {
     this.pendingWrap = false;
     this.appCursor = false;
     this.bracketed = false;
+    this.mouse = 0; // 1000, 1002 or 1003: the program wants the mouse (we send it the wheel)
+    this.mouseSgr = false; // 1006: as ESC [ < b ; x ; y M
     this.cursorVisible = true;
     this.alt = null; // the main screen's lines while the alternate one is up
     this.lines = Array.from({ length: this.rows }, () => this.blankLine());
@@ -287,6 +289,8 @@ class TermScreen {
       else if (m === 7) this.wrap = on;
       else if (m === 25) { this.cursorVisible = on; this.dirty.add(this.y); }
       else if (m === 2004) this.bracketed = on;
+      else if (m === 1000 || m === 1002 || m === 1003) this.mouse = on ? m : 0;
+      else if (m === 1006) this.mouseSgr = on;
       else if (m === 47 || m === 1047 || m === 1049) this.altScreen(on, m === 1049);
     }
   }
@@ -653,6 +657,32 @@ termInput.addEventListener("blur", () => { if (term.screen) { term.screen.focuse
 $("term-screen").addEventListener("mouseup", () => {
   if (!String(window.getSelection())) termInput.focus();
 });
+// The wheel: a program that asked for the mouse (Claude Code, htop, vim with
+// the mouse on) gets it, and scrolls what it shows itself; one on the
+// alternate screen that didn't (less, man) gets the arrow keys. Otherwise,
+// and always with Shift, the scrollback scrolls.
+let termWheel = 0;
+$("term-screen").addEventListener("wheel", (e) => {
+  const s = term.screen;
+  if (!s || !term.alive || e.shiftKey || (!s.mouse && !s.alt)) return;
+  e.preventDefault();
+  termWheel += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; // lines, or pixels
+  const steps = Math.trunc(termWheel / 50);
+  if (!steps) return;
+  termWheel -= steps * 50;
+  const up = steps < 0;
+  let one;
+  if (s.mouse) {
+    const view = s.view.getBoundingClientRect();
+    const col = Math.min(s.cols, Math.max(1, Math.floor((e.clientX - view.left) / (view.width / s.cols)) + 1));
+    const row = Math.min(s.rows, Math.max(1, Math.floor((e.clientY - view.top) / (view.height / s.rows)) + 1));
+    const b = up ? 64 : 65;
+    one = s.mouseSgr ? `\x1b[<${b};${col};${row}M` : `\x1b[M${String.fromCharCode(32 + b, 32 + Math.min(col, 223), 32 + Math.min(row, 223))}`;
+  } else {
+    one = (s.appCursor ? "\x1bO" : "\x1b[") + (up ? "A" : "B");
+  }
+  sendTerminal(one.repeat(Math.min(Math.abs(steps), 10)));
+}, { passive: false });
 $("term-screen").addEventListener("scroll", () => {
   const s = $("term-screen");
   if (term.screen) term.screen.follow = s.scrollTop + s.clientHeight >= s.scrollHeight - 4;

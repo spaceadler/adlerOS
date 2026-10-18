@@ -15,6 +15,7 @@
 const wm = { windows: new Map(), stack: [], order: [], active: null, geometry: {}, drag: null, keys: null, frames: {} };
 const WIN_MIN = [340, 220];
 const WIN_Z = 20; // above the desktop, under the dock (50)
+const WIN_CLOSE_MS = 1000; // its fade (app.css: Hyprland's fade, 10 ds)
 const DESKTOP_MODE_KEY = "adleros.desktopMode";
 const WIN_GEOMETRY_KEY = "adleros.windows";
 
@@ -77,6 +78,7 @@ function switchDesktopMode(on) {
   }
   wm.stack = [];
   wm.order = [];
+  tilesReset();
   document.body.classList.toggle("wm", on);
   wm.active = null;
   dockKey = null;
@@ -89,10 +91,11 @@ function switchDesktopMode(on) {
 
 // Each window: its section's id, a title, close() (and hide(), if closing
 // would lose something, like the terminal's session), its dock item, a size.
-// A float one (Music) is small: on the home screen it sits over the others
-// instead of taking their place.
-function registerWindow(id, { title, close, hide = null, dock = null, size = [1000, 700], app = null, extras = [], float = false }) {
-  wm.windows.set(id, { id, title, close, hide, dock, size, app, float });
+// A float one (Music, the viewer) sits over the others on the home screen
+// instead of taking their place; a floats one (Music) floats when windows
+// tile, too.
+function registerWindow(id, { title, close, hide = null, dock = null, size = [1000, 700], app = null, extras = [], float = false, floats = false }) {
+  wm.windows.set(id, { id, title, close, hide, dock, size, app, float, floats });
   if (!$(id).querySelector(":scope > .win-bar")) winFrame(id, title, extras);
 }
 
@@ -169,7 +172,14 @@ function openWindow(id) {
   if (w?.dock) markDockOpen(w.dock, true);
   if (!wm.order.includes(id)) wm.order.push(id);
   if (desktopMode()) {
-    if (fresh) winPlace(id);
+    if (fresh) {
+      wsClaim(id); // on the workspace you're on
+      // Straight to its place (its tile, when windows tile); the others move over.
+      sheet.classList.add("win-placing");
+      requestAnimationFrame(() => requestAnimationFrame(() => sheet.classList.remove("win-placing")));
+      winPlace(id);
+    }
+    winLayout();
     raiseWindow(id);
   }
   winDock();
@@ -187,6 +197,7 @@ function closeWindow(id) {
   wm.order = wm.order.filter((o) => o !== id);
   if (wm.active === id) winActivateTop();
   if (hadFocus && desktopMode()) winFocusNext();
+  winLayout(); // the others fill its place while it fades
   winDock();
   setTimeout(() => {
     if (!sheet.classList.contains("closing")) return; // opened again meanwhile
@@ -196,7 +207,7 @@ function closeWindow(id) {
       sheet.remove();
       wm.windows.delete(id);
     }
-  }, desktopMode() ? 160 : 280);
+  }, desktopMode() ? WIN_CLOSE_MS : 280);
   return true;
 }
 
@@ -212,7 +223,10 @@ function toggleWindow(id, open) {
 function raiseWindow(id, focus = false) {
   const sheet = $(id);
   if (!sheet || !desktopMode() || !isOpen(id)) return;
+  if (!wsHere(id)) return switchWorkspace(wsOf(id), id); // over there: go there
+  const wasMinimized = sheet.classList.contains("minimized");
   sheet.classList.remove("minimized");
+  if (wasMinimized) winLayout();
   wm.stack = [...wm.stack.filter((o) => o !== id && wm.windows.has(o)), id];
   wm.stack.forEach((o, i) => { if ($(o)) $(o).style.zIndex = String(WIN_Z + i); });
   if (wm.active !== id) {
@@ -227,7 +241,7 @@ function raiseWindow(id, focus = false) {
 // The window under it gets to be the active one; none left, the desktop.
 function winActivateTop() {
   wm.active = null;
-  const next = [...wm.stack].reverse().find((o) => isOpen(o) && !$(o).classList.contains("minimized"));
+  const next = [...wm.stack].reverse().find((o) => isOpen(o) && wsHere(o) && !$(o).classList.contains("minimized"));
   if (next) raiseWindow(next);
   else for (const o of wm.windows.keys()) $(o)?.classList.remove("active");
 }
@@ -246,6 +260,7 @@ function minimizeWindow(id) {
   sheet.classList.remove("active");
   if (wm.active === id) winActivateTop();
   if (hadFocus) winFocusNext();
+  winLayout();
   winDock();
 }
 
@@ -284,8 +299,11 @@ function winApply(id) {
   const g = wm.geometry[id];
   if (!sheet || !g) return;
   const area = winArea();
+  const tile = g.mode !== "max" && tileBox(id);
+  sheet.dataset.tiled = tile ? "1" : "";
   let box;
-  if (g.mode === "max") box = { x: 0, y: 0, w: area.w, h: area.h };
+  if (tile) box = tile;
+  else if (g.mode === "max") box = { x: 0, y: 0, w: area.w, h: area.h };
   else if (g.mode === "left") box = { x: 0, y: 0, w: Math.round(area.w / 2), h: area.h };
   else if (g.mode === "right") box = { x: Math.round(area.w / 2), y: 0, w: area.w - Math.round(area.w / 2), h: area.h };
   else {
@@ -328,10 +346,16 @@ function toggleMaximize(id) {
 
 function winPointerDown(e, id, kind) {
   if (!desktopMode() || e.button !== 0 || (kind === "move" && e.target.closest("button"))) return;
+  winDragStart(e, id, kind, e.currentTarget);
+}
+
+function winDragStart(e, id, kind, holder) {
   raiseWindow(id);
   const r = $(id).getBoundingClientRect();
-  wm.drag = { id, kind, sx: e.clientX, sy: e.clientY, box: { x: r.left, y: r.top, w: r.width, h: r.height }, moved: false, snap: null };
-  e.currentTarget.setPointerCapture(e.pointerId);
+  // A tiled one is lifted out of its place, and dropped on another to swap.
+  wm.drag = { id, kind, sx: e.clientX, sy: e.clientY, box: { x: r.left, y: r.top, w: r.width, h: r.height }, moved: false, snap: null,
+    tiled: Boolean(tileBox(id)) };
+  holder.setPointerCapture(e.pointerId);
   e.preventDefault();
 }
 
@@ -346,6 +370,12 @@ function winPointerMove(e) {
     document.body.classList.add("win-moving");
   }
   const g = wm.geometry[d.id];
+  if (d.tiled) {
+    if (d.kind !== "move") return;
+    Object.assign($(d.id).style, { left: `${Math.round(d.box.x + dx)}px`, top: `${Math.round(d.box.y + dy)}px` });
+    d.at = [e.clientX, e.clientY];
+    return;
+  }
   if (d.kind === "move") {
     if (g.mode !== "normal") {
       // Dragging a maximized or half-screen window off: its own size again,
@@ -377,6 +407,10 @@ function winPointerUp() {
   wm.drag = null;
   document.body.classList.remove("win-moving");
   winSnapHint(null);
+  if (d.tiled) {
+    if (d.moved && d.at) tileDrop(d.id, d.at[0], d.at[1]);
+    return winLayout();
+  }
   if (d.snap) {
     wm.geometry[d.id].mode = d.snap;
     winApply(d.id);
@@ -440,7 +474,7 @@ function winMenu(id) {
 
 // Round the open windows (and the desktop), in the order they opened.
 function winCycle(back) {
-  const stops = [...wm.order.filter((id) => isOpen(id)), null];
+  const stops = [...wm.order.filter((id) => isOpen(id) && wsHere(id)), null];
   if (stops.length === 1) return;
   const i = stops.indexOf(wm.active);
   const next = stops[(i + (back ? -1 : 1) + stops.length) % stops.length];
@@ -638,6 +672,5 @@ document.addEventListener("keydown", (e) => {
   e.stopImmediatePropagation();
 }, true);
 window.addEventListener("resize", () => {
-  if (!desktopMode()) return;
-  for (const id of wm.windows.keys()) if (isOpen(id)) winApply(id);
+  if (desktopMode()) winLayout();
 });

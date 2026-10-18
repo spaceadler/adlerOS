@@ -15,6 +15,7 @@
     "  open          a button opening one of adlerOS's windows (target: terminal)",
     "  glass         the window transparency slider (this device's)",
     "  open-apps     window or new tab for apps on the home screen (this device's)",
+    "  tiling        floating or tiling windows in desktop mode (this computer's)",
     "admin: true on a row: it only works while admin mode is on.",
     "mode: \"homelab\" or \"standalone\" on a row: only shown in that kind of install.",
     "keywords: extra words the search box matches."
@@ -103,6 +104,18 @@
       "keywords": "windows window manager floating desktop computer laptop multitask side by side split",
       "control": {
         "type": "desktop-mode"
+      }
+    },
+    {
+      "id": "tiling",
+      "category": "account",
+      "device": "computer",
+      "icon": "windows",
+      "title": "Window layout",
+      "description": "In desktop mode: windows float (you place them), or tile and share the screen, a new one taking half of the one in front, like Hyprland's. Alt+V floats one anyway. Just this computer.",
+      "keywords": "tiling tile floating float layout hyprland i3 sway window manager dwindle",
+      "control": {
+        "type": "tiling"
       }
     },
     {

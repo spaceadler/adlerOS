@@ -302,6 +302,13 @@ function buildRow(row) {
       value.textContent = Number(range.value).toFixed(2);
     });
     control.append(range, value);
+  } else if (c.type === "tiling") {
+    // This computer's, like desktop mode.
+    const select = el("select", { class: "field-input", "aria-label": row.title },
+      el("option", { value: "floating" }, "Floating"), el("option", { value: "tiling" }, "Tiling"));
+    select.value = winLoad(TILING_KEY, false) === true ? "tiling" : "floating";
+    select.addEventListener("change", () => setTiling(select.value === "tiling"));
+    control.append(select);
   } else if (c.type === "open-apps") {
     const select = el("select", { class: "field-input", "aria-label": row.title },
       el("option", { value: "here" }, "In a window here"), el("option", { value: "tab" }, "In a new tab"));

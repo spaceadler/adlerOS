@@ -1766,6 +1766,7 @@ a.chip-button { text-decoration: none; }
 .crumb.current { cursor: default; }
 .crumb-sep { color: rgb(255 255 255 / 0.35); }
 .files-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.files-sort { width: auto; height: 32px; padding-left: 12px; }
 .files-main { display: flex; flex: 1; gap: 14px; min-height: 0; }
 .files-side { display: flex; flex-direction: column; gap: 2px; width: 170px; flex-shrink: 0; }
 .files-place {
@@ -2130,6 +2131,19 @@ body.wm .desk {
 }
 .desk-empty { grid-column: 1 / span 4; max-width: 360px; margin: 0; padding: 14px 16px; border-radius: 14px; background: rgb(0 0 0 / 0.4); font-size: 13px; }
 
+/* Moving, opening and closing on the curves of your Hyprland animations:
+   windowsMove 5 ds on wind (a window's place and size, and its wallpaper
+   with it), fade 10 ds, a window in on winIn and out on winOut; workspaces
+   slide 5 ds on wind (tiling.js); the border below. */
+:root {
+  --hl-wind: cubic-bezier(0.05, 0.9, 0.1, 1.05);
+  --hl-win-in: cubic-bezier(0.1, 1.1, 0.1, 1.1);
+  --hl-win-out: cubic-bezier(0.3, -0.3, 0, 1);
+  --hl-default: cubic-bezier(0, 0.75, 0.15, 1);
+}
+@property --win-x { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --win-y { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --hl-angle { syntax: "<angle>"; inherits: false; initial-value: 45deg; }
 body.wm .sheet {
   bottom: auto;
   max-width: none;
@@ -2137,15 +2151,55 @@ body.wm .sheet {
   border-radius: 14px;
   box-shadow: 0 22px 60px rgb(0 0 0 / 0.6);
   transform: none;
-  animation: win-in 0.16s ease-out both;
+  transition: left 0.5s var(--hl-wind), top 0.5s var(--hl-wind), width 0.5s var(--hl-wind), height 0.5s var(--hl-wind),
+    --win-x 0.5s var(--hl-wind), --win-y 0.5s var(--hl-wind);
+  animation: hl-pop-in 0.41s var(--hl-win-in) both, hl-fade-in 1s var(--hl-default) both;
 }
+body.wm.win-moving .sheet, body.wm .sheet.win-keyed, body.wm .sheet.win-placing { transition: none; }
+@keyframes hl-pop-in { from { transform: scale(0.8); } }
+@keyframes hl-fade-in { from { opacity: 0; } }
+@keyframes hl-pop-out { to { transform: scale(0.8); } }
+@keyframes hl-fade-out { to { opacity: 0; } }
+/* Its border: Hyprland's gradient, turning once as a window comes to the
+   front (borderangle 30 ds), its colour in a tenth of a second (border). */
+body.wm .sheet::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  padding: 2px;
+  border-radius: inherit;
+  background: linear-gradient(var(--hl-angle), rgb(51 204 255 / 0.93), rgb(0 255 153 / 0.93));
+  -webkit-mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  -webkit-mask-clip: content-box, border-box;
+  -webkit-mask-composite: xor;
+  mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  mask-clip: content-box, border-box;
+  mask-composite: exclude;
+  filter: grayscale(1) brightness(0.5);
+  opacity: 0.67;
+  pointer-events: none;
+  transition: filter 0.1s linear, opacity 0.1s linear;
+}
+body.wm .sheet.active::before { filter: none; opacity: 1; animation: hl-border-angle 3s linear 1; }
+body.wm .sheet[data-mode="max"]::before { display: none; }
+@keyframes hl-border-angle { from { --hl-angle: 45deg; } to { --hl-angle: 405deg; } }
+/* Tiling and workspaces (tiling.js). */
+body.wm .sheet.off-ws { display: none; }
+body.wm .sheet[data-tiled="1"] .win-grip { display: none; }
+body.wm.alt-held .sheet { cursor: move; }
+body.wm.alt-held .app-sheet .app-shield { position: absolute; inset: 38px 0 0; z-index: 7; display: block; }
+.ws-osd { position: fixed; top: 70px; left: 50%; z-index: 60; display: flex; gap: 6px; padding: 8px 12px; border-radius: 999px; opacity: 0; pointer-events: none; translate: -50% 0; transition: opacity 0.4s; }
+.ws-osd.shown { opacity: 1; transition-duration: 0.1s; }
+.ws-dot { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 600; color: rgb(255 255 255 / 0.4); }
+.ws-dot.used { color: #fff; }
+.ws-dot.current { background: rgb(255 255 255 / 0.92); color: #000; }
 body.wm .sheet:not(.active) { box-shadow: 0 10px 30px rgb(0 0 0 / 0.45); }
-body.wm .sheet.closing { animation: win-out 0.16s ease-in both; }
+body.wm .sheet.closing { animation: hl-pop-out 0.41s var(--hl-win-out) both, hl-fade-out 1s var(--hl-default) both; pointer-events: none; }
 body.wm .sheet.minimized { display: none; }
 body.wm .sheet[data-mode="max"] { border-radius: 0; }
 body.wm .sheet.win-keyed { box-shadow: 0 0 0 3px #fff, 0 22px 60px rgb(0 0 0 / 0.6); }
-@keyframes win-in { from { opacity: 0; transform: scale(0.97); } }
-@keyframes win-out { to { opacity: 0; transform: scale(0.97); } }
+
 body.wm .sheet-close { display: none; }
 body.wm .win-bar {
   position: absolute;
