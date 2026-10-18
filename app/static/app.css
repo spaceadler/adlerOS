@@ -21,6 +21,10 @@
 
 :root {
   color-scheme: dark;
+  /* Window transparency, 0 (solid) to 1 (Settings; windows.js sets it), and
+     the wallpaper that windows show, blurred, behind them (app.js). */
+  --glass: 0.45;
+  --wallpaper: none;
   /* Grid geometry; app.js sets the real values per breakpoint. */
   --app-w: 120px;
   --app-h: 110px;
@@ -1187,12 +1191,12 @@ body.arranging .app:nth-child(2n) .app-icon { animation-delay: -0.12s; }
 .sheet-wallpaper {
   position: absolute;
   inset: 0;
-  background: center / cover no-repeat;
+  background: var(--wallpaper) center / cover no-repeat;
   transform: scale(1.2);
   filter: blur(40px) saturate(150%) brightness(70%);
   animation: fade-in 0.7s ease-out 0.2s both;
 }
-.sheet-tint { position: absolute; inset: 0; background: rgb(0 0 0 / 0.7); }
+.sheet-tint { position: absolute; inset: 0; background: rgb(0 0 0 / calc(1 - var(--glass))); }
 .sheet::after {
   content: "";
   position: absolute;
@@ -1831,8 +1835,25 @@ a.chip-button { text-decoration: none; }
 .upload { display: flex; justify-content: space-between; gap: 12px; padding: 6px 12px; border-radius: 10px; background: rgb(255 255 255 / 0.06); font-size: 12px; }
 .files-sheet.dropping .files-list { box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85) inset; }
 .wide-input { width: 100%; }
-.dialog.preview { width: min(980px, 100%); }
-.preview-media { display: block; max-width: 100%; max-height: 70vh; margin: 0 auto 18px; border-radius: 12px; }
+/* The viewer (files.js): a picture, a video or a PDF in a window of its own.
+   Over the home screen it floats over Files and the rest, as big as fits
+   above the dock. */
+.viewer-sheet { display: flex; flex-direction: column; }
+.viewer-head { position: relative; z-index: 2; display: flex; flex-shrink: 0; align-items: center; gap: 10px; min-height: 52px; padding: 8px 64px 8px 18px; border-bottom: 1px solid rgb(255 255 255 / 0.08); }
+body.wm .viewer-head { min-height: 44px; padding-right: 10px; }
+.viewer-title { flex: 1; overflow: hidden; font-size: 15px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.viewer-close { top: 8px; }
+.viewer-body { position: relative; z-index: 2; flex: 1; min-height: 0; padding: 12px; }
+.viewer-body img, .viewer-body video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.viewer-body iframe { display: block; width: 100%; height: 100%; border: 0; border-radius: 10px; background: #fff; }
+body:not(.wm) .sheet.viewer-sheet {
+  top: max(20px, env(safe-area-inset-top));
+  bottom: calc(var(--dock-h, 74px) + 10px + 12px);
+  z-index: 45;
+  width: min(1100px, calc(100vw - 32px));
+  height: auto;
+  border-radius: 24px;
+}
 
 /* Music (files.js): a song in a window of its own. In desktop mode it's a
    window like any other; over the home screen (and on a phone) it floats
@@ -1847,12 +1868,7 @@ body:not(.wm) .sheet.music-sheet {
   width: min(490px, calc(100vw - 32px));
   height: 260px;
   border-radius: 24px;
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  backdrop-filter: blur(28px) saturate(150%);
 }
-body:not(.wm) .music-sheet .sheet-bg { background: transparent; }
-body:not(.wm) .music-sheet .sheet-wallpaper { display: none; }
-body:not(.wm) .music-sheet .sheet-tint { background: rgb(0 0 0 / 0.55); }
 body:not(.wm) .music-name { padding-inline: 40px; }
 /* The editor takes the window's place while it's open. */
 .editor { display: none; flex: 1; flex-direction: column; gap: 10px; min-height: 0; }
@@ -1889,7 +1905,7 @@ body:not(.wm) .music-name { padding-inline: 40px; }
 /* Glass like the other windows, a little darker for the text; --term-bg
    stays solid for what's drawn in it (inverse text, the cursor). */
 .term-sheet { --term-bg: #0d0f12; --term-fg: #d7dae0; display: flex; flex-direction: column; }
-.term-tint { background: rgb(13 15 18 / 0.8); }
+.term-tint { background: rgb(13 15 18 / calc(1 - var(--glass))); }
 .term-head {
   position: relative;
   z-index: 2;
@@ -2060,6 +2076,10 @@ body:not(.wm) .music-name { padding-inline: 40px; }
 
 .desk, .win-bar, .win-grip, .app-shield { display: none; }
 body.wm .header, body.wm .stage { display: none; }
+/* With the greeting and apps gone, the Search pill is at the top: as far
+   from it as the bell, and as tall. */
+body.wm .search-pill { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 50%; z-index: 20; height: 40px; padding-block: 0; transform: translateX(-50%); }
+body.wm .search-pill:active { transform: translateX(-50%) scale(0.97); }
 body.wm.sheet-open .desktop { opacity: 1; }
 body.wm .desk {
   position: fixed;
@@ -2307,19 +2327,56 @@ body.wm .desk { grid-auto-flow: column dense; }
 .desk-icon.drop-target { background: rgb(255 255 255 / 0.22); box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85); }
 .files-list.drop-here { box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85) inset; }
 
-/* Desktop mode: windows are glass over what's really behind them (other
-   windows, the desktop), not over a copy of the wallpaper; an app's page is
-   a little see-through too. Maximized, a window is solid again. */
-body.wm .sheet:not([data-mode="max"]) {
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  backdrop-filter: blur(28px) saturate(150%);
+/* Windows are glass over the desktop: the wallpaper, blurred, lined up with
+   the real one wherever the window is (windows.js sets --win-x and -y), so
+   two windows on top of each other don't show through each other. How much
+   shows is --glass (Settings → Window transparency); an app's page lets a
+   little through too, except maximized. */
+body.wm .sheet:not([data-mode="max"]) .sheet-wallpaper {
+  inset: auto;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100dvh;
+  transform: translate(calc(-1 * var(--win-x, 0px)), calc(-1 * var(--win-y, 0px)));
+  filter: blur(28px) saturate(150%);
 }
-body.wm .sheet:not([data-mode="max"]) .sheet-bg { background: transparent; }
-body.wm .sheet:not([data-mode="max"]) .sheet-wallpaper { display: none; }
-body.wm .sheet:not([data-mode="max"]) .sheet-tint { background: rgb(0 0 0 / 0.55); }
-body.wm .sheet:not([data-mode="max"]) .term-tint { background: rgb(13 15 18 / 0.72); }
-body.wm .app-sheet:not([data-mode="max"]) .sheet-tint { background: rgb(0 0 0 / 0.2); }
-body.wm .app-sheet:not([data-mode="max"]) .app-frame { opacity: 0.92; }
+.app-sheet .sheet-tint { background: rgb(0 0 0 / calc((1 - var(--glass)) * 0.36)); }
+.app-frame { opacity: calc(1 - var(--glass) * 0.18); }
+body.wm .app-sheet[data-mode="max"] .app-frame { opacity: 1; }
+
+/* An app's window on the home screen: a head like the terminal's (desktop
+   mode has its title bar instead). */
+.app-head { display: none; }
+body:not(.wm) .app-head {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 12px 8px 16px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+}
+.app-head-plate { display: grid; flex-shrink: 0; width: 26px; height: 26px; overflow: hidden; border-radius: 7px; }
+.app-head-plate .plate { width: 100%; height: 100%; }
+.app-head-title { flex: 1; overflow: hidden; font-size: 15px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.app-head-button { display: grid; flex-shrink: 0; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgb(255 255 255 / 0.08); color: rgb(255 255 255 / 0.8); cursor: pointer; }
+.app-head-button:hover { background: rgb(255 255 255 / 0.16); }
+.app-head-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Over a window on the home screen the dock steps aside (it covered the
+   window's last lines), and comes back when the pointer reaches the bottom
+   edge, or the keys go into it. */
+.dock { transition: translate 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
+body.sheet-open:not(.wm):not(.dock-peek) .dock:not(:focus-within) { translate: 0 calc(100% + 30px); }
+.dock-edge { position: fixed; left: 0; right: 0; bottom: 0; z-index: 49; display: none; height: 6px; }
+body.sheet-open:not(.wm):not(.dock-peek) .dock-edge { display: block; }
+body.phone .dock-edge { height: 16px; }
+
+.glass-range { width: 160px; accent-color: #fff; }
+.glass-value { min-width: 34px; font-size: 13px; font-variant-numeric: tabular-nums; color: rgb(255 255 255 / 0.75); text-align: right; }
 
 /* Dragging a file out of Files (files.js). */
 .file-ghost { position: fixed; top: 0; left: 0; z-index: 300; display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 12px; font-size: 13px; pointer-events: none; }
@@ -2341,17 +2398,29 @@ body.wm .app-sheet:not([data-mode="max"]) .app-frame { opacity: 0.92; }
 body.wm .desk > .desk-icon { grid-row: span 2; }
 body.wm .desk > .desk-empty { grid-row: span 2; }
 
-/* The search bar widget (desktop mode): a bar, four icons wide and half a row tall. */
-.w-search { display: flex; flex: 1; align-items: center; gap: 10px; min-width: 0; padding: 0 16px; }
-.w-search svg { width: 17px; height: 17px; flex-shrink: 0; fill: none; stroke: rgb(255 255 255 / 0.7); stroke-width: 2.2; stroke-linecap: round; cursor: grab; }
-.w-search-input { flex: 1; min-width: 0; border: 0; background: none; color: #fff; font: inherit; font-size: 15px; font-weight: 500; outline: none; }
+/* The search bar widget (desktop mode): eight icons wide and half a row
+   tall, and the home screen's search bar to look at (.web-search). */
+.w-search { display: flex; flex: 1; align-items: center; gap: 10px; min-width: 0; padding: 0 8px 0 14px; }
+.w-search svg { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: rgb(255 255 255 / 0.7); stroke-width: 2.2; stroke-linecap: round; cursor: grab; }
+.w-search-input { flex: 1; min-width: 0; border: 0; background: none; color: #fff; font: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.01em; outline: none; }
+.w-search kbd { flex-shrink: 0; padding: 2px 7px; border-radius: 6px; background: rgb(255 255 255 / 0.1); font: inherit; font-size: 12px; color: rgb(255 255 255 / 0.5); opacity: 0; transition: opacity 0.2s; }
+.w-search:focus-within kbd { opacity: 1; }
 span.w-search-input { color: rgb(255 255 255 / 0.55); }
 .w-search-input::placeholder { color: rgb(255 255 255 / 0.55); }
 .w-search-input::-webkit-search-cancel-button { filter: invert(1); opacity: 0.6; }
 .desk-widget.bar .widget { gap: 0; }
 .desk-widget.bar .widget-label { display: none; }
-.desk-widget.bar .widget-panel { border-radius: 999px; cursor: grab; }
-.desk-widget.bar .widget-panel:focus-within { box-shadow: var(--shine), 0 0 0 3px rgb(255 255 255 / 0.35); }
+.desk-widget.bar .widget-panel {
+  flex: 0 0 auto;
+  height: var(--web-search-h, 40px);
+  border-radius: 999px;
+  background: linear-gradient(to bottom, rgb(255 255 255 / 0.1), rgb(12 14 18 / 0.34));
+  -webkit-backdrop-filter: blur(16px) saturate(180%) brightness(82%);
+  backdrop-filter: blur(16px) saturate(180%) brightness(82%);
+  box-shadow: var(--shine), 0 10px 20px rgb(0 0 0 / 0.25);
+  cursor: grab;
+}
+.desk-widget.bar .widget-panel:focus-within { box-shadow: var(--shine), 0 0 0 4px rgb(255 255 255 / 0.2), 0 10px 20px rgb(0 0 0 / 0.25); }
 .picker-option .widget-panel[data-type="search"] { height: 48px; border-radius: 999px; }
 .wallpaper-option img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .file-row.selected { background: rgb(255 255 255 / 0.12); }

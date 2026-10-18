@@ -147,7 +147,7 @@ async function refreshLive() {
 function renderSide() {
   const d = settings.data;
   const wallpaperUrl = `url("/api/wallpaper?id=${encodeURIComponent(d.wallpaper.selected)}")`;
-  for (const bg of document.querySelectorAll(".sheet-wallpaper")) bg.style.backgroundImage = wallpaperUrl;
+  document.documentElement.style.setProperty("--wallpaper", wallpaperUrl);
 
   // A small picture of the desktop: wallpaper, greeting, widgets, apps, dock.
   const preview = $("settings-preview");
@@ -293,6 +293,21 @@ function buildRow(row) {
     const sw = el("button", { type: "button", class: "switch", role: "switch", "aria-checked": String(desktopMode()), "aria-label": "Desktop mode" }, el("span"));
     sw.addEventListener("click", () => setDesktopMode(!desktopMode()));
     control.append(sw);
+  } else if (c.type === "glass") {
+    // This device's, like desktop mode.
+    const value = el("span", { class: "glass-value" }, glassLevel().toFixed(2));
+    const range = el("input", { type: "range", class: "glass-range", min: "0", max: "1", step: "0.05", value: String(glassLevel()), "aria-label": row.title });
+    range.addEventListener("input", () => {
+      setGlass(Number(range.value));
+      value.textContent = Number(range.value).toFixed(2);
+    });
+    control.append(range, value);
+  } else if (c.type === "open-apps") {
+    const select = el("select", { class: "field-input", "aria-label": row.title },
+      el("option", { value: "here" }, "In a window here"), el("option", { value: "tab" }, "In a new tab"));
+    select.value = appsInTabs() ? "tab" : "here";
+    select.addEventListener("change", () => winSave(OPEN_APPS_KEY, select.value));
+    control.append(select);
   } else if (c.type === "open") {
     // Opens one of adlerOS's windows (the terminal, say).
     const b = el("button", { type: "button", class: "chip-button" }, c.label || "Open");

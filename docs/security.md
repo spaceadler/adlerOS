@@ -146,6 +146,12 @@ shell inside its own container. It has no login unless you add one
   `.env`).
 - **Logs** show what an app's containers printed, which can include things
   apps log (addresses, usernames).
+- **A PDF in Firefox:** the helper checks it's a PDF inside one of Files'
+  places (links resolved, nothing outside them, 512 MB at most), copies it
+  into the Firefox app's own `config/adleros-open/` (cleared after a day:
+  Firefox sees nothing else of the machine), and runs exactly one command in
+  its container, `firefox --new-tab file:///config/adleros-open/…`, as its
+  user.
 - **Store apps** get new random passwords in their own `.env` (only you can
   read it).
 

@@ -38,6 +38,23 @@ function winSave(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private window: not kept */ }
 }
 
+// This device's: how see-through windows are, in both modes, 0 (solid) to 1
+// (just the blurred wallpaper); and on the home screen, whether an app opens
+// in a window here (a Raspberry Pi showing adlerOS full screen has nowhere
+// else to show a tab) or in a new tab.
+const GLASS_KEY = "adleros.glass";
+const GLASS_DEFAULT = 0.45;
+const OPEN_APPS_KEY = "adleros.openApps";
+function glassLevel() {
+  const v = Number(winLoad(GLASS_KEY, GLASS_DEFAULT));
+  return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : GLASS_DEFAULT;
+}
+function setGlass(v, keep = true) {
+  document.documentElement.style.setProperty("--glass", String(v));
+  if (keep) winSave(GLASS_KEY, v);
+}
+function appsInTabs() { return winLoad(OPEN_APPS_KEY, "here") === "tab"; }
+
 // -------------------------------------------------------- the two modes
 
 function setDesktopMode(on) {
@@ -115,6 +132,17 @@ function winFrame(id, title, extras) {
   }
 }
 
+// A window that shows one thing at a time (the viewer): its title, in its
+// bar and the dock.
+function titleWindow(id, title) {
+  const w = wm.windows.get(id);
+  if (!w) return;
+  w.title = title;
+  const bar = $(id).querySelector(":scope > .win-bar .win-title");
+  if (bar) bar.textContent = title;
+  winDock();
+}
+
 // ------------------------------------------------------ open and close
 
 function isActive(id) {
@@ -128,6 +156,7 @@ function openWindow(id) {
   const w = wm.windows.get(id);
   if (!desktopMode() && !w?.float) {
     for (const [other, o] of wm.windows) if (other !== id && !o.float && isOpen(other)) (o.hide || o.close)();
+    document.body.classList.remove("dock-peek"); // the dock steps aside again
   }
   const sheet = $(id);
   const fresh = sheet.hidden || sheet.classList.contains("closing");
@@ -265,6 +294,10 @@ function winApply(id) {
     box = g;
   }
   Object.assign(sheet.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` });
+  // Its blurred wallpaper lines up with the real one: a window shows the
+  // desktop behind it, never the windows in between.
+  sheet.style.setProperty("--win-x", `${box.x}px`);
+  sheet.style.setProperty("--win-y", `${box.y}px`);
   sheet.dataset.mode = g.mode;
   const max = sheet.querySelector(":scope > .win-bar .win-button.max");
   if (max) max.setAttribute("aria-label", g.mode === "max" ? "Restore" : "Maximize");
@@ -486,18 +519,33 @@ async function openAppWindow(app) {
     // An inactive window's page would swallow the click that should bring it forward.
     const shield = el("div", { class: "app-shield", "aria-hidden": "true" });
     shield.addEventListener("pointerdown", () => raiseWindow(id));
+    const tab = () => window.open(app.url, "_blank", "noopener,noreferrer");
+    const close = () => closeWindow(id);
+    // On the home screen there's no title bar: this head, like the terminal's.
+    const head = el("div", { class: "app-head" }, el("span", { class: "app-head-plate" }, plateFor(app)),
+      el("span", { class: "app-head-title" }, app.name),
+      headButton("Reload", () => reloadAppWindow(id), ["M21 12a9 9 0 1 1-3-6.7L21 8", "M21 3v5h-5"]),
+      headButton("Open in a new tab", tab, ["M14 4h6v6", "M20 4 10 14", "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"]),
+      headButton(`Close ${app.name}`, close, ["M18 6 6 18", "m6 6 12 12"]));
     const sheet = el("section", { id, class: "sheet app-sheet", "aria-label": app.name, hidden: "" },
-      el("div", { class: "sheet-bg", "aria-hidden": "true" }, el("div", { class: "sheet-tint" })), frame, shield);
+      el("div", { class: "sheet-bg", "aria-hidden": "true" }, el("div", { class: "sheet-wallpaper" }), el("div", { class: "sheet-tint" })),
+      head, frame, shield);
     document.body.insertBefore(sheet, $("modal"));
     registerWindow(id, {
-      title: app.name, close: () => closeWindow(id), size: [1200, 800], app,
+      title: app.name, close, size: [1200, 800], app,
       extras: [
         { kind: "reload", label: "Reload", run: () => reloadAppWindow(id), icon: ["M21 12a9 9 0 1 1-3-6.7L21 8", "M21 3v5h-5"] },
-        { kind: "tab", label: "Open in a new tab", run: () => window.open(app.url, "_blank", "noopener,noreferrer"), icon: ["M14 4h6v6", "M20 4 10 14", "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"] },
+        { kind: "tab", label: "Open in a new tab", run: tab, icon: ["M14 4h6v6", "M20 4 10 14", "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"] },
       ],
     });
   }
   openWindow(id);
+}
+
+function headButton(label, run, paths) {
+  const b = el("button", { type: "button", class: "app-head-button", "aria-label": label, title: label }, svg(paths));
+  b.addEventListener("click", run);
+  return b;
 }
 
 function reloadAppWindow(id) {
@@ -508,6 +556,30 @@ function reloadAppWindow(id) {
 // ---------------------------------------------------------------- wiring
 
 wm.geometry = winLoad(WIN_GEOMETRY_KEY, {}) || {};
+setGlass(glassLevel(), false);
+
+// Over a window on the home screen the dock is away (app.css): down at the
+// bottom edge it comes back, and goes again a moment after the pointer isn't
+// on it (never while it is, or while its menu is open).
+const dockPeek = { timer: null, over: false };
+function dockAwaySoon(ms) {
+  clearTimeout(dockPeek.timer);
+  dockPeek.timer = setTimeout(function away() {
+    if (dockPeek.over || !$("menu").hidden) dockPeek.timer = setTimeout(away, 500);
+    else document.body.classList.remove("dock-peek");
+  }, ms);
+}
+const dockEdge = el("div", { class: "dock-edge", "aria-hidden": "true" });
+document.body.append(dockEdge);
+dockEdge.addEventListener("pointerenter", () => {
+  document.body.classList.add("dock-peek");
+  dockAwaySoon(1500);
+});
+$("dock").addEventListener("pointerenter", () => { dockPeek.over = true; });
+$("dock").addEventListener("pointerleave", () => {
+  dockPeek.over = false;
+  dockAwaySoon(500);
+});
 if (winLoad(DESKTOP_MODE_KEY, false) === true && computerScreen()) document.body.classList.add("wm");
 // The screen got narrow (or wide again): off, or back on if you'd chosen it.
 NARROW_SCREEN.addEventListener("change", () => {
