@@ -28,11 +28,27 @@ let fileFront = null; // the one you used last: the desktop's opening and Escape
 
 function makeFileWin(id, section) {
   const f = { id, section, path: "/user", place: "user", places: [], entries: [], view: "folder",
-    writable: true, admin: false, rootAllowed: false, trash: [],
+    writable: true, admin: false, rootAllowed: false, trash: [], back: [], fwd: [], shown: false,
     part: (name) => section.querySelector(`[data-part="${name}"]`) };
   fileWins.set(id, f);
   wireFiles(f);
+  registerNav(id, (dir) => filesNav(f, dir));
   return f;
+}
+
+// Back and forward (the mouse's side buttons): where this window has been.
+const filesHere = (f) => ({ view: f.view === "trash" ? "trash" : "folder", path: f.path });
+function filesWent(f, from) {
+  f.back.push(from);
+  if (f.back.length > 100) f.back.shift();
+  f.fwd = [];
+}
+function filesNav(f, dir) {
+  const to = (dir < 0 ? f.back : f.fwd).pop();
+  if (!to) return;
+  (dir < 0 ? f.fwd : f.back).push(filesHere(f));
+  if (to.view === "trash") showTrash(f, { remember: false });
+  else showFolder(to.path, f, { remember: false });
 }
 const mainFiles = () => fileWins.get("files");
 const frontFiles = () => (fileFront && fileWins.has(fileFront.id) && isOpen(fileFront.id) ? fileFront : mainFiles());
@@ -113,7 +129,8 @@ function forgetFileEdits() { for (const p of pads.values()) p.dirty = false; }
 
 // --------------------------------------------------------------- folder
 
-async function showFolder(path, f = frontFiles()) {
+async function showFolder(path, f = frontFiles(), { remember = true } = {}) {
+  const from = f.shown ? filesHere(f) : null;
   const { status, body } = await api(`/api/files?path=${encodeURIComponent(path)}`).catch(() => ({ status: 0 }));
   if (status === 401) return showLock();
   if (status === 404 && body?.error === "no storage folder is mounted") {
@@ -125,9 +142,11 @@ async function showFolder(path, f = frontFiles()) {
   }
   if (status !== 200) {
     toast(body?.error || "Can't open that folder.");
-    if (path !== "/user" && path !== "/") return showFolder(f.places.length ? `/${f.places[0].place}` : "/", f);
+    if (path !== "/user" && path !== "/") return showFolder(f.places.length ? `/${f.places[0].place}` : "/", f, { remember });
     return;
   }
+  if (remember && from && (from.view !== "folder" || from.path !== body.path)) filesWent(f, from);
+  f.shown = true;
   Object.assign(f, {
     view: "folder", path: body.path, place: body.place, places: body.places, entries: body.entries,
     writable: body.writable, admin: Boolean(body.admin), rootAllowed: Boolean(body.rootAllowed),
@@ -532,9 +551,10 @@ function uploadFiles(list, dir = frontFiles().path, f = frontFiles()) {
 
 // ---------------------------------------------------------------- trash
 
-async function showTrash(f) {
+async function showTrash(f, { remember = true } = {}) {
   const { status, body } = await api("/api/files/trash").catch(() => ({ status: 0 }));
   if (status !== 200) return toast("Can't open the Trash.");
+  if (remember && f.shown && f.view !== "trash") filesWent(f, filesHere(f));
   f.view = "trash";
   f.trash = body.items;
   renderFiles(f);

@@ -19,7 +19,7 @@
 const adler = {
   vault: null, vaults: [], index: null, names: new Set(), notes: new Map(), backlinks: new Map(), tags: new Map(),
   tabs: [], active: -1, pane: "files", right: winLoad("adleros.mdRight", true) !== false, expanded: new Set(),
-  texts: new Map(), refreshTimer: null, built: false,
+  texts: new Map(), refreshTimer: null, built: false, shown: null, // shown: the tab mdRenderMain last drew
 };
 const MD_MODE_KEY = "adleros.mdMode";
 const mdIsNote = (p) => /\.md$/i.test(p);
@@ -503,6 +503,7 @@ async function mdOpen(path, { newTab = false, line = null, mode = null } = {}) {
     const here = mdTab();
     if (!newTab && here && !here.dirty && here.kind !== "graph") {
       await mdSave(here);
+      mdWent(here, tab);
       adler.tabs[adler.active] = tab;
       i = adler.active;
     } else {
@@ -514,9 +515,38 @@ async function mdOpen(path, { newTab = false, line = null, mode = null } = {}) {
   if (line !== null) adler.tabs[i].gotoLine = line;
 }
 
+// Back and forward (the mouse's side buttons), in a tab: where it's been.
+// Its place in a note or a folder too.
+const mdLoc = (t) => ({ kind: t.kind, path: t.path, scroll: (t === adler.shown ? $("md-main").querySelector(".md-scroll")?.scrollTop : t.scroll) || 0 });
+const mdLocThere = (l) => (l.kind === "folder" ? mdFolderThere(l.path) : adler.names.has(l.path));
+
+function mdWent(from, to) {
+  to.back = [...(from.back || []), mdLoc(from)].slice(-100);
+  to.fwd = [];
+}
+
+async function mdNav(dir) {
+  const here = mdTab();
+  if (!here || here.kind === "graph" || !adler.index) return;
+  const stack = (dir < 0 ? here.back : here.fwd) || [];
+  let to;
+  while ((to = stack.pop()) && !mdLocThere(to)); // gone since: past it
+  if (!to) return;
+  if (!(await mdSave(here))) { stack.push(to); return; }
+  const tab = mdNewTab(to.kind, to.path);
+  const now = mdLoc(here);
+  tab.scroll = to.scroll;
+  tab.back = dir < 0 ? stack : [...(here.back || []), now];
+  tab.fwd = dir < 0 ? [...(here.fwd || []), now] : stack;
+  adler.tabs[adler.active] = tab;
+  mdActivate(adler.active);
+}
+registerNav("adlermd", (dir) => mdNav(dir));
+
 async function mdActivate(i) {
-  const prev = mdTab();
-  if (prev?.kind === "note") prev.scroll = $("md-main").querySelector(".md-scroll")?.scrollTop || 0;
+  // Where you were in what's showing (not the tab that's taken its place).
+  const prev = adler.shown;
+  if (prev && (prev.kind === "note" || prev.kind === "folder")) prev.scroll = $("md-main").querySelector(".md-scroll")?.scrollTop || 0;
   adler.active = i;
   mdKeepTabs();
   const tab = mdTab();
@@ -582,6 +612,7 @@ function mdRenderMain() {
   const main = $("md-main");
   const tab = mdTab();
   if (!adler.index) return;
+  adler.shown = tab;
   if (!tab) {
     const make = el("button", { type: "button", class: "button-primary" }, "New note");
     const find = el("button", { type: "button", class: "button-secondary" }, "Find a note (Ctrl+O)");
@@ -863,6 +894,7 @@ async function mdOpenFolder(path, { newTab = false } = {}) {
     const here = mdTab();
     if (!newTab && here && !here.dirty && here.kind !== "graph") {
       await mdSave(here);
+      mdWent(here, tab);
       adler.tabs[adler.active] = tab;
       i = adler.active;
     } else {
@@ -936,8 +968,8 @@ function mdFolderView(tab) {
     e.preventDefault();
     mdMoveInto(e.dataTransfer.getData("text/x-adlermd"), path);
   });
-  const view = el("div", { class: "md-note md-folder", tabindex: "-1" }, head,
-    el("div", { class: "md-scroll" }, el("div", { class: "md-page" }, el("h1", { class: "md-folder-title" }, name), list)));
+  const scroll = el("div", { class: "md-scroll" }, el("div", { class: "md-page" }, el("h1", { class: "md-folder-title" }, name), list));
+  const view = el("div", { class: "md-note md-folder", tabindex: "-1" }, head, scroll);
   // Backspace: up a folder, as in My Computer.
   view.addEventListener("keydown", (e) => {
     if (e.key !== "Backspace" || up === null || e.target.closest("input, textarea, [contenteditable]")) return;
@@ -945,6 +977,7 @@ function mdFolderView(tab) {
     mdOpenFolder(up);
   });
   requestAnimationFrame(() => {
+    scroll.scrollTop = tab.scroll || 0;
     const active = document.activeElement;
     if (!active || active === document.body || !active.isConnected) (view.querySelector(".md-folder-row") || view).focus({ preventScroll: true });
   });
@@ -1206,9 +1239,10 @@ async function mdRename(from, to) {
   for (const t of adler.tabs) if (t.path === from || t.path?.startsWith(`${from}/`)) await mdSave(t);
   const reply = await mdPost("rename", { vault: adler.vault, from, to, links });
   if (!reply) return;
+  const moved = (p) => (p === from ? to : p?.startsWith(`${from}/`) ? to + p.slice(from.length) : p);
   for (const t of adler.tabs) {
-    if (t.path === from) t.path = to;
-    else if (t.path?.startsWith(`${from}/`)) t.path = to + t.path.slice(from.length);
+    t.path = moved(t.path);
+    for (const l of [...(t.back || []), ...(t.fwd || [])]) l.path = moved(l.path);
   }
   if (reply.updated) toast(`Moved; ${reply.updated} note${reply.updated === 1 ? "" : "s"} with links to it updated.`);
   await mdRefreshIndex();
