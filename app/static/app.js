@@ -131,7 +131,8 @@ function monogram(plate, app) {
 function plateFor(app) {
   const plate = el("span", { class: "plate" });
   if (app.hasIcon) {
-    const src = `/api/icon/${encodeURIComponent(app.id)}?v=${encodeURIComponent(app.icon || "")}`;
+    // r: icons served differently (white-only ones made legible), so a week's cache doesn't keep the old.
+    const src = `/api/icon/${encodeURIComponent(app.id)}?v=${encodeURIComponent(app.icon || "")}&r=2`;
     const img = el("img", { src, alt: "", draggable: "false" });
     img.addEventListener("error", () => monogram(plate, app));
     plate.append(img);
@@ -361,19 +362,21 @@ function appById(id) {
   return state.apps.find((a) => a.id === id);
 }
 
-// The dock: apps you pin, a divider, then the homelab's own items, which
-// always stay. Their icons come from /api/dock-icon, so ./icons can replace them.
-// Clicking one whose window is open closes it again.
+// The dock, like a Mac's: what you pin (your apps and adlerOS's own, in any
+// order), then what's open that isn't pinned, a divider, and All apps, which
+// always stays. adlerOS's icons come from /api/dock-icon, so ./icons can
+// replace them. Clicking one whose window is open puts it away again.
 const DOCK_FIXED = [
   { id: "app-drawer", label: "All apps", run: () => toggleDrawer() },
-  { id: "app-store", label: "App Store", run: () => toggleStore() },
-  { id: "settings", label: "Settings", run: () => toggleWindow("settings", () => openSettings()) },
-  { id: "live-usage", label: "Live Usage", run: () => toggleUsage() },
 ];
-const DOCK_MAX_PINS = 12;
-// adlerOS's own windows you can pin (and unpin) like an app.
+const DOCK_MAX_PINS = 16;
+// adlerOS's own windows: pinned (and unpinned, moved about, put on the
+// desktop) like any app.
 const BUILTIN_PINS = {
-  "adleros:files": { name: "Files", icon: "files", dock: "files", open: () => toggleFiles() },
+  "adleros:app-store": { name: "App Store", icon: "app-store", dock: "app-store", open: () => toggleStore() },
+  "adleros:settings": { name: "Settings", icon: "settings", dock: "settings", open: () => toggleWindow("settings", () => openSettings()) },
+  "adleros:live-usage": { name: "Live Usage", icon: "live-usage", dock: "live-usage", open: () => toggleUsage() },
+  "adleros:files": { name: "My Computer", icon: "files", dock: "files", open: () => toggleFiles() },
   "adleros:terminal": { name: "Terminal", icon: "terminal", dock: "terminal", open: () => toggleTerminal() },
 };
 // A pin: an installed app, or one of those.
@@ -406,8 +409,9 @@ function fixedDockItem(item) {
 
 function builtinDockItem(pin) {
   const b = pin.builtin;
-  const src = `/static/dock/${b.icon}.svg`;
-  const button = el("button", { class: "dock-item dock-builtin", type: "button", "aria-label": b.name,
+  const src = `/api/dock-icon/${b.icon}`;
+  // A pin like an app's (dock-app): dragged about among them.
+  const button = el("button", { class: "dock-item dock-app dock-builtin", type: "button", "aria-label": b.name,
     "data-app": pin.id, "data-dock": b.dock },
   el("img", { class: "glow", src, alt: "", draggable: "false" }),
   el("img", { src, alt: "", draggable: "false" }),
@@ -439,25 +443,24 @@ function pinnedDockItem(app) {
 let dockKey = null;
 const dockKeyFor = (pinned) => pinned.map((a) => `${a.id}:${a.icon}:${a.up}`).join(",");
 function buildDock() {
-  // Your apps on the left; after the divider adlerOS's own: the four that
-  // always stay, then Files and the Terminal while they're pinned.
-  // The terminal shows only in admin mode (its pin waits until then).
-  const all = state.dock.map(pinFor).filter((p) => p && (p.id !== "adleros:terminal" || state.admin));
-  let pinned = all.filter((p) => !p.builtin);
-  let fixed = [...DOCK_FIXED.map((item) => ({ item })), ...all.filter((p) => p.builtin).map((pin) => ({ pin }))];
-  // A phone's dock holds four, like an iPhone's: your pins first, then
-  // adlerOS's own (all of them are in the App Library too).
+  // Your pins, in your order (winDock adds what's open after them); then the
+  // divider and All apps. The terminal shows only in admin mode (its pin
+  // waits until then).
+  let pinned = state.dock.map(pinFor).filter((p) => p && (p.id !== "adleros:terminal" || state.admin));
+  let fixed = DOCK_FIXED;
+  // A phone's dock holds four, like an iPhone's (its App Library is past the
+  // last page): All apps only while there's room.
   if (phoneLayout()) {
     pinned = pinned.slice(0, PHONE_DOCK);
     fixed = fixed.slice(0, PHONE_DOCK - pinned.length);
   }
   // Rebuilt only when the pins, their icons or their status change.
-  const key = `${dockKeyFor(pinned)}|${fixed.map((f) => f.item?.id || f.pin.id).join(",")}|${state.admin}`;
+  const key = `${dockKeyFor(pinned)}|${fixed.map((f) => f.id).join(",")}|${state.admin}`;
   if (key === dockKey) return;
   dockKey = key;
   $("dock").replaceChildren(...pinned.map(pinnedDockItem),
     ...(pinned.length && fixed.length && !phoneLayout() ? [el("span", { class: "dock-divider", "aria-hidden": "true" })] : []),
-    ...fixed.map((f) => (f.item ? fixedDockItem(f.item) : builtinDockItem(f.pin))));
+    ...fixed.map(fixedDockItem));
   markDockOpen("settings", isOpen("settings"));
   markDockOpen("app-store", isOpen("store"));
   markDockOpen("live-usage", isOpen("usage"));
@@ -472,11 +475,8 @@ function isPinned(id) { return state.dock.includes(id); }
 // Pins (or unpins) an app; `at`: where in the dock (dropped there), else the end.
 async function setPinned(id, pinned, at) {
   const rest = state.dock.filter((a) => a !== id);
-  const apps = rest.filter((p) => !BUILTIN_PINS[p]);
-  const own = rest.filter((p) => BUILTIN_PINS[p]);
   let next = rest;
-  if (pinned && BUILTIN_PINS[id]) next = [...apps, ...own, id];
-  else if (pinned) next = [...(at === undefined ? [...apps, id] : [...apps.slice(0, at), id, ...apps.slice(at)]), ...own];
+  if (pinned) next = at === undefined ? [...rest, id] : [...rest.slice(0, at), id, ...rest.slice(at)];
   if (next.length > DOCK_MAX_PINS) return toast(`The dock holds up to ${DOCK_MAX_PINS} apps.`);
   let result;
   try {
@@ -611,8 +611,9 @@ function menuForItem(target) {
     : { label: "Keep in Dock", run: () => setPinned(id, true) });
   // Files and the terminal: pinned or not, like an app.
   // In desktop mode, any app (or Files, the terminal) can go on the desktop too.
-  const onDesktop = (id) => (!desktopMode() || target.closest("#desk") ? []
-    : [onDesk(id) ? { label: "Remove from desktop", run: () => setOnDesk(id, false) } : { label: "Add to desktop", run: () => setOnDesk(id, true) }]);
+  // On the desktop itself, its own icon: Remove from desktop.
+  const onDesktop = (id) => (!desktopMode() ? []
+    : [onDesk(id) || target.closest("#desk") ? { label: "Remove from desktop", run: () => setOnDesk(id, false) } : { label: "Add to desktop", run: () => setOnDesk(id, true) }]);
   const builtin = appId && BUILTIN_PINS[appId];
   if (builtin) return [{ label: "Open", run: builtin.open }, pin(appId), ...onDesktop(appId)];
   if (app) {
@@ -1022,7 +1023,7 @@ const ACTIONS = [
   { id: "usage", name: "Live Usage", keywords: "live usage cpu memory ram storage disk temperature stats monitor" },
   { id: "drawer", name: "All apps", keywords: "all apps drawer launchpad list every app alphabetical" },
   { id: "terminal", name: "Terminal", keywords: "terminal shell console ssh bash command line admin" },
-  { id: "files", name: "Files", keywords: "files folders storage documents upload download editor text edit trash desktop mailbox root" },
+  { id: "files", name: "My Computer", keywords: "files folders storage documents upload download editor text edit trash desktop mailbox root computer finder explorer" },
   { id: "desktop-mode", name: "Desktop mode or home screen", keywords: "desktop mode windows window manager floating side by side home screen switch" },
   { id: "welcome", name: "Welcome tour", keywords: "welcome tour intro introduction start first help guide find apps compose folders" },
   { id: "logout", name: "Log out", keywords: "log out sign out lock exit" },

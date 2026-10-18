@@ -54,7 +54,10 @@ function when(seconds) {
 
 function filesOpen() { return isOpen("files"); }
 
-function toggleFiles() { toggleWindow("files", () => openFiles()); }
+// My Computer starts at Root (the homelab's folder) in admin mode, at User
+// otherwise; a path (the Desktop, a folder) opens there instead.
+const filesHome = () => (state.admin ? "/root" : "/user");
+function toggleFiles() { toggleWindow("files", () => openFiles(filesHome())); }
 
 async function openFiles(path) {
   openWindow("files");
@@ -106,7 +109,7 @@ function crumbs() {
     if (i) nodes.push(el("span", { class: "crumb-sep", "aria-hidden": "true" }, "/"));
     nodes.push(b);
   });
-  return nodes.length ? nodes : [el("span", { class: "crumb current" }, "Files")];
+  return nodes.length ? nodes : [el("span", { class: "crumb current" }, "My Computer")];
 }
 
 function renderPlaces() {
@@ -231,8 +234,7 @@ function openEntry(entry, path) {
   if (entry.dir) return isOpen("files") ? showFolder(path) : openFiles(path);
   if (entry.kind === "text") return editFile(path);
   if (entry.kind === "audio") return playSong(entry, path);
-  if (entry.kind === "pdf") return openPdf(entry, path);
-  if (["image", "video"].includes(entry.kind)) return viewFile(entry, path);
+  if (["image", "video", "pdf"].includes(entry.kind)) return viewFile(entry, path);
   return downloadFile(path);
 }
 
@@ -261,27 +263,6 @@ function viewFile(entry, path) {
 function closeViewer() {
   $("viewer-body").replaceChildren(); // a video stops
   closeWindow("viewer");
-}
-
-// A PDF opens in the Firefox app, when there's one: the helper hands it the
-// file and adlerOS shows Firefox. Without it, in the viewer; and on the home
-// screen with apps in tabs (Settings → Open apps), in a tab of this browser.
-async function openPdf(entry, path) {
-  if (!desktopMode() && appsInTabs()) return window.open(fileUrl(path, true), "_blank", "noopener");
-  const firefox = state.apps.find((a) => a.known === "firefox" && a.url);
-  if (!firefox) return viewFile(entry, path);
-  toast(`Opening ${entry.name} in Firefox…`);
-  const { status, body } = await postAction("firefox-open", { path });
-  if (status === 401) return showLock();
-  const job = status === 202 && body ? await waitForJob(body) : null;
-  const r = job?.result;
-  if (!r?.ok) {
-    toast(`Firefox couldn't open it (${r?.error || job?.error || body?.error || "the helper didn't answer"}), so here it is.`);
-    return viewFile(entry, path);
-  }
-  const id = `app-${firefox.id}`;
-  if (wm.windows.has(id) && isOpen(id)) raiseWindow(id, true);
-  else openApp(firefox);
 }
 
 // A song plays in a window of its own, so the rest of adlerOS stays yours
@@ -653,7 +634,7 @@ async function fileUp(e) {
 
 // ---------------------------------------------------------------- wiring
 
-registerWindow("files", { title: "Files", close: closeFiles, dock: "files", size: [980, 640] });
+registerWindow("files", { title: "My Computer", close: closeFiles, dock: "files", size: [980, 640] });
 // Half the width of a picture's preview and a quarter taller; over the home
 // screen it floats above the dock (float), with everything else still open.
 registerWindow("music", { title: "Music", close: closeMusic, size: [490, 260], float: true });

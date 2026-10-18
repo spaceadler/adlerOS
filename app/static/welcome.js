@@ -215,7 +215,7 @@ const TOUR = [
   {
     view: () => ({
       title: "And the rest",
-      body: [welcomeText("Files, in All apps: your Desktop, your storage and your homelab, with an editor. Settings → Desktop mode, on a computer: windows side by side. Press ? for every key; it all works without a mouse."),
+      body: [welcomeText("My Computer, in the dock and All apps: your Desktop, your storage and your homelab, with an editor. Settings → Desktop mode, on a computer: windows side by side. Press ? for every key; it all works without a mouse."),
         welcomeText("This tour is in Settings, if you want it again.")],
     }),
   },

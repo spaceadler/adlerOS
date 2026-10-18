@@ -92,8 +92,10 @@ JOBS = DATA / "agent" / "jobs"
 # Your own icons for the dock's fixed items (mounted from ./icons):
 # app-store.png, settings.svg... replace the built-in ones.
 ICON_OVERRIDES = Path(os.environ.get("OS_ICON_DIR", "/icons"))
-DOCK_FIXED = ("app-drawer", "app-store", "settings", "live-usage")
-DOCK_MAX_PINS = 12
+# adlerOS's own dock icons (./icons can replace each): All apps, and the ones
+# you pin like any app.
+DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal")
+DOCK_MAX_PINS = 16
 # The widgets you can put on the desktop, with the defaults and the limit.
 WIDGET_CATALOG = STATIC / "widgets-catalog.json"
 # Drop any image here (mounted from ./wallpaper) to offer it as a wallpaper.
@@ -425,19 +427,27 @@ def search_url():
 
 # adlerOS's own windows you can pin like an app (and unpin): pre-pinned,
 # once, after whatever you'd pinned already.
-BUILTIN_PINS = ("adleros:files", "adleros:terminal")
+# adlerOS's own, pinned (and unpinned, moved about) like any app; in the dock
+# from the start, in this order, until you take them out.
+BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal")
+DOCK_SEED = 2  # 1: My Computer and the Terminal pinned; 2: the App Store, Settings and Live Usage too
 
 
 def dock_pins():
-    """Pinned to the dock, in order: installed apps, and adlerOS's Files and
-    Terminal (there from the start, until you take them out)."""
+    """Pinned to the dock, in order: installed apps and adlerOS's own."""
     settings = load_settings()
     pins = settings.get("dock", [])
     if not isinstance(pins, list):
         pins = []
-    if not settings.get("dockSeeded"):
-        pins = [*pins, *(p for p in BUILTIN_PINS if p not in pins)]
-        save_settings({"dock": pins, "dockSeeded": True})
+    seeded = settings.get("dockSeeded")
+    seeded = 1 if seeded is True else seeded if isinstance(seeded, int) else 0
+    if seeded < DOCK_SEED:
+        # The three that used to stay in the dock whatever you did join the
+        # pins, after your apps; the rest as you had them.
+        new = BUILTIN_PINS if seeded < 1 else ("adleros:app-store", "adleros:settings", "adleros:live-usage")
+        own = [p for p in BUILTIN_PINS if p in pins or p in new]
+        pins = [p for p in pins if p not in BUILTIN_PINS] + own
+        save_settings({"dock": pins, "dockSeeded": DOCK_SEED})
     installed = {a["id"] for a in installed_apps()}
     return [p for p in pins if p in installed or p in BUILTIN_PINS]
 
@@ -494,7 +504,7 @@ def widget_data():
 
 
 def dock_icon_path(name):
-    if name not in DOCK_FIXED:
+    if name not in DOCK_ICONS:
         return None
     for suffix in (".svg", ".png", ".webp"):
         mine = ICON_OVERRIDES / f"{name}{suffix}"
@@ -987,6 +997,38 @@ def _fetch(url, check):
     return data if len(data) <= 512 * 1024 and check(data) else None
 
 
+WHITE = {"#fff", "#ffffff", "white", "rgb(255,255,255)"}
+
+
+def white_only(svg):
+    """Whether an SVG is drawn all in white (made for dark backgrounds)."""
+    text = svg[:256 * 1024].decode("utf-8", "replace").lower()
+    colors = {c.replace(" ", "") for c in re.findall(r'(?:fill|stroke|stop-color)\s*[:=]\s*"?\s*(#[0-9a-f]{3,8}|[a-z]+|rgba?\([^)]*\))', text)}
+    colors -= {"none", "currentcolor", "transparent", "inherit"}
+    return bool(colors) and colors <= WHITE
+
+
+def legible(name, svg):
+    """An icon all in white is lost on a tile's white: dashboard-icons' dark
+    one (<name>-dark) instead, or else this one in near-black."""
+    if not white_only(svg):
+        return svg
+    dark = ICONS / f"{name}-dark.svg"
+    missing = ICONS / f"{name}-dark.missing"
+    if not dark.is_file() and not (missing.exists() and time.time() - missing.stat().st_mtime < ICON_RETRY_SECONDS):
+        data = _fetch(f"{ICON_CDN}/svg/{name}-dark.svg", lambda d: b"<svg" in d[:1024])
+        if data:
+            tmp = ICONS / f".{name}-dark.svg.{secrets.token_hex(4)}"
+            tmp.write_bytes(data)
+            tmp.replace(dark)
+        else:
+            missing.touch()
+    if dark.is_file():
+        return dark.read_bytes()
+    return re.sub(rb'((?:fill|stroke|stop-color)\s*[:=]\s*"?\s*)(#ffffff|#fff|white|rgb\(\s*255\s*,\s*255\s*,\s*255\s*\))',
+                  rb"\1#1c1c1e", svg, flags=re.I)
+
+
 def app_icon(app_id):
     """(content type, bytes) of an app's icon, or None to use a lettered tile."""
     app = next((a for a in read_catalog() + registry_apps() + registry_apps(installed=False) + store_apps()
@@ -1001,7 +1043,7 @@ def app_icon(app_id):
     for ext, ctype, _ in kinds:
         cached = ICONS / f"{name}.{ext}"
         if cached.is_file():
-            return ctype, cached.read_bytes()
+            return ctype, legible(name, cached.read_bytes()) if ext == "svg" else cached.read_bytes()
     missing = ICONS / f"{name}.missing"
     if missing.exists() and time.time() - missing.stat().st_mtime < ICON_RETRY_SECONDS:
         return None
@@ -1011,7 +1053,7 @@ def app_icon(app_id):
             tmp = ICONS / f".{name}.{ext}.{secrets.token_hex(4)}"
             tmp.write_bytes(data)
             tmp.replace(ICONS / f"{name}.{ext}")
-            return ctype, data
+            return ctype, legible(name, data) if ext == "svg" else data
     missing.touch()
     return None
 
@@ -1789,7 +1831,7 @@ class Handler(BaseHTTPRequestHandler):
                 {"id": a["id"], "name": a["name"], "about": a["about"], "genre": a["genre"],
                  "url": a["url"], "hasIcon": a["icon"].startswith("di:"), "icon": a["icon"],
                  "imported": bool(a.get("imported")), "note": a.get("note", ""), "up": status[a["id"]],
-                 "home": a.get("home"), "known": a.get("known", "")} for a in apps],
+                 "home": a.get("home")} for a in apps],
                 "available": [{"id": a["id"], "name": a["name"], "about": a["about"], "genre": a["genre"],
                                "hasIcon": a["icon"].startswith("di:"), "icon": a["icon"],
                                "imported": bool(a.get("imported")), "store": bool(a.get("store"))}
@@ -1939,7 +1981,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(pins, list) or len(pins) > DOCK_MAX_PINS or len(set(map(str, pins))) != len(pins):
                 return self.send_json(400, {"error": f"dock: up to {DOCK_MAX_PINS} different apps"})
             if not all(isinstance(a, str) and (a in installed or a in BUILTIN_PINS) for a in pins):
-                return self.send_json(400, {"error": "dock: only installed apps (and Files, Terminal) can be pinned"})
+                return self.send_json(400, {"error": "dock: only installed apps and adlerOS's own can be pinned"})
             changes["dock"] = pins
         if "folders" in body:
             # Every folder at once: {id: {name, collection, apps}}; an app in

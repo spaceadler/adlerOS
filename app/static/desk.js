@@ -64,12 +64,27 @@ function setOnDesk(id, on) {
 }
 const pinName = (id) => { const p = pinFor(id); return p?.builtin ? p.builtin.name : p?.name || id; };
 
+// Your own folder, named after you (Settings → Name): User, in My Computer.
+// Always on the desktop; it moves about like an app, but doesn't go.
+const DESK_HOME = "adleros:home";
+function deskHomeNode(places) {
+  const name = state.name || "User";
+  const icon = el("button", { type: "button", class: "desk-icon desk-app desk-home", "data-desk-app": DESK_HOME, title: `${name}: your files (User)` },
+    el("span", { class: "desk-glyph file-icon folder" }, svg(FILE_ICONS.folder)), el("span", { class: "desk-name" }, name));
+  const at = places[`app:${DESK_HOME}`];
+  if (at && at[1] <= deskRows() - ICON_ROWS + 1) placeIcon(icon, at);
+  icon.addEventListener("dblclick", () => openFiles("/user"));
+  icon.addEventListener("click", () => { if (matchMedia("(pointer: coarse)").matches) openFiles("/user"); });
+  icon.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); openFiles("/user"); } });
+  return icon;
+}
+
 function deskAppNodes() {
   const places = deskPlaces();
-  return deskApps().map(pinFor).filter(Boolean).map((p) => {
+  return [deskHomeNode(places), ...deskApps().map(pinFor).filter(Boolean).map((p) => {
     const name = p.builtin ? p.builtin.name : p.name;
     const glyph = p.builtin
-      ? el("span", { class: "desk-glyph desk-app-glyph builtin" }, el("img", { src: `/static/dock/${p.builtin.icon}.svg`, alt: "" }))
+      ? el("span", { class: "desk-glyph desk-app-glyph builtin" }, el("img", { src: `/api/dock-icon/${p.builtin.icon}`, alt: "" }))
       : el("span", { class: "desk-glyph desk-app-glyph" }, plateFor(p));
     const icon = el("button", { type: "button", class: `desk-icon desk-app${p.up === false ? " offline" : ""}`, "data-desk-app": p.id, title: name },
       glyph, el("span", { class: "desk-name" }, name));
@@ -79,7 +94,7 @@ function deskAppNodes() {
     icon.addEventListener("dblclick", open);
     icon.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); open(); } });
     return icon;
-  });
+  })];
 }
 
 function deskWidgetList() {
@@ -422,6 +437,7 @@ function deskPlace(icon, name, e) {
 // The right-click menu on the desktop, in desktop mode.
 function deskMenu(target) {
   const deskApp = target.closest(".desk-app")?.dataset.deskApp;
+  if (deskApp === DESK_HOME) return [{ label: "Open", run: () => openFiles("/user") }];
   if (deskApp && pinFor(deskApp)) {
     const p = pinFor(deskApp);
     return [{ label: "Open", run: () => (p.builtin ? p.builtin.open() : openApp(p)) },
@@ -455,7 +471,7 @@ function deskMenu(target) {
       { label: "New text file", run: () => newTextFile("/desktop") });
     if (files.clip) items.push({ label: `Paste ${files.clip.label}`, run: () => paste("/desktop") });
     items.push({ label: "Upload…", run: () => { files.uploadTo = "/desktop"; $("files-picker").click(); } },
-      { label: "Open in Files", run: () => openFiles("/desktop") });
+      { label: "Open in My Computer", run: () => openFiles("/desktop") });
   }
   const cell = desk.menuAt && deskCellAt(desk.menuAt[0], desk.menuAt[1]);
   items.push({ label: "Add widget…", run: () => deskWidgetPicker(cell) },

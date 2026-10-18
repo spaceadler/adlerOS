@@ -33,7 +33,7 @@ const OPENERS = { terminal: () => openTerminal(), welcome: () => { closeSettings
 // Named read-only values for "info" rows.
 const FORMATTERS = {
   https: (d) => (d.config.URL_SCHEME === "https" ? "On for every app" : "Vaultwarden only, via Tailscale"),
-  device: (d) => [d.device.model, d.device.os].filter(Boolean).join(" · ") || d.device.hostname,
+  device: (d) => [d.device.model, d.device.os].filter(Boolean).join("\n") || d.device.hostname, // a line each
 };
 
 const settings = {
