@@ -63,7 +63,7 @@
       "category": "account",
       "icon": "image",
       "title": "Wallpaper",
-      "description": "Add your own by putting images in containers/core/os/wallpaper.",
+      "description": "Add your own: put images in your storage's Other/Wallpapers folder (WALLPAPER_DIR in adlerOS's settings picks another).",
       "keywords": "background photo image",
       "control": {
         "type": "wallpaper"

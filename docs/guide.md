@@ -306,7 +306,8 @@ Nothing outside them is reachable, and a link that leads out of its place is
 shown greyed out and won't open. Root's `mailbox/` and `storage/` are the
 Desktop and User themselves: opening one takes you there.
 
-- **Open** a folder to go in; the path at the top takes you back up. A text
+- **Double-click** a folder to go in (a click picks it; on a touch screen a
+  tap opens it; Enter too); the path at the top takes you back up. A text
   file opens in the editor, an image, video, song or PDF in a preview,
   anything else downloads.
 - **Upload** with the button, or drop files onto the window; big files are

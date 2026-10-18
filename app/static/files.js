@@ -156,7 +156,13 @@ function renderFiles() {
     el("span", { class: "file-name" }, entry.name, entry.place && files.path !== "/" ? el("span", { class: "file-from" }, `Your ${PLACE_NAMES[entry.place]}`) : ""),
     el("span", { class: "file-size" }, entry.dir ? "" : bytes(entry.size)),
     el("span", { class: "file-date" }, entry.mtime ? when(entry.mtime) : ""));
-    row.addEventListener("click", () => openEntry(entry, path));
+    // A click picks it, a double click opens it, like any file manager. Enter
+    // (a click with no mouse in it) and a tap on a touch screen open it too.
+    row.addEventListener("click", (e) => {
+      if (e.detail === 0 || matchMedia("(pointer: coarse)").matches) return openEntry(entry, path);
+      selectRow(row);
+    });
+    row.addEventListener("dblclick", () => openEntry(entry, path));
     row.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -196,6 +202,11 @@ function entryKeys(e, entry, path, row) {
     const r = row.getBoundingClientRect();
     openMenu(r.left + 40, r.bottom, entryMenu(entry, path));
   }
+}
+
+function selectRow(row) {
+  for (const r of $("files-list").querySelectorAll(".file-row.selected")) r.classList.remove("selected");
+  row?.classList.add("selected");
 }
 
 function entryMenu(entry, path) {

@@ -4,9 +4,12 @@ Most of adlerOS is data: lists you can add a line to without touching code.
 
 ## Wallpaper
 
-Put any image (`.jpg`, `.png`, `.webp`, `.avif`) in `wallpaper/` (in a
-homelab: `containers/core/os/wallpaper/`), then pick it in **Settings →
-Wallpaper**. The built-in ones are NASA photographs.
+Put any image (`.jpg`, `.png`, `.webp`, `.avif`) in your storage's
+`Other/Wallpapers` folder (`WALLPAPER_DIR` in the settings file picks another
+folder of your storage), then pick it in **Settings → Wallpaper**. The
+`wallpaper/` folder next to adlerOS (in a homelab: `containers/core/os/wallpaper/`)
+works too. The built-in ones are NASA photographs. Only the thumbnails you
+scroll to load, so a folder of hundreds is fine.
 
 ## Dock icons
 

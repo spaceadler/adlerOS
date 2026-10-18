@@ -510,12 +510,29 @@ def password_ok(password):
 
 # ---------------------------------------------------------------- wallpaper
 
+def wallpaper_dirs():
+    """Where your wallpapers are: a folder in your storage (WALLPAPER_DIR in the
+    settings file, Other/Wallpapers if it isn't set), and the wallpaper/
+    folder next to adlerOS."""
+    env = read_env_file(HOMELAB_ENV) if HOMELAB_MODE else read_env_file(STANDALONE_ENV) if STANDALONE_ENV.is_file() else os.environ
+    rel = (env.get("WALLPAPER_DIR") or "Other/Wallpapers").strip().strip("/")
+    _, folder = locate(f"/user/{rel}")
+    return [d for d in (folder, WALLPAPER_DIR) if d and d.is_dir()]
+
+
 def custom_wallpapers():
-    try:
-        return sorted(p for p in WALLPAPER_DIR.iterdir()
-                      if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES and not p.name.startswith("."))
-    except OSError:
-        return []
+    found, names = [], set()
+    for folder in wallpaper_dirs():
+        try:
+            pics = sorted(p for p in folder.iterdir()
+                          if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES and not p.name.startswith("."))
+        except OSError:
+            continue
+        for p in pics:
+            if p.name not in names:  # the same name in both: the storage folder's
+                names.add(p.name)
+                found.append(p)
+    return found
 
 
 def wallpaper_options():

@@ -339,8 +339,9 @@ function wallpaperPicker() {
   const strip = el("div", { class: "wallpapers", role: "group", "aria-label": "Wallpapers" });
   const draw = () => {
     strip.replaceChildren(...settings.data.wallpaper.options.map((w) => {
-      const b = el("button", { type: "button", class: "wallpaper-option", title: w.name, "aria-label": w.name, "aria-pressed": String(w.id === settings.data.wallpaper.selected) });
-      b.style.backgroundImage = `url("/api/wallpaper?id=${encodeURIComponent(w.id)}")`;
+      // Only the ones scrolled into view load (a folder can hold hundreds).
+      const b = el("button", { type: "button", class: "wallpaper-option", title: w.name, "aria-label": w.name, "aria-pressed": String(w.id === settings.data.wallpaper.selected) },
+        el("img", { src: `/api/wallpaper?id=${encodeURIComponent(w.id)}`, alt: "", loading: "lazy", decoding: "async", draggable: "false" }));
       b.addEventListener("click", async () => {
         const { status, body } = await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ wallpaper: w.id }) });
         if (status !== 200) return toast(body?.error || "Couldn't change the wallpaper.");
@@ -353,6 +354,7 @@ function wallpaperPicker() {
     }));
   };
   draw();
+  requestAnimationFrame(() => strip.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: "nearest" }));
   return strip;
 }
 
