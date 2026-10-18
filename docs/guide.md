@@ -53,8 +53,10 @@ by itself, but **Settings → Welcome tour** (or Alt+Space "welcome") shows it a
   that doesn't answer turns dim and says *Offline*. An app with no web page
   (a game server, a bot) opens its App Store card instead.
 - **Opening an app** puts it in a window over the home screen, like the
-  terminal's, with Reload, *Open in a new tab* and close at its top; an app
-  that won't be shown inside another page opens in a tab. If you'd rather
+  terminal's, with Reload, *Open in a new tab* and close at its top. An app
+  that won't be shown inside another page opens in the App Store's Firefox
+  instead, in its window here (started for it, if it's stopped); without
+  Firefox, in a tab. If you'd rather
   have tabs (on this device): **Settings → Open apps → In a new tab**. Keep
   windows on a computer showing adlerOS full screen (a Raspberry Pi on a
   TV): there, a tab would open somewhere you can't see.
@@ -153,11 +155,12 @@ made phone-narrow leaves it until it's wide again.
   wallpaper behind them shows through, blurred, but never another window, so
   My Computer over the Terminal is just My Computer. How much shows is **Settings →
   Window transparency**, from 0.00 (solid) to 1.00, the same on the home
-  screen; an app's own page lets a little through, except maximized. The
+  screen; your apps' own pages stay solid. The
   Search pill sits at the top, level with the bell.
 - **Your apps** open in windows of their own, if they allow it: adlerOS asks
   each app whether it may be shown inside another page, and opens the ones
-  that say no in a tab. Ctrl+click opens any app in a tab. An app's window
+  that say no in the App Store's Firefox, in its window (or, without it, in
+  a tab). Ctrl+click opens any app in a tab. An app's window
   has Reload and *Open in a new tab* on its bar. The App Store's **Open**
   does the same as the app's icon.
 - **The dock** shows what's open: a mark under pinned apps and adlerOS's own
@@ -230,7 +233,9 @@ widget do the same. Arrow keys pick, Enter opens.
 Every app on your desktop, by collection, with what its containers are doing:
 *Running*, *Partly running (1 of 2)*, *Stopped*, *Restarting*, *Running,
 unhealthy*, or *No containers*. Click the line under a card to see each
-container. The buttons:
+container. Agents with no page of their own (Beszel's agent) are only here,
+under **In the background**: never on the home screen or in All apps. The
+buttons:
 
 | | |
 | --- | --- |

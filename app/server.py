@@ -219,7 +219,7 @@ def registry_apps(installed=True):
             continue
         icon = info.get("icon") if isinstance(info.get("icon"), str) and re.fullmatch(r"di:[a-z0-9-]+", info.get("icon") or "") else "-"
         port = info.get("port") if isinstance(info.get("port"), int) and 0 < info["port"] < 65536 else None
-        collection = info.get("collection") if info.get("collection") in COLLECTION_ORDER else EXTRAS
+        collection = info.get("collection") if info.get("collection") in (*COLLECTION_ORDER, BACKGROUND) else EXTRAS
         apps.append({"id": folder.name, "genre": collection, "sub": "-", "port": port, "icon": icon,
                      "name": info["name"][:40], "about": str(info.get("about", ""))[:200], "url": info["url"],
                      "imported": True, "known": str(info.get("known", "")), "note": str(info.get("note", ""))[:300],
@@ -274,10 +274,15 @@ def installed_apps():
 
 
 EXTRAS = "extras"  # the collection for apps that aren't in one
+# Agents and the like, with no page of their own (Beszel's agent): only in
+# the App Store, to start and stop, never on the home screen or in All apps.
+BACKGROUND = "background"
 
 
 def collection_name(collection_id):
     """A collection's title, from its folder name: life -> Life, home-lab -> Home lab."""
+    if collection_id == BACKGROUND:
+        return "In the background"
     return "Extras" if collection_id == EXTRAS else collection_id.replace("-", " ").capitalize()
 
 
@@ -287,7 +292,7 @@ def collections(apps):
     for app in read_catalog() if HOMELAB_MODE else []:
         if app["genre"] not in order:
             order.append(app["genre"])
-    present = {a["genre"] for a in apps}
+    present = {a["genre"] for a in apps} - {BACKGROUND}
     ids = [c for c in order if c in present and c != EXTRAS]
     ids += sorted(c for c in present if c not in ids and c != EXTRAS)
     if EXTRAS in present:

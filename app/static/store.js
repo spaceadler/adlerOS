@@ -247,6 +247,9 @@ function renderStore() {
   $("store").classList.toggle("importing", store.view === "import");
   if (store.view === "import") return renderImport();
   const groups = groupApps();
+  // Agents and the like: here only, their own tab.
+  const background = state.apps.filter((a) => a.genre === "background");
+  if (background.length) groups.push({ id: "background", name: "In the background", apps: background, items: [] });
   // Filter tabs: All, then each collection.
   const tabs = [{ id: "all", name: "All" }, ...groups];
   // Collections with nothing installed yet still get a tab for their apps.
