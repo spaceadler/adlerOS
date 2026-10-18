@@ -95,7 +95,7 @@ JOBS = DATA / "agent" / "jobs"
 ICON_OVERRIDES = Path(os.environ.get("OS_ICON_DIR", "/icons"))
 # adlerOS's own dock icons (./icons can replace each): All apps, and the ones
 # you pin like any app.
-DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal")
+DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "adlermd")
 DOCK_MAX_PINS = 16
 # The widgets you can put on the desktop, with the defaults and the limit.
 WIDGET_CATALOG = STATIC / "widgets-catalog.json"
@@ -435,7 +435,9 @@ def search_url():
 # once, after whatever you'd pinned already.
 # adlerOS's own, pinned (and unpinned, moved about) like any app; in the dock
 # from the start, in this order, until you take them out.
-BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal")
+BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal",
+                "adleros:notepad", "adleros:adlermd")
+DOCK_FIRST = BUILTIN_PINS[:5]  # a new dock's (Notepad and adlerMD: in All apps, for you to pin)
 DOCK_SEED = 2  # 1: My Computer and the Terminal pinned; 2: the App Store, Settings and Live Usage too
 
 
@@ -450,7 +452,7 @@ def dock_pins():
     if seeded < DOCK_SEED:
         # The three that used to stay in the dock whatever you did join the
         # pins, after your apps; the rest as you had them.
-        new = BUILTIN_PINS if seeded < 1 else ("adleros:app-store", "adleros:settings", "adleros:live-usage")
+        new = DOCK_FIRST if seeded < 1 else ("adleros:app-store", "adleros:settings", "adleros:live-usage")
         own = [p for p in BUILTIN_PINS if p in pins or p in new]
         pins = [p for p in pins if p not in BUILTIN_PINS] + own
         save_settings({"dock": pins, "dockSeeded": DOCK_SEED})
@@ -1522,10 +1524,10 @@ def link_href(note_rel, target, style, names):
         path = posixpath.basename(target)
     else:
         path = target
-    return urllib.parse.quote(path, safe="/()-_.~!*'&=+,;@$")
+    return urllib.parse.quote(path, safe="/-_.~!*'&=+,;@$")  # ( ) too: a ) would end the link
 
 
-def vault_rename(vault, old, new):
+def vault_rename(vault, old, new, links=True):
     """Rename (or move) a note, file or folder in a vault, and every link in
     the vault that points into it (and the moved notes' own relative links),
     as Obsidian does with Automatically update internal links. {updated: n}."""
@@ -1544,7 +1546,7 @@ def vault_rename(vault, old, new):
     names_before, names_after = set(before), {after_of(r) for r in before}
     os.rename(src, dst)
     updated = 0
-    for rel in before:
+    for rel in before if links else []:
         if not rel.lower().endswith(".md"):
             continue
         now = after_of(rel)
@@ -2569,7 +2571,7 @@ class Handler(BaseHTTPRequestHandler):
             vault, old, new = body.get("vault"), body.get("from"), body.get("to")
             if not all(isinstance(x, str) and 0 < len(x) < 2000 for x in (vault, old, new)):
                 return self.send_json(400, {"error": "expected vault, from and to"})
-            result = vault_rename(vault, old, new)
+            result = vault_rename(vault, old, new, links=body.get("links") is not False)
             return self.send_json(200 if result.get("ok") else 409, result)
         if what == "vaults":
             # {"use": path}, {"add": path}, {"remove": path}, or {"create": {"in": folder, "name": name}}.

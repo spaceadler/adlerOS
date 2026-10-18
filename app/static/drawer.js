@@ -52,6 +52,8 @@ const BUILT_IN = [
   { id: "settings", name: "Settings", about: "adlerOS and this machine", open: () => openSettings(), keywords: "settings preferences" },
   { id: "live-usage", name: "Live Usage", about: "CPU, memory, storage, temperature", open: () => openUsage(), keywords: "usage cpu memory stats" },
   { id: "terminal", name: "Terminal", about: "A shell on this machine (admin mode)", open: () => openTerminal(), keywords: "terminal shell console ssh" },
+  { id: "notepad", name: "Notepad", about: "Text files, one a window", open: () => openNotepad(), keywords: "notepad text editor edit write txt" },
+  { id: "adlermd", name: "adlerMD", about: "Your notes, in vaults (Obsidian's work too)", open: () => openAdlermd(), keywords: "adlermd notes markdown obsidian vault" },
 ];
 // The terminal only in admin mode.
 const builtIns = () => BUILT_IN.filter((b) => b.id !== "terminal" || state.admin);

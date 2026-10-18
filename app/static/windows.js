@@ -548,7 +548,8 @@ async function frameCheck(app) {
   return wm.frames[app.id];
 }
 
-async function openAppWindow(app) {
+// wake: false when a page is about to be handed to Firefox (that starts it).
+async function openAppWindow(app, { wake = true } = {}) {
   const id = `app-${app.id}`;
   if (wm.windows.has(id) && isOpen(id)) return toggleWindow(id, () => {});
   const check = await frameCheck(app);
@@ -565,7 +566,14 @@ async function openAppWindow(app) {
     const shield = el("div", { class: "app-shield", "aria-hidden": "true" });
     shield.addEventListener("pointerdown", () => raiseWindow(id));
     const tab = () => window.open(app.url, "_blank", "noopener,noreferrer");
-    const close = () => closeWindow(id);
+    // The Firefox app: its window closed, its browser quits (tabs and all,
+    // and the memory comes back); opened, a browser's there.
+    const firefox = app.known === "firefox";
+    const close = () => {
+      closeWindow(id);
+      if (firefox) postAction("firefox-quit", {});
+    };
+    if (firefox && wake) postAction("firefox-wake", {});
     // On the home screen there's no title bar: this head, like the terminal's.
     const head = el("div", { class: "app-head" }, el("span", { class: "app-head-plate" }, plateFor(app)),
       el("span", { class: "app-head-title" }, app.name),
@@ -608,7 +616,7 @@ async function openInFirefox(url, name = "it") {
     firefox.up = true;
     delete wm.frames[firefox.id]; // it said no while it was off
   }
-  openAppWindow(firefox);
+  openAppWindow(firefox, { wake: false });
   const { status, body } = await postAction("firefox-url", { url });
   const job = status === 202 && body ? await waitForJob(body) : null;
   if (!job?.result?.ok) toast(`Firefox couldn't open ${name} (${job?.result?.error || job?.error || body?.error || "the helper didn't answer"}).`);

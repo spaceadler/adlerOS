@@ -21,13 +21,13 @@ const HIDDEN_KEY = "adleros.showHidden";
 try { files.showHidden = localStorage.getItem(HIDDEN_KEY) === "1"; } catch { /* private window */ }
 const hiddenShown = (f) => f.admin && files.showHidden;
 
-// Each window's own: its folder, its view (the folder, the Trash, the
-// editor), what it found there. The first is #files.
+// Each window's own: its folder, its view (the folder or the Trash), what
+// it found there. The first is #files.
 const fileWins = new Map();
 let fileFront = null; // the one you used last: the desktop's opening and Escape go there
 
 function makeFileWin(id, section) {
-  const f = { id, section, path: "/user", place: "user", places: [], entries: [], view: "folder", editor: null,
+  const f = { id, section, path: "/user", place: "user", places: [], entries: [], view: "folder",
     writable: true, admin: false, rootAllowed: false, trash: [],
     part: (name) => section.querySelector(`[data-part="${name}"]`) };
   fileWins.set(id, f);
@@ -94,7 +94,7 @@ function newFilesWindow(path) {
   section.querySelector(":scope > .win-bar")?.remove();
   section.querySelectorAll(":scope > .win-grip").forEach((g) => g.remove());
   Object.assign(section, { id, hidden: true });
-  section.classList.remove("active", "minimized", "closing", "off-ws", "editing", "dropping");
+  section.classList.remove("active", "minimized", "closing", "off-ws", "dropping");
   section.removeAttribute("style");
   section.setAttribute("aria-label", `My Computer ${n}`);
   document.body.insertBefore(section, $("files").nextSibling);
@@ -103,18 +103,13 @@ function newFilesWindow(path) {
   return openFiles(path || filesHome(), f);
 }
 
-async function closeFiles(f = mainFiles()) {
-  if (f.editor && f.editor.dirty) {
-    const ok = await confirmDialog({ title: "Close without saving?", body: `Your changes to ${f.editor.name} will be lost.`, button: "Close", destructive: true });
-    if (!ok) return;
-  }
-  f.editor = null;
+function closeFiles(f = mainFiles()) {
   closeWindow(f.id);
   if (f.id !== "files") fileWins.delete(f.id);
 }
 
-// Logging out: no "unsaved changes" question.
-function forgetFileEdits() { for (const f of fileWins.values()) f.editor = null; }
+// Logging out: no "unsaved changes" question (Notepad's).
+function forgetFileEdits() { for (const p of pads.values()) p.dirty = false; }
 
 // --------------------------------------------------------------- folder
 
@@ -134,7 +129,7 @@ async function showFolder(path, f = frontFiles()) {
     return;
   }
   Object.assign(f, {
-    view: "folder", editor: null, path: body.path, place: body.place, places: body.places, entries: body.entries,
+    view: "folder", path: body.path, place: body.place, places: body.places, entries: body.entries,
     writable: body.writable, admin: Boolean(body.admin), rootAllowed: Boolean(body.rootAllowed),
   });
   if (!f.admin) files.rootOk = false; // the warning again, next time admin mode is on
@@ -183,12 +178,10 @@ function renderNote(f) {
 }
 
 function renderFiles(f) {
-  f.section.classList.toggle("editing", f.view === "editor");
   renderPlaces(f);
   renderNote(f);
   renderTools(f);
   if (f.view === "trash") return renderTrash(f);
-  if (f.view === "editor") return;
   f.part("crumbs").replaceChildren(...crumbs(f));
   f.part("up").disabled = f.path.split("/").filter(Boolean).length < 2;
   const shown = f.entries.filter((e) => hiddenShown(f) || !e.name.startsWith("."));
@@ -287,7 +280,7 @@ function entryMenu(entry, path, f) {
   if (entry.dir && desktopMode()) items.push({ label: "Open in a new window", run: () => newFilesWindow(path) });
   if (entry.place) return items; // a place itself: open it, nothing else
   if (entry.kind === "text" || (!entry.dir && entry.size < 2 * 1024 * 1024 && entry.kind === "file")) {
-    items.push({ label: f.writable ? "Edit as text" : "View as text", run: () => editFile(path, f) });
+    items.push({ label: "Open in Notepad", run: () => editFile(path) });
   }
   if (!entry.dir) items.push({ label: "Download", run: () => downloadFile(path) });
   items.push({ label: "Copy", run: () => clip(entry, path, true) });
@@ -300,14 +293,15 @@ function entryMenu(entry, path, f) {
 }
 
 // A folder opens in this window (from the desktop: the one in front, if
-// one's open); a text file in its editor; the rest in windows of their own.
+// one's open); a text file in Notepad (Markdown: adlerMD's quick look); the
+// rest in windows of their own.
 function openEntry(entry, path, f = null) {
   if (entry.outside) return toast("That link leads outside its place, so adlerOS won't open it.");
   if (entry.dir) {
     const into = f || (filesOpen() ? frontFiles() : null);
     return into ? showFolder(path, into) : openFiles(path);
   }
-  if (entry.kind === "text") return editFile(path, f);
+  if (entry.kind === "text") return openNotepad(path);
   if (entry.kind === "audio") return playSong(entry, path);
   if (["image", "video", "pdf"].includes(entry.kind)) return viewFile(entry, path);
   return downloadFile(path);
@@ -413,6 +407,7 @@ async function filesPost(what, body) {
     return null;
   }
   if (status === 409 && reply?.conflict) return { conflict: true };
+  if (status === 409 && reply?.exists) return { exists: true };
   if (status !== 200) {
     toast(reply?.error || "That didn't work.");
     return null;
@@ -426,14 +421,14 @@ async function newFolder(dir = frontFiles().path) {
   if (name && await filesPost("mkdir", { path: dir, name })) refreshFiles();
 }
 
-async function newTextFile(dir = frontFiles().path, f = null) {
+async function newTextFile(dir = frontFiles().path) {
   if (!(await rootOk([dir]))) return;
   const name = await nameDialog({ title: "New text file", value: "untitled.txt", button: "Create" });
   if (!name) return;
   const reply = await filesPost("text", { path: join(dir, name), text: "" });
   if (!reply) return;
   refreshFiles();
-  editFile(reply.path || join(dir, name), f);
+  openNotepad(reply.path || join(dir, name));
 }
 
 async function renamePath(entry, path) {
@@ -575,67 +570,11 @@ function renderTrash(f) {
   f.part("list").replaceChildren(...(rows.length ? [...rows, el("div", { class: "trash-actions" }, empty)] : [el("p", { class: "no-results" }, "The Trash is empty.")]));
 }
 
-// --------------------------------------------------------------- editor
+// ------------------------------------------------------------ in Notepad
 
-// In this window's editor (from the desktop: the window in front, or the
-// first, opened).
-async function editFile(path, f = null) {
-  const { status, body } = await api(`/api/files/text?path=${encodeURIComponent(path)}`).catch(() => ({ status: 0 }));
-  if (status === 401) return showLock();
-  if (status !== 200) return toast(body?.error || "Can't open that file.");
-  const w = f || (filesOpen() ? frontFiles() : mainFiles());
-  if (!isOpen(w.id)) {
-    openWindow(w.id);
-    w.path = parentOf(body.path);
-  }
-  fileFront = w;
-  w.view = "editor";
-  w.editor = { path: body.path, name: body.path.split("/").pop(), mtime: body.mtime, dirty: false, writable: body.writable };
-  const area = w.part("editor-text");
-  area.value = body.text;
-  area.readOnly = !body.writable;
-  w.part("editor-name").textContent = w.editor.name;
-  w.part("editor-path").textContent = body.path;
-  w.part("editor-save").hidden = !body.writable;
-  setDirty(w, false);
-  renderFiles(w);
-  area.focus();
-  area.setSelectionRange(0, 0);
-  area.scrollTop = 0;
-}
-
-function setDirty(f, dirty) {
-  if (!f.editor) return;
-  f.editor.dirty = dirty;
-  f.part("editor-state").textContent = !f.editor.writable ? "Read-only" : dirty ? "Not saved" : "Saved";
-  f.part("editor-state").classList.toggle("dirty", dirty);
-}
-
-async function saveFile(f, overwrite = false) {
-  const ed = f.editor;
-  if (!ed || !ed.writable) return;
-  if (!(await rootOk([ed.path]))) return;
-  const reply = await filesPost("text", { path: ed.path, text: f.part("editor-text").value, mtime: overwrite ? undefined : ed.mtime });
-  if (reply?.conflict) {
-    const ok = await confirmDialog({ title: `${ed.name} changed`, body: "Something else changed it since you opened it. Save yours over it anyway?", button: "Overwrite", destructive: true });
-    if (ok) saveFile(f, true);
-    return;
-  }
-  if (!reply) return;
-  ed.mtime = reply.mtime;
-  setDirty(f, false);
-  toast(`Saved ${ed.name}.`);
-}
-
-async function leaveEditor(f) {
-  if (f.editor?.dirty) {
-    const ok = await confirmDialog({ title: "Leave without saving?", body: `Your changes to ${f.editor.name} will be lost.`, button: "Leave", destructive: true });
-    if (!ok) return;
-  }
-  const back = parentOf(f.editor?.path || join(f.path, "x"));
-  f.editor = null;
-  await showFolder(back, f);
-}
+// A text file is Notepad's (a Markdown one, adlerMD's quick look):
+// Edit as text from the menus, the desktop's too.
+function editFile(path) { return openNotepad(path, { markdown: false }); }
 
 // ------------------------------------------------- dragging a file away
 
@@ -718,7 +657,7 @@ async function fileUp(e) {
 
 // ---------------------------------------------------------------- wiring
 
-// A window's own buttons, list, editor and drops.
+// A window's own buttons, list and drops.
 function wireFiles(f) {
   const front = () => { fileFront = f; };
   f.section.addEventListener("pointerdown", front, true);
@@ -737,7 +676,7 @@ function wireFiles(f) {
     showFolder(parentOf(f.path), f);
   });
   f.part("new-folder").addEventListener("click", () => newFolder(f.path));
-  f.part("new-file").addEventListener("click", () => newTextFile(f.path, f));
+  f.part("new-file").addEventListener("click", () => newTextFile(f.path));
   f.part("paste").addEventListener("click", () => paste(f.path, f));
   f.part("hidden").addEventListener("click", () => {
     files.showHidden = !files.showHidden;
@@ -774,24 +713,6 @@ function wireFiles(f) {
       paste(f.path, f);
     }
   });
-  const editorText = f.part("editor-text");
-  editorText.addEventListener("input", () => setDirty(f, true));
-  editorText.addEventListener("keydown", (e) => {
-    // Tab indents, Ctrl+S saves; neither leaves the editor.
-    if (e.key === "Tab" && !e.ctrlKey && !e.altKey && !editorText.readOnly) {
-      e.preventDefault();
-      e.stopPropagation();
-      document.execCommand("insertText", false, "\t") || editorText.setRangeText("\t", editorText.selectionStart, editorText.selectionEnd, "end");
-      setDirty(f, true);
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-      e.preventDefault();
-      e.stopPropagation();
-      saveFile(f);
-    }
-  });
-  f.part("editor-save").addEventListener("click", () => saveFile(f));
-  f.part("editor-back").addEventListener("click", () => leaveEditor(f));
 }
 
 const firstFiles = makeFileWin("files", $("files"));
@@ -808,8 +729,8 @@ $("music-download").addEventListener("click", () => downloadFile($("music").data
 document.addEventListener("pointermove", fileMove);
 document.addEventListener("pointerup", fileUp);
 document.addEventListener("pointercancel", fileUp);
-// Escape: the viewer first; then out of the editor, out of the Trash, then
-// out of the My Computer window in front.
+// Escape: the viewer first; then out of the Trash, then out of the My
+// Computer window in front.
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && isActive("viewer") && $("modal").hidden && $("menu").hidden) {
     e.stopImmediatePropagation(); // the viewer first, My Computer behind it stays
@@ -818,10 +739,9 @@ document.addEventListener("keydown", (e) => {
   const f = [...fileWins.values()].find((w) => isActive(w.id));
   if (e.key !== "Escape" || !f || !$("modal").hidden || !$("menu").hidden) return;
   e.stopImmediatePropagation();
-  if (f.view === "editor") leaveEditor(f);
-  else if (f.view === "trash") showFolder(f.path, f);
+  if (f.view === "trash") showFolder(f.path, f);
   else closeFiles(f);
 }, true);
 window.addEventListener("beforeunload", (e) => {
-  if ([...fileWins.values()].some((f) => f.editor?.dirty) || files.uploads || files.tasks.size) e.preventDefault();
+  if ([...pads.values()].some((p) => p.dirty) || files.uploads || files.tasks.size) e.preventDefault();
 });

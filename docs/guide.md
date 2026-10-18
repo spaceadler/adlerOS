@@ -203,8 +203,16 @@ image](https://docs.linuxserver.io/images/docker-firefox/), so:
   its own ([standalone](standalone.md#https-behind-a-reverse-proxy));
   otherwise in a tab.
 - It's heavy: about 1 GB of memory and a good part of the CPU while it runs
-  (a Raspberry Pi 4 manages, slowly for video). Stop it in the App Store when
-  you're done.
+  (a Raspberry Pi 4 manages, slowly for video). So **closing its window
+  quits the browser** (its tabs go, the memory comes back); its container
+  stays up, and opening Firefox or anything that goes through it starts the
+  browser again, with just that page.
+- Apps that won't be shown in a window of adlerOS's, and web searches, open
+  in it: in the tab you're on, not a new one (adlerOS sets that in its
+  profile's `user.js`).
+- The certificate it makes itself isn't one a browser trusts inside a frame
+  (you'd get a blank window), so give it a name of its own behind your
+  reverse proxy (below) and **Look for new apps**.
 - Anyone who can reach it can use it, so keep it on your own network or VPN,
   like adlerOS.
 
@@ -416,6 +424,63 @@ way to change a homelab.
 code. Ctrl+S (⌘S) saves; Tab indents. If something else changed the file
 since you opened it, it asks before saving over it. Leaving with unsaved
 changes asks first.
+
+## Notepad
+
+Text files, one a window, like Windows': **All apps → Notepad**, or open a
+text file in My Computer (its menu's **Open in Notepad** for any file).
+**File**: New, Open…, Save (Ctrl+S), Save as… (Ctrl+Shift+S), Close;
+**View**: word wrap. Open… and Save as… pick from your places. A file only
+readable here (Root without admin mode) opens read-only: Save as… puts a
+copy somewhere you can change. Closing one with changes asks first.
+
+A **Markdown** file (`.md`) opened from My Computer or the desktop opens
+the same way, as adlerMD's quick look: its text, how it reads (View → Read,
+or Ctrl+E), or both side by side; for a quick note you'll throw away. Its
+**File → Load vault** opens adlerMD with your vault instead (the file's own,
+if it's in one); with changes it asks whether to save them first.
+
+## adlerMD
+
+Your notes, in **vaults**, Obsidian's way: a vault is a folder of Markdown
+notes and their attachments, and an Obsidian vault works here as it is (and
+back: adlerMD reads `.obsidian`'s settings and never writes them, so the
+Obsidian on your laptop, through Syncthing, keeps its own). Open it from
+All apps, the dock or the desktop; it opens your vault: the first is
+`NOTES_DIR` in your storage (in a homelab, `Notes`), and the vault name at
+the top left switches, **creates a vault**, or **opens a folder as a
+vault**.
+
+- **Files** down the side (right-click: new note or folder, rename, move,
+  delete to the Trash; drag one onto a folder to move it), **search**
+  (words, or `tag:#name`, `path:folder`) and **tags**.
+- **Notes in tabs**: a click opens one in the tab you're on, Ctrl+click (or
+  the middle button) in a new one. **Edit**, **Read** or **Both** side by
+  side (Ctrl+E switches); a double-click in reading edits there. It saves as
+  you go. If Obsidian (or anything) changed the note meanwhile, you choose:
+  keep yours, theirs, or both.
+- **What it reads**: headings, emphasis, ==highlights==, lists and tasks
+  (tick them while reading), quotes and callouts (`> [!note]`, folding with
+  `+`/`-`), code, tables, footnotes, `%%comments%%`, properties (the
+  frontmatter), `#tags`, links both ways (`[text](path.md)` and
+  `[[name]]`), and embeds: pictures, other notes (or a section), PDFs,
+  video, songs and Bases. A note's own HTML shows as text, and pictures from
+  the internet as links (adlerOS only loads its own).
+- **Writing links**: `[[` offers the notes whose names match, and writes the
+  link the way the vault says (`useMarkdownLinks`, `newLinkFormat`). A link
+  to a note that isn't there yet makes it when you click it. A picture
+  pasted or dropped in goes to the vault's attachment folder.
+- **Renaming or moving** a note or folder updates the links to it (and its
+  own), as Obsidian's *Automatically update internal links* does; with that
+  off, it asks.
+- **On the right**: backlinks, outgoing links, the outline and the tags of
+  the note you're on.
+- **The graph** (Ctrl+G, or a note's menu for just its part of it), laid
+  out as `graph.json` says, with its colour groups. **Bases** (`.base`
+  files, or a `base` code block) show their table and card views.
+- **Ctrl+O** finds (or makes) a note by name; the calendar button opens
+  today's **daily note** (`daily-notes.json`'s folder, format and
+  template); a note's menu **inserts a template** (`templates.json`).
 
 ## Terminal
 
