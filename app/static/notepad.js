@@ -12,7 +12,7 @@
 
 const pads = new Map(); // window id -> its file
 const PAD_WRAP_KEY = "adleros.padWrap";
-const PAD_MODE_KEY = "adleros.padMode"; // a Markdown file's: edit, read, split
+const PAD_MODE_KEY = "adleros.padMode"; // a Markdown file's: live, edit, read, split
 let padCount = 0;
 
 // A file in Notepad: the window it's in already, or a new one. No path: the
@@ -47,7 +47,7 @@ async function openNotepad(path = null, { markdown = path ? /\.(md|markdown)$/i.
 function makePad({ markdown }) {
   const id = `notepad-${++padCount}`;
   const area = el("textarea", { class: "pad-text", spellcheck: "false", autocapitalize: "off", "aria-label": "Text" });
-  const preview = el("div", { class: "pad-preview md-view", hidden: "" });
+  const preview = el("div", { class: "pad-preview md-view", tabindex: "0", hidden: "" });
   const title = el("span", { class: "pad-title" });
   const status = el("span", { class: "pad-status" });
   const menuButton = (label, items) => {
@@ -59,7 +59,7 @@ function makePad({ markdown }) {
     return b;
   };
   const pad = { id, markdown, area, preview, title, status, path: null, name: "Untitled", mtime: null, writable: true, dirty: false,
-    mode: markdown ? winLoad(PAD_MODE_KEY, "edit") : "edit" };
+    mode: markdown ? winLoad(PAD_MODE_KEY, "live") : "edit" };
   const close = el("button", { class: "sheet-close pad-close", type: "button", "aria-label": "Close" },
     svg(["M18 6 6 18", "m6 6 12 12"]));
   close.addEventListener("click", () => closePad(pad));
@@ -76,7 +76,7 @@ function makePad({ markdown }) {
     icon: markdown ? "adlermd" : "notepad", size: [820, 600] });
   area.addEventListener("input", () => {
     setPadDirty(pad, true);
-    if (pad.markdown && pad.mode !== "edit") renderPadPreview(pad);
+    if (pad.markdown && pad.mode !== "edit" && pad.mode !== "live") renderPadPreview(pad);
   });
   area.addEventListener("keydown", (e) => padKeys(e, pad));
   area.addEventListener("keyup", () => padStatus(pad));
@@ -85,7 +85,7 @@ function makePad({ markdown }) {
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); e.stopPropagation(); return e.shiftKey ? savePadAs(pad) : savePad(pad); }
     if (mod && e.key.toLowerCase() === "o") { e.preventDefault(); e.stopPropagation(); return padOpenFile(pad); }
-    if (mod && e.key.toLowerCase() === "e" && pad.markdown) { e.preventDefault(); return setPadMode(pad, pad.mode === "read" ? "edit" : "read"); }
+    if (mod && e.key.toLowerCase() === "e" && pad.markdown) { e.preventDefault(); return setPadMode(pad, pad.mode === "read" ? pad.editMode || "live" : "read"); }
   });
   setPadWrap(pad, winLoad(PAD_WRAP_KEY, true) !== false);
   setPadMode(pad, pad.mode, false);
@@ -94,7 +94,10 @@ function makePad({ markdown }) {
 
 function showPad(pad) {
   openWindow(pad.id);
-  requestAnimationFrame(() => (pad.mode === "read" ? pad.preview : pad.area).focus({ preventScroll: true }));
+  requestAnimationFrame(() => {
+    const at = pad.mode === "live" ? pad.preview.querySelector(".md-live-area") || pad.preview : pad.mode === "read" ? pad.preview : pad.area;
+    at.focus({ preventScroll: true });
+  });
   return pad;
 }
 
@@ -144,7 +147,8 @@ function padViewMenu(pad) {
   return [
     { label: tick(pad.wrap, "Word wrap"), run: () => { setPadWrap(pad, !pad.wrap); winSave(PAD_WRAP_KEY, pad.wrap); } },
     ...(pad.markdown ? [
-      { label: tick(pad.mode === "edit", "Edit"), run: () => setPadMode(pad, "edit") },
+      { label: tick(pad.mode === "live", "Live: edit it as it reads"), run: () => setPadMode(pad, "live") },
+      { label: tick(pad.mode === "edit", "Source"), run: () => setPadMode(pad, "edit") },
       { label: tick(pad.mode === "read", "Read (Ctrl+E)"), run: () => setPadMode(pad, "read") },
       { label: tick(pad.mode === "split", "Edit and read, side by side"), run: () => setPadMode(pad, "split") },
     ] : []),
@@ -158,9 +162,11 @@ function setPadWrap(pad, on) {
 
 function setPadMode(pad, mode, keep = true) {
   pad.mode = pad.markdown ? mode : "edit";
-  pad.section.dataset.mode = pad.mode;
+  if (pad.mode !== "read") pad.editMode = pad.mode; // Ctrl+E comes back to it
+  pad.section.dataset.view = pad.mode; // (data-mode is the window's: max)
   pad.preview.hidden = pad.mode === "edit";
-  pad.area.hidden = pad.mode === "read";
+  pad.area.hidden = pad.mode === "read" || pad.mode === "live";
+  if (pad.mode !== "live") mdLiveStop(pad.preview);
   if (pad.mode !== "edit") renderPadPreview(pad);
   if (keep && pad.markdown) winSave(PAD_MODE_KEY, pad.mode);
 }
@@ -168,38 +174,55 @@ function setPadMode(pad, mode, keep = true) {
 // The Markdown, as it reads: its links lead to files next to it.
 function renderPadPreview(pad) {
   clearTimeout(pad.renderTimer);
-  pad.renderTimer = setTimeout(() => {
-    const dir = pad.path ? parentOf(pad.path) : null;
-    const resolve = (href) => {
-      if (!dir) return { path: null, exists: false };
-      const clean = decodeURIComponent(href.split("#")[0]);
-      return { path: clean.startsWith("/") ? clean : normalizePath(join(dir, clean)), exists: true };
-    };
-    pad.preview.replaceChildren(mdRender(pad.area.value, {
-      resolve,
-      open: (link) => {
-        if (link.external) return window.open(link.href, "_blank", "noopener,noreferrer");
-        if (!link.target?.path) return;
-        const name = link.target.path.split("/").pop();
-        openEntry({ name, dir: !/\.[^./]+$/.test(name), kind: padKind(name), size: 0 }, link.target.path);
-      },
-      embed: (target, opts) => {
-        const r = resolve(target);
-        if (!r.path || !/\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i.test(r.path)) return null;
-        return el("img", { class: "md-embed-image", src: fileUrl(r.path, true), alt: opts.alt || "", ...(opts.width ? { width: opts.width } : {}) });
-      },
-      media: (src) => {
-        const r = resolve(src);
-        return r.path ? fileUrl(r.path, true) : null;
-      },
-      toggleTask: (line, done) => {
-        const lines = pad.area.value.split("\n");
-        lines[line] = lines[line].replace(/\[(.)\]/, done ? "[x]" : "[ ]");
-        pad.area.value = lines.join("\n");
-        setPadDirty(pad, true);
-      },
-    }));
-  }, pad.preview.childElementCount ? 120 : 0);
+  if (pad.mode === "live") {
+    // Edited where you click (mdlive.js); the text area behind it holds the file.
+    const live = mdLive(pad.preview, {
+      text: () => pad.area.value,
+      set: (text) => { pad.area.value = text; setPadDirty(pad, true); },
+      ctx: () => padMdCtx(pad),
+      writable: () => !pad.area.readOnly,
+      wire: (area) => area.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey && continueList(area)) { e.preventDefault(); area.dispatchEvent(new Event("input")); }
+      }),
+    });
+    if (!pad.area.readOnly && !mdFrontmatter(pad.area.value).body.trim()) mdLiveAtEnd(live, null, { focus: false }); // somewhere to start
+    return;
+  }
+  pad.renderTimer = setTimeout(() => pad.preview.replaceChildren(mdRender(pad.area.value, padMdCtx(pad))), pad.preview.childElementCount ? 120 : 0);
+}
+
+// Where a Markdown file's links lead, and what its pictures show: files next to it.
+function padMdCtx(pad) {
+  const dir = pad.path ? parentOf(pad.path) : null;
+  const resolve = (href) => {
+    if (!dir) return { path: null, exists: false };
+    const clean = decodeURIComponent(href.split("#")[0]);
+    return { path: clean.startsWith("/") ? clean : normalizePath(join(dir, clean)), exists: true };
+  };
+  return {
+    resolve,
+    open: (link) => {
+      if (link.external) return window.open(link.href, "_blank", "noopener,noreferrer");
+      if (!link.target?.path) return;
+      const name = link.target.path.split("/").pop();
+      openEntry({ name, dir: !/\.[^./]+$/.test(name), kind: padKind(name), size: 0 }, link.target.path);
+    },
+    embed: (target, opts) => {
+      const r = resolve(target);
+      if (!r.path || !/\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i.test(r.path)) return null;
+      return el("img", { class: "md-embed-image", src: fileUrl(r.path, true), alt: opts.alt || "", ...(opts.width ? { width: opts.width } : {}) });
+    },
+    media: (src) => {
+      const r = resolve(src);
+      return r.path ? fileUrl(r.path, true) : null;
+    },
+    toggleTask: (line, done) => {
+      const lines = pad.area.value.split("\n");
+      lines[line] = lines[line].replace(/\[(.)\]/, done ? "[x]" : "[ ]");
+      pad.area.value = lines.join("\n");
+      setPadDirty(pad, true);
+    },
+  };
 }
 
 function normalizePath(path) {

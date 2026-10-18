@@ -435,8 +435,9 @@ readable here (Root without admin mode) opens read-only: Save as… puts a
 copy somewhere you can change. Closing one with changes asks first.
 
 A **Markdown** file (`.md`) opened from My Computer or the desktop opens
-the same way, as adlerMD's quick look: its text, how it reads (View → Read,
-or Ctrl+E), or both side by side; for a quick note you'll throw away. Its
+the same way, as adlerMD's quick look: as it reads, edited where you click
+(View → Live, as in adlerMD), its text (Source), how it reads (Read, or
+Ctrl+E), or both side by side; for a quick note you'll throw away. Its
 **File → Load vault** opens adlerMD with your vault instead (the file's own,
 if it's in one); with changes it asks whether to save them first.
 
@@ -455,10 +456,17 @@ vault**.
   delete to the Trash; drag one onto a folder to move it), **search**
   (words, or `tag:#name`, `path:folder`) and **tags**.
 - **Notes in tabs**: a click opens one in the tab you're on, Ctrl+click (or
-  the middle button) in a new one. **Edit**, **Read** or **Both** side by
-  side (Ctrl+E switches); a double-click in reading edits there. It saves as
-  you go. If Obsidian (or anything) changed the note meanwhile, you choose:
-  keep yours, theirs, or both.
+  the middle button) in a new one. It saves as you go. If Obsidian (or
+  anything) changed the note meanwhile, you choose: keep yours, theirs, or
+  both.
+- **Live** (Obsidian's Live Preview): the note as it reads, and you edit it
+  where you click. The paragraph, heading, list or table you're in shows
+  its Markdown until you leave it; a link, a task's box or a video still
+  works as itself. The arrows go on into the block above or below,
+  Backspace at a block's start (Delete at its end) joins it with the next
+  one, Escape is done. Or **Source** (all of it as Markdown), **Read**, or
+  **Both** side by side. Ctrl+E switches between reading and editing; a
+  double-click in reading edits there.
 - **What it reads**: headings, emphasis, ==highlights==, lists and tasks
   (tick them while reading), quotes and callouts (`> [!note]`, folding with
   `+`/`-`), code, tables, footnotes, `%%comments%%`, properties (the
