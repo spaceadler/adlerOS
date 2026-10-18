@@ -51,6 +51,7 @@ would take the App Store down with it. Import and discovery never take a
 compose file the adlerOS web app could have written (its data folder), and
 imports from the browser only take files under your home folder.
 """
+import datetime
 import json
 import os
 import re
@@ -92,7 +93,7 @@ SHOW_TOTAL = 700 * 1024
 SKIP_DIRS = {"node_modules", ".git", "__pycache__", "venv", ".venv"}
 LOG_LINES = 300  # per compose file
 LOG_BYTES = 400 * 1024
-COLLECTIONS = ("core", "system", "media", "knowledge", "productivity", "life", "files", "extras")
+COLLECTIONS = ("core", "system", "media", "knowledge", "productivity", "life", "files", "extras", "background")
 # Services that are never the app itself: they belong to the app that needs them.
 BACKING = re.compile(r"postgres|mysql|mariadb|redis|valkey|mongo|couchdb|memcached|elastic|meili|typesense|clickhouse"
                      r"|minio|rabbitmq|nats|pgvecto|immich-machine-learning|(^|[/-])db($|[:-])", re.I)
@@ -788,13 +789,17 @@ def record_for(file, folder_name, svc, info, own, apps, svcs=()):
     # No web page (a game server, a bot): no address, but its port still
     # says whether it's up.
     check = port or next(iter(svc.get("ports") or []), None)
-    # Unknown: the folder's name, each word capitalised (spaceadler.com stays as is).
-    name = info["name"] if info else " ".join(w[:1].upper() + w[1:] for w in re.split(r"[-_ ]+", folder_name) if w)
+    # Unknown: the folder's name, each word capitalised; one named like a
+    # website (spaceadler.com) stays as it is, and with no port of its own
+    # (a tunnel serves it) that website is its address.
+    site = re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}", folder_name.lower()) is not None
+    name = info["name"] if info else folder_name if site else " ".join(w[:1].upper() + w[1:] for w in re.split(r"[-_ ]+", folder_name) if w)
     image_base = image_path(svc["image"]).rsplit("/", 1)[-1]
     icon = (info or {}).get("icon") or (f"di:{image_base}" if re.fullmatch(r"[a-z0-9-]+", image_base) else "")
     return new_app_id(name, apps), {
         "name": name[:40], "files": [str(file)], "services": own,
-        "url": f"http://{host_address()}:{port}" if port else "", "icon": icon, "port": check,
+        "url": f"http://{host_address()}:{port}" if port else f"https://{folder_name.lower()}" if site and not info else "",
+        "icon": icon, "port": check,
         "about": (info or {}).get("about") or f"Found in {file.parent}",
         "collection": (info or {}).get("collection", "extras"), "source": "discovered",
         "known": (info or {}).get("id", ""), "added": time.strftime("%Y-%m-%d"), "installed": True}
@@ -1116,7 +1121,12 @@ def firefox_container(app):
             info = json.loads(found.stdout)[0]
             if "firefox" in info["Config"]["Image"]:
                 env = dict(e.split("=", 1) for e in info["Config"].get("Env") or [] if "=" in e)
-                return cid, env.get("PUID") or "abc"
+                started = info.get("State", {}).get("StartedAt", "")
+                try:  # a container that's just started starts Firefox itself
+                    age = time.time() - datetime.datetime.fromisoformat(started[:26].rstrip("Z") + "+00:00").timestamp()
+                except ValueError:
+                    age = 3600
+                return cid, env.get("PUID") or "abc", age
     return None
 
 
@@ -1132,14 +1142,21 @@ def firefox_url(url):
     found = firefox_container(app)
     if not found:
         return {"error": "Firefox isn't running: start it in the App Store"}
-    cid, user = found
-    # Its display and profile, as the running Firefox has them; detached, so
-    # a Firefox this starts keeps running after the command's done.
-    seen = subprocess.run(["docker", "exec", "-u", user, cid, "sh", "-c",
-                           'p=$(pgrep -o -x firefox) && tr "\\0" "\\n" < /proc/$p/environ'],
-                          env=docker_env(), stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                          timeout=30, check=False).stdout
-    running = dict(line.split("=", 1) for line in seen.splitlines() if "=" in line)
+    cid, user, age = found
+    # Its display and profile, as the running Firefox has them. A container
+    # that just started starts Firefox itself in a moment: wait for that one
+    # (a second would find its profile in use) before starting one here.
+    # Detached, so a Firefox this starts keeps running after we're done.
+    running = {}
+    for _ in range(25):
+        seen = subprocess.run(["docker", "exec", "-u", user, cid, "sh", "-c",
+                               'p=$(pgrep -o -x firefox) && tr "\\0" "\\n" < /proc/$p/environ'],
+                              env=docker_env(), stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                              timeout=30, check=False).stdout
+        running = dict(line.split("=", 1) for line in seen.splitlines() if "=" in line)
+        if running or age > 60:
+            break
+        time.sleep(1)
     env = {"HOME": "/config", "DISPLAY": ":0", "XDG_RUNTIME_DIR": "/config/.XDG"}
     env.update({k: running[k] for k in env if running.get(k)})
     started = subprocess.run(["docker", "exec", "-d", "-u", user, *[a for k, v in env.items() for a in ("-e", f"{k}={v}")],

@@ -44,7 +44,7 @@ lissy93/dashy|dashy	dashy	Dashy	system	di:dashy	Dashboard of your services	-
 linuxserver/heimdall|heimdall	heimdall	Heimdall	system	di:heimdall	Application dashboard	-
 louislam/uptime-kuma|uptime-kuma	uptime-kuma	Uptime Kuma	system	di:uptime-kuma	Uptime monitoring and status pages	3001
 henrygd/beszel|beszel	beszel	Beszel	system	di:beszel	Server and container monitoring	8090
-henrygd/beszel-agent|beszel-agent	beszel-agent	Beszel agent	system	di:beszel	Reports this machine to Beszel	-
+henrygd/beszel-agent|beszel-agent	beszel-agent	Beszel agent	background	di:beszel	Reports this machine to Beszel	-
 netdata/netdata	netdata	Netdata	system	di:netdata	Real-time performance monitoring	19999
 grafana/grafana|grafana	grafana	Grafana	system	di:grafana	Dashboards and charts	-
 prom/prometheus|prometheus	prometheus	Prometheus	system	di:prometheus	Metrics collection	-

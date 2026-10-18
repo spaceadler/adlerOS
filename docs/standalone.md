@@ -76,7 +76,9 @@ levels below them, becomes one or more apps:
    other services are part of that stack. On their own, they're apps.
 5. One known app: the whole file is that app. Several (Ollama and Open WebUI):
    one app each, with the services each depends on; leftovers go with the
-   first. None: the file is one app named after its folder, in **Extras**. If
+   first. None: the file is one app named after its folder, in **Extras**
+   (a folder named like a website, `example.com`, keeps its name, and with no
+   port of its own that website is its address). If
    the folder's name is a known app (an image you built yourself, say), it's
    that app.
 6. Its address is `http://<ADLEROS_HOST>:<port>`, from the first published

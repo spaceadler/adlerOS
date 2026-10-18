@@ -38,6 +38,7 @@ function closeDrawer() {
 function drawerMatches() {
   const q = $("drawer-search").value.trim().toLowerCase();
   return state.apps
+    .filter((a) => a.genre !== "background") // agents: only in the App Store
     .filter((a) => !q || a.name.toLowerCase().includes(q) || a.about.toLowerCase().includes(q))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

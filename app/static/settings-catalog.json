@@ -77,7 +77,7 @@
       "category": "account",
       "icon": "image",
       "title": "Window transparency",
-      "description": "How much of the wallpaper shows through windows, from 0.00 (solid) to 1.00, on the home screen and in desktop mode. A window shows the desktop behind it, never another window. Just this device.",
+      "description": "How much of the wallpaper shows through adlerOS's own windows, from 0.00 (solid) to 1.00, on the home screen and in desktop mode; your apps' pages stay solid. A window shows the desktop behind it, never another window. Just this device.",
       "keywords": "transparency transparent opacity glass blur see-through solid windows look",
       "control": {
         "type": "glass"
@@ -136,7 +136,7 @@
       "category": "account",
       "icon": "search",
       "title": "Web search",
-      "description": "Where the search bar on your home screen takes you. {QUERY} becomes what you typed.",
+      "description": "Where every web search goes: the search bar, the desktop's search widget, and Search (Alt+Space) when you pick Search the web. {QUERY} becomes what you typed. It opens in the Firefox app here when you have it, else in a tab.",
       "keywords": "search engine 4get google duckduckgo searxng url",
       "control": {
         "type": "setting-text",

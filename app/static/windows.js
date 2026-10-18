@@ -553,6 +553,8 @@ async function openAppWindow(app) {
   if (wm.windows.has(id) && isOpen(id)) return toggleWindow(id, () => {});
   const check = await frameCheck(app);
   if (!check.frame) {
+    // It won't be shown in a page of ours: in the Firefox app instead.
+    if (app.known !== "firefox" && (await openInFirefox(app.url, app.name))) return;
     window.open(app.url, "_blank", "noopener,noreferrer");
     if (check.why) toast(`${app.name} opened in a tab: ${check.why}.`);
     return;
@@ -589,6 +591,28 @@ function headButton(label, run, paths) {
   const b = el("button", { type: "button", class: "app-head-button", "aria-label": label, title: label }, svg(paths));
   b.addEventListener("click", run);
   return b;
+}
+
+// A page we can't show in a window of our own (an app that refuses, a web
+// search): in a new tab of the Firefox app from the store, in its window
+// here, Firefox started first if it's stopped. False: no Firefox (or this
+// device wants tabs on the home screen); the caller opens a tab instead.
+async function openInFirefox(url, name = "it") {
+  const firefox = state.apps.find((a) => a.known === "firefox" && a.url);
+  if (!firefox || (!desktopMode() && appsInTabs())) return false;
+  if (!firefox.up) {
+    toast(`Starting Firefox for ${name}…`);
+    const { status, body } = await postAction("app-start", { app: firefox.id });
+    const started = status === 202 && body ? await waitForJob(body) : null;
+    if (started?.status !== "done") return false;
+    firefox.up = true;
+    delete wm.frames[firefox.id]; // it said no while it was off
+  }
+  openAppWindow(firefox);
+  const { status, body } = await postAction("firefox-url", { url });
+  const job = status === 202 && body ? await waitForJob(body) : null;
+  if (!job?.result?.ok) toast(`Firefox couldn't open ${name} (${job?.result?.error || job?.error || body?.error || "the helper didn't answer"}).`);
+  return true;
 }
 
 function reloadAppWindow(id) {

@@ -263,7 +263,7 @@ function groupApps() {
       const i = saved.indexOf(a.id);
       return i < 0 ? Infinity : i;
     };
-    const apps = state.apps.filter((a) => a.genre === c.id || (c.id === "extras" && !known.has(a.genre)))
+    const apps = state.apps.filter((a) => a.genre === c.id || (c.id === "extras" && !known.has(a.genre) && a.genre !== "background"))
       .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
     // What the page shows: its folders (of its own apps), and the apps in none.
     const here = new Set(apps.map((a) => a.id));
@@ -1074,7 +1074,7 @@ function searchFilesSoon(q) {
 function renderResults(keepSelection = false) {
   const q = $("search-input").value.trim().toLowerCase();
   if (!keepSelection) searchFilesSoon(q);
-  const apps = state.apps.filter((a) => !q || a.name.toLowerCase().includes(q) || a.about.toLowerCase().includes(q));
+  const apps = state.apps.filter((a) => a.genre !== "background" && (!q || a.name.toLowerCase().includes(q) || a.about.toLowerCase().includes(q)));
   const actions = q ? ACTIONS.filter((a) => (a.name.toLowerCase().includes(q) || a.keywords.includes(q))
     && (a.id !== "desktop-mode" || computerScreen()) && (a.id !== "terminal" || state.admin)) : [];
   const found = q.length >= 2 && fileSearch.q === q ? fileSearch.items : [];
@@ -1141,17 +1141,11 @@ function runResult(i) {
   else if (r.action.id === "logout") confirmLogout();
 }
 
-// The web: in the Firefox app from the store, in a window here, when there
-// is one (the helper gives it a new tab); else a tab of this browser. On the
-// home screen with apps in tabs (Settings → Open apps), a tab too.
+// Every web search (search's last result, the search bar, the widget) goes
+// to the same address: Settings → Web search.
 async function webSearch(query) {
   const url = state.searchUrl.replaceAll("{QUERY}", encodeURIComponent(query));
-  const firefox = state.apps.find((a) => a.known === "firefox" && a.url && a.up);
-  if (!firefox || (!desktopMode() && appsInTabs())) return window.open(url, "_blank", "noopener,noreferrer");
-  openApp(firefox); // its window now; the page arrives in a moment
-  const { status, body } = await postAction("firefox-url", { url });
-  const job = status === 202 && body ? await waitForJob(body) : null;
-  if (!job?.result?.ok) toast(`Firefox couldn't open it (${job?.result?.error || job?.error || body?.error || "the helper didn't answer"}).`);
+  if (!(await openInFirefox(url, "the search"))) window.open(url, "_blank", "noopener,noreferrer");
 }
 
 // ------------------------------------------------------------- lock/unlock
