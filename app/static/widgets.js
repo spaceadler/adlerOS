@@ -199,7 +199,7 @@ const TYPES = {
         e.preventDefault();
         const q = input.value.trim();
         if (!q) return;
-        window.open(state.searchUrl.replaceAll("{QUERY}", encodeURIComponent(q)), "_blank", "noopener,noreferrer");
+        webSearch(q);
         input.value = "";
       });
     }

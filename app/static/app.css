@@ -1109,7 +1109,7 @@ body.arranging .app:nth-child(2n) .app-icon { animation-delay: -0.12s; }
   outline: none;
 }
 .search-field input::placeholder { color: rgb(255 255 255 / 0.35); }
-.search-results { margin: 4px 0 0; padding: 0; list-style: none; max-height: 50vh; overflow-y: auto; }
+.search-results { margin: 4px 0 0; padding: 0; list-style: none; max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; }
 .search-results:empty { display: none; }
 .search-results li {
   display: flex;
@@ -1759,7 +1759,7 @@ a.chip-button { text-decoration: none; }
   padding: 24px 12px 30px;
 }
 .files-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-right: 48px; }
-.files-bar #files-up svg { width: 16px; height: 16px; }
+.files-bar [data-part="up"] svg { width: 16px; height: 16px; }
 .crumbs { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
 .crumb { padding: 4px 8px; border: 0; border-radius: 8px; background: none; color: #fff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
 .crumb:hover { background: rgb(255 255 255 / 0.08); }
@@ -2134,7 +2134,7 @@ body.wm .desk {
 /* Moving, opening and closing on the curves of your Hyprland animations:
    windowsMove 5 ds on wind (a window's place and size, and its wallpaper
    with it), fade 10 ds, a window in on winIn and out on winOut; workspaces
-   slide 5 ds on wind (tiling.js); the border below. */
+   slide 5 ds on wind (tiling.js). */
 :root {
   --hl-wind: cubic-bezier(0.05, 0.9, 0.1, 1.05);
   --hl-win-in: cubic-bezier(0.1, 1.1, 0.1, 1.1);
@@ -2143,7 +2143,6 @@ body.wm .desk {
 }
 @property --win-x { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --win-y { syntax: "<length>"; inherits: true; initial-value: 0px; }
-@property --hl-angle { syntax: "<angle>"; inherits: false; initial-value: 45deg; }
 body.wm .sheet {
   bottom: auto;
   max-width: none;
@@ -2160,30 +2159,6 @@ body.wm.win-moving .sheet, body.wm .sheet.win-keyed, body.wm .sheet.win-placing 
 @keyframes hl-fade-in { from { opacity: 0; } }
 @keyframes hl-pop-out { to { transform: scale(0.8); } }
 @keyframes hl-fade-out { to { opacity: 0; } }
-/* Its border: Hyprland's gradient, turning once as a window comes to the
-   front (borderangle 30 ds), its colour in a tenth of a second (border). */
-body.wm .sheet::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 11;
-  padding: 2px;
-  border-radius: inherit;
-  background: linear-gradient(var(--hl-angle), rgb(51 204 255 / 0.93), rgb(0 255 153 / 0.93));
-  -webkit-mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
-  -webkit-mask-clip: content-box, border-box;
-  -webkit-mask-composite: xor;
-  mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
-  mask-clip: content-box, border-box;
-  mask-composite: exclude;
-  filter: grayscale(1) brightness(0.5);
-  opacity: 0.67;
-  pointer-events: none;
-  transition: filter 0.1s linear, opacity 0.1s linear;
-}
-body.wm .sheet.active::before { filter: none; opacity: 1; animation: hl-border-angle 3s linear 1; }
-body.wm .sheet[data-mode="max"]::before { display: none; }
-@keyframes hl-border-angle { from { --hl-angle: 45deg; } to { --hl-angle: 405deg; } }
 /* Tiling and workspaces (tiling.js). */
 body.wm .sheet.off-ws { display: none; }
 body.wm .sheet[data-tiled="1"] .win-grip { display: none; }
@@ -2465,11 +2440,11 @@ body.phone .dock-edge { height: 16px; }
 body.wm .desk > .desk-icon { grid-row: span 2; }
 body.wm .desk > .desk-empty { grid-row: span 2; }
 
-/* The search bar widget (desktop mode): eight icons wide and half a row
-   tall, and the home screen's search bar to look at (.web-search). */
-.w-search { display: flex; flex: 1; align-items: center; gap: 10px; min-width: 0; padding: 0 8px 0 14px; }
-.w-search svg { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: rgb(255 255 255 / 0.7); stroke-width: 2.2; stroke-linecap: round; cursor: grab; }
-.w-search-input { flex: 1; min-width: 0; border: 0; background: none; color: #fff; font: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.01em; outline: none; }
+/* The search bar widget (desktop mode): four icons wide and a row tall (two
+   half rows), the home screen's search bar's glass (.web-search). */
+.w-search { display: flex; flex: 1; align-items: center; gap: 14px; min-width: 0; padding: 0 16px 0 22px; }
+.w-search svg { width: 22px; height: 22px; flex-shrink: 0; fill: none; stroke: rgb(255 255 255 / 0.7); stroke-width: 2.2; stroke-linecap: round; cursor: grab; }
+.w-search-input { flex: 1; min-width: 0; border: 0; background: none; color: #fff; font: inherit; font-size: 18px; font-weight: 500; letter-spacing: -0.01em; outline: none; }
 .w-search kbd { flex-shrink: 0; padding: 2px 7px; border-radius: 6px; background: rgb(255 255 255 / 0.1); font: inherit; font-size: 12px; color: rgb(255 255 255 / 0.5); opacity: 0; transition: opacity 0.2s; }
 .w-search:focus-within kbd { opacity: 1; }
 span.w-search-input { color: rgb(255 255 255 / 0.55); }
@@ -2478,9 +2453,9 @@ span.w-search-input { color: rgb(255 255 255 / 0.55); }
 .desk-widget.bar .widget { gap: 0; }
 .desk-widget.bar .widget-label { display: none; }
 .desk-widget.bar .widget-panel {
-  flex: 0 0 auto;
-  height: var(--web-search-h, 40px);
-  border-radius: 999px;
+  flex: 1 1 auto;
+  height: 100%;
+  border-radius: 28px;
   background: linear-gradient(to bottom, rgb(255 255 255 / 0.1), rgb(12 14 18 / 0.34));
   -webkit-backdrop-filter: blur(16px) saturate(180%) brightness(82%);
   backdrop-filter: blur(16px) saturate(180%) brightness(82%);

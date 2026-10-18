@@ -216,7 +216,7 @@ document.addEventListener("keydown", (e) => {
     return menuForFocused();
   }
   if (DIRS[e.key] && !e.altKey && !e.ctrlKey && !e.metaKey) {
-    // The search box (⌘K) runs its own list; text fields keep Left and Right.
+    // The search box (Alt+Space) runs its own list; text fields keep Left and Right.
     if (layer?.id === "search") return;
     if (typing(node) && (node.matches("textarea, select") || e.key === "ArrowLeft" || e.key === "ArrowRight")) return;
     if (arranging() && !layer && moveArranged(e.key)) return e.preventDefault();

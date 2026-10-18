@@ -282,6 +282,29 @@
       }
     ]
   },
+  "firefox-url": {
+    "label": "Opening in Firefox",
+    "description": "Opens a web page (a search from adlerOS) in a new tab of the Firefox app from the store, starting Firefox again if it had closed.",
+    "quiet": true,
+    "params": {
+      "url": {
+        "pattern": "^https?://[^\\s\"'<>\\\\]{1,2000}$",
+        "maxLength": 2010
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "firefox-url",
+          "{param:url}"
+        ],
+        "result": true
+      }
+    ]
+  },
   "files-root": {
     "label": "Changing Root",
     "description": "A change in Files' Root, the homelab's own folder (adlerOS sees it read-only). What to change is in data/agent/files/<request>.json; agent/files.py also refuses unless ADLEROS_TERMINAL=on on the machine.",

@@ -42,8 +42,8 @@ Screen*: it opens like an app.
   every app's share of the CPU and memory.
 - **Notifications.** An app went offline (or came back), a backup or update
   finished or failed, the disk is filling up, it's running hot.
-- **All apps**, A to Z, and **search** (⌘K, Ctrl+K or `/`) across apps and
-  settings.
+- **All apps**, A to Z, and **search** (Alt+Space or `/`) across apps,
+  settings and every file in your homelab by name.
 - **A welcome** on the first login: where are your containers (it looks there
   while you watch), or in a homelab the apps you can add, then a short tour.
 - **Keyboard first.** Every part works with arrow keys, Enter and Escape: a

@@ -17,7 +17,7 @@ crop anything private (addresses, names in notifications).
 | `widgets-picker.png` | Right-click → Edit widgets, with two or three chosen | guide |
 | `dock-menu.png` | Right-click on an app → the menu with Keep in Dock | guide |
 | `all-apps.png` | The All apps drawer, with something typed in its search | guide |
-| `search.png` | ⌘K search with a few results (apps and a setting) | guide |
+| `search.png` | Alt+Space search with a few results (apps, a setting, a file) | guide |
 | `app-logs.png` | An app's Logs window | guide |
 | `import-file.png` | Import, on a file step: compose text on the left, services ticked on the right | guide |
 | `live-usage.png` | Live Usage: the four tiles and the By app list | guide |

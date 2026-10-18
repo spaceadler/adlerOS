@@ -164,9 +164,8 @@ $("drawer-grid").addEventListener("click", (e) => {
   const tile = e.target.closest(".drawer-app");
   if (!tile || e.defaultPrevented) return;
   const app = appById(tile.dataset.app);
-  // In desktop mode an app opens in a window; Ctrl+click, a tab as ever.
-  const tab = e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1;
-  if (app && (!app.url || (desktopMode() && !tab))) {
+  // In a window (opensHere); Ctrl+click, a tab as ever.
+  if (app && opensHere(e, app)) {
     e.preventDefault();
     closeDrawer();
     return openApp(app);

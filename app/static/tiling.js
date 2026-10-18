@@ -320,11 +320,13 @@ function closeActive() {
 // Alt and a key (by where it is: Alt changes what some keys type). Anywhere,
 // even in the terminal, since that's what these are for; the window keys
 // and workspaces only in desktop mode.
+// Like exec alacritty / nautilus: with one open, another (desktop mode).
+const openOrNew = (open, again, ids) => () => (desktopMode() && [...ids()].some((id) => isOpen(id)) ? again() : open());
 const ALT_KEYS = {
-  Space: () => toggleDrawer(),
-  Enter: () => openTerminal(),
-  KeyT: () => openTerminal(),
-  KeyE: () => toggleFiles(),
+  Space: () => toggleSearch(),
+  Enter: openOrNew(openTerminal, newTerminalWindow, () => terms.keys()),
+  KeyT: openOrNew(openTerminal, newTerminalWindow, () => terms.keys()),
+  KeyE: openOrNew(() => openFiles(filesHome()), () => newFilesWindow(), () => fileWins.keys()),
   "Shift+KeyP": () => openSettings("wallpaper"),
   Escape: () => powerMenu(),
   KeyM: () => confirmLogout(),

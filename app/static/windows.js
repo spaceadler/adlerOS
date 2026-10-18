@@ -94,8 +94,10 @@ function switchDesktopMode(on) {
 // A float one (Music, the viewer) sits over the others on the home screen
 // instead of taking their place; a floats one (Music) floats when windows
 // tile, too.
-function registerWindow(id, { title, close, hide = null, dock = null, size = [1000, 700], app = null, extras = [], float = false, floats = false }) {
-  wm.windows.set(id, { id, title, close, hide, dock, size, app, float, floats });
+// A copy (a second terminal) goes for good when it closes, like an app's.
+function registerWindow(id, { title, close, hide = null, dock = null, icon = null, size = [1000, 700], app = null, extras = [],
+  float = false, floats = false, copy = false }) {
+  wm.windows.set(id, { id, title, close, hide, dock, icon, size, app, float, floats, copy });
   if (!$(id).querySelector(":scope > .win-bar")) winFrame(id, title, extras);
 }
 
@@ -203,9 +205,10 @@ function closeWindow(id) {
     if (!sheet.classList.contains("closing")) return; // opened again meanwhile
     sheet.hidden = true;
     sheet.classList.remove("closing", "minimized");
-    if (w?.app) {
+    if (w?.app || w?.copy) {
       sheet.remove();
       wm.windows.delete(id);
+      delete wm.geometry[id];
     }
   }, desktopMode() ? WIN_CLOSE_MS : 280);
   return true;
@@ -461,6 +464,9 @@ function winMenu(id) {
     items.push({ label: "Open in a new tab", run: () => window.open(w.app.url, "_blank", "noopener,noreferrer") },
       { label: "Reload", run: () => reloadAppWindow(id) });
   }
+  // A My Computer or terminal window: another of it.
+  const kind = fileWins.has(id) ? "adleros:files" : terms.has(id) ? "adleros:terminal" : null;
+  if (kind) items.push(...newWindowItem(kind));
   items.push(
     { label: g.mode === "max" ? "Restore" : "Maximize", run: () => toggleMaximize(id) },
     { label: g.mode === "left" ? "Restore" : "Left half", run: () => winSnap(id, "left") },
@@ -518,7 +524,7 @@ function winDock() {
 
 function winDockItem(id, w) {
   const icon = w.app ? el("span", { class: "dock-plate" }, plateFor(w.app))
-    : el("img", { src: `/static/dock/${w.dock || id}.svg`, alt: "", draggable: "false" });
+    : el("img", { src: `/static/dock/${w.icon || w.dock || id}.svg`, alt: "", draggable: "false" });
   // Not a pin (no dock-app): it can't be dragged in among them.
   const b = el("button", { type: "button", class: `dock-item dock-run open${wm.active === id ? " active" : ""}`,
     "aria-label": w.title, "data-window": id }, icon, el("span", { class: "dock-label material" }, w.title));

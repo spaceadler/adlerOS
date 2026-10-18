@@ -184,7 +184,7 @@ function renderFolder() {
       rel: "noopener noreferrer", draggable: "false", "data-app": app.id, title: app.about },
     el("span", { class: "app-icon" }, plateFor(app)), el("span", { class: "app-label" }, app.up ? app.name : "Offline"));
     tile.addEventListener("click", (e) => {
-      if (!app.url || desktopMode()) {
+      if (opensHere(e, app)) {
         e.preventDefault();
         openApp(app);
       }

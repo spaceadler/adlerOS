@@ -1,24 +1,42 @@
-// Files: three places in a window. Desktop (a homelab's mailbox/) and User
-// (your storage folder) you can change: upload (button or drop), download,
-// make folders, rename, cut, copy and paste between them, delete into the
-// Trash (and restore), edit text files. Root is the homelab's own folder:
-// read-only, except in admin mode when the machine allows it, and even then
-// it warns you first. Nothing outside the three places is reachable.
+// My Computer: three places in a window. Desktop (a homelab's mailbox/) and
+// User (your storage folder) you can change: upload (button or drop),
+// download, make folders, rename, cut, copy and paste between them, delete
+// into the Trash (and restore), edit text files. Root is the homelab's own
+// folder: read-only, except in admin mode when the machine allows it, and
+// even then it warns you first. Nothing outside the three places is
+// reachable. In desktop mode, New window opens more of them, each in a
+// folder of its own.
 // Uses $, el, svg, api, toast, state, isOpen, isActive, openWindow,
 // closeWindow, openModal, closeModal, confirmDialog, openMenu, bytes,
 // waitForJob, showLock.
 "use strict";
 
-const files = {
-  path: "/user", place: "user", places: [], entries: [], view: "folder", editor: null, uploads: 0,
-  writable: true, admin: false, rootAllowed: false, clip: null, tasks: new Map(), rootOk: false,
-  showHidden: false,
-};
+// What every My Computer window shares: what you cut or copied, copies and
+// moves under way, uploads, Root's warning, the hidden-files choice, and
+// where the desktop's Upload… goes.
+const files = { clip: null, tasks: new Map(), uploads: 0, rootOk: false, showHidden: false, uploadTo: null };
 // Hidden files (.env, .gitignore…): shown only in admin mode, and only when
 // you ask (this browser remembers); off to begin with.
 const HIDDEN_KEY = "adleros.showHidden";
 try { files.showHidden = localStorage.getItem(HIDDEN_KEY) === "1"; } catch { /* private window */ }
-const hiddenShown = () => files.admin && files.showHidden;
+const hiddenShown = (f) => f.admin && files.showHidden;
+
+// Each window's own: its folder, its view (the folder, the Trash, the
+// editor), what it found there. The first is #files.
+const fileWins = new Map();
+let fileFront = null; // the one you used last: the desktop's opening and Escape go there
+
+function makeFileWin(id, section) {
+  const f = { id, section, path: "/user", place: "user", places: [], entries: [], view: "folder", editor: null,
+    writable: true, admin: false, rootAllowed: false, trash: [],
+    part: (name) => section.querySelector(`[data-part="${name}"]`) };
+  fileWins.set(id, f);
+  wireFiles(f);
+  return f;
+}
+const mainFiles = () => fileWins.get("files");
+const frontFiles = () => (fileFront && fileWins.has(fileFront.id) && isOpen(fileFront.id) ? fileFront : mainFiles());
+const fileWinOf = (node) => fileWins.get(node?.closest?.(".files-sheet")?.id);
 
 const FILE_ICONS = {
   folder: ["M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"],
@@ -52,67 +70,90 @@ function when(seconds) {
 
 // ------------------------------------------------------- open and close
 
-function filesOpen() { return isOpen("files"); }
+function filesOpen() { return [...fileWins.keys()].some((id) => isOpen(id)); }
 
 // My Computer starts at Root (the homelab's folder) in admin mode, at User
 // otherwise; a path (the Desktop, a folder) opens there instead.
 const filesHome = () => (state.admin ? "/root" : "/user");
 function toggleFiles() { toggleWindow("files", () => openFiles(filesHome())); }
 
-async function openFiles(path) {
-  openWindow("files");
-  await showFolder(path || files.path);
-  ($("files-list").querySelector(".file-row") || $("files-up")).focus({ preventScroll: true });
+async function openFiles(path, f = mainFiles()) {
+  openWindow(f.id);
+  fileFront = f;
+  await showFolder(path || f.path, f);
+  (f.part("list").querySelector(".file-row") || f.part("up")).focus({ preventScroll: true });
 }
 
-async function closeFiles() {
-  if (files.editor && files.editor.dirty) {
-    const ok = await confirmDialog({ title: "Close without saving?", body: `Your changes to ${files.editor.name} will be lost.`, button: "Close", destructive: true });
+// Another My Computer window (New window, or Alt+E with one open).
+function newFilesWindow(path) {
+  if (!desktopMode()) return openFiles(path || filesHome());
+  let n = 2;
+  while ($(`files-${n}`)) n++;
+  const id = `files-${n}`;
+  const section = $("files").cloneNode(true);
+  section.querySelector(":scope > .win-bar")?.remove();
+  section.querySelectorAll(":scope > .win-grip").forEach((g) => g.remove());
+  Object.assign(section, { id, hidden: true });
+  section.classList.remove("active", "minimized", "closing", "off-ws", "editing", "dropping");
+  section.removeAttribute("style");
+  section.setAttribute("aria-label", `My Computer ${n}`);
+  document.body.insertBefore(section, $("files").nextSibling);
+  const f = makeFileWin(id, section);
+  registerWindow(id, { title: `My Computer ${n}`, close: () => closeFiles(f), icon: "files", size: [980, 640], copy: true });
+  return openFiles(path || filesHome(), f);
+}
+
+async function closeFiles(f = mainFiles()) {
+  if (f.editor && f.editor.dirty) {
+    const ok = await confirmDialog({ title: "Close without saving?", body: `Your changes to ${f.editor.name} will be lost.`, button: "Close", destructive: true });
     if (!ok) return;
   }
-  files.editor = null;
-  closeWindow("files");
+  f.editor = null;
+  closeWindow(f.id);
+  if (f.id !== "files") fileWins.delete(f.id);
 }
+
+// Logging out: no "unsaved changes" question.
+function forgetFileEdits() { for (const f of fileWins.values()) f.editor = null; }
 
 // --------------------------------------------------------------- folder
 
-async function showFolder(path) {
+async function showFolder(path, f = frontFiles()) {
   const { status, body } = await api(`/api/files?path=${encodeURIComponent(path)}`).catch(() => ({ status: 0 }));
   if (status === 401) return showLock();
   if (status === 404 && body?.error === "no storage folder is mounted") {
-    files.view = "folder";
-    files.entries = [];
-    $("files-side").replaceChildren();
-    $("files-list").replaceChildren(el("p", { class: "store-error" }, "adlerOS can't see a storage folder. Set STORAGE_DIR (in .env, or homelab.env) and run ./install.sh again."));
+    f.view = "folder";
+    f.entries = [];
+    f.part("side").replaceChildren();
+    f.part("list").replaceChildren(el("p", { class: "store-error" }, "adlerOS can't see a storage folder. Set STORAGE_DIR (in .env, or homelab.env) and run ./install.sh again."));
     return;
   }
   if (status !== 200) {
     toast(body?.error || "Can't open that folder.");
-    if (path !== "/user" && path !== "/") return showFolder(files.places.length ? `/${files.places[0].place}` : "/");
+    if (path !== "/user" && path !== "/") return showFolder(f.places.length ? `/${f.places[0].place}` : "/", f);
     return;
   }
-  Object.assign(files, {
+  Object.assign(f, {
     view: "folder", editor: null, path: body.path, place: body.place, places: body.places, entries: body.entries,
     writable: body.writable, admin: Boolean(body.admin), rootAllowed: Boolean(body.rootAllowed),
   });
-  if (!files.admin) files.rootOk = false; // the warning again, next time admin mode is on
-
-  renderFiles();
+  if (!f.admin) files.rootOk = false; // the warning again, next time admin mode is on
+  renderFiles(f);
 }
 
-function crumbs() {
-  const parts = files.path.split("/").filter(Boolean);
+function crumbs(f) {
+  const parts = f.path.split("/").filter(Boolean);
   const nodes = [];
   parts.forEach((part, i) => {
     const b = el("button", { type: "button", class: "crumb" }, i === 0 ? PLACE_NAMES[part] || part : part);
-    b.addEventListener("click", () => showFolder(`/${parts.slice(0, i + 1).join("/")}`));
+    b.addEventListener("click", () => showFolder(`/${parts.slice(0, i + 1).join("/")}`, f));
     if (i) nodes.push(el("span", { class: "crumb-sep", "aria-hidden": "true" }, "/"));
     nodes.push(b);
   });
   return nodes.length ? nodes : [el("span", { class: "crumb current" }, "My Computer")];
 }
 
-function renderPlaces() {
+function renderPlaces(f) {
   const item = (id, label, current, run) => {
     const b = el("button", { type: "button", class: `files-place${current ? " current" : ""}`, "aria-current": current ? "true" : "false",
       ...(id === "trash" ? { "data-trash": "1" } : { "data-path": `/${id}` }) },
@@ -120,63 +161,63 @@ function renderPlaces() {
     b.addEventListener("click", run);
     return b;
   };
-  $("files-side").replaceChildren(
-    ...files.places.map((p) => item(p.place, p.name, files.view === "folder" && files.place === p.place, () => showFolder(`/${p.place}`))),
-    item("trash", "Trash", files.view === "trash", showTrash));
+  f.part("side").replaceChildren(
+    ...f.places.map((p) => item(p.place, p.name, f.view === "folder" && f.place === p.place, () => showFolder(`/${p.place}`, f))),
+    item("trash", "Trash", f.view === "trash", () => showTrash(f)));
 }
 
 // What Root says about itself: look, don't touch (and how to, if you must).
-function renderNote() {
-  const note = $("files-note");
-  if (files.view !== "folder" || files.place !== "root") {
+function renderNote(f) {
+  const note = f.part("note");
+  if (f.view !== "folder" || f.place !== "root") {
     note.hidden = true;
     return;
   }
   note.hidden = false;
-  note.classList.toggle("warn", files.writable);
-  note.textContent = files.writable
+  note.classList.toggle("warn", f.writable);
+  note.textContent = f.writable
     ? "Admin mode: you can change Root, your homelab's own files. A wrong edit here can stop your apps; git and the terminal are safer."
-    : !files.admin
+    : !f.admin
       ? "Root is your homelab's own folder: look around, copy things out. It's read-only; changing it needs admin mode."
       : "Root is read-only on this machine. Changing it also needs ADLEROS_TERMINAL=on (like the terminal).";
 }
 
-function renderFiles() {
-  $("files").classList.toggle("editing", files.view === "editor");
-  renderPlaces();
-  renderNote();
-  renderTools();
-  if (files.view === "trash") return renderTrash();
-  if (files.view === "editor") return;
-  $("files-crumbs").replaceChildren(...crumbs());
-  $("files-up").disabled = files.path.split("/").filter(Boolean).length < 2;
-  const shown = files.entries.filter((e) => hiddenShown() || !e.name.startsWith("."));
-  const rows = (files.path === "/" ? shown : sortEntries(shown)).map((entry) => {
-    const path = entry.place && files.path === "/" ? `/${entry.place}` : join(files.path, entry.name);
+function renderFiles(f) {
+  f.section.classList.toggle("editing", f.view === "editor");
+  renderPlaces(f);
+  renderNote(f);
+  renderTools(f);
+  if (f.view === "trash") return renderTrash(f);
+  if (f.view === "editor") return;
+  f.part("crumbs").replaceChildren(...crumbs(f));
+  f.part("up").disabled = f.path.split("/").filter(Boolean).length < 2;
+  const shown = f.entries.filter((e) => hiddenShown(f) || !e.name.startsWith("."));
+  const rows = (f.path === "/" ? shown : sortEntries(shown)).map((entry) => {
+    const path = entry.place && f.path === "/" ? `/${entry.place}` : join(f.path, entry.name);
     const row = el("button", { type: "button", class: `file-row${entry.outside ? " outside" : ""}`, "data-file": path,
       ...(entry.dir ? { "data-dir": "1" } : {}), ...(entry.place ? { "data-place": entry.place } : {}),
       title: entry.outside ? "A link to somewhere outside this place" : entry.place ? `${entry.name}: your ${PLACE_NAMES[entry.place]}` : entry.name },
     el("span", { class: `file-icon ${entry.kind}` }, svg(entry.place ? PLACE_ICONS[entry.place] : FILE_ICONS[entry.kind] || FILE_ICONS.file)),
-    el("span", { class: "file-name" }, entry.name, entry.place && files.path !== "/" ? el("span", { class: "file-from" }, `Your ${PLACE_NAMES[entry.place]}`) : ""),
+    el("span", { class: "file-name" }, entry.name, entry.place && f.path !== "/" ? el("span", { class: "file-from" }, `Your ${PLACE_NAMES[entry.place]}`) : ""),
     el("span", { class: "file-size" }, entry.dir ? "" : bytes(entry.size)),
     el("span", { class: "file-date" }, entry.mtime ? when(entry.mtime) : ""));
     // A click picks it, a double click opens it, like any file manager. Enter
     // (a click with no mouse in it) and a tap on a touch screen open it too.
     row.addEventListener("click", (e) => {
-      if (e.detail === 0 || matchMedia("(pointer: coarse)").matches) return openEntry(entry, path);
-      selectRow(row);
+      if (e.detail === 0 || matchMedia("(pointer: coarse)").matches) return openEntry(entry, path, f);
+      selectRow(row, f);
     });
-    row.addEventListener("dblclick", () => openEntry(entry, path));
+    row.addEventListener("dblclick", () => openEntry(entry, path, f));
     row.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      openMenu(e.clientX, e.clientY, entryMenu(entry, path));
+      openMenu(e.clientX, e.clientY, entryMenu(entry, path, f));
     });
-    row.addEventListener("keydown", (e) => entryKeys(e, entry, path, row));
+    row.addEventListener("keydown", (e) => entryKeys(e, entry, path, row, f));
     return row;
   });
-  const empty = files.writable ? "Empty. Drop files here, or Upload." : "Empty.";
-  $("files-list").replaceChildren(...(rows.length ? rows : [el("p", { class: "no-results" }, empty)]));
+  const empty = f.writable ? "Empty. Drop files here, or Upload." : "Empty.";
+  f.part("list").replaceChildren(...(rows.length ? rows : [el("p", { class: "no-results" }, empty)]));
 }
 
 // Sorted by name, type or size, A to Z (smallest first) unless you turn it
@@ -198,30 +239,30 @@ function sortEntries(entries) {
 }
 function setFilesSort(change) {
   winSave(FILES_SORT_KEY, { ...filesSort(), ...change });
-  renderFiles();
+  for (const f of fileWins.values()) if (isOpen(f.id) && f.view === "folder") renderFiles(f);
 }
 
-function renderTools() {
-  const inFolder = files.view === "folder" && files.path !== "/";
+function renderTools(f) {
+  const inFolder = f.view === "folder" && f.path !== "/";
   const sort = filesSort();
-  $("files-sort").hidden = $("files-order").hidden = !inFolder;
-  $("files-sort").value = sort.by;
-  $("files-order").textContent = sort.desc ? "↓ Descending" : "↑ Ascending";
-  $("files-order").setAttribute("aria-label", `Sorted ${sort.desc ? "descending" : "ascending"}; change it`);
-  const canChange = inFolder && files.writable;
-  $("files-new-folder").hidden = $("files-new-file").hidden = !canChange;
-  $("files-upload").hidden = !canChange || files.place === "root";
-  const hidden = $("files-hidden");
-  hidden.hidden = !inFolder || !files.admin;
+  f.part("sort").hidden = f.part("order").hidden = !inFolder;
+  f.part("sort").value = sort.by;
+  f.part("order").textContent = sort.desc ? "↓ Descending" : "↑ Ascending";
+  f.part("order").setAttribute("aria-label", `Sorted ${sort.desc ? "descending" : "ascending"}; change it`);
+  const canChange = inFolder && f.writable;
+  f.part("new-folder").hidden = f.part("new-file").hidden = !canChange;
+  f.part("upload").hidden = !canChange || f.place === "root";
+  const hidden = f.part("hidden");
+  hidden.hidden = !inFolder || !f.admin;
   hidden.textContent = files.showHidden ? "Hide hidden files" : "Show hidden files";
   hidden.setAttribute("aria-pressed", String(files.showHidden));
-  const paste = $("files-paste");
+  const paste = f.part("paste");
   paste.hidden = !files.clip || !canChange;
   if (files.clip) paste.textContent = `${files.clip.copy ? "Paste copy of" : "Move"} ${files.clip.label} here`;
 }
 
 // The keys for a file or folder in the list.
-function entryKeys(e, entry, path, row) {
+function entryKeys(e, entry, path, row, f) {
   const mod = e.ctrlKey || e.metaKey;
   if (e.key === "Delete") { e.preventDefault(); return deletePaths([path]); }
   if (e.key === "F2") { e.preventDefault(); return renamePath(entry, path); }
@@ -231,25 +272,26 @@ function entryKeys(e, entry, path, row) {
     e.preventDefault();
     e.stopPropagation();
     const r = row.getBoundingClientRect();
-    openMenu(r.left + 40, r.bottom, entryMenu(entry, path));
+    openMenu(r.left + 40, r.bottom, entryMenu(entry, path, f));
   }
 }
 
-function selectRow(row) {
-  for (const r of $("files-list").querySelectorAll(".file-row.selected")) r.classList.remove("selected");
+function selectRow(row, f) {
+  for (const r of f.part("list").querySelectorAll(".file-row.selected")) r.classList.remove("selected");
   row?.classList.add("selected");
 }
 
-function entryMenu(entry, path) {
+function entryMenu(entry, path, f) {
   if (entry.outside) return [{ label: "Can't open: it leads outside this place", run: () => {} }];
-  const items = [{ label: "Open", run: () => openEntry(entry, path) }];
+  const items = [{ label: "Open", run: () => openEntry(entry, path, f) }];
+  if (entry.dir && desktopMode()) items.push({ label: "Open in a new window", run: () => newFilesWindow(path) });
   if (entry.place) return items; // a place itself: open it, nothing else
   if (entry.kind === "text" || (!entry.dir && entry.size < 2 * 1024 * 1024 && entry.kind === "file")) {
-    items.push({ label: files.writable ? "Edit as text" : "View as text", run: () => editFile(path) });
+    items.push({ label: f.writable ? "Edit as text" : "View as text", run: () => editFile(path, f) });
   }
   if (!entry.dir) items.push({ label: "Download", run: () => downloadFile(path) });
   items.push({ label: "Copy", run: () => clip(entry, path, true) });
-  if (files.writable) {
+  if (f.writable) {
     items.push({ label: "Cut", run: () => clip(entry, path, false) });
     items.push({ label: "Rename…", run: () => renamePath(entry, path) });
     items.push({ label: "Delete", run: () => deletePaths([path]), destructive: true });
@@ -257,10 +299,15 @@ function entryMenu(entry, path) {
   return items;
 }
 
-function openEntry(entry, path) {
+// A folder opens in this window (from the desktop: the one in front, if
+// one's open); a text file in its editor; the rest in windows of their own.
+function openEntry(entry, path, f = null) {
   if (entry.outside) return toast("That link leads outside its place, so adlerOS won't open it.");
-  if (entry.dir) return isOpen("files") ? showFolder(path) : openFiles(path);
-  if (entry.kind === "text") return editFile(path);
+  if (entry.dir) {
+    const into = f || (filesOpen() ? frontFiles() : null);
+    return into ? showFolder(path, into) : openFiles(path);
+  }
+  if (entry.kind === "text") return editFile(path, f);
   if (entry.kind === "audio") return playSong(entry, path);
   if (["image", "video", "pdf"].includes(entry.kind)) return viewFile(entry, path);
   return downloadFile(path);
@@ -275,7 +322,7 @@ function downloadFile(path) {
 
 // A picture, a video or a PDF opens in a window of its own (one you can
 // resize, in desktop mode), so the rest of adlerOS stays usable; over the
-// home screen it floats over Files. The next one takes its place.
+// home screen it floats over My Computer. The next one takes its place.
 function viewFile(entry, path) {
   const url = fileUrl(path, true);
   const media = entry.kind === "image" ? el("img", { src: url, alt: entry.name })
@@ -373,20 +420,20 @@ async function filesPost(what, body) {
   return reply;
 }
 
-async function newFolder(dir = files.path) {
+async function newFolder(dir = frontFiles().path) {
   if (!(await rootOk([dir]))) return;
   const name = await nameDialog({ title: "New folder", button: "Create" });
   if (name && await filesPost("mkdir", { path: dir, name })) refreshFiles();
 }
 
-async function newTextFile(dir = files.path) {
+async function newTextFile(dir = frontFiles().path, f = null) {
   if (!(await rootOk([dir]))) return;
   const name = await nameDialog({ title: "New text file", value: "untitled.txt", button: "Create" });
   if (!name) return;
   const reply = await filesPost("text", { path: join(dir, name), text: "" });
   if (!reply) return;
   refreshFiles();
-  editFile(reply.path || join(dir, name));
+  editFile(reply.path || join(dir, name), f);
 }
 
 async function renamePath(entry, path) {
@@ -405,9 +452,9 @@ async function deletePaths(paths) {
   }
 }
 
-// Whatever shows files (the window, the desktop) looks again.
+// Whatever shows files (every My Computer window, the desktop) looks again.
 function refreshFiles() {
-  if (filesOpen() && files.view === "folder") showFolder(files.path);
+  for (const f of fileWins.values()) if (isOpen(f.id) && f.view === "folder") showFolder(f.path, f);
   if (typeof refreshDesk === "function") refreshDesk();
 }
 
@@ -416,26 +463,26 @@ function refreshFiles() {
 function clip(entry, path, copy) {
   files.clip = { paths: [path], label: entry.name, copy };
   toast(`${copy ? "Copied" : "Cut"} ${entry.name}. Go to a folder and paste it there (Ctrl+V).`);
-  renderTools();
+  for (const f of fileWins.values()) renderTools(f);
 }
 
-async function paste(into = files.path) {
+async function paste(into = frontFiles().path, f = frontFiles()) {
   const c = files.clip;
   if (!c) return;
   if (!(await rootOk([into, ...(c.copy ? [] : c.paths)]))) return;
   const reply = await filesPost(c.copy ? "copy" : "move", { paths: c.paths, to: into });
   if (!reply) return;
   if (!c.copy) files.clip = null;
-  if (reply.task) watchTask(reply.task);
+  if (reply.task) watchTask(reply.task, f);
   else toast(c.copy ? `Copied ${c.label}.` : `Moved ${c.label}.`);
   refreshFiles();
 }
 
-// A long copy or move: its progress under the list, until it's done.
-function watchTask(task) {
+// A long copy or move: its progress under the window's list, until it's done.
+function watchTask(task, f = frontFiles()) {
   if (files.tasks.has(task.id)) return;
   const line = el("div", { class: "upload" }, el("span", { class: "upload-name" }, task.label), el("span", { class: "upload-pct" }, "…"));
-  $("files-uploads").append(line);
+  f.part("uploads").append(line);
   files.tasks.set(task.id, line);
   if (files.tasks.size === 1) pollTasks();
 }
@@ -461,11 +508,11 @@ async function pollTasks() {
 
 // --------------------------------------------------------------- upload
 
-function uploadFiles(list, dir = files.path) {
+function uploadFiles(list, dir = frontFiles().path, f = frontFiles()) {
   if (placeOf(dir) === "root") return toast("Root takes no uploads: upload to the Desktop or User, then move it.");
   for (const file of list) {
     const status = el("div", { class: "upload" }, el("span", { class: "upload-name" }, file.name), el("span", { class: "upload-pct" }, "0%"));
-    $("files-uploads").append(status);
+    f.part("uploads").append(status);
     files.uploads++;
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", `/api/files/upload?dir=${encodeURIComponent(dir)}&name=${encodeURIComponent(file.name)}`);
@@ -481,7 +528,7 @@ function uploadFiles(list, dir = files.path) {
         try { error = JSON.parse(xhr.responseText).error || error; } catch { /* not JSON */ }
         return toast(`${file.name}: ${error}`);
       }
-      if (filesOpen() && files.path === dir && files.view === "folder") showFolder(dir);
+      for (const w of fileWins.values()) if (isOpen(w.id) && w.path === dir && w.view === "folder") showFolder(dir, w);
       if (typeof refreshDesk === "function" && placeOf(dir) === "desktop") refreshDesk();
     };
     xhr.send(file);
@@ -490,12 +537,12 @@ function uploadFiles(list, dir = files.path) {
 
 // ---------------------------------------------------------------- trash
 
-async function showTrash() {
+async function showTrash(f) {
   const { status, body } = await api("/api/files/trash").catch(() => ({ status: 0 }));
   if (status !== 200) return toast("Can't open the Trash.");
-  files.view = "trash";
-  files.trash = body.items;
-  renderFiles();
+  f.view = "trash";
+  f.trash = body.items;
+  renderFiles(f);
 }
 
 function fromLabel(from) {
@@ -503,16 +550,16 @@ function fromLabel(from) {
   return [PLACE_NAMES[parts[0]] || parts[0], ...parts.slice(1, -1)].join(" / ");
 }
 
-function renderTrash() {
-  $("files-crumbs").replaceChildren(el("span", { class: "crumb current" }, "Trash"));
-  $("files-up").disabled = false;
-  const rows = files.trash.map((item) => {
+function renderTrash(f) {
+  f.part("crumbs").replaceChildren(el("span", { class: "crumb current" }, "Trash"));
+  f.part("up").disabled = false;
+  const rows = f.trash.map((item) => {
     const restore = el("button", { type: "button", class: "chip-button" }, "Restore");
     restore.addEventListener("click", async () => {
       if (!(await rootOk([item.from]))) return;
       if (await filesPost("restore", { ids: [item.id] })) {
         toast(`${item.name} is back in ${fromLabel(item.from)}.`);
-        showTrash();
+        showTrash(f);
       }
     });
     return el("div", { class: "file-row trash-row" },
@@ -523,90 +570,99 @@ function renderTrash() {
   const empty = el("button", { type: "button", class: "chip-button destructive" }, "Empty Trash");
   empty.addEventListener("click", async () => {
     const ok = await confirmDialog({ title: "Empty the Trash?", body: "Everything in it is deleted for good.", button: "Empty Trash", destructive: true });
-    if (ok && await filesPost("empty-trash", {})) showTrash();
+    if (ok && await filesPost("empty-trash", {})) showTrash(f);
   });
-  $("files-list").replaceChildren(...(rows.length ? [...rows, el("div", { class: "trash-actions" }, empty)] : [el("p", { class: "no-results" }, "The Trash is empty.")]));
+  f.part("list").replaceChildren(...(rows.length ? [...rows, el("div", { class: "trash-actions" }, empty)] : [el("p", { class: "no-results" }, "The Trash is empty.")]));
 }
 
 // --------------------------------------------------------------- editor
 
-async function editFile(path) {
+// In this window's editor (from the desktop: the window in front, or the
+// first, opened).
+async function editFile(path, f = null) {
   const { status, body } = await api(`/api/files/text?path=${encodeURIComponent(path)}`).catch(() => ({ status: 0 }));
   if (status === 401) return showLock();
   if (status !== 200) return toast(body?.error || "Can't open that file.");
-  if (!filesOpen()) {
-    openWindow("files");
-    files.path = parentOf(body.path);
+  const w = f || (filesOpen() ? frontFiles() : mainFiles());
+  if (!isOpen(w.id)) {
+    openWindow(w.id);
+    w.path = parentOf(body.path);
   }
-  files.view = "editor";
-  files.editor = { path: body.path, name: body.path.split("/").pop(), mtime: body.mtime, dirty: false, writable: body.writable };
-  const area = $("editor-text");
+  fileFront = w;
+  w.view = "editor";
+  w.editor = { path: body.path, name: body.path.split("/").pop(), mtime: body.mtime, dirty: false, writable: body.writable };
+  const area = w.part("editor-text");
   area.value = body.text;
   area.readOnly = !body.writable;
-  $("editor-name").textContent = files.editor.name;
-  $("editor-path").textContent = body.path;
-  $("editor-save").hidden = !body.writable;
-  setDirty(false);
-  renderFiles();
+  w.part("editor-name").textContent = w.editor.name;
+  w.part("editor-path").textContent = body.path;
+  w.part("editor-save").hidden = !body.writable;
+  setDirty(w, false);
+  renderFiles(w);
   area.focus();
   area.setSelectionRange(0, 0);
   area.scrollTop = 0;
 }
 
-function setDirty(dirty) {
-  if (!files.editor) return;
-  files.editor.dirty = dirty;
-  $("editor-state").textContent = !files.editor.writable ? "Read-only" : dirty ? "Not saved" : "Saved";
-  $("editor-state").classList.toggle("dirty", dirty);
+function setDirty(f, dirty) {
+  if (!f.editor) return;
+  f.editor.dirty = dirty;
+  f.part("editor-state").textContent = !f.editor.writable ? "Read-only" : dirty ? "Not saved" : "Saved";
+  f.part("editor-state").classList.toggle("dirty", dirty);
 }
 
-async function saveFile(overwrite = false) {
-  const ed = files.editor;
+async function saveFile(f, overwrite = false) {
+  const ed = f.editor;
   if (!ed || !ed.writable) return;
   if (!(await rootOk([ed.path]))) return;
-  const reply = await filesPost("text", { path: ed.path, text: $("editor-text").value, mtime: overwrite ? undefined : ed.mtime });
+  const reply = await filesPost("text", { path: ed.path, text: f.part("editor-text").value, mtime: overwrite ? undefined : ed.mtime });
   if (reply?.conflict) {
     const ok = await confirmDialog({ title: `${ed.name} changed`, body: "Something else changed it since you opened it. Save yours over it anyway?", button: "Overwrite", destructive: true });
-    if (ok) saveFile(true);
+    if (ok) saveFile(f, true);
     return;
   }
   if (!reply) return;
   ed.mtime = reply.mtime;
-  setDirty(false);
+  setDirty(f, false);
   toast(`Saved ${ed.name}.`);
 }
 
-async function leaveEditor() {
-  if (files.editor?.dirty) {
-    const ok = await confirmDialog({ title: "Leave without saving?", body: `Your changes to ${files.editor.name} will be lost.`, button: "Leave", destructive: true });
+async function leaveEditor(f) {
+  if (f.editor?.dirty) {
+    const ok = await confirmDialog({ title: "Leave without saving?", body: `Your changes to ${f.editor.name} will be lost.`, button: "Leave", destructive: true });
     if (!ok) return;
   }
-  const back = parentOf(files.editor?.path || join(files.path, "x"));
-  files.editor = null;
-  await showFolder(back);
+  const back = parentOf(f.editor?.path || join(f.path, "x"));
+  f.editor = null;
+  await showFolder(back, f);
 }
 
 // ------------------------------------------------- dragging a file away
 
 // With a mouse: drop it on a folder in the list, a place down the side, the
-// Trash, or (desktop mode) the desktop. From a folder you can't change
-// (Root), it's a copy; otherwise it moves.
+// Trash, another My Computer window (into its folder), or (desktop mode)
+// the desktop. From a folder you can't change (Root), it's a copy;
+// otherwise it moves.
 const fileDrag = { row: null, suppress: false };
 
 function fileDown(e) {
-  const row = e.target.closest("#files-list .file-row[data-file]");
-  if (!row || row.dataset.place || e.button !== 0 || e.pointerType !== "mouse" || files.view !== "folder") return;
-  Object.assign(fileDrag, { row, pointerId: e.pointerId, x: e.clientX, y: e.clientY, active: false, over: null });
+  const row = e.target.closest(".files-list .file-row[data-file]");
+  const f = fileWinOf(row);
+  if (!row || !f || row.dataset.place || e.button !== 0 || e.pointerType !== "mouse" || f.view !== "folder") return;
+  Object.assign(fileDrag, { row, f, pointerId: e.pointerId, x: e.clientX, y: e.clientY, active: false, over: null });
 }
 
 function fileDropTarget(e) {
   const under = document.elementFromPoint(e.clientX, e.clientY);
-  const row = under?.closest("#files-list .file-row[data-dir]");
+  const w = fileWinOf(under);
+  const row = under?.closest(".files-list .file-row[data-dir]");
   if (row && row !== fileDrag.row) return { node: row, to: row.dataset.file };
-  const place = under?.closest("#files-side [data-path]");
+  const place = under?.closest(".files-side [data-path]");
   if (place) return { node: place, to: place.dataset.path };
-  const trash = under?.closest("#files-side [data-trash]");
-  if (trash && files.writable) return { node: trash, trash: true };
+  const trash = under?.closest(".files-side [data-trash]");
+  if (trash && fileDrag.f.writable) return { node: trash, trash: true };
+  const list = under?.closest(".files-list");
+  if (list && w && w !== fileDrag.f && w.view === "folder" && w.path !== "/") return { node: list, to: w.path };
   const icon = under?.closest("#desk .desk-icon");
   const entry = icon && desk.entries.find((x) => `/desktop/${x.name}` === icon.dataset.file);
   if (entry?.dir) return { node: icon, to: icon.dataset.file };
@@ -650,111 +706,122 @@ async function fileUp(e) {
   const name = path.split("/").pop();
   if (t.trash) return deletePaths([path]);
   if (!t.to || t.to === parentOf(path) || t.to === path) return;
-  if (!(await rootOk([t.to, ...(files.writable ? [path] : [])]))) return;
-  const copy = !files.writable;
+  if (!(await rootOk([t.to, ...(d.f.writable ? [path] : [])]))) return;
+  const copy = !d.f.writable;
   const reply = await filesPost(copy ? "copy" : "move", { paths: [path], to: t.to });
   if (!reply) return;
   if (t.desk) rememberDeskPlace(name, deskCellAt(e.clientX, e.clientY));
-  if (reply.task) watchTask(reply.task);
+  if (reply.task) watchTask(reply.task, d.f);
   else toast(`${copy ? "Copied" : "Moved"} ${name} to ${t.desk ? "the Desktop" : fromLabel(`${t.to}/x`) || "it"}.`);
   refreshFiles();
 }
 
 // ---------------------------------------------------------------- wiring
 
-registerWindow("files", { title: "My Computer", close: closeFiles, dock: "files", size: [980, 640] });
+// A window's own buttons, list, editor and drops.
+function wireFiles(f) {
+  const front = () => { fileFront = f; };
+  f.section.addEventListener("pointerdown", front, true);
+  f.section.addEventListener("focusin", front);
+  f.part("close").addEventListener("click", () => closeFiles(f));
+  f.part("sort").addEventListener("change", () => setFilesSort({ by: f.part("sort").value }));
+  f.part("order").addEventListener("click", () => setFilesSort({ desc: !filesSort().desc }));
+  f.part("list").addEventListener("pointerdown", fileDown);
+  f.part("list").addEventListener("click", (e) => {
+    if (!fileDrag.suppress) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
+  f.part("up").addEventListener("click", () => {
+    if (f.view !== "folder") return showFolder(f.path, f);
+    showFolder(parentOf(f.path), f);
+  });
+  f.part("new-folder").addEventListener("click", () => newFolder(f.path));
+  f.part("new-file").addEventListener("click", () => newTextFile(f.path, f));
+  f.part("paste").addEventListener("click", () => paste(f.path, f));
+  f.part("hidden").addEventListener("click", () => {
+    files.showHidden = !files.showHidden;
+    try { localStorage.setItem(HIDDEN_KEY, files.showHidden ? "1" : "0"); } catch { /* not kept */ }
+    for (const w of fileWins.values()) if (isOpen(w.id)) renderFiles(w);
+  });
+  f.part("upload").addEventListener("click", () => {
+    files.uploadTo = null;
+    f.part("picker").click();
+  });
+  // The first window's picker is the desktop's too: its Upload… sets where.
+  f.part("picker").addEventListener("change", (e) => {
+    uploadFiles(e.target.files, files.uploadTo || f.path, f);
+    files.uploadTo = null;
+    e.target.value = "";
+  });
+  const drop = f.section;
+  drop.addEventListener("dragover", (e) => {
+    if (f.view !== "folder" || !f.writable || f.place === "root" || !e.dataTransfer?.types.includes("Files")) return;
+    e.preventDefault();
+    drop.classList.add("dropping");
+  });
+  drop.addEventListener("dragleave", (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("dropping"); });
+  drop.addEventListener("drop", (e) => {
+    drop.classList.remove("dropping");
+    if (f.view !== "folder" || !e.dataTransfer?.files.length) return;
+    e.preventDefault();
+    uploadFiles(e.dataTransfer.files, f.path, f);
+  });
+  // Ctrl+V in the window pastes into the folder you're in.
+  drop.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v" && files.clip && f.view === "folder" && !e.target.matches("textarea, input")) {
+      e.preventDefault();
+      paste(f.path, f);
+    }
+  });
+  const editorText = f.part("editor-text");
+  editorText.addEventListener("input", () => setDirty(f, true));
+  editorText.addEventListener("keydown", (e) => {
+    // Tab indents, Ctrl+S saves; neither leaves the editor.
+    if (e.key === "Tab" && !e.ctrlKey && !e.altKey && !editorText.readOnly) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.execCommand("insertText", false, "\t") || editorText.setRangeText("\t", editorText.selectionStart, editorText.selectionEnd, "end");
+      setDirty(f, true);
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      e.stopPropagation();
+      saveFile(f);
+    }
+  });
+  f.part("editor-save").addEventListener("click", () => saveFile(f));
+  f.part("editor-back").addEventListener("click", () => leaveEditor(f));
+}
+
+const firstFiles = makeFileWin("files", $("files"));
+registerWindow("files", { title: "My Computer", close: () => closeFiles(firstFiles), dock: "files", size: [980, 640] });
 // Half the width of a picture's preview and a quarter taller; over the home
-// screen it floats above the dock (float), with everything else still open.
-registerWindow("music", { title: "Music", close: closeMusic, size: [490, 260], float: true });
+// screen it floats above the dock (float), with everything else still open;
+// it floats when windows tile, too (floats).
+registerWindow("music", { title: "Music", close: closeMusic, size: [490, 260], float: true, floats: true });
 registerWindow("viewer", { title: "Viewer", close: closeViewer, size: [980, 680], float: true });
-$("files-close").addEventListener("click", closeFiles);
-$("files-sort").addEventListener("change", () => setFilesSort({ by: $("files-sort").value }));
-$("files-order").addEventListener("click", () => setFilesSort({ desc: !filesSort().desc }));
 $("music-close").addEventListener("click", closeMusic);
 $("viewer-close").addEventListener("click", closeViewer);
 $("viewer-download").addEventListener("click", () => downloadFile($("viewer").dataset.path));
 $("music-download").addEventListener("click", () => downloadFile($("music").dataset.path));
-$("files-list").addEventListener("pointerdown", fileDown);
 document.addEventListener("pointermove", fileMove);
 document.addEventListener("pointerup", fileUp);
 document.addEventListener("pointercancel", fileUp);
-$("files-list").addEventListener("click", (e) => {
-  if (!fileDrag.suppress) return;
-  e.preventDefault();
-  e.stopPropagation();
-}, true);
-$("files-up").addEventListener("click", () => {
-  if (files.view !== "folder") return showFolder(files.path);
-  showFolder(parentOf(files.path));
-});
-$("files-new-folder").addEventListener("click", () => newFolder());
-$("files-new-file").addEventListener("click", () => newTextFile());
-$("files-paste").addEventListener("click", () => paste());
-$("files-hidden").addEventListener("click", () => {
-  files.showHidden = !files.showHidden;
-  try { localStorage.setItem(HIDDEN_KEY, files.showHidden ? "1" : "0"); } catch { /* not kept */ }
-  renderFiles();
-});
-$("files-upload").addEventListener("click", () => {
-  files.uploadTo = null;
-  $("files-picker").click();
-});
-// The picker is shared: the desktop's Upload… sets where it goes.
-$("files-picker").addEventListener("change", (e) => {
-  uploadFiles(e.target.files, files.uploadTo || files.path);
-  files.uploadTo = null;
-  e.target.value = "";
-});
-const drop = $("files");
-drop.addEventListener("dragover", (e) => {
-  if (files.view !== "folder" || !files.writable || files.place === "root" || !e.dataTransfer?.types.includes("Files")) return;
-  e.preventDefault();
-  drop.classList.add("dropping");
-});
-drop.addEventListener("dragleave", (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("dropping"); });
-drop.addEventListener("drop", (e) => {
-  drop.classList.remove("dropping");
-  if (files.view !== "folder" || !e.dataTransfer?.files.length) return;
-  e.preventDefault();
-  uploadFiles(e.dataTransfer.files);
-});
-// Ctrl+V in the window pastes into the folder you're in.
-drop.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v" && files.clip && files.view === "folder" && !e.target.matches("textarea, input")) {
-    e.preventDefault();
-    paste();
-  }
-});
-const editorText = $("editor-text");
-editorText.addEventListener("input", () => setDirty(true));
-editorText.addEventListener("keydown", (e) => {
-  // Tab indents, Ctrl+S saves; neither leaves the editor.
-  if (e.key === "Tab" && !e.ctrlKey && !e.altKey && !editorText.readOnly) {
-    e.preventDefault();
-    e.stopPropagation();
-    document.execCommand("insertText", false, "\t") || editorText.setRangeText("\t", editorText.selectionStart, editorText.selectionEnd, "end");
-    setDirty(true);
-  }
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-    e.preventDefault();
-    e.stopPropagation();
-    saveFile();
-  }
-});
-$("editor-save").addEventListener("click", () => saveFile());
-$("editor-back").addEventListener("click", leaveEditor);
-// Escape: out of the editor first, then out of Files.
+// Escape: the viewer first; then out of the editor, out of the Trash, then
+// out of the My Computer window in front.
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && isActive("viewer") && $("modal").hidden && $("menu").hidden) {
-    e.stopImmediatePropagation(); // the viewer first, Files behind it stays
+    e.stopImmediatePropagation(); // the viewer first, My Computer behind it stays
     return closeViewer();
   }
-  if (e.key !== "Escape" || !isActive("files") || !$("modal").hidden || !$("menu").hidden) return;
+  const f = [...fileWins.values()].find((w) => isActive(w.id));
+  if (e.key !== "Escape" || !f || !$("modal").hidden || !$("menu").hidden) return;
   e.stopImmediatePropagation();
-  if (files.view === "editor") leaveEditor();
-  else if (files.view === "trash") showFolder(files.path);
-  else closeFiles();
+  if (f.view === "editor") leaveEditor(f);
+  else if (f.view === "trash") showFolder(f.path, f);
+  else closeFiles(f);
 }, true);
 window.addEventListener("beforeunload", (e) => {
-  if (files.editor?.dirty || files.uploads || files.tasks.size) e.preventDefault();
+  if ([...fileWins.values()].some((f) => f.editor?.dirty) || files.uploads || files.tasks.size) e.preventDefault();
 });

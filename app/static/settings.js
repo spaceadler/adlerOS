@@ -519,7 +519,7 @@ function showAdmin(on) {
   dockKey = null;
   buildDock();
   if (drawerOpen()) renderDrawer();
-  if (filesOpen() && files.view === "folder") showFolder(files.path);
+  refreshFiles(); // hidden files, Root's note
 }
 
 // Admin mode turns itself off 8 hours after it's turned on (adlerOS keeps
@@ -710,9 +710,9 @@ function waitForRestart(note) {
   setTimeout(check, 3000);
 }
 
-// ------------------------------------------------------------- for ⌘K
+// ------------------------------------------------------------- for search
 
-// Settings rows as search results, so ⌘K finds "timezone" or "back up".
+// Settings rows as search results, so search finds "timezone" or "back up".
 function settingsSearchResults(query) {
   if (!settings.catalog || !query) return [];
   const q = query.toLowerCase();
