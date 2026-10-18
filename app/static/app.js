@@ -43,6 +43,9 @@ function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (k === "class") node.className = v;
+    // A style attribute is "inline style", which the page's CSP refuses; the
+    // same set through the element's style is allowed.
+    else if (k === "style") node.style.cssText = v;
     else node.setAttribute(k, v);
   }
   node.append(...children);

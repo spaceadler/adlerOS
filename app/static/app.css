@@ -2528,6 +2528,13 @@ body.wm .pad-bar { padding-right: 10px; min-height: 36px; }
 .md-view .md-table th, .md-view .md-table td { padding: 6px 12px; border: 1px solid rgb(255 255 255 / 0.12); }
 .md-view .md-table th { background: rgb(255 255 255 / 0.06); font-weight: 600; }
 .md-view .md-embed-image { display: block; max-width: 100%; margin: 0.4em 0 0.9em; border-radius: 8px; }
+/* A note's own HTML (markdown.js's mdHtml). */
+.md-view img, .md-view video { max-width: 100%; height: auto; }
+.md-view audio { max-width: 100%; }
+.md-view .md-embed-frame { display: block; max-width: 100%; border: 0; border-radius: 8px; margin: 0.4em 0 0.9em; background: rgba(0, 0, 0, 0.2); }
+.md-view details:not(.md-callout) { margin: 0.4em 0 0.9em; }
+.md-view details:not(.md-callout) > summary { cursor: pointer; }
+.md-view kbd { padding: 0.05em 0.4em; border: 1px solid rgba(255, 255, 255, 0.2); border-bottom-width: 2px; border-radius: 5px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.88em; }
 .md-view .md-properties { display: grid; gap: 4px; margin: 0 0 1.4em; padding: 10px 12px; border-radius: 10px; background: rgb(255 255 255 / 0.04); font-size: 0.9em; }
 .md-view .md-prop { display: grid; grid-template-columns: minmax(90px, 160px) 1fr; gap: 10px; }
 .md-view .md-prop-key { color: rgb(255 255 255 / 0.5); }

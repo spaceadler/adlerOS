@@ -690,6 +690,11 @@ function mdCtx(tab) {
       if (src) src.value = tab.text;
     } : null,
     embed: (target, opts) => mdVaultEmbed(tab, target, opts),
+    // An <img>/<video>/<audio> src in the note's HTML: a file of the vault's.
+    media: (src) => {
+      const r = mdResolve(tab.path, src, false);
+      return r.exists && !r.self ? fileUrl(mdFull(r.path), true) : null;
+    },
     base: (yaml) => mdBase(yaml, mdBaseCtx(tab)),
   };
 }
