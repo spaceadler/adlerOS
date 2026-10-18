@@ -49,6 +49,7 @@ import hmac
 import ipaddress
 import json
 import os
+import posixpath
 import re
 import secrets
 import shutil
@@ -543,12 +544,17 @@ def password_ok(password):
 
 # ---------------------------------------------------------------- wallpaper
 
+def install_setting(key, default=""):
+    """KEY from the install's settings file (homelab.env, or adlerOS's .env)."""
+    env = read_env_file(HOMELAB_ENV) if HOMELAB_MODE else read_env_file(STANDALONE_ENV) if STANDALONE_ENV.is_file() else os.environ
+    return (env.get(key) or default).strip()
+
+
 def wallpaper_dirs():
     """Where your wallpapers are: a folder in your storage (WALLPAPER_DIR in the
     settings file, Other/Wallpapers if it isn't set), and the wallpaper/
     folder next to adlerOS."""
-    env = read_env_file(HOMELAB_ENV) if HOMELAB_MODE else read_env_file(STANDALONE_ENV) if STANDALONE_ENV.is_file() else os.environ
-    rel = (env.get("WALLPAPER_DIR") or "Other/Wallpapers").strip().strip("/")
+    rel = install_setting("WALLPAPER_DIR", "Other/Wallpapers").strip("/")
     _, folder = locate(f"/user/{rel}")
     return [d for d in (folder, WALLPAPER_DIR) if d and d.is_dir()]
 
@@ -874,6 +880,21 @@ def frame_headers(app):
     return None
 
 
+def cert_trusted(url):
+    """Whether an https address has a certificate browsers accept. Not
+    answering at all isn't a no: frame_headers says that."""
+    try:
+        request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "adlerOS"})
+        with urllib.request.urlopen(request, timeout=4, context=ssl.create_default_context()):
+            return True
+    except urllib.error.HTTPError:
+        return True  # it answered, over a trusted connection
+    except urllib.error.URLError as e:
+        return not isinstance(e.reason, ssl.SSLCertVerificationError)
+    except (OSError, ValueError):
+        return True
+
+
 def frame_allowed(headers, host):
     """Whether these headers let a page at `host` (adlerOS) show it in a frame."""
     xfo = headers.get("X-Frame-Options", "").strip().lower()
@@ -910,6 +931,10 @@ def frame_answer(app, host, secure):
     headers = frame_headers(app)
     if headers is None:
         answer = {"frame": False, "why": "it didn't answer adlerOS's check"}
+    elif url.startswith("https:") and not cert_trusted(url):
+        # A browser shows nothing at all in a frame whose certificate it
+        # doesn't trust (no warning to click through): a blank window.
+        answer = {"frame": False, "why": "its certificate isn't one browsers trust (its own, made for itself)"}
     elif frame_allowed(headers, host):
         answer = {"frame": True, "why": ""}
     else:
@@ -1327,6 +1352,233 @@ def search_files(q, limit=40):
         items.append({"path": path, "name": path.rsplit("/", 1)[-1], "dir": is_dir,
                       "kind": file_kind(Path(path), is_dir)})
     return {"items": items, "more": max(0, len(hits) - limit), "ready": at > 0}
+
+
+# ---------------------------------------------------------------- notes
+
+# adlerMD's vaults: folders of notes, Obsidian's way, so a vault Obsidian
+# keeps works here and back (its .obsidian settings are read, never
+# written). The first is NOTES_DIR in your storage (a homelab's Notes, by
+# default); you add more from adlerMD.
+VAULT_MAX = 20000  # files listed in one vault
+NOTE_MAX = 2 * 1024 * 1024
+OBSIDIAN_FILES = ("app.json", "appearance.json", "graph.json", "daily-notes.json", "templates.json", "bookmarks.json")
+_notes_cache = {}  # real path -> (mtime, size, facts, text)
+_notes_lock = threading.Lock()
+LINK_MD = re.compile(r"(!?)\[([^\]\n]*)\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
+LINK_WIKI = re.compile(r"(!?)\[\[([^\]\n|#^]*)([#^][^\]\n|]*)?(?:\|([^\]\n]*))?\]\]")
+TAG = re.compile(r"(?<![\w/#&])#([A-Za-z_][\w/-]*|[0-9]+[A-Za-z_/-][\w/-]*)")
+CODE = re.compile(r"^(```|~~~).*?^\1[^\n]*$|`[^`\n]*`", re.M | re.S)
+
+
+def default_vault():
+    """NOTES_DIR (in your storage), if it's there: the vault that's always offered."""
+    rel = install_setting("NOTES_DIR", "Notes" if HOMELAB_MODE else "").strip("/")
+    if not rel:
+        return None
+    _, real = locate(f"/user/{rel}")
+    return f"/user/{rel}" if real and real.is_dir() else None
+
+
+def vault_list():
+    """[vault paths]: the default first, then the ones you added that are still there."""
+    found = [v for v in [default_vault()] if v]
+    saved = load_settings().get("vaults")
+    for v in saved if isinstance(saved, list) else []:
+        if isinstance(v, str) and v not in found and (lambda r: r and r.is_dir())(locate(v)[1]):
+            found.append(v)
+    return found
+
+
+def note_facts(real, st):
+    """What a note says about itself: its links, embeds, tags, headings and
+    frontmatter (as written; adlerMD reads it). Kept until it changes."""
+    with _notes_lock:
+        cached = _notes_cache.get(str(real))
+    if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
+        return cached[2], cached[3]
+    try:
+        text = real.read_bytes()[:NOTE_MAX].decode("utf-8", "replace")
+    except OSError:
+        return {}, ""
+    front = ""
+    if text.startswith("---\n"):
+        end = text.find("\n---", 4)
+        if end > 0:
+            front = text[4:end][:16384]
+    body = CODE.sub(" ", text)
+    links = [{"to": m[3], "embed": bool(m[1])} for m in LINK_MD.finditer(body)]
+    links += [{"to": m[2] + (m[3] or ""), "wiki": True, "embed": bool(m[1])} for m in LINK_WIKI.finditer(body)]
+    tags = sorted({m[1] for m in TAG.finditer(re.sub(r"^#+\s.*$", "", body, flags=re.M))})
+    headings = [m[2].strip() for m in re.finditer(r"^(#{1,6})\s+(.+?)\s*#*$", body, re.M)][:200]
+    facts = {"links": links[:2000], "tags": tags, "headings": headings, "front": front}
+    with _notes_lock:
+        _notes_cache[str(real)] = (st.st_mtime, st.st_size, facts, text)
+        if len(_notes_cache) > 50000:
+            _notes_cache.clear()
+    return facts, text
+
+
+def vault_walk(top):
+    """(folders, files) in a vault, as paths inside it; hidden ones (.obsidian,
+    .trash) left out."""
+    folders, files = [], []
+    for dirpath, dirnames, filenames in os.walk(top):
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+        rel = os.path.relpath(dirpath, top)
+        rel = "" if rel == "." else rel.replace(os.sep, "/")
+        if rel:
+            folders.append(rel)
+        for name in sorted(filenames):
+            if name.startswith("."):
+                continue
+            files.append((f"{rel}/{name}" if rel else name, Path(dirpath) / name))
+            if len(files) >= VAULT_MAX:
+                return folders, files
+    return folders, files
+
+
+def vault_index(vault):
+    """Everything adlerMD needs to know about a vault at once: its folders,
+    its files (notes with their facts), its Obsidian settings."""
+    place, top = locate(vault)
+    if not top or not top.is_dir():
+        return None
+    folders, found = vault_walk(top)
+    files = []
+    for rel, real in found:
+        try:
+            st = real.stat()
+        except OSError:
+            continue
+        entry = {"path": rel, "size": st.st_size, "mtime": st.st_mtime}
+        if rel.lower().endswith(".md"):
+            entry.update(note_facts(real, st)[0])
+        files.append(entry)
+    obsidian = {}
+    for name in OBSIDIAN_FILES:
+        f = top / ".obsidian" / name
+        try:
+            if f.is_file() and f.stat().st_size < 256 * 1024:
+                obsidian[name[:-5]] = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+    writable = place in WRITABLE
+    return {"vault": vault, "name": top.name, "folders": folders, "files": files, "obsidian": obsidian,
+            "writable": writable, "full": len(found) >= VAULT_MAX}
+
+
+def vault_search(vault, q, limit=100):
+    """Notes with every word of q in them, and the lines that have them."""
+    words = [w for w in q.lower().split() if w][:10]
+    place, top = locate(vault)
+    if not words or not top or not top.is_dir():
+        return []
+    hits = []
+    for rel, real in vault_walk(top)[1]:
+        if not rel.lower().endswith(".md"):
+            continue
+        try:
+            st = real.stat()
+        except OSError:
+            continue
+        text = note_facts(real, st)[1]
+        low = text.lower()
+        name_hit = all(w in rel.lower() for w in words)
+        if not name_hit and not all(w in low for w in words):
+            continue
+        lines = [line.strip() for line in text.splitlines() if any(w in line.lower() for w in words)][:3]
+        hits.append({"path": rel, "lines": [line[:240] for line in lines], "name": name_hit})
+        if len(hits) >= limit:
+            break
+    hits.sort(key=lambda h: (not h["name"], h["path"]))
+    return hits
+
+
+def link_target(note_rel, href, wiki, names):
+    """The file a link in note_rel points at (a path in the vault), and how it
+    was written (relative, absolute, or by name), Obsidian's way: from the
+    note's folder, then from the vault's top, then by name."""
+    target = urllib.parse.unquote(href.split("#", 1)[0].split("^", 1)[0]).strip()
+    if not target or re.match(r"[a-z][a-z0-9+.-]*:", target, re.I):
+        return None, None
+    here = posixpath.dirname(note_rel)
+    tries = [] if wiki else [("relative", posixpath.normpath(posixpath.join(here, target)))]
+    tries += [("absolute", posixpath.normpath(target.lstrip("/")))]
+    for style, cand in tries:
+        for c in (cand, f"{cand}.md"):
+            if c in names:
+                return c, style
+    base = posixpath.basename(target).lower()
+    matches = sorted((n for n in names if posixpath.basename(n).lower() in (base, f"{base}.md")), key=len)
+    return (matches[0], "name") if matches else (None, None)
+
+
+def link_href(note_rel, target, style, names):
+    """How a link to target is written from note_rel in that style, spaces as %20."""
+    if style == "relative":
+        path = posixpath.relpath(target, posixpath.dirname(note_rel) or ".")
+    elif style == "name" and sum(posixpath.basename(n) == posixpath.basename(target) for n in names) == 1:
+        path = posixpath.basename(target)
+    else:
+        path = target
+    return urllib.parse.quote(path, safe="/()-_.~!*'&=+,;@$")
+
+
+def vault_rename(vault, old, new):
+    """Rename (or move) a note, file or folder in a vault, and every link in
+    the vault that points into it (and the moved notes' own relative links),
+    as Obsidian does with Automatically update internal links. {updated: n}."""
+    place, top = locate(vault)
+    if not top or place not in WRITABLE:
+        return {"error": "that vault can't be changed here"}
+    old, new = posixpath.normpath(old.strip("/")), posixpath.normpath(new.strip("/"))
+    src, dst = top / old, top / new
+    if ".." in old.split("/") or ".." in new.split("/") or not old or not new or old == new:
+        return {"error": "a path in the vault"}
+    if not src.exists() or dst.exists() or not dst.parent.is_dir():
+        return {"error": "it's gone, there's one by that name already, or its folder isn't there"}
+    before = [rel for rel, _ in vault_walk(top)[1]]
+    moved = lambda rel: rel == old or rel.startswith(old + "/")  # noqa: E731
+    after_of = lambda rel: new + rel[len(old):] if moved(rel) else rel  # noqa: E731
+    names_before, names_after = set(before), {after_of(r) for r in before}
+    os.rename(src, dst)
+    updated = 0
+    for rel in before:
+        if not rel.lower().endswith(".md"):
+            continue
+        now = after_of(rel)
+        real = top / now
+        try:
+            text = real.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+
+        def fix_md(m, rel=rel, now=now):
+            target, style = link_target(rel, m[3], False, names_before)
+            if not target or (not moved(target) and now == rel):
+                return m[0]
+            frag = m[3][len(m[3].split("#", 1)[0]):] if "#" in m[3] else ""
+            href = link_href(now, after_of(target), style, names_after) + frag
+            return m[0].replace(f"({m[3]}", f"({href}", 1).replace(f"(<{m[3]}>", f"(<{href}>", 1)
+
+        def fix_wiki(m, rel=rel):
+            target, _ = link_target(rel, m[2], True, names_before)
+            if not target or not moved(target):
+                return m[0]
+            to = after_of(target)
+            unique = sum(posixpath.basename(n) == posixpath.basename(to) for n in names_after) == 1
+            name = posixpath.splitext(posixpath.basename(to))[0] if unique else posixpath.splitext(to)[0]
+            return f"{m[1]}[[{name}{m[3] or ''}{'|' + m[4] if m[4] is not None else ''}]]"
+
+        fixed = LINK_WIKI.sub(fix_wiki, LINK_MD.sub(fix_md, text))
+        if fixed != text:
+            tmp = real.with_name(f".{real.name}.{secrets.token_hex(4)}.saving")
+            tmp.write_text(fixed, encoding="utf-8")
+            os.chmod(tmp, real.stat().st_mode & 0o7777)
+            os.replace(tmp, real)
+            updated += 1
+    return {"ok": True, "updated": updated, "path": new}
 
 
 def locate(path, must_exist=True):
@@ -1959,6 +2211,8 @@ class Handler(BaseHTTPRequestHandler):
                                         "ended": ended, "started": started})
         if path.startswith("/api/files"):
             return self.files_get(path, query)
+        if path.startswith("/api/notes/"):
+            return self.notes_get(path[len("/api/notes/"):], query)
         if path.startswith("/api/frame/"):
             app = next((a for a in installed_apps() if a["id"] == path[len("/api/frame/"):]), None)
             if not app:
@@ -2025,6 +2279,9 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/api/files/"):
             _search_wake.set()  # it may change what search should find
             return self.files_post(path[len("/api/files/"):], body)
+        if path.startswith("/api/notes/"):
+            _search_wake.set()
+            return self.notes_post(path[len("/api/notes/"):], body)
         if path == "/api/terminal":
             return self.open_terminal(body)
         if path.startswith("/api/terminal/"):
@@ -2286,6 +2543,66 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(409, {"error": error})
         return self.send_json(202, {"ok": True, "job": job})
 
+    # adlerMD: its vaults, a vault's index, search in it, renames that keep
+    # links working.
+    def notes_get(self, what, query):
+        if not places_on():
+            return self.send_json(404, {"error": "no storage folder is mounted"})
+        if what == "vaults":
+            current = load_settings().get("vault")
+            found = vault_list()
+            return self.send_json(200, {"vaults": [{"path": v, "name": v.rstrip("/").rsplit("/", 1)[-1], "default": v == default_vault()}
+                                                   for v in found],
+                                        "current": current if current in found else (found[0] if found else None)})
+        vault = query.get("vault", [""])[0]
+        if what == "index":
+            index = vault_index(vault)
+            return self.send_json(200, index) if index else self.send_json(404, {"error": "no such vault"})
+        if what == "search":
+            return self.send_json(200, {"hits": vault_search(vault, query.get("q", [""])[0][:200])})
+        return self.send_json(404, {"error": "not found"})
+
+    def notes_post(self, what, body):
+        if not places_on():
+            return self.send_json(404, {"error": "no storage folder is mounted"})
+        if what == "rename":
+            vault, old, new = body.get("vault"), body.get("from"), body.get("to")
+            if not all(isinstance(x, str) and 0 < len(x) < 2000 for x in (vault, old, new)):
+                return self.send_json(400, {"error": "expected vault, from and to"})
+            result = vault_rename(vault, old, new)
+            return self.send_json(200 if result.get("ok") else 409, result)
+        if what == "vaults":
+            # {"use": path}, {"add": path}, {"remove": path}, or {"create": {"in": folder, "name": name}}.
+            saved = [v for v in load_settings().get("vaults") or [] if isinstance(v, str)]
+            if "create" in body:
+                c = body["create"] if isinstance(body["create"], dict) else {}
+                place, parent = locate(c.get("in", ""))
+                if not parent or not parent.is_dir() or place not in WRITABLE or not good_name(c.get("name")):
+                    return self.send_json(400, {"error": "a folder in your Desktop or User, and a name without /"})
+                real = parent / c["name"]
+                if real.exists():
+                    return self.send_json(409, {"error": "there's one by that name already"})
+                (real / ".obsidian").mkdir(parents=True)  # a vault to Obsidian too
+                body = {"add": place_path(place, real), "use": True}
+            path = body.get("add") or body.get("remove") or body.get("use")
+            if not isinstance(path, str):
+                return self.send_json(400, {"error": "expected a vault"})
+            if body.get("add"):
+                place, real = locate(path)
+                if not real or not real.is_dir():
+                    return self.send_json(400, {"error": "that isn't a folder"})
+                path = place_path(place, real)
+                saved = [*[v for v in saved if v != path], path][-20:]
+                save_settings({"vaults": saved, **({"vault": path} if body.get("use") else {})})
+            elif body.get("remove"):
+                save_settings({"vaults": [v for v in saved if v != path]})  # the folder itself stays
+            else:
+                if path not in vault_list():
+                    return self.send_json(400, {"error": "not one of your vaults"})
+                save_settings({"vault": path})
+            return self.send_json(200, {"ok": True, "vault": path})
+        return self.send_json(404, {"error": "not found"})
+
     def files_post(self, what, body):
         if not places_on():
             return self.send_json(404, {"error": "no storage folder is mounted"})
@@ -2311,6 +2628,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(409, {"error": "changed since you opened it", "conflict": True})
             elif body.get("mtime") is not None or not real.parent.is_dir():
                 return self.send_json(404, {"error": "it's gone, or its folder is"})
+            if body.get("create") is True and real.exists():
+                return self.send_json(409, {"error": "there's one by that name already", "exists": True})
             tmp = real.with_name(f".{real.name}.{secrets.token_hex(4)}.saving")
             tmp.write_bytes(data)
             if real.exists():
