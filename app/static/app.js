@@ -355,6 +355,58 @@ function onPagesScroll() {
   }
 }
 
+// With a mouse or a trackpad the pages turn one at a time: a wheel (up,
+// down or sideways), a sideways swipe (its momentum doesn't turn another),
+// or a drag across them. A touch screen swipes them itself (scroll snap).
+const pageTurn = { acc: 0, last: 0, held: false, drag: null };
+function onPagesWheel(e) {
+  if (state.pageCount < 2 || e.ctrlKey || arranging()) return;
+  e.preventDefault();
+  const now = performance.now();
+  const gap = now - pageTurn.last;
+  pageTurn.last = now;
+  if (pageTurn.held && gap < 180) return; // the rest of the swipe that turned it
+  pageTurn.held = false;
+  if (gap > 300) pageTurn.acc = 0;
+  const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  pageTurn.acc += e.deltaMode === 1 ? d * 30 : d;
+  if (Math.abs(pageTurn.acc) < 40) return;
+  const next = state.page + Math.sign(pageTurn.acc);
+  pageTurn.acc = 0;
+  pageTurn.held = true;
+  if (next >= 0 && next < state.pageCount) goToPage(next);
+}
+
+function onPagesDown(e) {
+  if (e.pointerType !== "mouse" || e.button !== 0 || state.pageCount < 2 || arranging()
+    || e.target.closest(".app, button, a, input, [data-widget], [data-folder]")) return;
+  pageTurn.drag = { x: e.clientX, left: $("pages").scrollLeft, page: state.page, id: e.pointerId, moved: false };
+}
+function onPagesMove(e) {
+  const d = pageTurn.drag;
+  if (!d || e.pointerId !== d.id) return;
+  const dx = e.clientX - d.x;
+  if (!d.moved && Math.abs(dx) < 6) return;
+  const pages = $("pages");
+  if (!d.moved) {
+    d.moved = true;
+    pages.style.scrollSnapType = "none"; // follows the pointer; snaps when you let go
+    pages.setPointerCapture(e.pointerId);
+  }
+  pages.scrollLeft = d.left - dx;
+}
+function onPagesUp(e) {
+  const d = pageTurn.drag;
+  if (!d || e.pointerId !== d.id) return;
+  pageTurn.drag = null;
+  if (!d.moved) return;
+  const pages = $("pages");
+  pages.style.scrollSnapType = "";
+  const dx = e.clientX - d.x;
+  const far = Math.abs(dx) > Math.min(160, pages.clientWidth * 0.15);
+  goToPage(far ? d.page - Math.sign(dx) : d.page);
+}
+
 // ------------------------------------------------------------------- dock
 
 // The helper's systemd unit: its name differs between the two kinds of install.
@@ -1331,6 +1383,11 @@ $("confirm-cancel").addEventListener("click", () => { $("confirm").hidden = true
 $("confirm-ok").addEventListener("click", logout);
 $("confirm").addEventListener("pointerdown", (e) => { if (e.target === $("confirm")) $("confirm").hidden = true; });
 $("pages").addEventListener("scroll", onPagesScroll, { passive: true });
+$("pages").addEventListener("wheel", onPagesWheel, { passive: false });
+$("pages").addEventListener("pointerdown", onPagesDown);
+$("pages").addEventListener("pointermove", onPagesMove);
+$("pages").addEventListener("pointerup", onPagesUp);
+$("pages").addEventListener("pointercancel", onPagesUp);
 $("prev").addEventListener("click", () => goToPage(state.page - 1));
 $("next").addEventListener("click", () => goToPage(state.page + 1));
 document.addEventListener("pointerdown", onSortDown);
