@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="/static/ios.css">
   <script src="/static/app.js" defer></script>
   <script src="/static/windows.js" defer></script>
+  <script src="/static/tiling.js" defer></script>
   <script src="/static/settings.js" defer></script>
   <script src="/static/widgets.js" defer></script>
   <script src="/static/store.js" defer></script>
@@ -221,6 +222,12 @@
         <nav class="crumbs" id="files-crumbs" aria-label="Folder"></nav>
         <div class="files-tools">
           <button type="button" class="chip-button primary" id="files-paste" hidden>Paste</button>
+          <select class="field-input files-sort" id="files-sort" aria-label="Sort by">
+            <option value="name">Name</option>
+            <option value="type">Type</option>
+            <option value="size">Size</option>
+          </select>
+          <button type="button" class="chip-button" id="files-order"></button>
           <button type="button" class="chip-button" id="files-hidden" aria-pressed="false" hidden>Show hidden files</button>
           <button type="button" class="chip-button" id="files-new-folder">New folder</button>
           <button type="button" class="chip-button" id="files-new-file">New text file</button>

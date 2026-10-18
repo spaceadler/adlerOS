@@ -24,7 +24,7 @@ room.
 | Key | Does |
 | --- | --- |
 | Arrows | Move to the nearest item that way |
-| Enter | Open it (an app opens in a new tab; in desktop mode, in a window if it allows) |
+| Enter | Open it (an app in a window if it allows; Settings → Open apps can make that a tab) |
 | Escape | Close the menu, dialog or window on top; again to go back further |
 | Menu key, Shift+F10, or `m` | The menu for what's selected: Open, Keep in Dock, Rearrange… |
 | Tab / Shift+Tab | Next / previous control in the open window |
@@ -48,6 +48,41 @@ These work anywhere except while you're typing in a text box.
 | `?` | The list of keys |
 
 Pressing the key of the window that's open closes it again.
+
+## Alt keys
+
+Hyprland's, with Alt where it has Super. They work everywhere, the
+terminal included (so fish's own Alt+E, Alt+L, Alt+H, Alt+P, Alt+S and
+Alt+W go to adlerOS there), but not while an app's page has the keys:
+click its title bar first. The window keys and workspaces are for desktop
+mode.
+
+| Key | Does |
+| --- | --- |
+| Alt+Space | All apps (the launcher) |
+| Alt+Enter, Alt+T | Terminal |
+| Alt+E | My Computer |
+| Alt+Shift+P | Wallpaper (in Settings) |
+| Alt+Escape | The power menu: log out, restart, shut down |
+| Alt+M | Log out |
+| Alt+W | Close the window in front |
+| Alt+Tab, Alt+Shift+Tab | The next / previous window |
+| Alt+V | Float it, or tile it again (tiling) |
+| Alt+F | Fill the screen, or not |
+| Alt+C | Centre it (a floating one) |
+| Alt+H / L / K / J | The window to the left / right / above / below |
+| Alt+Shift+H / L / K / J | Move it that way: swap with that window (tiled), or that half of the screen (floating; up fills it, down is its own size) |
+| Alt+U / P | 30 px narrower / wider (hold to keep going) |
+| Alt+I / O | 30 px shorter / taller |
+| Alt+1 … Alt+0 | Workspace 1 … 10 |
+| Alt+Shift+1 … 0 | Move the window there, and go with it |
+| Alt+S / Alt+A | The next / previous workspace |
+| Alt+D | The workspace you were on before |
+| Alt + drag | Move a window from anywhere on it |
+
+Three of Hyprland's had two jobs there (C: clipboard and centre, J: emoji
+and down, P: wallpaper and wider); here they move windows, and the
+wallpaper is Alt+Shift+P.
 
 ## Typing
 
