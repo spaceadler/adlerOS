@@ -13,6 +13,8 @@
     "                formatter from FORMATTERS in settings.js",
     "  admin         the admin mode switch (asks for the password to turn on)",
     "  open          a button opening one of adlerOS's windows (target: terminal)",
+    "  glass         the window transparency slider (this device's)",
+    "  open-apps     window or new tab for apps on the home screen (this device's)",
     "admin: true on a row: it only works while admin mode is on.",
     "mode: \"homelab\" or \"standalone\" on a row: only shown in that kind of install.",
     "keywords: extra words the search box matches."
@@ -67,6 +69,28 @@
       "keywords": "background photo image",
       "control": {
         "type": "wallpaper"
+      }
+    },
+    {
+      "id": "glass",
+      "category": "account",
+      "icon": "image",
+      "title": "Window transparency",
+      "description": "How much of the wallpaper shows through windows, from 0.00 (solid) to 1.00, on the home screen and in desktop mode. A window shows the desktop behind it, never another window. Just this device.",
+      "keywords": "transparency transparent opacity glass blur see-through solid windows look",
+      "control": {
+        "type": "glass"
+      }
+    },
+    {
+      "id": "open-apps",
+      "category": "account",
+      "icon": "windows",
+      "title": "Open apps",
+      "description": "On the home screen: in a window here, like the terminal, or in a new tab. In desktop mode apps always get windows of their own; an app that won't be shown inside another page opens in a tab either way. Just this device.",
+      "keywords": "open apps window tab new tab redirect browser kiosk raspberry pi here",
+      "control": {
+        "type": "open-apps"
       }
     },
     {

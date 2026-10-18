@@ -324,6 +324,12 @@ function storeCard(app) {
     if (s && !core && state.admin) actions.append(button("Delete", "destructive", () => appAction(app, "app-delete")));
   }
   const open = app.url ? el("a", { class: "chip-button", href: app.url, target: "_blank", rel: "noopener noreferrer" }, "Open") : "";
+  // Like its icon: a window when it can be one (a middle click still makes a tab).
+  if (open) open.addEventListener("click", (e) => {
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    openApp(app);
+  });
 
   const head = el("div", { class: "store-head" },
     el("span", { class: "store-icon" }, plateFor(app)),

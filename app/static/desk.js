@@ -129,7 +129,24 @@ function iconUnderWidget(cell) {
   return underWidget(cell) || underWidget([cell[0], cell[1] + ICON_ROWS - 1]);
 }
 // Icons you'd put where a widget now is go back in with the rest.
+// Two widgets on top of each other (one grew: the search bar got wider):
+// the later one moves to the nearest place that's free.
+function separateWidgets() {
+  const list = deskWidgetList();
+  list.forEach((w, i) => {
+    const z = widgetSize(w.id);
+    const hit = list.slice(0, i).some((o) => {
+      const y = widgetSize(o.id);
+      return w.cell[0] < o.cell[0] + y.cols && o.cell[0] < w.cell[0] + z.cols && w.cell[1] < o.cell[1] + y.rows && o.cell[1] < w.cell[1] + z.rows;
+    });
+    if (!hit) return;
+    w.cell = widgetSpot(w.cell, w.key, z);
+    saveDeskWidgets(list);
+  });
+}
+
 function clearUnderWidgets() {
+  separateWidgets();
   const places = deskPlaces();
   let changed = false;
   for (const [name, cell] of Object.entries(places)) {

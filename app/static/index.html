@@ -248,6 +248,22 @@
     </div>
   </section>
 
+  <!-- Viewer: a picture, a video or a PDF from Files, in a window of its own -->
+  <section id="viewer" class="sheet viewer-sheet" aria-label="Viewer" hidden>
+    <div class="sheet-bg" aria-hidden="true">
+      <div class="sheet-wallpaper"></div>
+      <div class="sheet-tint"></div>
+    </div>
+    <div class="viewer-head">
+      <span class="viewer-title" id="viewer-title"></span>
+      <button type="button" class="chip-button" id="viewer-download">Download</button>
+      <button class="sheet-close viewer-close" id="viewer-close" type="button" aria-label="Close the viewer">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="viewer-body" id="viewer-body"></div>
+  </section>
+
   <!-- Music: a song from Files, playing in a window of its own -->
   <section id="music" class="sheet music-sheet" aria-label="Music" hidden>
     <div class="sheet-bg" aria-hidden="true">

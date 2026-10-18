@@ -1789,7 +1789,7 @@ class Handler(BaseHTTPRequestHandler):
                 {"id": a["id"], "name": a["name"], "about": a["about"], "genre": a["genre"],
                  "url": a["url"], "hasIcon": a["icon"].startswith("di:"), "icon": a["icon"],
                  "imported": bool(a.get("imported")), "note": a.get("note", ""), "up": status[a["id"]],
-                 "home": a.get("home")} for a in apps],
+                 "home": a.get("home"), "known": a.get("known", "")} for a in apps],
                 "available": [{"id": a["id"], "name": a["name"], "about": a["about"], "genre": a["genre"],
                                "hasIcon": a["icon"].startswith("di:"), "icon": a["icon"],
                                "imported": bool(a.get("imported")), "store": bool(a.get("store"))}

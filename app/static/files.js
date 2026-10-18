@@ -231,7 +231,8 @@ function openEntry(entry, path) {
   if (entry.dir) return isOpen("files") ? showFolder(path) : openFiles(path);
   if (entry.kind === "text") return editFile(path);
   if (entry.kind === "audio") return playSong(entry, path);
-  if (["image", "video", "pdf"].includes(entry.kind)) return previewFile(entry, path);
+  if (entry.kind === "pdf") return openPdf(entry, path);
+  if (["image", "video"].includes(entry.kind)) return viewFile(entry, path);
   return downloadFile(path);
 }
 
@@ -242,18 +243,45 @@ function downloadFile(path) {
   a.remove();
 }
 
-function previewFile(entry, path) {
-  if (entry.kind === "pdf") return window.open(fileUrl(path, true), "_blank", "noopener");
+// A picture, a video or a PDF opens in a window of its own (one you can
+// resize, in desktop mode), so the rest of adlerOS stays usable; over the
+// home screen it floats over Files. The next one takes its place.
+function viewFile(entry, path) {
   const url = fileUrl(path, true);
-  const media = entry.kind === "image" ? el("img", { src: url, alt: entry.name, class: "preview-media" })
-    : el(entry.kind, { src: url, controls: "", autoplay: "", class: "preview-media" });
-  const close = el("button", { type: "button", class: "button-secondary" }, "Close");
-  const download = el("button", { type: "button", class: "button-primary" }, "Download");
-  close.addEventListener("click", closeModal);
-  download.addEventListener("click", () => downloadFile(path));
-  openModal(el("div", { class: "dialog material preview", role: "dialog", "aria-modal": "true", "aria-label": entry.name },
-    el("h2", {}, entry.name), media, el("div", { class: "dialog-actions" }, close, download)));
-  close.focus();
+  const media = entry.kind === "image" ? el("img", { src: url, alt: entry.name })
+    : entry.kind === "video" ? el("video", { src: url, controls: "", autoplay: "" })
+    : el("iframe", { src: url, title: entry.name }); // the browser's own PDF viewer
+  $("viewer-body").replaceChildren(media);
+  $("viewer").dataset.path = path;
+  $("viewer-title").textContent = entry.name;
+  titleWindow("viewer", entry.name);
+  openWindow("viewer");
+}
+
+function closeViewer() {
+  $("viewer-body").replaceChildren(); // a video stops
+  closeWindow("viewer");
+}
+
+// A PDF opens in the Firefox app, when there's one: the helper hands it the
+// file and adlerOS shows Firefox. Without it, in the viewer; and on the home
+// screen with apps in tabs (Settings → Open apps), in a tab of this browser.
+async function openPdf(entry, path) {
+  if (!desktopMode() && appsInTabs()) return window.open(fileUrl(path, true), "_blank", "noopener");
+  const firefox = state.apps.find((a) => a.known === "firefox" && a.url);
+  if (!firefox) return viewFile(entry, path);
+  toast(`Opening ${entry.name} in Firefox…`);
+  const { status, body } = await postAction("firefox-open", { path });
+  if (status === 401) return showLock();
+  const job = status === 202 && body ? await waitForJob(body) : null;
+  const r = job?.result;
+  if (!r?.ok) {
+    toast(`Firefox couldn't open it (${r?.error || job?.error || body?.error || "the helper didn't answer"}), so here it is.`);
+    return viewFile(entry, path);
+  }
+  const id = `app-${firefox.id}`;
+  if (wm.windows.has(id) && isOpen(id)) raiseWindow(id, true);
+  else openApp(firefox);
 }
 
 // A song plays in a window of its own, so the rest of adlerOS stays yours
@@ -629,8 +657,11 @@ registerWindow("files", { title: "Files", close: closeFiles, dock: "files", size
 // Half the width of a picture's preview and a quarter taller; over the home
 // screen it floats above the dock (float), with everything else still open.
 registerWindow("music", { title: "Music", close: closeMusic, size: [490, 260], float: true });
+registerWindow("viewer", { title: "Viewer", close: closeViewer, size: [980, 680], float: true });
 $("files-close").addEventListener("click", closeFiles);
 $("music-close").addEventListener("click", closeMusic);
+$("viewer-close").addEventListener("click", closeViewer);
+$("viewer-download").addEventListener("click", () => downloadFile($("viewer").dataset.path));
 $("music-download").addEventListener("click", () => downloadFile($("music").dataset.path));
 $("files-list").addEventListener("pointerdown", fileDown);
 document.addEventListener("pointermove", fileMove);
@@ -703,6 +734,10 @@ $("editor-save").addEventListener("click", () => saveFile());
 $("editor-back").addEventListener("click", leaveEditor);
 // Escape: out of the editor first, then out of Files.
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && isActive("viewer") && $("modal").hidden && $("menu").hidden) {
+    e.stopImmediatePropagation(); // the viewer first, Files behind it stays
+    return closeViewer();
+  }
   if (e.key !== "Escape" || !isActive("files") || !$("modal").hidden || !$("menu").hidden) return;
   e.stopImmediatePropagation();
   if (files.view === "editor") leaveEditor();

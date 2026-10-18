@@ -193,7 +193,7 @@ const TYPES = {
       : { class: "w-search-input", type: "search", placeholder: "Search the web", "aria-label": "Search the web", autocomplete: "off", enterkeyhint: "search" },
     preview ? "Search the web" : "");
     const form = el(preview ? "div" : "form", { class: "w-search", ...(preview ? {} : { role: "search" }) },
-      svg(["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"]), input);
+      svg(["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"]), input, el("kbd", { "aria-hidden": "true" }, "↵"));
     if (!preview) {
       form.addEventListener("submit", (e) => {
         e.preventDefault();

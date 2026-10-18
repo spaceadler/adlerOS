@@ -60,6 +60,7 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.parse
 from pathlib import Path
 
 ADLEROS = Path(__file__).resolve().parents[1]
@@ -1100,7 +1101,106 @@ def forget(app_id):
     return 0
 
 
+# ---------------------------------------------------------- PDFs in Firefox
+
+OPEN_DIR = "adleros-open"  # in the Firefox app's /config: the files adlerOS hands it
+OPEN_KEEP = 24 * 3600
+OPEN_MAX = 512 * 1024 * 1024
+
+
+def place_folder(place):
+    """A Files place's folder on this machine: User, Desktop or Root."""
+    storage = Path(setting("STORAGE_DIR") or (HOMELAB / "storage" if HOMELAB else HOME / "storage")).expanduser()
+    if place == "user":
+        return storage
+    if place == "desktop":
+        return HOMELAB / "mailbox" if HOMELAB else Path(setting("DESKTOP_DIR") or storage / "Desktop").expanduser()
+    if place == "root":
+        return HOMELAB or (Path(setting("FILES_ROOT")).expanduser() if setting("FILES_ROOT") else None)
+    return None
+
+
+def firefox_container(app):
+    """The Firefox app's running container: (id, its /config on this machine, its user), or None."""
+    for f in app["files"]:
+        ids = subprocess.run(["docker", "compose", "-f", str(f), "ps", "-q", "--status", "running"], cwd=f.parent,
+                             env=docker_env(), stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                             timeout=30, check=False).stdout.split()
+        for cid in ids:
+            found = subprocess.run(["docker", "inspect", cid], env=docker_env(), stdin=subprocess.DEVNULL,
+                                   capture_output=True, text=True, timeout=30, check=False)
+            if found.returncode:
+                continue
+            info = json.loads(found.stdout)[0]
+            if "firefox" not in info["Config"]["Image"]:
+                continue
+            config = next((m["Source"] for m in info.get("Mounts") or []
+                           if m.get("Destination") == "/config" and m.get("Type") == "bind"), None)
+            env = dict(e.split("=", 1) for e in info["Config"].get("Env") or [] if "=" in e)
+            if config:
+                return cid, Path(config), env.get("PUID") or "abc"
+    return None
+
+
+def firefox_open(path):
+    """A PDF from Files in the Firefox app: copied into its profile folder (it
+    sees nothing else of this machine) and opened in a new tab there. Firefox
+    closed (its window shut, the screen black): this starts it again."""
+    match = re.fullmatch(r"/(user|desktop|root)/(.+)", path)
+    folder = place_folder(match[1]) if match else None
+    if not folder:
+        return {"error": "that isn't a file in Files"}
+    top = Path(os.path.realpath(folder))
+    real = Path(os.path.realpath(top / match[2]))
+    if not real.is_relative_to(top) or not real.is_file():
+        return {"error": "no such file"}
+    if real.suffix.lower() != ".pdf":
+        return {"error": "only PDFs open in Firefox from here"}
+    if real.stat().st_size > OPEN_MAX:
+        return {"error": "that PDF is over 512 MB"}
+    app = next((a for a in registry_apps().values() if a["info"].get("known") == "firefox" and a["installed"]), None)
+    if not app:
+        return {"error": "Firefox isn't installed (it's in the App Store)"}
+    found = firefox_container(app)
+    if not found:
+        return {"error": "Firefox isn't running: start it in the App Store"}
+    cid, config, user = found
+    if not config.is_dir() or config.is_symlink() or config.stat().st_uid != os.getuid():
+        return {"error": f"{config} isn't Firefox's own folder"}
+    inbox = config / OPEN_DIR
+    inbox.mkdir(exist_ok=True)
+    now = time.time()
+    for old in inbox.iterdir():  # yesterday's are done with
+        if old.is_dir() and not old.is_symlink() and now - old.stat().st_mtime > OPEN_KEEP:
+            shutil.rmtree(old, ignore_errors=True)
+    token = secrets.token_hex(4)
+    (inbox / token).mkdir()
+    shutil.copyfile(real, inbox / token / real.name)
+    # As it runs (its display, its profile); detached, so a Firefox this
+    # starts keeps running after the command's done.
+    seen = subprocess.run(["docker", "exec", "-u", user, cid, "sh", "-c",
+                           'p=$(pgrep -o -x firefox) && tr "\\0" "\\n" < /proc/$p/environ'],
+                          env=docker_env(), stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                          timeout=30, check=False).stdout
+    running = dict(line.split("=", 1) for line in seen.splitlines() if "=" in line)
+    env = {"HOME": "/config", "DISPLAY": ":0", "XDG_RUNTIME_DIR": "/config/.XDG"}
+    env.update({k: running[k] for k in env if running.get(k)})
+    url = f"file:///config/{OPEN_DIR}/{token}/{urllib.parse.quote(real.name)}"
+    started = subprocess.run(["docker", "exec", "-d", "-u", user, *[a for k, v in env.items() for a in ("-e", f"{k}={v}")], cid,
+                              "firefox", "--new-tab", url], env=docker_env(), stdin=subprocess.DEVNULL,
+                             capture_output=True, text=True, timeout=30, check=False)
+    if started.returncode:
+        return {"error": f"Firefox didn't take it: {started.stderr.strip()[-200:]}"}
+    return {"ok": True, "app": app["id"], "name": real.name, "started": not running}
+
+
 def main(argv):
+    if len(argv) == 2 and argv[0] == "firefox-open":
+        try:
+            print(json.dumps(firefox_open(argv[1])))
+        except (OSError, ValueError, subprocess.TimeoutExpired) as e:
+            print(json.dumps({"error": f"couldn't hand it to Firefox: {e}"}))
+        return 0
     if argv == ["discover"]:
         if HOMELAB:
             sys.exit("discover is for standalone installs; a homelab's apps come from its catalog")

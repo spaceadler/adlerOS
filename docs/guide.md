@@ -52,6 +52,15 @@ by itself, but **Settings → Welcome tour** (or ⌘K "welcome") shows it again.
   dots under them, or the arrows at the sides to move between pages. An app
   that doesn't answer turns dim and says *Offline*. An app with no web page
   (a game server, a bot) opens its App Store card instead.
+- **Opening an app** puts it in a window over the home screen, like the
+  terminal's, with Reload, *Open in a new tab* and close at its top; an app
+  that won't be shown inside another page opens in a tab. If you'd rather
+  have tabs (on this device): **Settings → Open apps → In a new tab**. Keep
+  windows on a computer showing adlerOS full screen (a Raspberry Pi on a
+  TV): there, a tab would open somewhere you can't see.
+- **Over a window the dock steps aside**, so it doesn't cover the window's
+  last lines (the terminal's prompt); bring the pointer to the bottom edge
+  of the screen and it comes back, until you leave it.
 - **Rearranging:** drag an app to a new place on its page. On a touch screen,
   long-press it and, without letting go, drag: the menu gives way and the
   apps start to wiggle; **Done** when you've finished. From the keyboard, its
@@ -123,8 +132,9 @@ made phone-narrow leaves it until it's wide again.
 - **Widgets on the desktop:** right-click the desktop → **Add widget…** and
   pick one (the same ones as the home screen's). It's three icons wide and a
   row and a half tall; drag it where you want it (icons make room), right-click it →
-  **Remove widget**. One is only for the desktop: **Search the web**, a bar
-  four icons wide (drag it by its edge; inside it, you type). Each computer
+  **Remove widget**. One is only for the desktop: **Search the web**, the
+  home screen's search bar, eight icons wide (drag it by its edge; inside
+  it, you type). Each computer
   keeps its own desktop: where things are, which apps and widgets. Files that arrive
   some other way (Syncthing) show up within 15 seconds.
 - **Windows:** Settings, the App Store, Live Usage, Files and the Terminal
@@ -132,13 +142,17 @@ made phone-narrow leaves it until it's wide again.
   any edge to resize it; drag it to the left or right edge of the screen for
   that half, or to the top to fill the screen (or double-click its bar). The
   buttons on its bar minimize it to the dock, maximize it, and close it.
-  Windows remember where you put them. They're glass: what's behind them
-  (other windows, the desktop) shows through, blurred, and an app's page is
-  a little see-through too; a maximized window is solid.
+  Windows remember where you put them. They're glass over the desktop: the
+  wallpaper behind them shows through, blurred, but never another window, so
+  Files over the Terminal is just Files. How much shows is **Settings →
+  Window transparency**, from 0.00 (solid) to 1.00, the same on the home
+  screen; an app's own page lets a little through, except maximized. The
+  Search pill sits at the top, level with the bell.
 - **Your apps** open in windows of their own, if they allow it: adlerOS asks
   each app whether it may be shown inside another page, and opens the ones
-  that say no in a tab, as on the home screen. Ctrl+click opens any app in a
-  tab. An app's window has Reload and *Open in a new tab* on its bar.
+  that say no in a tab. Ctrl+click opens any app in a tab. An app's window
+  has Reload and *Open in a new tab* on its bar. The App Store's **Open**
+  does the same as the app's icon.
 - **The dock** shows what's open: a mark under pinned apps and adlerOS's own
   items with a window, and, after your pinned apps (like a Mac's), the windows
   that have no place in the dock otherwise (apps you haven't pinned, Files or
@@ -189,7 +203,7 @@ container. The buttons:
 
 | | |
 | --- | --- |
-| **Open** | Its web page, in a new tab. |
+| **Open** | Its web page, like its icon: in a window, or a tab if it won't be shown in one (Ctrl+click: a tab). |
 | **Start** | Starts its containers (`docker compose up -d`). An app with a `pre-start.sh` that says "not yet" (Kiwix without an archive, say) says why. |
 | **Stop** | Stops them; they stay, ready to start again. |
 | **Restart** | Restarts them, or starts them if there are none. |
@@ -311,8 +325,19 @@ Desktop and User themselves: opening one takes you there.
 
 - **Double-click** a folder to go in (a click picks it; on a touch screen a
   tap opens it; Enter too); the path at the top takes you back up. A text
-  file opens in the editor, an image, video, song or PDF in a preview,
-  anything else downloads.
+  file opens in the editor; anything else that opens gets a window of its
+  own, so the rest of adlerOS stays usable while it's open:
+  - a **picture or video**: the **Viewer** (in desktop mode, drag and resize
+    it like any window; over the home screen it floats over Files);
+  - a **song**: **Music**, a small window above the dock that keeps playing
+    while you do other things, minimized too; the next song takes its place,
+    closing it stops it;
+  - a **PDF**: in **Firefox**, if you have the App Store's (adlerOS hands it
+    the file and shows Firefox's window, starting Firefox again if it had
+    closed); without it, in the Viewer. With *Open apps → In a new tab*,
+    a tab of your browser.
+
+  Anything else downloads.
 - **Upload** with the button, or drop files onto the window; big files are
   fine. A file with a name that's taken gets a `(2)`.
 - **New folder**, **New text file**, and per file (right-click, `m`, or its

@@ -78,8 +78,8 @@ function loadWallpaper(id) {
   img.onload = () => {
     $("wallpaper").style.backgroundImage = `url("${url}")`;
     $("wallpaper").classList.add("loaded");
-    // Behind every window too, blurred (Settings, App Store, Live Usage).
-    for (const bg of document.querySelectorAll(".sheet-wallpaper")) bg.style.backgroundImage = `url("${url}")`;
+    // Behind every window too, blurred (.sheet-wallpaper).
+    document.documentElement.style.setProperty("--wallpaper", `url("${url}")`);
   };
   img.src = url;
 }
@@ -575,7 +575,9 @@ function openApp(app) {
     toast(`${app.name} has no web page; here it is in the App Store.`);
     return openStore();
   }
-  if (desktopMode()) return openAppWindow(app);
+  // In a window, unless this device wants tabs (on the home screen) or the
+  // app won't be shown inside another page.
+  if (desktopMode() || !appsInTabs()) return openAppWindow(app);
   window.open(app.url, "_blank", "noopener,noreferrer");
 }
 
