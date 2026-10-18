@@ -35,7 +35,7 @@ These work anywhere except while you're typing in a text box.
 
 | Key | Opens |
 | --- | --- |
-| `/` (or ⌘K, Ctrl+K) | Search: apps, settings, adlerOS's windows |
+| `/` (or Alt+Space) | Search: apps, settings, adlerOS's windows, files |
 | `a` | All apps |
 | `g` | The App Store ("get apps") |
 | `,` | Settings |
@@ -59,9 +59,9 @@ mode.
 
 | Key | Does |
 | --- | --- |
-| Alt+Space | All apps (the launcher) |
-| Alt+Enter, Alt+T | Terminal |
-| Alt+E | My Computer |
+| Alt+Space | Search: apps, files, settings (the launcher) |
+| Alt+Enter, Alt+T | Terminal (another one, with one open) |
+| Alt+E | My Computer (another one, with one open) |
 | Alt+Shift+P | Wallpaper (in Settings) |
 | Alt+Escape | The power menu: log out, restart, shut down |
 | Alt+M | Log out |

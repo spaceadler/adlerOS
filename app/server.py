@@ -1232,6 +1232,98 @@ def nested(place):
     return sorted(found, key=lambda f: -len(f[1]))
 
 
+# ------------------------------------------------------------ file search
+
+# Search (Alt+Space) finds files by name in every place: from an index made
+# in the background, again every SEARCH_EVERY seconds and soon after
+# anything changes through My Computer. Hidden files and folders (and the
+# Trash) are left out; a place inside another (Root's storage/) is listed
+# once, as itself.
+SEARCH_EVERY = 1800  # a look round takes a minute on a Raspberry Pi
+SEARCH_SOON = 10  # seconds after a change
+SEARCH_MAX = 500_000  # files and folders, at most
+SEARCH_SKIP = {"node_modules", "__pycache__", "venv"}
+_search = {"paths": [], "keys": [], "at": 0.0, "full": False}
+_search_lock = threading.Lock()
+_search_wake = threading.Event()
+
+
+def search_key(name):
+    """What a name is found by: lower case, with - _ . as spaces."""
+    return re.sub(r"[-_.]+", " ", name.lower())
+
+
+def index_places():
+    paths, keys = [], []
+    for place in places_on():
+        skip = {tuple(p) for _, p in nested(place)}
+        stack = [(str(PLACES[place]), ())]
+        while stack and len(paths) < SEARCH_MAX:
+            folder, rel = stack.pop()
+            try:
+                with os.scandir(folder) as found:
+                    entries = list(found)
+            except OSError:
+                continue
+            for entry in entries:
+                if entry.name.startswith(".") or entry.name in SEARCH_SKIP:
+                    continue
+                sub = (*rel, entry.name)
+                try:
+                    is_dir = entry.is_dir(follow_symlinks=False)
+                except OSError:
+                    continue
+                if is_dir and sub in skip:
+                    continue
+                paths.append("/" + "/".join((place, *sub)) + ("/" if is_dir else ""))  # a folder ends in /
+                keys.append(search_key(entry.name))
+                if is_dir:
+                    stack.append((entry.path, sub))
+    return paths, keys
+
+
+def search_indexer():
+    try:  # behind everything else on the CPU: this thread only
+        os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 15)
+    except (OSError, AttributeError):
+        pass
+    while True:
+        try:
+            paths, keys = index_places()
+            with _search_lock:
+                _search.update(paths=paths, keys=keys, at=time.time(), full=len(paths) >= SEARCH_MAX)
+        except Exception as e:  # a bad folder never stops the server
+            print(f"file search: couldn't look round ({e})", file=sys.stderr, flush=True)
+        if _search_wake.wait(SEARCH_EVERY):
+            time.sleep(SEARCH_SOON)  # a burst of changes: one look after
+        _search_wake.clear()
+
+
+def search_files(q, limit=40):
+    """The files and folders whose names have every word of q in them,
+    best first: names that start with it, then that have it as a word."""
+    words = search_key(q).split()
+    if not words:
+        return {"items": [], "more": 0}
+    with _search_lock:
+        paths, keys, at = _search["paths"], _search["keys"], _search["at"]
+    longest = max(words, key=len)
+    hits = [i for i, key in enumerate(keys) if longest in key]
+    rest = [w for w in words if w != longest]
+    hits = [i for i in hits if all(w in keys[i] for w in rest)]
+    whole = " ".join(words)
+    hits.sort(key=lambda i: (0 if keys[i].startswith(whole) else 1 if f" {whole}" in f" {keys[i]}" else 2,
+                             len(paths[i])))
+    items = []
+    for i in hits[:limit]:
+        path = paths[i]
+        is_dir = path.endswith("/")
+        path = path.rstrip("/")
+        items.append({"path": path, "name": path.rsplit("/", 1)[-1], "dir": is_dir,
+                      "kind": file_kind(Path(path), is_dir)})
+    return {"items": items, "more": max(0, len(hits) - limit), "ready": at > 0}
+
+
 def locate(path, must_exist=True):
     """(place, real path) for '/user/Documents/a.txt', else (None, None). '..'
     and links that lead out of their place are refused."""
@@ -1831,7 +1923,7 @@ class Handler(BaseHTTPRequestHandler):
                 {"id": a["id"], "name": a["name"], "about": a["about"], "genre": a["genre"],
                  "url": a["url"], "hasIcon": a["icon"].startswith("di:"), "icon": a["icon"],
                  "imported": bool(a.get("imported")), "note": a.get("note", ""), "up": status[a["id"]],
-                 "home": a.get("home")} for a in apps],
+                 "home": a.get("home"), "known": a.get("known", "")} for a in apps],
                 "available": [{"id": a["id"], "name": a["name"], "about": a["about"], "genre": a["genre"],
                                "hasIcon": a["icon"].startswith("di:"), "icon": a["icon"],
                                "imported": bool(a.get("imported")), "store": bool(a.get("store"))}
@@ -1926,6 +2018,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/admin":
             return self.set_admin(body)
         if path.startswith("/api/files/"):
+            _search_wake.set()  # it may change what search should find
             return self.files_post(path[len("/api/files/"):], body)
         if path == "/api/terminal":
             return self.open_terminal(body)
@@ -2087,6 +2180,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(404, {"error": "no storage folder is mounted"})
         if path == "/api/files/trash":
             return self.send_json(200, {"items": trash_items()})
+        if path == "/api/files/search":
+            q = query.get("q", [""])[0]
+            return self.send_json(200, search_files(q[:200]))
         if path == "/api/files/tasks":
             with _tasks_lock:
                 return self.send_json(200, {"tasks": list(TASKS.values())})
@@ -2324,6 +2420,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(401, {"error": "login required"})
         if not places_on():
             return self.send_json(404, {"error": "no storage folder is mounted"})
+        _search_wake.set()  # a new file to find
         place, folder = locate(query.get("dir", [""])[0])
         name = query.get("name", [""])[0]
         try:
@@ -2439,6 +2536,7 @@ def main():
     if settings.get("admin") is True and "adminUntil" not in settings:
         save_settings({"adminUntil": time.time() + ADMIN_SECONDS})  # on from before it timed out: from now
     threading.Thread(target=Watcher().run, name="watcher", daemon=True).start()
+    threading.Thread(target=search_indexer, name="search", daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     server.daemon_threads = True
     print(f"adlerOS on :{PORT}, for {os.environ.get('ADLEROS_NETWORKS') or 'anyone'}" if ALLOWED_NETWORKS

@@ -27,7 +27,7 @@ collection. In a homelab it shows instead **the apps you can add**: the
 catalog's, by collection, each with a button to its App Store card. Then a
 short look around: your apps, the dock, search, the bell, and where My Computer and
 desktop mode are. **Skip the tour** (or Escape) ends it; it doesn't come back
-by itself, but **Settings → Welcome tour** (or ⌘K "welcome") shows it again.
+by itself, but **Settings → Welcome tour** (or Alt+Space "welcome") shows it again.
 
 ## The desktop
 
@@ -115,7 +115,7 @@ any of adlerOS's in `icons/` ([customizing](customizing.md#dock-icons)).
 ![Desktop mode](screenshots/desktop-mode.png)
 
 For a computer with a mouse: windows side by side, like any desktop. Switch it
-on in **Settings → Desktop mode**, ⌘K "desktop mode", or right-click the
+on in **Settings → Desktop mode**, Alt+Space "desktop mode", or right-click the
 desktop. It's kept in that browser only, so the TV can stay on the home screen
 while the laptop uses desktop mode. It's for computers: a phone never has it
 (held upright, it gets the iPhone-style layout instead), and a browser window
@@ -175,8 +175,12 @@ made phone-narrow leaves it until it's wide again.
   window in front there. The windows slide over as you go, and a dot row
   says where you are. The desktop and its icons are the same on all of them.
 - **Moving** is on the curves of a Hyprland config: windows glide to where
-  they go, pop in and fade, and the window in front has a gradient border
-  that turns once. Every Alt key is in [keyboard](keyboard.md#alt-keys).
+  they go, pop in and fade. Every Alt key is in [keyboard](keyboard.md#alt-keys).
+- **More than one My Computer or Terminal:** right-click it (in the dock,
+  All apps, on the desktop, or its title bar) → **New window**, or Alt+E /
+  Alt+Enter with one open. Each terminal has a shell of its own (three at
+  most); each My Computer its own folder, and a file dragged from one onto
+  another moves into that one's folder.
 - **Keys:** Ctrl+` goes to the next window, then the desktop; Ctrl+Shift+`
   goes back. On a title bar, `m` (or the Menu key) opens its menu: left or
   right half, maximize, minimize, close, or move and resize it with the
@@ -203,12 +207,20 @@ image](https://docs.linuxserver.io/images/docker-firefox/), so:
 
 ## Search
 
-<!-- screenshot: ⌘K search -->
+<!-- screenshot: Alt+Space search -->
 ![Search](screenshots/search.png)
 
-⌘K, Ctrl+K, or `/` opens a search across your apps, every setting ("timezone",
-"back up") and adlerOS's windows; the last result searches the web for what
-you typed. Arrow keys pick, Enter opens.
+**Alt+Space** (or `/`, or the Search pill) opens a search across your apps
+(all of them, the list scrolls), every setting ("timezone", "back up"),
+adlerOS's windows, and every file and folder in your places by name: type
+*never snitch* and the song in `Media/Music` is there, and opens in Music
+(a folder in My Computer, a picture in the Viewer). Hidden files are left
+out, and the list of files is made again every half hour and soon after
+you change something in My Computer, so a file that just arrived some other
+way (Syncthing) may take a while. The last result searches the web: in the
+App Store's Firefox, in a window here, when you have it (a new tab of it);
+otherwise a tab of your browser. The search bar and the desktop's search
+widget do the same. Arrow keys pick, Enter opens.
 
 ## The App Store
 
@@ -329,7 +341,7 @@ itself off, and a terminal you had keeps running for when it's back on.
 <!-- screenshot: My Computer, a folder of documents, the places down the side -->
 ![My Computer](screenshots/files.png)
 
-Your files, in a window: the dock, **All apps → My Computer**, ⌘K "files",
+Your files, in a window: the dock, **All apps → My Computer**, Alt+Space "files",
 or `f`. It starts in Root in admin mode, in User otherwise. Down the
 side are three places, and the Trash:
 
@@ -406,7 +418,7 @@ changes asks first.
 ![Terminal](screenshots/terminal.png)
 
 A shell on this machine, as you, in a window: the dock, **Settings → System →
-Terminal**, ⌘K "terminal", or `t`. It's there only in admin mode: with admin
+Terminal**, Alt+Space "terminal", or `t`. It's there only in admin mode: with admin
 mode off it's not in the dock, All apps, search or Settings. It's also off
 unless it's switched on *on the machine itself* (`ADLEROS_TERMINAL=on`, see
 [standalone](standalone.md#settings-in-env) or [homelab](homelab.md)). It asks

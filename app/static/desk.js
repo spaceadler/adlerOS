@@ -315,7 +315,9 @@ function deskTarget(e) {
   const icon = under?.closest(".desk-icon");
   const entry = icon && desk.entries.find((x) => `/desktop/${x.name}` === icon.dataset.file);
   if (icon && icon !== desk.drag.icon && entry?.dir) return { folder: icon };
-  if (under?.closest("#files .files-list") && files.view === "folder" && files.writable && files.path !== "/desktop") return { files: true };
+  // A My Computer window's list: into the folder it's showing.
+  const w = under?.closest(".files-list") && fileWinOf(under);
+  if (w && w.view === "folder" && w.writable && w.path !== "/desktop" && w.path !== "/") return { files: w };
   if (under?.closest("#desk")) return { cell: true };
   return {};
 }
@@ -340,10 +342,10 @@ function deskMove(e) {
   if (d.widget || d.icon.dataset.deskApp) return; // these only move about
   const t = deskTarget(e);
   d.over?.classList.remove("drop-target");
-  $("files-list").classList.remove("drop-here");
+  for (const w of fileWins.values()) w.part("list").classList.remove("drop-here");
   d.over = t.folder || null;
   d.over?.classList.add("drop-target");
-  if (t.files) $("files-list").classList.add("drop-here");
+  if (t.files) t.files.part("list").classList.add("drop-here");
 }
 
 function deskUp(e) {
@@ -354,7 +356,7 @@ function deskUp(e) {
   d.ghost.remove();
   d.icon.classList.remove("drag-source");
   d.over?.classList.remove("drop-target");
-  $("files-list").classList.remove("drop-here");
+  for (const w of fileWins.values()) w.part("list").classList.remove("drop-here");
   desk.justDragged = true; // its click (a widget opens what it's about) doesn't count
   setTimeout(() => { desk.justDragged = false; }, 0);
   if (d.widget) return moveDeskWidget(d, e);
@@ -363,7 +365,7 @@ function deskUp(e) {
   const name = d.icon.dataset.file.slice("/desktop/".length);
   const t = deskTarget(e);
   if (t.folder) return deskMoveTo(name, t.folder.dataset.file);
-  if (t.files) return deskMoveTo(name, files.path);
+  if (t.files) return deskMoveTo(name, t.files.path);
   if (t.cell) deskPlace(d.icon, name, e);
 }
 
@@ -440,7 +442,7 @@ function deskMenu(target) {
   if (deskApp === DESK_HOME) return [{ label: "Open", run: () => openFiles("/user") }];
   if (deskApp && pinFor(deskApp)) {
     const p = pinFor(deskApp);
-    return [{ label: "Open", run: () => (p.builtin ? p.builtin.open() : openApp(p)) },
+    return [{ label: "Open", run: () => (p.builtin ? p.builtin.open() : openApp(p)) }, ...newWindowItem(deskApp),
       isPinned(deskApp) ? { label: "Remove from Dock", run: () => setPinned(deskApp, false) } : { label: "Keep in Dock", run: () => setPinned(deskApp, true) },
       { label: "Remove from desktop", run: () => setOnDesk(deskApp, false), destructive: true }];
   }
@@ -470,7 +472,7 @@ function deskMenu(target) {
     items.push({ label: "New folder", run: () => newFolder("/desktop") },
       { label: "New text file", run: () => newTextFile("/desktop") });
     if (files.clip) items.push({ label: `Paste ${files.clip.label}`, run: () => paste("/desktop") });
-    items.push({ label: "Upload…", run: () => { files.uploadTo = "/desktop"; $("files-picker").click(); } },
+    items.push({ label: "Upload…", run: () => { files.uploadTo = "/desktop"; mainFiles().part("picker").click(); } },
       { label: "Open in My Computer", run: () => openFiles("/desktop") });
   }
   const cell = desk.menuAt && deskCellAt(desk.menuAt[0], desk.menuAt[1]);

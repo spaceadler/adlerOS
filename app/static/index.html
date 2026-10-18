@@ -211,46 +211,46 @@
       <div class="sheet-wallpaper"></div>
       <div class="sheet-tint"></div>
     </div>
-    <button class="sheet-close" id="files-close" type="button" aria-label="Close My Computer">
+    <button class="sheet-close" data-part="close" type="button" aria-label="Close My Computer">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
     </button>
     <div class="files-body">
       <div class="files-bar">
-        <button type="button" class="chip-button" id="files-up" aria-label="Up one folder">
+        <button type="button" class="chip-button" data-part="up" aria-label="Up one folder">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
         </button>
-        <nav class="crumbs" id="files-crumbs" aria-label="Folder"></nav>
+        <nav class="crumbs" data-part="crumbs" aria-label="Folder"></nav>
         <div class="files-tools">
-          <button type="button" class="chip-button primary" id="files-paste" hidden>Paste</button>
-          <select class="field-input files-sort" id="files-sort" aria-label="Sort by">
+          <button type="button" class="chip-button primary" data-part="paste" hidden>Paste</button>
+          <select class="field-input files-sort" data-part="sort" aria-label="Sort by">
             <option value="name">Name</option>
             <option value="type">Type</option>
             <option value="size">Size</option>
           </select>
-          <button type="button" class="chip-button" id="files-order"></button>
-          <button type="button" class="chip-button" id="files-hidden" aria-pressed="false" hidden>Show hidden files</button>
-          <button type="button" class="chip-button" id="files-new-folder">New folder</button>
-          <button type="button" class="chip-button" id="files-new-file">New text file</button>
-          <button type="button" class="chip-button primary" id="files-upload">Upload</button>
-          <input type="file" id="files-picker" multiple hidden>
+          <button type="button" class="chip-button" data-part="order"></button>
+          <button type="button" class="chip-button" data-part="hidden" aria-pressed="false" hidden>Show hidden files</button>
+          <button type="button" class="chip-button" data-part="new-folder">New folder</button>
+          <button type="button" class="chip-button" data-part="new-file">New text file</button>
+          <button type="button" class="chip-button primary" data-part="upload">Upload</button>
+          <input type="file" data-part="picker" multiple hidden>
         </div>
       </div>
       <div class="files-main">
-        <nav class="files-side" id="files-side" aria-label="Places"></nav>
+        <nav class="files-side" data-part="side" aria-label="Places"></nav>
         <div class="files-col">
-          <p class="files-note" id="files-note" role="note" hidden></p>
-          <div class="files-list" id="files-list" role="list"></div>
-          <div class="uploads" id="files-uploads" aria-live="polite"></div>
+          <p class="files-note" data-part="note" role="note" hidden></p>
+          <div class="files-list" data-part="list" role="list"></div>
+          <div class="uploads" data-part="uploads" aria-live="polite"></div>
         </div>
       </div>
-      <div class="editor" id="files-editor">
+      <div class="editor" data-part="editor">
         <div class="editor-bar">
-          <button type="button" class="chip-button" id="editor-back">Back</button>
-          <div class="editor-title"><span id="editor-name"></span><span class="editor-path" id="editor-path"></span></div>
-          <span class="editor-state" id="editor-state">Saved</span>
-          <button type="button" class="chip-button primary" id="editor-save">Save</button>
+          <button type="button" class="chip-button" data-part="editor-back">Back</button>
+          <div class="editor-title"><span data-part="editor-name"></span><span class="editor-path" data-part="editor-path"></span></div>
+          <span class="editor-state" data-part="editor-state">Saved</span>
+          <button type="button" class="chip-button primary" data-part="editor-save">Save</button>
         </div>
-        <textarea class="editor-text" id="editor-text" spellcheck="false" autocapitalize="off" aria-label="File contents"></textarea>
+        <textarea class="editor-text" data-part="editor-text" spellcheck="false" autocapitalize="off" aria-label="File contents"></textarea>
       </div>
     </div>
   </section>
@@ -338,12 +338,12 @@
   <div id="menu-veil" class="menu-veil" aria-hidden="true" hidden></div>
   <div id="menu" class="menu material" role="menu" hidden></div>
 
-  <!-- Search (⌘K / Ctrl+K) -->
+  <!-- Search (Alt+Space, /) -->
   <div id="search" class="search" hidden>
     <div class="search-panel material" role="dialog" aria-label="Search">
       <div class="search-field">
         <span class="orb" aria-hidden="true"></span>
-        <input id="search-input" type="text" placeholder="Search for apps or actions"
+        <input id="search-input" type="text" placeholder="Search apps, files and settings"
                autocomplete="off" spellcheck="false" aria-controls="search-results">
       </div>
       <ul id="search-results" class="search-results" role="listbox"></ul>

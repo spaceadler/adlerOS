@@ -156,10 +156,12 @@ function tile(app, index) {
     draggable: "false",
     "data-app": app.id,
   }, el("span", { class: "app-icon" }, plate, warning), label);
-  if (!app.url) {
-    link.removeAttribute("target");
-    link.addEventListener("click", (e) => { e.preventDefault(); openApp(app); });
-  }
+  if (!app.url) link.removeAttribute("target");
+  link.addEventListener("click", (e) => {
+    if (e.defaultPrevented || !opensHere(e, app)) return;
+    e.preventDefault();
+    openApp(app);
+  });
   link.style.animationDelay = `${index * 10}ms`;
   // Once only: dragging a tile moves it in the page, which would replay it.
   link.addEventListener("animationend", () => { link.style.animation = "none"; }, { once: true });
@@ -432,7 +434,7 @@ function pinnedDockItem(app) {
   el("span", { class: "dock-label material" }, app.up ? app.name : `${app.name} · Offline`));
   link.addEventListener("click", (e) => {
     bounce(link);
-    if (!app.url || (desktopMode() && !(e.ctrlKey || e.metaKey || e.shiftKey))) {
+    if (opensHere(e, app)) {
       e.preventDefault();
       openApp(app);
     }
@@ -569,6 +571,15 @@ function closeMenu() {
   if (hadFocus && menuOpener?.isConnected) menuOpener.focus({ preventScroll: true });
 }
 
+// Whether a click on an app's link opens it here (a window, openApp) rather
+// than letting the link make a tab: unless you asked for a tab (Ctrl, ⌘,
+// Shift, the middle button) or this device wants tabs on the home screen.
+function opensHere(e, app) {
+  if (!app.url) return true;
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return false;
+  return desktopMode() || !appsInTabs();
+}
+
 // An app with no web page (a game server, a bot) opens its App Store card.
 function openApp(app) {
   if (!app.url) {
@@ -580,6 +591,11 @@ function openApp(app) {
   if (desktopMode() || !appsInTabs()) return openAppWindow(app);
   window.open(app.url, "_blank", "noopener,noreferrer");
 }
+
+// My Computer and the terminal open as many windows as you like (desktop
+// mode): another, whether or not one's open.
+const NEW_WINDOW = { "adleros:files": () => newFilesWindow(), "adleros:terminal": () => newTerminalWindow() };
+const newWindowItem = (id) => (desktopMode() && NEW_WINDOW[id] ? [{ label: "New window", run: NEW_WINDOW[id] }] : []);
 
 // What a right-click (or a long press) on `target` offers.
 // The window a dock item opens, if it's open: its id, for Close.
@@ -615,7 +631,7 @@ function menuForItem(target) {
   const onDesktop = (id) => (!desktopMode() ? []
     : [onDesk(id) || target.closest("#desk") ? { label: "Remove from desktop", run: () => setOnDesk(id, false) } : { label: "Add to desktop", run: () => setOnDesk(id, true) }]);
   const builtin = appId && BUILTIN_PINS[appId];
-  if (builtin) return [{ label: "Open", run: builtin.open }, pin(appId), ...onDesktop(appId)];
+  if (builtin) return [{ label: "Open", run: builtin.open }, ...newWindowItem(appId), pin(appId), ...onDesktop(appId)];
   if (app) {
     const inFolder = target.closest("#folder");
     return [{ label: "Open", run: () => openApp(app) }, pin(app.id), ...onDesktop(app.id),
@@ -1039,16 +1055,35 @@ function openSearch() {
   $("search-input").focus();
 }
 function closeSearch() { $("search").hidden = true; }
+function toggleSearch() { $("search").hidden ? openSearch() : closeSearch(); }
 
-function renderResults() {
+// Files whose names have every word you typed (the server's index of every
+// place), asked for a moment after you stop typing.
+const fileSearch = { q: "", items: [], timer: null };
+function searchFilesSoon(q) {
+  clearTimeout(fileSearch.timer);
+  if (q.length < 2) return;
+  fileSearch.timer = setTimeout(async () => {
+    const { status, body } = await api(`/api/files/search?q=${encodeURIComponent(q)}`).catch(() => ({ status: 0 }));
+    if (status !== 200 || $("search-input").value.trim().toLowerCase() !== q) return;
+    Object.assign(fileSearch, { q, items: body.items || [] });
+    renderResults(true);
+  }, 180);
+}
+
+function renderResults(keepSelection = false) {
   const q = $("search-input").value.trim().toLowerCase();
+  if (!keepSelection) searchFilesSoon(q);
   const apps = state.apps.filter((a) => !q || a.name.toLowerCase().includes(q) || a.about.toLowerCase().includes(q));
   const actions = q ? ACTIONS.filter((a) => (a.name.toLowerCase().includes(q) || a.keywords.includes(q))
     && (a.id !== "desktop-mode" || computerScreen()) && (a.id !== "terminal" || state.admin)) : [];
-  results = [...apps.slice(0, 8).map((app) => ({ type: "app", app })), ...settingsSearchResults(q),
+  const found = q.length >= 2 && fileSearch.q === q ? fileSearch.items : [];
+  results = [...apps.map((app) => ({ type: "app", app })), ...settingsSearchResults(q),
     ...actions.map((action) => ({ type: "action", action })),
+    ...found.map((file) => ({ type: "file", file })),
     // Last: the web, for anything else (a phone has no search bar of its own).
     ...(q ? [{ type: "web", query: $("search-input").value.trim() }] : [])];
+  const before = selected;
   selected = 0;
   const list = $("search-results");
   list.replaceChildren(...results.map((r, i) => {
@@ -1057,6 +1092,8 @@ function renderResults() {
       : { settings: "settings", store: "app-store", usage: "live-usage", drawer: "app-drawer" }[r.action?.id] || null;
     const icon = r.type === "app"
       ? el("span", { class: "result-icon" }, plateFor(r.app))
+      : r.type === "file"
+        ? el("span", { class: `result-icon action file-icon ${r.file.kind}` }, svg(FILE_ICONS[r.file.kind] || FILE_ICONS.file))
       : r.type === "web"
         ? el("span", { class: "result-icon action web" }, svg(["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"]))
       : glyph
@@ -1064,22 +1101,25 @@ function renderResults() {
         : el("span", { class: "result-icon action" }, svg(r.action?.id === "terminal" ? ["m4 17 6-6-6-6", "M12 19h8"]
           : r.action?.id === "files" ? ["M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"]
           : ["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "m16 17 5-5-5-5", "M21 12H9"]));
-    const name = r.type === "app" ? r.app.name : r.type === "setting" ? r.row.title
+    const name = r.type === "app" ? r.app.name : r.type === "setting" ? r.row.title : r.type === "file" ? r.file.name
       : r.type === "web" ? `Search the web for “${r.query}”` : r.action.name;
+    // A file: where it is (its folder, from its place's name).
     const hint = r.type === "app" ? (r.app.up ? "Open" : "Offline") : r.type === "setting" ? "Settings"
+      : r.type === "file" ? fromLabel(r.file.path) || "My Computer"
       : r.type === "web" ? "Web" : "Action";
     const li = el("li", { role: "option", id: `result-${i}` }, icon, el("span", {}, name), el("span", { class: "hint" }, hint));
     li.addEventListener("pointermove", () => select(i));
     li.addEventListener("click", () => runResult(i));
     return li;
   }));
-  select(0);
+  select(keepSelection ? Math.min(before, results.length - 1) : 0);
 }
 
 function select(i) {
   selected = i;
   [...$("search-results").children].forEach((li, j) => li.setAttribute("aria-selected", String(j === i)));
   $("search-input").setAttribute("aria-activedescendant", results.length ? `result-${i}` : "");
+  $(`result-${i}`)?.scrollIntoView({ block: "nearest" }); // the list scrolls: every app, then files
 }
 
 function runResult(i) {
@@ -1088,7 +1128,8 @@ function runResult(i) {
   closeSearch();
   if (r.type === "app") openApp(r.app);
   else if (r.type === "setting") openSettings(r.row.id);
-  else if (r.type === "web") window.open(state.searchUrl.replaceAll("{QUERY}", encodeURIComponent(r.query)), "_blank", "noopener,noreferrer");
+  else if (r.type === "file") openEntry({ name: r.file.name, dir: r.file.dir, kind: r.file.kind, size: 0 }, r.file.path);
+  else if (r.type === "web") webSearch(r.query);
   else if (r.action.id === "settings") openSettings();
   else if (r.action.id === "store") openStore();
   else if (r.action.id === "usage") openUsage();
@@ -1098,6 +1139,19 @@ function runResult(i) {
   else if (r.action.id === "desktop-mode") setDesktopMode(!desktopMode());
   else if (r.action.id === "welcome") openWelcome();
   else if (r.action.id === "logout") confirmLogout();
+}
+
+// The web: in the Firefox app from the store, in a window here, when there
+// is one (the helper gives it a new tab); else a tab of this browser. On the
+// home screen with apps in tabs (Settings → Open apps), a tab too.
+async function webSearch(query) {
+  const url = state.searchUrl.replaceAll("{QUERY}", encodeURIComponent(query));
+  const firefox = state.apps.find((a) => a.known === "firefox" && a.url && a.up);
+  if (!firefox || (!desktopMode() && appsInTabs())) return window.open(url, "_blank", "noopener,noreferrer");
+  openApp(firefox); // its window now; the page arrives in a moment
+  const { status, body } = await postAction("firefox-url", { url });
+  const job = status === 202 && body ? await waitForJob(body) : null;
+  if (!job?.result?.ok) toast(`Firefox couldn't open it (${job?.result?.error || job?.error || body?.error || "the helper didn't answer"}).`);
 }
 
 // ------------------------------------------------------------- lock/unlock
@@ -1115,7 +1169,7 @@ function showLock() {
   closeUsage();
   closeDrawer();
   closeTerminal();
-  files.editor = null; // logging out: no "unsaved changes" question
+  forgetFileEdits(); // logging out: no "unsaved changes" question
   closeFiles();
   for (const [id, w] of wm.windows) if (w.app && isOpen(id)) w.close();
   $("confirm").hidden = true;
@@ -1239,7 +1293,7 @@ function stopRefresh() {
 function platformKey() {
   const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
   const touch = matchMedia("(pointer: coarse)").matches;
-  return touch ? "" : mac ? "⌘K" : "Ctrl K";
+  return touch ? "" : mac ? "⌥ Space" : "Alt Space";
 }
 
 let resizeTimer = null;
@@ -1251,11 +1305,6 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden && refreshTimer) refresh();
 });
 document.addEventListener("keydown", (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-    e.preventDefault();
-    $("search").hidden ? openSearch() : closeSearch();
-    return;
-  }
   if (e.key === "Escape") {
     closeMenu();
     closeSearch();
@@ -1303,13 +1352,13 @@ $("arrange-done").addEventListener("click", stopArranging);
 $("dock").addEventListener("pointermove", magnify);
 $("dock").addEventListener("pointerleave", sizeDock);
 $("login").addEventListener("submit", unlock);
-// Web search: a new tab at the search address, {QUERY} filled in.
+// Web search: at the search address, {QUERY} filled in (webSearch).
 $("web-search").addEventListener("submit", (e) => {
   e.preventDefault();
   const input = $("web-search-input");
   const query = input.value.trim();
   if (!query) return;
-  window.open(state.searchUrl.replaceAll("{QUERY}", encodeURIComponent(query)), "_blank", "noopener,noreferrer");
+  webSearch(query);
   input.value = "";
 });
 

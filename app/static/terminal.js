@@ -456,30 +456,76 @@ function keySequence(e, appCursor) {
 
 // --------------------------------------------------------------- window
 
-const term = { sid: null, screen: null, offset: 0, decoder: null, sending: Promise.resolve(), queue: "", timer: null, sizeTimer: null, alive: false };
+// Each terminal window and its shell. The first is #terminal; New window
+// (desktop mode) makes more from it, each with a shell of its own.
+const terms = new Map();
 
-function terminalOpen() { return isOpen("terminal"); }
+function makeTerm(id, section) {
+  const t = { id, section, sid: null, screen: null, offset: 0, decoder: null, sending: Promise.resolve(), queue: "",
+    timer: null, sizeTimer: null, alive: false, wheel: 0,
+    screenEl: section.querySelector(".term"), input: section.querySelector(".term-input"),
+    status: section.querySelector(".term-status"), closeButton: section.querySelector(".term-close") };
+  terms.set(id, t);
+  wireTerminal(t);
+  return t;
+}
+
+const mainTerm = () => terms.get("terminal");
+function terminalOpen() { return [...terms.keys()].some((id) => isOpen(id)); }
 
 function toggleTerminal() { toggleWindow("terminal", openTerminal); }
 
+// The terminal: back to its shell, or one still running from before (the
+// page reloaded, another tab), else a new one.
 async function openTerminal() {
   closeSearch();
   closeMenu();
   closeDrawer();
-  // A session still running behind another window: back to it.
-  if (term.alive && term.sid) {
-    showTerminalWindow();
-    return $("term-input").focus();
+  const t = mainTerm();
+  if (t.alive && t.sid) {
+    showTerminalWindow(t);
+    return t.input.focus();
   }
+  const body = await terminalReady();
+  if (!body) return;
+  const shown = new Set([...terms.values()].map((x) => x.sid));
+  const free = (body.sessions || []).find((sid) => !shown.has(sid));
+  if (free) return startTerminal(t, free);
+  newTerminal(t);
+}
+
+// Another terminal window, with a new shell (Alt+Enter with one open, or
+// New window in a terminal's menu).
+async function newTerminalWindow() {
+  if (!desktopMode()) return openTerminal();
+  if (!(await terminalReady())) return;
+  let n = 2;
+  while ($(`terminal-${n}`)) n++;
+  const id = `terminal-${n}`;
+  const section = $("terminal").cloneNode(true);
+  section.querySelector(":scope > .win-bar")?.remove();
+  section.querySelectorAll(":scope > .win-grip").forEach((g) => g.remove());
+  for (const node of section.querySelectorAll("[id]")) node.removeAttribute("id");
+  Object.assign(section, { id, hidden: true });
+  section.classList.remove("active", "minimized", "closing", "off-ws");
+  section.removeAttribute("style");
+  section.setAttribute("aria-label", `Terminal ${n}`);
+  section.querySelector(".term-title").textContent = `Terminal ${n}`;
+  document.body.insertBefore(section, $("terminal").nextSibling);
+  const t = makeTerm(id, section);
+  registerWindow(id, { title: `Terminal ${n}`, close: () => closeTerminal(t), hide: () => hideTerminal(t), icon: "terminal",
+    size: [920, 580], copy: true });
+  newTerminal(t);
+}
+
+// Whether a terminal may open: switched on, admin mode. The body, or null.
+async function terminalReady() {
   const { status, body } = await api("/api/terminal").catch(() => ({ status: 0 }));
   if (status === 401) return showLock();
   if (status !== 200) return toast("Can't reach adlerOS right now.");
   if (!body.enabled) return terminalOffDialog();
   if (!body.admin) return toast("The terminal is only there in admin mode (Settings).");
-  // A shell still running from before (the page reloaded, another tab):
-  // back into it, its screen as it was, rather than one more.
-  if (body.sessions?.length) return startTerminal(body.sessions[0]);
-  newTerminal();
+  return body;
 }
 
 function terminalOffDialog() {
@@ -494,21 +540,23 @@ function terminalOffDialog() {
 }
 
 // Straight in: admin mode (which your password turned on) is the key.
-async function newTerminal() {
-  const size = measureTerminal();
+async function newTerminal(t) {
+  showTerminalWindow(t);
+  const size = measureTerminal(t);
   const { status, body } = await api("/api/terminal", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ rows: size.rows, cols: size.cols }),
   }).catch(() => ({ status: 0 }));
-  if (status === 200) return startTerminal(body.sid);
+  if (status === 200) return startTerminal(t, body.sid);
   if (status === 401) return showLock();
   toast(status === 403 ? "The terminal needs admin mode." : body?.error || "Couldn't open a terminal.");
+  if (t.id !== "terminal") closeWindow(t.id);
 }
 
 // Rows and columns that fit the window, from one character's size.
-function measureTerminal() {
-  const box = $("term-screen");
+function measureTerminal(t) {
+  const box = t.screenEl;
   const probe = el("span", { class: "term-probe" }, "W".repeat(10));
   box.append(probe);
   const r = probe.getBoundingClientRect();
@@ -520,174 +568,184 @@ function measureTerminal() {
   return { cols: Math.max(20, Math.floor((width - 16) / cw)), rows: Math.max(5, Math.floor((height - 8) / ch)) };
 }
 
-function showTerminalWindow() { openWindow("terminal"); }
+function showTerminalWindow(t) { openWindow(t.id); }
 
-function startTerminal(sid) {
-  showTerminalWindow();
-  const size = measureTerminal();
-  term.sid = sid;
-  term.offset = 0;
-  term.alive = true;
-  term.decoder = new TextDecoder("utf-8");
-  term.screen = new TermScreen($("term-screen"), size.rows, size.cols);
-  term.screen.follow = true;
-  $("term-status").textContent = "Starting…";
-  $("term-input").focus();
-  readTerminal(sid);
+function startTerminal(t, sid) {
+  showTerminalWindow(t);
+  const size = measureTerminal(t);
+  t.sid = sid;
+  t.offset = 0;
+  t.alive = true;
+  t.decoder = new TextDecoder("utf-8");
+  t.screen = new TermScreen(t.screenEl, size.rows, size.cols);
+  t.screen.follow = true;
+  t.status.textContent = "Starting…";
+  t.input.focus();
+  readTerminal(t, sid);
 }
 
-async function readTerminal(sid) {
+async function readTerminal(t, sid) {
   const asked = Date.now();
-  while (term.sid === sid) {
+  while (t.sid === sid) {
     let result;
     try {
-      result = await api(`/api/terminal/${sid}?offset=${term.offset}`);
+      result = await api(`/api/terminal/${sid}?offset=${t.offset}`);
     } catch {
       await new Promise((r) => setTimeout(r, 1000));
       continue;
     }
-    if (term.sid !== sid) return;
+    if (t.sid !== sid) return;
     if (result.status === 401) return showLock();
-    if (result.status === 403) return endTerminal("Admin mode is off. If it timed out, this shell is still running: turn it on again and open Terminal to get back to it.");
-    if (result.status !== 200 || !result.body) return endTerminal("This terminal is gone.");
+    if (result.status === 403) return endTerminal(t, "Admin mode is off. If it timed out, this shell is still running: turn it on again and open Terminal to get back to it.");
+    if (result.status !== 200 || !result.body) return endTerminal(t, "This terminal is gone.");
     const { data, offset, ended, started } = result.body;
     if (data) {
       const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-      term.screen.write(term.decoder.decode(bytes, { stream: true }));
-      $("term-status").textContent = term.screen.title || "Connected";
+      t.screen.write(t.decoder.decode(bytes, { stream: true }));
+      t.status.textContent = t.screen.title || "Connected";
     }
-    term.offset = offset;
-    if (ended) return endTerminal(`Session ended: ${ended.why || "done"}.`);
+    t.offset = offset;
+    if (ended) return endTerminal(t, `Session ended: ${ended.why || "done"}.`);
     if (!started) {
       // The host takes a request for a minute; after that it never will.
       if (Date.now() - asked > 60000) {
         api(`/api/terminal/${sid}/close`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
-        return endTerminal("The terminal host didn't answer. On the machine: systemctl status adleros-terminal.path");
+        return endTerminal(t, "The terminal host didn't answer. On the machine: systemctl status adleros-terminal.path");
       }
-      $("term-status").textContent = "Waiting for the terminal host…";
+      t.status.textContent = "Waiting for the terminal host…";
     }
   }
 }
 
-function endTerminal(message) {
-  term.alive = false;
-  term.sid = null;
-  $("term-status").textContent = message;
-  term.screen?.write(`\r\n\x1b[2m[${message}]\x1b[0m\r\n`);
+function endTerminal(t, message) {
+  t.alive = false;
+  t.sid = null;
+  t.status.textContent = message;
+  t.screen?.write(`\r\n\x1b[2m[${message}]\x1b[0m\r\n`);
 }
 
-function sendTerminal(text) {
-  if (!term.alive || !term.sid || !text) return;
-  term.queue += text;
-  clearTimeout(term.timer);
-  term.timer = setTimeout(flushTerminal, 8);
+function sendTerminal(t, text) {
+  if (!t.alive || !t.sid || !text) return;
+  t.queue += text;
+  clearTimeout(t.timer);
+  t.timer = setTimeout(() => flushTerminal(t), 8);
 }
 
-function flushTerminal() {
-  const sid = term.sid;
-  let text = term.queue;
-  term.queue = "";
-  const bytes = new TextEncoder().encode(text);
+function flushTerminal(t) {
+  const sid = t.sid;
+  const bytes = new TextEncoder().encode(t.queue);
+  t.queue = "";
   // Small pieces: a request body is at most 4 KB.
   for (let i = 0; i < bytes.length; i += 2400) {
     const piece = bytes.slice(i, i + 2400);
     const data = btoa(String.fromCharCode(...piece));
-    term.sending = term.sending.then(() => api(`/api/terminal/${sid}/input`, {
+    t.sending = t.sending.then(() => api(`/api/terminal/${sid}/input`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }),
     }).catch(() => {}));
   }
-  text = "";
 }
 
-function resizeTerminal() {
-  if (!term.screen || !terminalOpen()) return;
-  clearTimeout(term.sizeTimer);
-  term.sizeTimer = setTimeout(() => {
-    const { rows, cols } = measureTerminal();
-    term.screen.resize(rows, cols);
-    if (term.alive) {
-      api(`/api/terminal/${term.sid}/size`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows, cols }) }).catch(() => {});
+function resizeTerminal(t) {
+  if (!t.screen || !isOpen(t.id)) return;
+  clearTimeout(t.sizeTimer);
+  t.sizeTimer = setTimeout(() => {
+    const { rows, cols } = measureTerminal(t);
+    t.screen.resize(rows, cols);
+    if (t.alive) {
+      api(`/api/terminal/${t.sid}/size`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows, cols }) }).catch(() => {});
     }
   }, 120);
 }
 
-// Ends the session: ✕, Ctrl+Shift+Q, or logging out.
-function closeTerminal() {
-  if (term.alive && term.sid) {
-    api(`/api/terminal/${term.sid}/close`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
+// Ends a window's session: its ✕, Ctrl+Shift+Q. No window: every terminal
+// (logging out, admin mode off).
+function closeTerminal(t = null) {
+  for (const x of t ? [t] : [...terms.values()]) {
+    if (x.alive && x.sid) {
+      api(`/api/terminal/${x.sid}/close`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
+    }
+    x.alive = false;
+    x.sid = null;
+    hideTerminal(x);
   }
-  term.alive = false;
-  term.sid = null;
-  hideTerminal();
 }
 
-// Puts the window away; a running shell keeps running (t brings it back).
-function hideTerminal() { closeWindow("terminal"); }
+// Puts a window away (no window: all of them); a running shell keeps
+// running (t brings the first back). A copy goes for good.
+function hideTerminal(t = null) {
+  for (const x of t ? [t] : [...terms.values()]) {
+    closeWindow(x.id);
+    if (x.id !== "terminal") terms.delete(x.id);
+  }
+}
 
 // ------------------------------------------------------------- wiring
 
-const termInput = $("term-input");
-termInput.addEventListener("keydown", (e) => {
-  // Ctrl+Shift+Q closes the window; everything else goes to the shell.
-  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "q") {
+function wireTerminal(t) {
+  const input = t.input;
+  input.addEventListener("keydown", (e) => {
+    // Ctrl+Shift+Q closes the window; everything else goes to the shell.
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "q") {
+      e.preventDefault();
+      return closeTerminal(t);
+    }
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "v") return; // paste (the paste event sends it)
+    if (e.metaKey) return; // ⌘C, ⌘V on a Mac
+    const seq = keySequence(e, t.screen?.appCursor);
+    if (seq !== null) {
+      e.preventDefault();
+      e.stopPropagation();
+      sendTerminal(t, seq);
+    }
+  });
+  input.addEventListener("input", () => {
+    if (input.value) sendTerminal(t, input.value);
+    input.value = "";
+  });
+  input.addEventListener("paste", (e) => {
     e.preventDefault();
-    return closeTerminal();
-  }
-  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "v") return; // paste (the paste event sends it)
-  if (e.metaKey) return; // ⌘C, ⌘V on a Mac
-  const seq = keySequence(e, term.screen?.appCursor);
-  if (seq !== null) {
+    const text = (e.clipboardData?.getData("text") || "").replace(/\r?\n/g, "\r");
+    sendTerminal(t, t.screen?.bracketed ? `\x1b[200~${text}\x1b[201~` : text);
+  });
+  input.addEventListener("focus", () => { if (t.screen) { t.screen.focused = true; t.screen.scheduleDraw(); } });
+  input.addEventListener("blur", () => { if (t.screen) { t.screen.focused = false; t.screen.scheduleDraw(); } });
+  // Clicking the screen types into it, unless you were selecting text to copy.
+  t.screenEl.addEventListener("mouseup", () => {
+    if (!String(window.getSelection())) input.focus();
+  });
+  // The wheel: a program that asked for the mouse (Claude Code, htop, vim
+  // with the mouse on) gets it, and scrolls what it shows itself; one on the
+  // alternate screen that didn't (less, man) gets the arrow keys. Otherwise,
+  // and always with Shift, the scrollback scrolls.
+  t.screenEl.addEventListener("wheel", (e) => {
+    const s = t.screen;
+    if (!s || !t.alive || e.shiftKey || (!s.mouse && !s.alt)) return;
     e.preventDefault();
-    e.stopPropagation();
-    sendTerminal(seq);
-  }
-});
-termInput.addEventListener("input", () => {
-  if (termInput.value) sendTerminal(termInput.value);
-  termInput.value = "";
-});
-termInput.addEventListener("paste", (e) => {
-  e.preventDefault();
-  const text = (e.clipboardData?.getData("text") || "").replace(/\r?\n/g, "\r");
-  sendTerminal(term.screen?.bracketed ? `\x1b[200~${text}\x1b[201~` : text);
-});
-termInput.addEventListener("focus", () => { if (term.screen) { term.screen.focused = true; term.screen.scheduleDraw(); } });
-termInput.addEventListener("blur", () => { if (term.screen) { term.screen.focused = false; term.screen.scheduleDraw(); } });
-// Clicking the screen types into it, unless you were selecting text to copy.
-$("term-screen").addEventListener("mouseup", () => {
-  if (!String(window.getSelection())) termInput.focus();
-});
-// The wheel: a program that asked for the mouse (Claude Code, htop, vim with
-// the mouse on) gets it, and scrolls what it shows itself; one on the
-// alternate screen that didn't (less, man) gets the arrow keys. Otherwise,
-// and always with Shift, the scrollback scrolls.
-let termWheel = 0;
-$("term-screen").addEventListener("wheel", (e) => {
-  const s = term.screen;
-  if (!s || !term.alive || e.shiftKey || (!s.mouse && !s.alt)) return;
-  e.preventDefault();
-  termWheel += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; // lines, or pixels
-  const steps = Math.trunc(termWheel / 50);
-  if (!steps) return;
-  termWheel -= steps * 50;
-  const up = steps < 0;
-  let one;
-  if (s.mouse) {
-    const view = s.view.getBoundingClientRect();
-    const col = Math.min(s.cols, Math.max(1, Math.floor((e.clientX - view.left) / (view.width / s.cols)) + 1));
-    const row = Math.min(s.rows, Math.max(1, Math.floor((e.clientY - view.top) / (view.height / s.rows)) + 1));
-    const b = up ? 64 : 65;
-    one = s.mouseSgr ? `\x1b[<${b};${col};${row}M` : `\x1b[M${String.fromCharCode(32 + b, 32 + Math.min(col, 223), 32 + Math.min(row, 223))}`;
-  } else {
-    one = (s.appCursor ? "\x1bO" : "\x1b[") + (up ? "A" : "B");
-  }
-  sendTerminal(one.repeat(Math.min(Math.abs(steps), 10)));
-}, { passive: false });
-$("term-screen").addEventListener("scroll", () => {
-  const s = $("term-screen");
-  if (term.screen) term.screen.follow = s.scrollTop + s.clientHeight >= s.scrollHeight - 4;
-});
-registerWindow("terminal", { title: "Terminal", close: closeTerminal, hide: hideTerminal, dock: "terminal", size: [920, 580] });
-$("term-close").addEventListener("click", closeTerminal);
-// The window's size changes with the screen, or (desktop mode) by dragging.
-new ResizeObserver(resizeTerminal).observe($("term-screen"));
+    t.wheel += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; // lines, or pixels
+    const steps = Math.trunc(t.wheel / 50);
+    if (!steps) return;
+    t.wheel -= steps * 50;
+    const up = steps < 0;
+    let one;
+    if (s.mouse) {
+      const view = s.view.getBoundingClientRect();
+      const col = Math.min(s.cols, Math.max(1, Math.floor((e.clientX - view.left) / (view.width / s.cols)) + 1));
+      const row = Math.min(s.rows, Math.max(1, Math.floor((e.clientY - view.top) / (view.height / s.rows)) + 1));
+      const b = up ? 64 : 65;
+      one = s.mouseSgr ? `\x1b[<${b};${col};${row}M` : `\x1b[M${String.fromCharCode(32 + b, 32 + Math.min(col, 223), 32 + Math.min(row, 223))}`;
+    } else {
+      one = (s.appCursor ? "\x1bO" : "\x1b[") + (up ? "A" : "B");
+    }
+    sendTerminal(t, one.repeat(Math.min(Math.abs(steps), 10)));
+  }, { passive: false });
+  t.screenEl.addEventListener("scroll", () => {
+    const box = t.screenEl;
+    if (t.screen) t.screen.follow = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
+  });
+  t.closeButton.addEventListener("click", () => closeTerminal(t));
+  // The window's size changes with the screen, or (desktop mode) by dragging.
+  new ResizeObserver(() => resizeTerminal(t)).observe(t.screenEl);
+}
+
+const firstTerm = makeTerm("terminal", $("terminal"));
+registerWindow("terminal", { title: "Terminal", close: () => closeTerminal(firstTerm), hide: () => hideTerminal(firstTerm), dock: "terminal", size: [920, 580] });

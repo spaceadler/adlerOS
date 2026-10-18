@@ -206,7 +206,7 @@ const TOUR = [
   },
   {
     spot: "#search-open",
-    view: () => ({ title: "Search", body: [welcomeText("⌘K, Ctrl+K or / finds apps, settings and adlerOS's windows.")] }),
+    view: () => ({ title: "Search", body: [welcomeText("Alt+Space or / finds apps, settings, adlerOS's windows and your files.")] }),
   },
   {
     spot: "#bell",

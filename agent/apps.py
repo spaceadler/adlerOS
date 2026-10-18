@@ -1100,7 +1100,63 @@ def forget(app_id):
     return 0
 
 
+# ------------------------------------------------- the web, in Firefox
+
+def firefox_container(app):
+    """The Firefox app's running container and the user it runs as, or None."""
+    for f in app["files"]:
+        ids = subprocess.run(["docker", "compose", "-f", str(f), "ps", "-q", "--status", "running"], cwd=f.parent,
+                             env=docker_env(), stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                             timeout=30, check=False).stdout.split()
+        for cid in ids:
+            found = subprocess.run(["docker", "inspect", cid], env=docker_env(), stdin=subprocess.DEVNULL,
+                                   capture_output=True, text=True, timeout=30, check=False)
+            if found.returncode:
+                continue
+            info = json.loads(found.stdout)[0]
+            if "firefox" in info["Config"]["Image"]:
+                env = dict(e.split("=", 1) for e in info["Config"].get("Env") or [] if "=" in e)
+                return cid, env.get("PUID") or "abc"
+    return None
+
+
+def firefox_url(url):
+    """A web page (a search from adlerOS) in a new tab of the Firefox app
+    from the store; a Firefox that had closed (its screen black) starts
+    again with it. One command in its container, as its user."""
+    if not re.fullmatch(r"https?://[^\s\"'<>\\]{1,2000}", url):
+        return {"error": "not a web address"}
+    app = next((a for a in registry_apps().values() if a["info"].get("known") == "firefox" and a["installed"]), None)
+    if not app:
+        return {"error": "Firefox isn't installed (it's in the App Store)"}
+    found = firefox_container(app)
+    if not found:
+        return {"error": "Firefox isn't running: start it in the App Store"}
+    cid, user = found
+    # Its display and profile, as the running Firefox has them; detached, so
+    # a Firefox this starts keeps running after the command's done.
+    seen = subprocess.run(["docker", "exec", "-u", user, cid, "sh", "-c",
+                           'p=$(pgrep -o -x firefox) && tr "\\0" "\\n" < /proc/$p/environ'],
+                          env=docker_env(), stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                          timeout=30, check=False).stdout
+    running = dict(line.split("=", 1) for line in seen.splitlines() if "=" in line)
+    env = {"HOME": "/config", "DISPLAY": ":0", "XDG_RUNTIME_DIR": "/config/.XDG"}
+    env.update({k: running[k] for k in env if running.get(k)})
+    started = subprocess.run(["docker", "exec", "-d", "-u", user, *[a for k, v in env.items() for a in ("-e", f"{k}={v}")],
+                              cid, "firefox", "--new-tab", url], env=docker_env(), stdin=subprocess.DEVNULL,
+                             capture_output=True, text=True, timeout=30, check=False)
+    if started.returncode:
+        return {"error": f"Firefox didn't take it: {started.stderr.strip()[-200:]}"}
+    return {"ok": True, "app": app["id"], "started": not running}
+
+
 def main(argv):
+    if len(argv) == 2 and argv[0] == "firefox-url":
+        try:
+            print(json.dumps(firefox_url(argv[1])))
+        except (OSError, ValueError, subprocess.TimeoutExpired) as e:
+            print(json.dumps({"error": f"couldn't reach Firefox: {e}"}))
+        return 0
     if argv == ["discover"]:
         if HOMELAB:
             sys.exit("discover is for standalone installs; a homelab's apps come from its catalog")
