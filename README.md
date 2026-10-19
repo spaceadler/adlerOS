@@ -61,6 +61,9 @@ Screen*: it opens like an app.
 - **Notepad** for text files, and **adlerMD** for notes: Markdown in vaults,
   Obsidian's way (an Obsidian vault works in both), with links, embeds,
   callouts, backlinks, the graph and Bases.
+- **Music**: your songs by album, artist and playlist (your `.m3u8` files,
+  spotdl's included), a queue, shuffle and repeat, lyrics that follow the
+  song, and radio made from your own library.
 - **Firefox** in the store: a real browser running on the machine, in your
   browser. With My Computer and the terminal, an old laptop is enough to work on
   your homelab.

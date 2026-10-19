@@ -44,6 +44,7 @@ on the host picks it up and runs it from the fixed list in
 scripts/agent/actions.json (see that folder).
 """
 import base64
+import gzip
 import hashlib
 import hmac
 import ipaddress
@@ -65,6 +66,8 @@ from concurrent.futures import ThreadPoolExecutor
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+import musictags
 
 STATIC = Path(__file__).resolve().parent / "static"
 # standalone: adlerOS on any Docker host (apps from the registry and the store);
@@ -95,7 +98,7 @@ JOBS = DATA / "agent" / "jobs"
 ICON_OVERRIDES = Path(os.environ.get("OS_ICON_DIR", "/icons"))
 # adlerOS's own dock icons (./icons can replace each): All apps, and the ones
 # you pin like any app.
-DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "adlermd")
+DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "adlermd", "music")
 DOCK_MAX_PINS = 16
 # The widgets you can put on the desktop, with the defaults and the limit.
 WIDGET_CATALOG = STATIC / "widgets-catalog.json"
@@ -1235,7 +1238,8 @@ KINDS = {"image": {".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".
 INLINE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
                 ".webp": "image/webp", ".avif": "image/avif", ".bmp": "image/bmp", ".pdf": "application/pdf",
                 ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg", ".ogg": "audio/ogg",
-                ".opus": "audio/ogg", ".wav": "audio/wav", ".m4a": "audio/mp4", ".flac": "audio/flac",
+                ".opus": "audio/ogg", ".oga": "audio/ogg", ".wav": "audio/wav", ".m4a": "audio/mp4", ".m4b": "audio/mp4",
+                ".flac": "audio/flac",
                 ".txt": "text/plain; charset=utf-8"}
 
 
@@ -1582,6 +1586,288 @@ def vault_rename(vault, old, new, links=True):
             os.replace(tmp, real)
             updated += 1
     return {"ok": True, "updated": updated, "path": new}
+
+
+# ------------------------------------------------------------------ music
+
+# Music: MUSIC_DIR in your storage (Media/Music if it isn't set). Its songs'
+# tags are read once and kept (data/music.json, by each file's size and
+# time), and looked over again (only what changed) when Music asks and it's
+# been a minute. Playlists are its .m3u8 (.m3u) files, as spotdl and other
+# players write them; plays are counted in data/music-plays.json.
+MUSIC_SUFFIXES = {".mp3", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".m4b", ".wav"}
+PLAYLIST_SUFFIXES = {".m3u8", ".m3u"}
+MUSIC_CACHE = DATA / "music.json"
+MUSIC_PLAYS = DATA / "music-plays.json"
+MUSIC_FRESH = 300  # seconds a look round is good for
+_music = {"songs": None, "playlists": [], "dir": None, "top": None, "at": 0, "scanning": False, "done": 0, "total": 0,
+          "tags": None}  # tags: music.json's, kept from the last look
+_music_lock = threading.Lock()
+_plays_lock = threading.Lock()
+
+
+def music_dir():
+    """(MUSIC_DIR as adlerOS writes it, its real folder or None)."""
+    rel = install_setting("MUSIC_DIR", "Media/Music").strip("/")
+    place, real = locate(f"/user/{rel}")
+    if not real or not real.is_dir():
+        return f"/user/{rel}", None
+    return place_path(place, real), real
+
+
+def music_song(rel, tags, mtime, lrc):
+    """A song as Music shows it: its tags, else what its name and folder say
+    ("Artist - Title", as spotdl and yt-dlp name them)."""
+    stem = posixpath.splitext(posixpath.basename(rel))[0]
+    folder = posixpath.basename(posixpath.dirname(rel))
+    title, artists = tags.get("title"), tags.get("artists") or []
+    if not title or not artists:
+        a, sep, t = stem.partition(" - ")
+        if sep and t.strip() and a.strip():
+            title = title or t.strip()
+            artists = artists or [x.strip() for x in a.split(",") if x.strip()]
+    song = {"id": rel, "title": title or stem, "artists": artists, "album": tags.get("album") or folder or "",
+            "albumArtist": tags.get("albumArtist") or (artists[0] if artists else ""), "added": int(mtime)}
+    for key in ("track", "disc", "year", "genre", "duration"):
+        if tags.get(key):
+            song[key] = tags[key]
+    if tags.get("cover"):
+        song["cover"] = True
+    if lrc or tags.get("lyrics"):
+        song["lyrics"] = True
+    return song
+
+
+def music_scan():
+    try:
+        os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 15)
+    except (OSError, AttributeError):
+        pass
+    try:
+        virtual, top = music_dir()
+        songs, lists = [], []
+        if top:
+            cache = _music["tags"]
+            if not cache:
+                try:
+                    cache = json.loads(MUSIC_CACHE.read_text())
+                except (OSError, ValueError):
+                    cache = {}
+            old = cache.get("songs", {}) if isinstance(cache, dict) and cache.get("top") == str(top) else {}
+            found = []
+            for dirpath, dirnames, filenames in os.walk(top):
+                dirnames[:] = sorted(d for d in dirnames if not d.startswith(".") and d != TRASH)
+                names = set(filenames)
+                for name in sorted(filenames):
+                    suffix = os.path.splitext(name)[1].lower()
+                    if name.startswith("."):
+                        continue
+                    if suffix in MUSIC_SUFFIXES:
+                        found.append((Path(dirpath) / name, names))
+                    elif suffix in PLAYLIST_SUFFIXES:
+                        lists.append(Path(dirpath) / name)
+            with _music_lock:
+                _music.update(total=len(found), done=0)
+            new = {}
+            for k, (real, names) in enumerate(found):
+                try:
+                    st = real.stat()
+                except OSError:
+                    continue
+                rel = real.relative_to(top).as_posix()
+                hit = old.get(rel)
+                if hit and hit.get("s") == st.st_size and hit.get("m") == st.st_mtime:
+                    tags = hit.get("t") or {}
+                else:
+                    tags = musictags.read_tags(real)
+                new[rel] = {"s": st.st_size, "m": st.st_mtime, "t": tags}
+                stem = os.path.splitext(real.name)[0]
+                songs.append(music_song(rel, tags, st.st_mtime, f"{stem}.lrc" in names or f"{stem}.LRC" in names))
+                if k % 25 == 0:
+                    with _music_lock:
+                        _music["done"] = k
+            if new != old:
+                write_private(MUSIC_CACHE, json.dumps({"top": str(top), "songs": new}, separators=(",", ":")))
+            with _music_lock:
+                _music["tags"] = {"top": str(top), "songs": new}
+        known = {s["id"] for s in songs}
+        playlists = [p for p in (music_playlist(real, top, known) for real in lists) if p]
+        with _music_lock:
+            _music.update(songs=songs, playlists=playlists, dir=virtual, top=str(top) if top else None,
+                          at=time.time(), scanning=False, done=len(songs))
+    except Exception as e:  # a bad file never stops the server
+        print(f"music: couldn't look round ({e})", file=sys.stderr, flush=True)
+        with _music_lock:
+            _music.update(scanning=False, at=time.time(), songs=_music["songs"] or [])
+
+
+def music_library():
+    """The songs (looked over again if it's been a while), or how far the
+    first look round has got."""
+    with _music_lock:
+        stale = time.time() - _music["at"] > MUSIC_FRESH or _music["dir"] != music_dir()[0]
+        if stale and not _music["scanning"]:
+            _music["scanning"] = True
+            threading.Thread(target=music_scan, name="music", daemon=True).start()
+        return dict(_music)
+
+
+def music_item(item):
+    """(real file, id) for a song: an id in the library (its path in
+    MUSIC_DIR) or a file anywhere in your places ("/user/…")."""
+    if not isinstance(item, str) or not item or len(item) > 4096:
+        return None, None
+    if item.startswith("/"):
+        place, real = locate(item)
+        if not real or not real.is_file():
+            return None, None
+        _, top = music_dir()
+        if top and real.is_relative_to(top.resolve()):
+            return real, real.relative_to(top.resolve()).as_posix()
+        return real, place_path(place, real)
+    _, top = music_dir()
+    if not top:
+        return None, None
+    place, real = locate(f"{music_dir()[0]}/{item}")
+    return (real, item) if real and real.is_file() else (None, None)
+
+
+def music_track(item):
+    """A song's tags, read now: one that isn't in the library."""
+    real, sid = music_item(item)
+    if not real or real.suffix.lower() not in MUSIC_SUFFIXES:
+        return None
+    st = real.stat()
+    song = music_song(sid if not sid.startswith("/") else sid.lstrip("/"), musictags.read_tags(real), st.st_mtime,
+                      real.with_suffix(".lrc").exists())
+    song["id"] = sid
+    return song
+
+
+def music_playlist(real, top, known=None):
+    """A .m3u8/.m3u: its name and its songs (ids; a file outside the
+    library as /user/…). Lines that lead nowhere are left out (counted)."""
+    try:
+        text = real.read_bytes().decode("utf-8-sig" if real.suffix.lower() == ".m3u8" else "utf-8", "replace")
+        st = real.stat()
+    except OSError:
+        return None
+    host = os.environ.get("ADLEROS_HOST_STORAGE", "").rstrip("/")
+    top_s = str(top.resolve()) + "/" if top else None
+    here = os.path.normpath(str(real.parent))
+    items, missing = [], 0
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if re.match(r"^[a-z][a-z0-9+.-]*://", line, re.I):
+            missing += 1  # a stream: not a file
+            continue
+        line = line.replace("\\", "/")
+        if host and line.startswith(host + "/"):
+            target = os.path.join(str(PLACES["user"]), line[len(host) + 1:])
+        elif line.startswith("/"):
+            _, found = locate(line)
+            target = str(found) if found else line
+        else:
+            target = os.path.join(here, line)  # beside it (the usual): worked out, not looked up
+        target = os.path.normpath(target)
+        if top_s and target.startswith(top_s):
+            sid = target[len(top_s):]
+            if known is not None and sid not in known:
+                missing += 1
+                continue
+            items.append(sid)
+            continue
+        try:
+            found = Path(target).resolve()
+        except OSError:
+            missing += 1
+            continue
+        if top_s and str(found).startswith(top_s):
+            items.append(str(found)[len(top_s):])
+            continue
+        place = next((p for p in PLACES if place_on(p) and found.is_relative_to(PLACES[p].resolve())), None)
+        if place and found.is_file() and found.suffix.lower() in MUSIC_SUFFIXES:
+            items.append(place_path(place, found))
+        else:
+            missing += 1
+    where = real.relative_to(top).as_posix() if top and real.is_relative_to(top) else None
+    place = next((p for p in PLACES if place_on(p) and real.resolve().is_relative_to(PLACES[p].resolve())), None)
+    return {"id": where or (place_path(place, real.resolve()) if place else real.name), "name": real.stem,
+            "path": place_path(place, real.resolve()) if place else None, "items": items, "missing": missing,
+            "mtime": st.st_mtime, "writable": place in WRITABLE}
+
+
+def write_playlist(real, items, songs):
+    """items (ids) as an .m3u8 there: paths from its folder, as players read them."""
+    _, top = music_dir()
+    lines = ["#EXTM3U"]
+    for item in items:
+        target, sid = music_item(item)
+        if not target:
+            continue
+        song = songs.get(sid) or {}
+        who = ", ".join(song.get("artists") or [])
+        lines.append(f"#EXTINF:{int(song.get('duration') or -1)},{who + ' - ' if who else ''}{song.get('title') or target.stem}")
+        lines.append(os.path.relpath(target, real.parent).replace(os.sep, "/"))
+    tmp = real.with_name(f".{real.name}.{secrets.token_hex(4)}.saving")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if real.exists():
+        os.chmod(tmp, real.stat().st_mode & 0o7777)
+    os.replace(tmp, real)
+
+
+def music_plays():
+    try:
+        data = json.loads(MUSIC_PLAYS.read_text())
+    except (OSError, ValueError):
+        data = {}
+    return data if isinstance(data, dict) else {}
+
+
+def music_played(sid):
+    """One more play: counted, and first in what you played lately."""
+    with _plays_lock:
+        data = music_plays()
+        counts = data.get("counts") if isinstance(data.get("counts"), dict) else {}
+        counts[sid] = int(counts.get(sid, 0)) + 1
+        recent = [r for r in data.get("recent", []) if r != sid][:299]
+        write_private(MUSIC_PLAYS, json.dumps({"counts": counts, "recent": [sid, *recent],
+                                               "last": {**(data.get("last") or {}), sid: int(time.time())}}))
+
+
+def music_cover(real):
+    """(mime, bytes): the song's own picture, else its folder's (cover.jpg…)."""
+    found = musictags.read_cover(real)
+    if found:
+        return found
+    try:
+        for child in real.parent.iterdir():
+            if child.stem.lower() in musictags.COVER_NAMES and child.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+                return INLINE_TYPES[child.suffix.lower()], child.read_bytes()
+    except OSError:
+        pass
+    return None
+
+
+def music_lyrics(real):
+    """{"text", "synced"}: the .lrc beside it, else the song's own."""
+    for lrc in (real.with_suffix(".lrc"), real.with_suffix(".LRC")):
+        try:
+            raw = lrc.read_bytes()[:512 * 1024]
+        except OSError:
+            continue
+        try:
+            text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = raw.decode("latin1")
+        break
+    else:
+        text = musictags.read_lyrics(real)
+    if not text or not text.strip():
+        return None
+    return {"text": text, "synced": bool(re.search(r"^\s*\[\d+:\d+(?:[.:]\d+)?\]", text, re.M))}
 
 
 def locate(path, must_exist=True):
@@ -2216,6 +2502,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.files_get(path, query)
         if path.startswith("/api/notes/"):
             return self.notes_get(path[len("/api/notes/"):], query)
+        if path.startswith("/api/music/"):
+            return self.music_get(path[len("/api/music/"):], query)
         if path.startswith("/api/frame/"):
             app = next((a for a in installed_apps() if a["id"] == path[len("/api/frame/"):]), None)
             if not app:
@@ -2270,7 +2558,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(401, {"error": "login required"})
         # Saving a file from the editor is the one big body.
         body = self.read_json(TEXT_LIMIT * 2 + 4096 if path == "/api/files/text"
-                              else 256 * 1024 if path.startswith("/api/files/") else 4096)
+                              else 256 * 1024 if path.startswith("/api/files/")
+                              else 2 * 1024 * 1024 if path.startswith("/api/music/") else 4096)
         if body is None:
             return self.send_json(400, {"error": "expected a JSON object"})
         if path == "/api/settings":
@@ -2285,6 +2574,8 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/api/notes/"):
             _search_wake.set()
             return self.notes_post(path[len("/api/notes/"):], body)
+        if path.startswith("/api/music/"):
+            return self.music_post(path[len("/api/music/"):], body)
         if path == "/api/terminal":
             return self.open_terminal(body)
         if path.startswith("/api/terminal/"):
@@ -2605,6 +2896,108 @@ class Handler(BaseHTTPRequestHandler):
                 save_settings({"vault": path})
             return self.send_json(200, {"ok": True, "vault": path})
         return self.send_json(404, {"error": "not found"})
+
+    # Music: the library, a song's tags, cover and lyrics, an .m3u8 anywhere,
+    # plays, and playlists to make, change and delete.
+    def music_get(self, what, query):
+        if not places_on():
+            return self.send_json(404, {"error": "no storage folder is mounted"})
+        item = query.get("id", [""])[0]
+        if what == "library":
+            lib = music_library()
+            if lib["songs"] is None:
+                return self.send_json(200, {"scanning": True, "done": lib["done"], "total": lib["total"], "dir": lib["dir"]})
+            body = json.dumps({"dir": lib["dir"], "found": bool(lib["top"]), "songs": lib["songs"], "playlists": lib["playlists"],
+                               "scanning": lib["scanning"], "plays": music_plays()}, separators=(",", ":")).encode()
+            headers = [("Cache-Control", "no-store"), ("Vary", "Accept-Encoding")]
+            if "gzip" in self.headers.get("Accept-Encoding", ""):
+                body = gzip.compress(body, 6)
+                headers.append(("Content-Encoding", "gzip"))
+            return self.send(200, body, "application/json", headers)
+        if what == "track":
+            song = music_track(item)
+            return self.send_json(200, song) if song else self.send_json(404, {"error": "not a song adlerOS can play"})
+        if what == "playlist":
+            place, real = locate(query.get("path", [""])[0])
+            if not real or not real.is_file() or real.suffix.lower() not in PLAYLIST_SUFFIXES:
+                return self.send_json(404, {"error": "no such playlist"})
+            lib = music_library()
+            known = {s["id"]: s for s in lib["songs"] or []}
+            found = music_playlist(real, music_dir()[1], None)
+            extra = {i: t for i in found["items"] if i not in known for t in [music_track(i)] if t}
+            return self.send_json(200, {**found, "items": [i for i in found["items"] if i in known or i in extra], "songs": extra})
+        real, _ = music_item(item)
+        if not real or real.suffix.lower() not in MUSIC_SUFFIXES:
+            return self.send_json(404, {"error": "no such song"})
+        if what == "cover":
+            found = music_cover(real)
+            if not found:
+                return self.send(404, b"no cover")
+            return self.send(200, found[1], found[0], [("Cache-Control", "private, max-age=604800")], csp="default-src 'none'; sandbox")
+        if what == "lyrics":
+            return self.send_json(200, music_lyrics(real) or {"text": None})
+        return self.send_json(404, {"error": "not found"})
+
+    def music_post(self, what, body):
+        if not places_on():
+            return self.send_json(404, {"error": "no storage folder is mounted"})
+        if what == "played":
+            real, sid = music_item(body.get("id"))
+            if not real:
+                return self.send_json(404, {"error": "no such song"})
+            music_played(sid)
+            return self.send_json(200, {"ok": True})
+        if what != "playlists":
+            return self.send_json(404, {"error": "not found"})
+        virtual, top = music_dir()
+        lib = music_library()
+        songs = {s["id"]: s for s in lib["songs"] or []}
+        if "delete" in body:
+            real, place = self.music_list_file(body.get("delete"), virtual)
+            if not real:
+                return self.send_json(404, {"error": "no such playlist"})
+            to_trash(place, real)
+            with _music_lock:
+                _music["playlists"] = [p for p in _music["playlists"] if p["id"] != body["delete"]]
+                _music["at"] = 0
+            return self.send_json(200, {"ok": True})
+        save = body.get("save") if isinstance(body.get("save"), dict) else None
+        if not save or not isinstance(save.get("items"), list) or not all(isinstance(i, str) for i in save["items"]):
+            return self.send_json(400, {"error": "expected {save: {id, name, items}} or {delete: id}"})
+        name = save.get("name")
+        if not good_name(name) or len(name) > 200:
+            return self.send_json(400, {"error": "a name, without /"})
+        if save.get("id"):
+            real, place = self.music_list_file(save["id"], virtual)
+            if not real:
+                return self.send_json(404, {"error": "no such playlist"})
+            if name != real.stem:
+                moved = real.with_name(name + real.suffix)
+                if moved.exists():
+                    return self.send_json(409, {"error": "there's a playlist by that name already"})
+                real.rename(moved)
+                real = moved
+        else:
+            if not top:
+                return self.send_json(404, {"error": f"there's no music folder ({virtual})"})
+            real = top / f"{name}.m3u8"
+            if real.exists():
+                return self.send_json(409, {"error": "there's a playlist by that name already"})
+        write_playlist(real, save["items"][:20000], songs)
+        found = music_playlist(real, top, None)
+        with _music_lock:
+            _music["playlists"] = [*[p for p in _music["playlists"] if p["id"] not in (found["id"], save.get("id"))], found]
+            _music["at"] = 0
+        return self.send_json(200, found)
+
+    def music_list_file(self, pid, virtual):
+        """(real file, place) for a playlist's id, if it may change."""
+        if not isinstance(pid, str) or not pid:
+            return None, None
+        place, real = locate(pid if pid.startswith("/") else f"{virtual}/{pid}")
+        if not real or not real.is_file() or real.suffix.lower() not in PLAYLIST_SUFFIXES or place not in WRITABLE:
+            return None, None
+        return real, place
 
     def files_post(self, what, body):
         if not places_on():

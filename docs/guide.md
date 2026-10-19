@@ -376,9 +376,8 @@ Desktop and User themselves: opening one takes you there.
   - a **picture, video or PDF**: the **Viewer** (in desktop mode, drag and
     resize it like any window; over the home screen it floats over My Computer),
     a PDF in your browser's own PDF viewer;
-  - a **song**: **Music**, a small window above the dock that keeps playing
-    while you do other things, minimized too; the next song takes its place,
-    closing it stops it;
+  - a **song**: **Music** plays it, and an `.m3u8` (`.m3u`) playlist: its
+    songs, in Music's queue;
 
   Anything else downloads.
 - **Upload** with the button, or drop files onto the window; big files are
@@ -498,6 +497,45 @@ vault**.
 - **Ctrl+O** finds (or makes) a note by name; the calendar button opens
   today's **daily note** (`daily-notes.json`'s folder, format and
   template); a note's menu **inserts a template** (`templates.json`).
+
+## Music
+
+Your songs: `MUSIC_DIR` in your storage (`Media/Music` if it isn't set).
+Open it from All apps, the dock, or Alt+Space "music". The first time, it
+reads every song's tags (a few thousand take half a minute or so); after
+that only what changed, so it opens straight away.
+
+- **Home**: what you've played lately, stations for you, what you added
+  lately, your playlists. **Songs** (sort by title, artist, album, recently
+  added, most played or length), **Albums**, **Artists** (their songs, their
+  albums, and the albums they're on), **Playlists**, and **Search** across
+  them all.
+- A click picks a song; a double-click (or Enter, or a tap) plays it, with
+  the rest of that list after it. Right-click for **Play next**, **Add to
+  queue**, **Start radio**, **Add to playlist**, its album and artists, and
+  where it is in My Computer.
+- **Playlists** are the `.m3u8` (`.m3u`) files in your music folder, so
+  spotdl's and other players' work here, and what you make here works
+  there. Make one (New playlist), add songs (right-click, or drag a song
+  onto a playlist in the side), drag them into a new order, rename it, or
+  delete it (its file goes to the Trash; the songs stay).
+- **Radio**: stations made from your own library, nothing from the
+  internet. A station from a song, an artist, an album, a playlist or a
+  genre plays songs like it: the ones your playlists put together with it
+  (Spotify's mixes, from spotdl, say a lot), the same artists, genres and
+  years. They don't run out. **Your station** follows what you play most.
+- **The player** along the bottom: shuffle, previous, play, next, repeat
+  (all, then this song), where you are in the song, volume. **Up next**
+  shows the queue: what you added (Play next goes first, Add to queue after
+  what you added), then the rest; drag to reorder, or remove. **Lyrics**
+  follow the song as it plays (an `.lrc` beside it, as spotdl makes them, or
+  the song's own); a click on a line goes there.
+- Your keyboard's media keys work, and so do the mouse's side buttons (back
+  and forward through where you've been). Plays are counted (after half a
+  minute), for Home, Your station and Most played.
+- Put away (another window over it, minimized), it keeps playing; closing it
+  stops it. The queue and where you were in the song are kept on this
+  device, for next time.
 
 ## Terminal
 

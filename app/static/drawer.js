@@ -47,13 +47,14 @@ function drawerMatches() {
 // adlerOS's own, here like any app: pinned to the dock or put on the desktop
 // from here (their menus), opened from here.
 const BUILT_IN = [
-  { id: "files", name: "My Computer", about: "Your files, and a text editor", open: () => openFiles(), keywords: "files folders storage documents editor computer finder explorer" },
+  { id: "files", name: "My Computer", about: "Your files: Desktop, User and Root", open: () => openFiles(), keywords: "files folders storage documents computer finder explorer" },
   { id: "app-store", name: "App Store", about: "Your apps, and more to install", open: () => openStore(), keywords: "store apps install" },
   { id: "settings", name: "Settings", about: "adlerOS and this machine", open: () => openSettings(), keywords: "settings preferences" },
   { id: "live-usage", name: "Live Usage", about: "CPU, memory, storage, temperature", open: () => openUsage(), keywords: "usage cpu memory stats" },
   { id: "terminal", name: "Terminal", about: "A shell on this machine (admin mode)", open: () => openTerminal(), keywords: "terminal shell console ssh" },
   { id: "notepad", name: "Notepad", about: "Text files, one a window", open: () => openNotepad(), keywords: "notepad text editor edit write txt" },
   { id: "adlermd", name: "adlerMD", about: "Your notes, in vaults (Obsidian's work too)", open: () => openAdlermd(), keywords: "adlermd notes markdown obsidian vault" },
+  { id: "music", name: "Music", about: "Your songs, albums, playlists and radio", open: () => openMusic(), keywords: "music songs albums artists playlists radio lyrics" },
 ];
 // The terminal only in admin mode.
 const builtIns = () => BUILT_IN.filter((b) => b.id !== "terminal" || state.admin);

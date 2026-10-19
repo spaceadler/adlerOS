@@ -109,6 +109,17 @@ wallpaper is Alt+Shift+P.
 | Escape (Live) | Done with the block: it reads again |
 | Backspace (a folder) | Up a folder |
 
+## In Music
+
+| Key | Does |
+| --- | --- |
+| Space | Play or pause |
+| Enter | Play the song that's picked (with the rest of the list after it) |
+| Up, Down | Pick the song above or below |
+| Ctrl+F | Search |
+| Media keys | Play, pause, next, previous (the browser passes them on) |
+| Mouse side buttons | Back and forward through where you've been |
+
 ## Typing
 
 Text boxes keep their keys: Left and Right move the cursor, letters type.
