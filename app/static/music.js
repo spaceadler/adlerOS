@@ -411,7 +411,7 @@ function musicVirtual(box, { count, height, render }) {
   const draw = (fresh = false) => {
     if (!box.isConnected) return;
     if (fresh) { for (const n of rows.values()) n.remove(); rows.clear(); }
-    const top = main.scrollTop - (box.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop);
+    const top = main.scrollTop - ((box.getBoundingClientRect().top - main.getBoundingClientRect().top) / drawnScale(main) + main.scrollTop);
     const first = Math.max(0, Math.floor(top / height) - 8);
     const last = Math.min(count - 1, Math.ceil((top + main.clientHeight) / height) + 8);
     for (const [i, n] of rows) if (i < first || i > last) { n.remove(); rows.delete(i); }
@@ -773,14 +773,16 @@ function musicReorder(box, ctx) {
     if (from === null || !r || !ctx.playlist.writable) return;
     e.preventDefault();
     box.querySelectorAll(".drop-above, .drop-below").forEach((n) => n.classList.remove("drop-above", "drop-below"));
-    const below = e.clientY > r.getBoundingClientRect().top + r.offsetHeight / 2;
+    const rect = r.getBoundingClientRect();
+    const below = e.clientY > rect.top + rect.height / 2;
     r.classList.add(below ? "drop-below" : "drop-above");
   });
   box.addEventListener("drop", async (e) => {
     const r = e.target.closest(".mu-row[data-id]");
     if (from === null || !r) return;
     e.preventDefault();
-    let to = Number(r.dataset.i) + (e.clientY > r.getBoundingClientRect().top + r.offsetHeight / 2 ? 1 : 0);
+    const rect = r.getBoundingClientRect();
+    let to = Number(r.dataset.i) + (e.clientY > rect.top + rect.height / 2 ? 1 : 0);
     const items = [...ctx.playlist.items];
     const [moved] = items.splice(from, 1);
     if (to > from) to--;

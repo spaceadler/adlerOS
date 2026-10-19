@@ -37,6 +37,16 @@ categories, adlermd's notes and folders (each tab its own). They never take
 the browser off adlerOS; nor does its own back (Alt+Left, its button), which
 goes back in the window in front instead.
 
+### Zoom
+
+**Ctrl and + − 0** (⌘ on a Mac), or Ctrl and the wheel (a trackpad's pinch),
+zoom the adlerOS window you're in, not the whole page: adlermd's text
+bigger, say, and the rest as it was. Each kind of window (adlermd, Music, My
+Computer…) keeps its own zoom on this device; its title bar shows it when
+it isn't 100% (a click there, or Ctrl+0, puts it back), and the window's
+menu has it too. Over the desktop, or an app's own window, they're the
+browser's zoom as usual.
+
 ## Shortcuts
 
 These work anywhere except while you're typing in a text box.

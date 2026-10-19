@@ -1066,7 +1066,7 @@ function mdComplete(area, tab) {
   document.body.append(box);
   const r = area.getBoundingClientRect();
   const lineNo = before.split("\n").length - 1;
-  const lh = parseFloat(getComputedStyle(area).lineHeight) || 24;
+  const lh = (parseFloat(getComputedStyle(area).lineHeight) || 24) * drawnScale(area); // on screen, in a zoomed window
   Object.assign(box.style, { left: `${r.left + 24}px`, top: `${Math.min(innerHeight - 260, r.top + (lineNo + 1) * lh + 18)}px` });
   adler.complete = { box, area, tab, start: area.selectionStart - m[0].length, matches, at: 0 };
   mdCompleteDraw();

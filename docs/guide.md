@@ -210,7 +210,10 @@ made phone-narrow leaves it until it's wide again.
   wallpaper behind them shows through, blurred, but never another window, so
   My Computer over the Terminal is just My Computer. How much shows is **Settings →
   Window transparency**, from 0.00 (solid) to 1.00, the same on the home
-  screen; your apps' own pages stay solid. The
+  screen; your apps' own pages stay solid. **Ctrl and + − 0** (or Ctrl and
+  the wheel) zoom just the window you're in (adlermd's text bigger, the rest
+  as it was), each kind of window keeping its own; its bar shows it, and a
+  click there puts it back ([keyboard](keyboard.md#zoom)). The
   Search pill sits at the top, level with the bell.
 - **Your apps** open in windows of their own, if they allow it: adlerOS asks
   each app whether it may be shown inside another page, and opens the ones

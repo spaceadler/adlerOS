@@ -99,6 +99,7 @@ function registerWindow(id, { title, close, hide = null, dock = null, icon = nul
   float = false, floats = false, copy = false }) {
   wm.windows.set(id, { id, title, close, hide, dock, icon, size, app, float, floats, copy });
   if (!$(id).querySelector(":scope > .win-bar")) winFrame(id, title, extras);
+  winZoomApply(id);
 }
 
 function winFrame(id, title, extras) {
@@ -115,8 +116,11 @@ function winFrame(id, title, extras) {
     button("close", "Close", () => wm.windows.get(id)?.close(), ["M17 7 7 17", "m7 7 10 10"]),
     button("min", "Minimize", () => minimizeWindow(id), ["M6 12h12"]),
     button("max", "Maximize", () => toggleMaximize(id), ["M12 6v12", "M6 12h12"]));
+  // Its zoom, when it isn't 100%: a click puts it back.
+  const zoom = el("button", { type: "button", class: "win-zoom", title: "Actual size (Ctrl+0)", hidden: "" });
+  zoom.addEventListener("click", (e) => { e.stopPropagation(); winZoom(id, 0); });
   const bar = el("div", { class: "win-bar" }, lights, name,
-    el("div", { class: "win-extras" }, ...extras.map((x) => button(x.kind, x.label, x.run, x.icon))));
+    el("div", { class: "win-extras" }, zoom, ...extras.map((x) => button(x.kind, x.label, x.run, x.icon))));
   bar.addEventListener("pointerdown", (e) => winPointerDown(e, id, "move"));
   bar.addEventListener("dblclick", (e) => { if (!e.target.closest("button")) toggleMaximize(id); });
   bar.addEventListener("contextmenu", (e) => {
@@ -467,6 +471,10 @@ function winMenu(id) {
   // A My Computer or terminal window: another of it.
   const kind = fileWins.has(id) ? "adleros:files" : terms.has(id) ? "adleros:terminal" : null;
   if (kind) items.push(...newWindowItem(kind));
+  if (winZoomable(id)) {
+    items.push({ label: "Zoom in (Ctrl +)", run: () => winZoom(id, 1) }, { label: "Zoom out (Ctrl −)", run: () => winZoom(id, -1) });
+    if (winZoomOf(id) !== 1) items.push({ label: "Actual size (Ctrl 0)", run: () => winZoom(id, 0) });
+  }
   items.push(
     { label: g.mode === "max" ? "Restore" : "Maximize", run: () => toggleMaximize(id) },
     { label: g.mode === "left" ? "Restore" : "Left half", run: () => winSnap(id, "left") },
@@ -477,6 +485,89 @@ function winMenu(id) {
     { label: "Close", run: () => w?.close(), destructive: true });
   return items;
 }
+
+// ---------------------------------------------------------------- zoom
+
+// Ctrl (⌘ on a Mac) with + − 0, or with the wheel (a trackpad's pinch), over
+// one of adlerOS's own windows zooms that window's content, not the whole
+// page: adlermd's text bigger, the rest as it was. Each kind of window
+// (adlermd, Music, My Computer…) keeps its own, on this device. An app's
+// window (another site's page) is left to the browser.
+const WIN_ZOOM_KEY = "adleros.zoom";
+const WIN_ZOOMS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+const winZoomKind = (id) => id.replace(/-\d+$/, ""); // My Computer 2 zooms with My Computer
+function winZoomable(id) { return Boolean(wm.windows.has(id) && !wm.windows.get(id).app && $(id)); }
+function winZoomOf(id) { return winLoad(WIN_ZOOM_KEY, {})[winZoomKind(id)] || 1; }
+
+function winZoomApply(id) {
+  const sheet = $(id);
+  if (!sheet || !winZoomable(id)) return;
+  const z = winZoomOf(id);
+  sheet.style.setProperty("--win-zoom", String(z));
+  const badge = sheet.querySelector(":scope > .win-bar .win-zoom");
+  if (badge) {
+    badge.hidden = z === 1;
+    badge.textContent = `${Math.round(z * 100)}%`;
+  }
+}
+
+// dir: 1 bigger, -1 smaller, 0 back to 100%.
+function winZoom(id, dir) {
+  if (!winZoomable(id)) return false;
+  const now = winZoomOf(id);
+  const at = WIN_ZOOMS.reduce((best, z, i) => (Math.abs(z - now) < Math.abs(WIN_ZOOMS[best] - now) ? i : best), 0);
+  const next = dir ? WIN_ZOOMS[Math.max(0, Math.min(WIN_ZOOMS.length - 1, at + dir))] : 1;
+  const all = winLoad(WIN_ZOOM_KEY, {});
+  if (next === 1) delete all[winZoomKind(id)];
+  else all[winZoomKind(id)] = next;
+  winSave(WIN_ZOOM_KEY, all);
+  for (const other of wm.windows.keys()) if (winZoomKind(other) === winZoomKind(id)) winZoomApply(other);
+  toast(`${wm.windows.get(id).title}: ${Math.round(next * 100)}%`);
+  return true;
+}
+
+// The window a zoom key is for: the one you're in (desktop mode's active
+// one, or the sheet that's open on the home screen).
+function winZoomTarget() {
+  const here = document.activeElement?.closest?.(".sheet")?.id;
+  if (here && isOpen(here)) return here;
+  if (desktopMode()) return wm.active && isOpen(wm.active) ? wm.active : null;
+  return [...wm.windows.keys()].reverse().find((id) => isOpen(id) && !wm.windows.get(id).float) || null;
+}
+
+// How much bigger than its own CSS pixels a node is drawn (inside a zoomed
+// window): what turns a pointer's offset on screen into the node's pixels.
+function drawnScale(node) {
+  const w = node?.offsetWidth;
+  return w ? node.getBoundingClientRect().width / w || 1 : 1;
+}
+
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const dir = ["=", "+"].includes(e.key) || e.code === "NumpadAdd" ? 1
+    : ["-", "_"].includes(e.key) || e.code === "NumpadSubtract" ? -1
+      : e.key === "0" || e.code === "Numpad0" ? 0 : null;
+  if (dir === null) return;
+  const id = winZoomTarget();
+  if (!id || !winZoomable(id)) return; // the desktop, or an app's window: the browser's zoom
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  winZoom(id, dir);
+}, true);
+
+// Ctrl and the wheel (or a pinch, which browsers send as one) over a window.
+const winWheel = { at: 0, sum: 0 };
+document.addEventListener("wheel", (e) => {
+  if (!e.ctrlKey) return;
+  const id = e.target.closest?.(".sheet")?.id;
+  if (!id || !winZoomable(id) || !isOpen(id)) return;
+  e.preventDefault();
+  winWheel.sum += e.deltaY;
+  if (Math.abs(winWheel.sum) < 40 || Date.now() - winWheel.at < 120) return;
+  winWheel.at = Date.now();
+  winZoom(id, winWheel.sum < 0 ? 1 : -1);
+  winWheel.sum = 0;
+}, { passive: false });
 
 // Round the open windows (and the desktop), in the order they opened.
 function winCycle(back) {
