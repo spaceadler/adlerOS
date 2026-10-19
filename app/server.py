@@ -1837,6 +1837,75 @@ def music_played(sid):
                                                "last": {**(data.get("last") or {}), sid: int(time.time())}}))
 
 
+# Navidrome (same music folder): what Music plays shows up there too, now
+# playing and then played, if NAVIDROME_USER and NAVIDROME_PASSWORD are set.
+# It's reached at NAVIDROME_URL, else at this machine's Tailscale address
+# (TS_IP, ADLEROS_HOST) and Navidrome's port.
+_navidrome_ids = {}  # a song's id here (its path in MUSIC_DIR) -> Navidrome's
+
+
+def navidrome():
+    user, password = install_setting("NAVIDROME_USER"), install_setting("NAVIDROME_PASSWORD")
+    if not user or not password:
+        return None
+    url = install_setting("NAVIDROME_URL").rstrip("/")
+    if not url:
+        host = install_setting("TS_IP") if HOMELAB_MODE else install_setting("ADLEROS_HOST")
+        app = next((a for a in installed_apps() if a["id"] == "navidrome"), None)
+        if not host or not app or not app.get("port"):
+            return None
+        url = f"http://{host}:{app['port']}"
+    return url, user, password
+
+
+def navidrome_call(cfg, view, **params):
+    url, user, password = cfg
+    salt = secrets.token_hex(6)  # Subsonic's token login: the password itself never goes
+    query = urllib.parse.urlencode({"u": user, "t": hashlib.md5((password + salt).encode()).hexdigest(), "s": salt,
+                                    "v": "1.16.1", "c": "adlerOS", "f": "json", **params})
+    with urllib.request.urlopen(f"{url}/rest/{view}?{query}", timeout=8) as r:
+        reply = json.loads(r.read()).get("subsonic-response", {})
+    if reply.get("status") != "ok":
+        raise ValueError((reply.get("error") or {}).get("message", "it said no"))
+    return reply
+
+
+def navidrome_id(cfg, sid, song):
+    """Navidrome's id for a song: the one with the same path, else the same
+    title, artist and length."""
+    if sid in _navidrome_ids:
+        return _navidrome_ids[sid]
+    found = navidrome_call(cfg, "search3.view", query=song["title"], songCount=60, artistCount=0, albumCount=0)
+    hits = (found.get("searchResult3") or {}).get("song") or []
+    norm = lambda t: str(t or "").casefold().strip()  # noqa: E731
+    match = next((h for h in hits if h.get("path") == sid or str(h.get("path", "")).endswith(f"/{sid}")), None)
+    if not match:
+        match = next((h for h in hits if norm(h.get("title")) == norm(song["title"])
+                      and any(norm(a) in norm(h.get("artist")) for a in song.get("artists") or [""])
+                      and abs((h.get("duration") or 0) - (song.get("duration") or 0)) <= 3), None)
+    _navidrome_ids[sid] = match["id"] if match else None
+    return _navidrome_ids[sid]
+
+
+def navidrome_scrobble(sid, played):
+    """Now playing (played=False), or played: to Navidrome, in the background."""
+    cfg = navidrome()
+    if not cfg or sid.startswith("/"):
+        return  # not set up, or a song from outside the library (not Navidrome's)
+    song = next((x for x in _music["songs"] or [] if x["id"] == sid), None)
+    if not song:
+        return
+
+    def send():
+        try:
+            nid = navidrome_id(cfg, sid, song)
+            if nid:
+                navidrome_call(cfg, "scrobble.view", id=nid, submission="true" if played else "false", time=int(time.time() * 1000))
+        except (OSError, ValueError, urllib.error.URLError) as e:
+            print(f"music: Navidrome didn't take {sid} ({e})", file=sys.stderr, flush=True)
+    threading.Thread(target=send, name="navidrome", daemon=True).start()
+
+
 def music_cover(real):
     """(mime, bytes): the song's own picture, else its folder's (cover.jpg…)."""
     found = musictags.read_cover(real)
@@ -2941,11 +3010,13 @@ class Handler(BaseHTTPRequestHandler):
     def music_post(self, what, body):
         if not places_on():
             return self.send_json(404, {"error": "no storage folder is mounted"})
-        if what == "played":
+        if what in ("played", "playing"):
             real, sid = music_item(body.get("id"))
             if not real:
                 return self.send_json(404, {"error": "no such song"})
-            music_played(sid)
+            if what == "played":
+                music_played(sid)
+            navidrome_scrobble(sid, played=what == "played")
             return self.send_json(200, {"ok": True})
         if what != "playlists":
             return self.send_json(404, {"error": "not found"})

@@ -126,6 +126,13 @@ a tab instead. adlerOS's own page may frame any web page (`frame-src http:
 https:`), since an app's page can redirect to its login or to HTTPS; it still
 runs only its own scripts.
 
+**Navidrome**, if you give Music your login (`NAVIDROME_USER`,
+`NAVIDROME_PASSWORD` in the settings file): the password stays there, and
+what goes to Navidrome is Subsonic's token (an MD5 of the password and a
+fresh salt each time), over your Tailscale address unless you set
+`NAVIDROME_URL`. Use an account of its own if you'd rather Music couldn't
+do more than play.
+
 **Notes** (adlermd, Notepad) are yours, but may come from anywhere (a vault
 someone shared). Their HTML is rebuilt from an allowlist, never inserted as
 is: formatting tags and their plain attributes, with no scripts, forms,
