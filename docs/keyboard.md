@@ -131,6 +131,14 @@ wallpaper is Alt+Shift+P.
 | Arrows, +, − (the map) | Move it, zoom in and out |
 | Mouse side buttons | Back and forward (in a photo: the one before and after) |
 
+## In Documents
+
+| Key | Does |
+| --- | --- |
+| Ctrl+F | Search inside them |
+| Escape | Back from a document |
+| Mouse side buttons | Back and forward |
+
 ## Typing
 
 Text boxes keep their keys: Left and Right move the cursor, letters type.

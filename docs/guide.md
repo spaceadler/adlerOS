@@ -574,6 +574,29 @@ Gallery says the same.
   and after). **Open Immich** in the side opens Immich itself, for
   anything Gallery doesn't do (uploading, sharing, editing).
 
+## Documents
+
+Your papers as Paperless-ngx has them: open it from All apps, the dock, or
+Alt+Space "documents". The files in your storage are only numbers
+(`0000001.pdf`); their titles, correspondents, types, tags, dates and the
+words Paperless read in them are in Paperless, so Documents asks it, with a
+token (in Paperless: your name → My Profile → API Auth Token) in the
+settings file as `PAPERLESS_TOKEN`. Paperless has to be running.
+
+- **All documents**, newest first (or oldest, recently added, by title or
+  correspondent), as a grid of their first pages or as rows; the **Inbox**,
+  and your **tags**, **correspondents** and **types** down the side, each
+  with how many.
+- **Search** finds a document by what it says (Paperless's own search of
+  the text it read), each match with where it matched.
+- A document opens with its preview (the PDF Paperless made of it) beside
+  what Paperless knows: who it's from, its type and tags (a click shows the
+  rest like it), when it's dated and was added, its pages and file, its
+  notes, and the text it read. **Download** gets the original.
+- **Add documents** (or drop files on the window): they go to Paperless,
+  which reads them (and tags them by its rules); they're there in a minute
+  or so. **Open Paperless** for the rest (editing, workflows).
+
 ## Terminal
 
 <!-- screenshot: the Terminal window running htop -->

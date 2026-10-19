@@ -66,6 +66,8 @@ Screen*: it opens like an app.
   song, and radio made from your own library.
 - **Gallery**: your photos from Immich, by month and day, albums, people,
   favorites, On this day and search, each photo big with its details.
+- **Documents**: your papers from Paperless, by tag, correspondent and
+  type, searched by what they say, each with its preview and details.
 - **Firefox** in the store: a real browser running on the machine, in your
   browser. With My Computer and the terminal, an old laptop is enough to work on
   your homelab.
