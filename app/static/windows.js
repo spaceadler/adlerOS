@@ -657,9 +657,11 @@ function navGo(node, dir) {
 
 const sideButton = (e) => e.button === 3 || e.button === 4;
 // The step of history, once you've done something (a browser skips one a
-// page made on its own).
+// page made on its own) with a mouse or the keyboard: not on a touch
+// screen, where it would give Safari its own back swipe to start, from the
+// left edge, in the middle of turning the home screen's pages.
 function navArm(e) {
-  if (navTrap.armed || !e.isTrusted) return;
+  if (navTrap.armed || !e.isTrusted || (e.pointerType && e.pointerType !== "mouse")) return;
   navTrap.armed = true;
   history.pushState(null, "", location.href);
 }

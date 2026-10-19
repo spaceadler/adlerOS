@@ -420,6 +420,9 @@ function onPagesUp(e) {
   const pages = $("pages");
   pages.style.scrollSnapType = "";
   if (!d.moved) return;
+  // The browser took the swipe (Safari's own back swipe, say): back to where
+  // it started. Its place (Safari's 0, 0) isn't the finger's.
+  if (e.type === "pointercancel") return goToPage(d.page);
   const dx = e.clientX - d.x;
   const [x0, t0] = d.trail[0];
   const speed = (e.clientX - x0) / Math.max(1, performance.now() - t0); // px/ms, lately
