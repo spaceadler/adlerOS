@@ -1,13 +1,18 @@
 // The welcome: on an install's first login (and from Settings or search any
-// time after). Standalone, it asks where your containers are and looks for
-// apps there while you watch; in a homelab, it shows the catalog's apps you
-// can still add. Then a short look around: the pages, the dock, search, the
-// bell, and where the rest is. Seen once, it's remembered on the server.
-// Uses $, el, svg, api, toast, state, refresh, postAction, waitForJob,
-// plateFor, openStore, renderStore, store, desktopMode, focusStart.
+// time after). What adlerOS is (a roof over your homelab, not a replacement
+// for any of it); your apps (standalone: where your containers are, looked
+// for while you watch; a homelab: the catalog's apps you can still add);
+// making your accounts in them; your storage, as a desktop; and adlerOS's
+// apps over Navidrome, Immich and Paperless, each one's connection asked live,
+// with how to connect it. Then a short look around: the pages, the dock,
+// search, the bell, and where the rest is. Seen once, it's remembered on the
+// server.
+// Uses $, el, api, toast, state, refresh, postAction, waitForJob, plateFor,
+// openStore, renderStore, store, openFiles, openMusic, openGallery,
+// openDocuments, settingsFile, settingsThen.
 "use strict";
 
-const welcome = { steps: [], at: 0, spot: null, roots: "", busy: false, found: false };
+const welcome = { steps: [], at: 0, spot: null, roots: "", busy: false, found: false, links: null };
 
 function welcomeOpen() { return !$("welcome").hidden; }
 
@@ -19,10 +24,12 @@ async function openWelcome() {
     const { body } = await api("/api/settings").catch(() => ({ body: null }));
     welcome.roots = (body?.config?.COMPOSE_ROOTS || "").split(":").filter(Boolean).join("\n");
   }
-  welcome.steps = [welcomeHello, state.mode === "standalone" ? welcomeFolders : welcomeCatalog, ...TOUR]
+  welcome.steps = [welcomeHello, state.mode === "standalone" ? welcomeFolders : welcomeCatalog, welcomeAccounts,
+    welcomeStorage, welcomeLayered, welcomeConnect, ...TOUR]
     .filter((step) => !step.spot || document.querySelector(step.spot)?.getClientRects().length);
   welcome.at = 0;
   welcome.found = false;
+  welcomeLinks(true); // asked now, so they're in by the time they're shown
   $("welcome").hidden = false;
   renderWelcome();
 }
@@ -40,6 +47,12 @@ function closeWelcome() {
 function goWelcome(step) {
   welcome.at = Math.max(0, Math.min(step, welcome.steps.length - 1));
   renderWelcome();
+}
+
+// Leave the tour for one of adlerOS's windows (it's in Settings for later).
+function welcomeTo(open) {
+  closeWelcome();
+  open();
 }
 
 // One step: its title, what it says, and its buttons (Back, Skip, and the
@@ -82,18 +95,22 @@ function spotlight(selector) {
 
 const welcomeText = (text) => el("p", { class: "welcome-text" }, text);
 
-// ---------------------------------------------------------------- steps
+// ------------------------------------------------- what adlerOS is, and isn't
 
 const welcomeHello = {
   view: () => ({
     title: `Welcome to adlerOS${state.name ? `, ${state.name}` : ""}`,
-    body: state.mode === "standalone"
-      ? [welcomeText("A home screen for the Docker apps on this machine: open them, start and stop them, update them, read their logs, install new ones, and get at your files."),
-        welcomeText("First, let's find your apps.")]
-      : [welcomeText("This is your homelab's home screen. Every app it runs is here, one page per collection, and the App Store has more it can add."),
-        welcomeText("A quick look around.")],
+    body: [
+      welcomeText(state.mode === "standalone"
+        ? "adlerOS is a home screen over the Docker apps on this machine. They're the base: each runs in its own container, set up the way it is, and keeps running whether adlerOS is open or not."
+        : "adlerOS is the home screen over your homelab. The homelab is the base: its containers, their storage and the network between them, built to just work, with adlerOS or without it."),
+      welcomeText("adlerOS doesn't replace any of it. It brings it under one roof: one place to open your apps, run and update them, get at your files, and work from."),
+      welcomeText(state.mode === "standalone" ? "First, let's find your apps." : "Here's how it fits together."),
+    ],
   }),
 };
+
+// ------------------------------------------------------------- your apps
 
 // Standalone: where the compose files are, and looking there.
 const welcomeFolders = {
@@ -112,7 +129,7 @@ const welcomeFolders = {
     look.addEventListener("click", () => (welcome.found ? goWelcome(welcome.at + 1) : lookForApps(area, look, status, log, skipLooking)));
     return {
       title: "Where are your containers?",
-      body: [welcomeText("The folders that hold your docker compose files, one per line: ~/docker, /opt/stacks… adlerOS looks up to three folders deep, puts each app in a collection (the ones it doesn't know go in Extras), and starts nothing."),
+      body: [welcomeText("The folders that hold your docker compose files, one per line: ~/docker, /opt/stacks… adlerOS looks up to three folders deep and puts each app in a collection (the ones it doesn't know go in Extras). It only reads them: nothing's started, stopped or changed."),
         area, status, log],
       extra: [skipLooking],
       primary: look,
@@ -169,7 +186,7 @@ const welcomeCatalog = {
   view() {
     const available = state.available.filter((a) => !a.imported).sort((a, b) => a.name.localeCompare(b.name));
     if (!available.length) {
-      return { title: "Apps you can add", body: [welcomeText("You've installed everything in the catalog. The App Store can still import apps you run yourself.")] };
+      return { title: "Apps you can add", body: [welcomeText(`Your homelab runs ${state.apps.length} apps, and that's everything in its catalog. The App Store can still import apps you run yourself.`)] };
     }
     const names = Object.fromEntries((state.collections || []).map((c) => [c.id, c.name]));
     const groups = {};
@@ -178,31 +195,189 @@ const welcomeCatalog = {
       el("h3", { class: "group-title" }, names[genre] || genre[0].toUpperCase() + genre.slice(1)),
       ...apps.map((a) => {
         const get = el("button", { type: "button", class: "chip-button" }, "See it");
-        get.addEventListener("click", () => {
-          closeWelcome();
+        get.addEventListener("click", () => welcomeTo(() => {
           openStore();
           $("store-search").value = store.query = a.name;
           renderStore();
-        });
+        }));
         return el("div", { class: "welcome-app" }, el("span", { class: "app-icon welcome-icon" }, plateFor(a)),
           el("span", { class: "welcome-app-text" }, el("strong", {}, a.name), el("span", {}, a.about)), get);
       })));
     return {
       title: "Apps you can add",
-      body: [welcomeText(`Your homelab has ${state.apps.length} apps running. These ${available.length} come with it too, ready to install from the App Store; nothing's installed until you say so.`),
+      body: [welcomeText(`Your homelab runs ${state.apps.length} apps. These ${available.length} come with it too, ready to install from the App Store; nothing's installed until you say so.`),
         el("div", { class: "welcome-apps" }, ...lists)],
     };
   },
 };
 
+// Each app is its own: adlerOS runs it, the accounts in it are the app's.
+const welcomeAccounts = {
+  view: () => ({
+    title: "Make your accounts",
+    body: [
+      welcomeText("Every app keeps its own accounts. Once one's installed, open it and make yours there; the first account is usually the app's admin."),
+      welcomeText("adlerOS doesn't sign in to your apps or change what's inside them. It opens them, starts and stops them, updates them and shows their logs; their users, settings and data stay theirs, and they work the same without adlerOS."),
+      welcomeText("A few of adlerOS's own apps can show you what's in yours, once they have a login or key from them. More on that in a moment."),
+    ],
+  }),
+};
+
+// ------------------------------------------------------------ your storage
+
+const welcomeStorage = {
+  view() {
+    const open = el("button", { type: "button", class: "button-secondary" }, "Open My Computer");
+    open.addEventListener("click", () => welcomeTo(() => openFiles()));
+    return {
+      title: "Your storage, as a desktop",
+      body: [
+        welcomeText("Next to the containers is your storage folder: the photos Immich keeps, the music Navidrome plays, Paperless's documents, your notes, and the rest. On its own it's a folder on a server, reached with File Browser or ssh."),
+        welcomeText("My Computer makes it a desktop to work from: open and edit what's in it, move it, upload to it, keep things on the Desktop, and every app reads the same folders. adlermd writes your notes in it, as the Markdown files they are."),
+      ],
+      extra: [open],
+    };
+  },
+};
+
+// ------------------------------------------- adlerOS's apps over your apps
+
+// Each one: the app it sits on, what it does without it, what it adds with
+// it, and how it connects.
+const LAYERED = [
+  {
+    id: "music", name: "Music", over: "Navidrome", apps: ["navidrome"], icon: "music", open: () => openMusic(),
+    adds: "what you play shows in Navidrome too, and in the Subsonic apps on your phone",
+    alone: "plays your music folder on its own",
+  },
+  {
+    id: "gallery", name: "Gallery", over: "Immich", apps: ["immich"], icon: "gallery", open: () => openGallery(),
+    adds: "Immich's albums, people, places and map, memories, and search by what's in a photo",
+    alone: "shows the photos in the Gallery folder, by month",
+  },
+  {
+    id: "documents", name: "Documents", over: "Paperless-ngx", apps: ["paperless-ngx", "paperless"], icon: "documents", open: () => openDocuments(),
+    adds: "Paperless's titles, tags and correspondents, search inside every page, and uploads to it",
+    alone: "shows the files in the Documents folder (Paperless names them by number)",
+  },
+];
+
+// Their connections, asked once a tour (and again on "Check again").
+function welcomeLinks(again = false) {
+  if (welcome.links && !again) return welcome.links;
+  const ask = (path) => api(path).then(({ status, body }) => (status === 200 && body ? body : { error: "noanswer" }), () => ({ error: "noanswer" }));
+  welcome.links = Promise.all([ask("/api/music/navidrome"), ask("/api/gallery/status"), ask("/api/paperless/status")])
+    .then(([music, gallery, documents]) => ({ music, gallery, documents }));
+  return welcome.links;
+}
+
+// Where one stands: connected, or the step it's at (0 install the app, 1 make
+// your account and a key, 2 a key it refused, 3 not answering).
+function layeredState(l, st) {
+  const installed = state.apps.some((a) => l.apps.includes(a.id));
+  if (st.ok) return { ok: true, label: "Connected" };
+  if (l.id === "music") {
+    if (st.configured) return { at: 3, label: "Not answering" };
+    return installed ? { at: 1, label: "Needs your login" } : { at: 0, label: `No ${l.over}` };
+  }
+  if (st.error === "noimmich" || st.error === "nopaperless") return { at: 0, label: `No ${l.over}` };
+  if (st.error === "nokey" || st.error === "notoken") return { at: 1, label: l.id === "gallery" ? "Needs a key" : "Needs a token" };
+  if (st.error === "refused") return { at: 2, label: l.id === "gallery" ? "Key refused" : "Token refused" };
+  return { at: 3, label: "Not answering" };
+}
+
+function welcomeChip(l) {
+  const chip = el("span", { class: "welcome-state" }, "Asking…");
+  welcomeLinks().then((links) => {
+    const s = layeredState(l, links[l.id]);
+    chip.textContent = s.label;
+    chip.classList.toggle("ok", Boolean(s.ok));
+  });
+  return chip;
+}
+
+const welcomeLayered = {
+  view() {
+    const rows = LAYERED.map((l) => {
+      const open = el("button", { type: "button", class: "chip-button" }, "Open");
+      open.addEventListener("click", () => welcomeTo(l.open));
+      return el("div", { class: "welcome-app welcome-layer" },
+        el("img", { class: "welcome-icon", src: `/static/dock/${l.icon}.svg`, alt: "" }),
+        el("span", { class: "welcome-app-text" }, el("strong", {}, `${l.name}, on ${l.over}`), el("span", { class: "welcome-wrap" }, l.adds)),
+        el("span", { class: "welcome-layer-side" }, welcomeChip(l), open));
+    });
+    return {
+      title: "Apps on top of your apps",
+      body: [
+        welcomeText("Music, Gallery and Documents sit on top of Navidrome, Immich and Paperless. They read what those apps already know, through the apps' own APIs, and show it the same way, all in one place."),
+        el("div", { class: "welcome-apps" }, ...rows),
+        welcomeText("They don't replace those apps or touch how your homelab is set up: the photos stay Immich's and the documents Paperless's, and what you do here (a play, an upload) goes to the app, as if you'd done it there. They need those apps for the good parts; without them, each still shows the files themselves, and says what connecting adds."),
+      ],
+    };
+  },
+};
+
+// How each one connects, from where it is now.
+function welcomeHow(l, s, st) {
+  const perms = (st.permissions || []).map((p) => el("code", {}, p));
+  const file = settingsFile();
+  const install = `Install ${l.over} (the App Store has it), or if it runs elsewhere, put its address in ${file} as ${l.id === "music" ? "NAVIDROME_URL" : l.id === "gallery" ? "IMMICH_URL" : "PAPERLESS_URL"}=…`;
+  const account = `Open ${l.over} and make your account.`;
+  const key = {
+    music: [`Your Navidrome login is all it takes: put it in ${file} as NAVIDROME_USER=… and NAVIDROME_PASSWORD=…${settingsThen()}.`],
+    gallery: ["In Immich: Account Settings → API Keys → New API Key, with these permissions (they only read):", el("span", { class: "welcome-perms" }, ...perms),
+      `Put it in ${file} as IMMICH_API_KEY=…${settingsThen()}.`],
+    documents: ["In Paperless: your name (top right) → My Profile → API Auth Token.", `Put it in ${file} as PAPERLESS_TOKEN=…${settingsThen()}.`],
+  }[l.id];
+  const steps = s.at === 0 ? [install, account, ...key]
+    : s.at === 1 ? [account, ...key]
+      : s.at === 2 ? [`${l.over} doesn't know the ${l.id === "music" ? "login" : l.id === "gallery" ? "key" : "token"} in ${file} (deleted, or mistyped). Make a new one:`, ...key]
+        : [`${l.over} isn't answering${st.url ? ` at ${st.url}` : ""}. Is it running? The App Store starts it.`];
+  const items = [];
+  for (const step of steps) {
+    if (typeof step === "string") items.push(el("li", {}, step));
+    else items[items.length - 1].append(step); // the permissions, under their line
+  }
+  return el("section", { class: "welcome-group" },
+    el("h3", { class: "group-title welcome-how-title" }, el("span", {}, `${l.name}, on ${l.over}`), el("span", { class: "welcome-state" }, s.label)),
+    el("ol", { class: "welcome-steps" }, ...items),
+    el("p", { class: "welcome-alone" }, `Meanwhile, it ${l.alone}.`));
+}
+
+const welcomeConnect = {
+  view() {
+    const box = el("div", { class: "welcome-apps" }, el("p", { class: "welcome-status" }, "Asking them…"));
+    const again = el("button", { type: "button", class: "button-secondary" }, "Check again");
+    again.addEventListener("click", () => { welcomeLinks(true); renderWelcome(); });
+    welcomeLinks().then((links) => {
+      const states = LAYERED.map((l) => [l, layeredState(l, links[l.id]), links[l.id]]);
+      const done = states.filter(([, s]) => s.ok).map(([l]) => l.name);
+      const todo = states.filter(([, s]) => !s.ok);
+      box.replaceChildren(
+        ...(done.length ? [el("p", { class: "welcome-status" }, `${new Intl.ListFormat("en").format(done)} ${done.length === 1 ? "is" : "are"} connected.`)] : []),
+        ...todo.map(([l, s, st]) => welcomeHow(l, s, st)));
+    });
+    return {
+      title: "Connecting them",
+      body: [
+        welcomeText(`Each takes one login or key, made in that app and put in ${settingsFile()}. It stays on this server; your browser never sees it.`),
+        box,
+      ],
+      extra: [again],
+    };
+  },
+};
+
+// ---------------------------------------------------------- a look around
+
 const TOUR = [
   {
     spot: "#grid-area",
-    view: () => ({ title: "Your apps", body: [welcomeText("One page per collection, its name above it. Swipe, use the dots, or the arrow keys to move between them. Right-click (or long-press) an app to keep it in the dock, or to rearrange the page.")] }),
+    view: () => ({ title: "Your apps", body: [welcomeText("One page per collection, its name above it. Swipe, use the dots, or the arrow keys to move between them. Right-click (or long-press) an app to keep it in the dock, put it on the Desktop, or rearrange the page.")] }),
   },
   {
     spot: "#dock",
-    view: () => ({ title: "The dock", body: [welcomeText("The apps you pin, then adlerOS's own: All apps (A to Z), the App Store (start, stop, update, install), Settings, and Live Usage.")] }),
+    view: () => ({ title: "The dock", body: [welcomeText("The apps you keep here (Music, Gallery and Documents too), then adlerOS's own: All apps, always here, the App Store (start, stop, update, install), Settings, and Live Usage.")] }),
   },
   {
     spot: "#search-open",
@@ -215,7 +390,7 @@ const TOUR = [
   {
     view: () => ({
       title: "And the rest",
-      body: [welcomeText("My Computer, in the dock and All apps: your Desktop, your storage and your homelab, with an editor. Settings → Desktop mode, on a computer: windows side by side. Press ? for every key; it all works without a mouse."),
+      body: [welcomeText("My Computer, Music, Gallery, Documents and adlermd are in All apps. On a computer, Settings → Desktop mode puts windows side by side, and the mouse's side buttons go back and forward in them. Press ? for every key; it all works without a mouse."),
         welcomeText("This tour is in Settings, if you want it again.")],
     }),
   },

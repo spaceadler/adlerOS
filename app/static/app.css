@@ -2259,6 +2259,18 @@ body.wm .app-sheet:not(.active) .app-shield { position: absolute; inset: 38px 0 
 .welcome-icon.app-icon { width: 36px; border-radius: 9px; }
 .welcome-app-text { display: flex; flex-direction: column; min-width: 0; font-size: 13px; }
 .welcome-app-text span { overflow: hidden; color: rgb(255 255 255 / 0.55); white-space: nowrap; text-overflow: ellipsis; }
+img.welcome-icon { width: 36px; height: 36px; }
+.welcome-app-text .welcome-wrap { white-space: normal; }
+.welcome-layer { align-items: start; }
+.welcome-layer-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.welcome-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 400; color: rgb(255 255 255 / 0.6); white-space: nowrap; }
+.welcome-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: rgb(255 255 255 / 0.35); }
+.welcome-state.ok::before { background: #4ade80; }
+.welcome-how-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.welcome-steps { display: flex; flex-direction: column; gap: 5px; margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.45; color: rgb(255 255 255 / 0.78); }
+.welcome-perms { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.welcome-perms code { padding: 2px 7px; border-radius: 6px; background: rgb(255 255 255 / 0.1); font-size: 12px; }
+.welcome-alone { margin: 0; font-size: 12.5px; color: rgb(255 255 255 / 0.5); }
 /* What a tour step is about. */
 .tour-spot { outline: 3px solid rgb(255 255 255 / 0.9); outline-offset: 6px; border-radius: 18px; animation: tour-pulse 1.6s ease-in-out infinite; }
 @keyframes tour-pulse { 50% { outline-color: rgb(255 255 255 / 0.35); } }
@@ -3147,3 +3159,21 @@ button.doc-tag { cursor: pointer; }
   .doc-page { padding: 16px 12px 40px; }
   .doc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
 }
+/* Before an app's connected: the files, and a line on what connecting adds. */
+.doc-note-bar, .ga-note-bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.45; }
+.doc-note-bar { background: color-mix(in srgb, var(--doc-accent) 16%, transparent); }
+.doc-note-bar p { flex: 1; margin: 0; min-width: 200px; }
+.ga-note-bar span { flex: 1; min-width: 200px; }
+.ga-note-link { margin: 0; font-size: 13px; }
+.doc-kind { display: grid; place-items: center; height: 100%; color: #2463e0; font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
+.doc-setup-actions, .ga-setup-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 14px; }
+.doc-setup-actions .button-primary, .ga-setup-actions .button-primary { margin-top: 0; }
+.doc-nav-connect svg { stroke: rgb(255 255 255 / 0.55); }
+.ga-file-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; height: 100%; padding: 6px; color: rgb(255 255 255 / 0.7); font-size: 13px; font-weight: 800; letter-spacing: 0.05em; }
+.ga-file-tile svg { width: 22px; height: 22px; fill: currentColor; stroke: none; }
+.ga-file-tile small { max-width: 100%; overflow: hidden; font-size: 10px; font-weight: 500; letter-spacing: 0; white-space: nowrap; text-overflow: ellipsis; opacity: 0.7; }
+.mu-connect { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: -6px 0 22px; font-size: 13px; color: rgb(255 255 255 / 0.7); }
+.mu-connect:empty { display: none; }
+.mu-connect-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: rgb(255 255 255 / 0.35); transform: translateY(-1px); }
+.mu-connect-dot.ok { background: #4ade80; }
+.mu-connect-how { color: var(--mu-accent); }

@@ -1,8 +1,43 @@
 # Using adlerOS
 
-A tour of everything on the screen, and the two built-in apps, My Computer and the
-Terminal. Every part works with a mouse, a touch
-screen, or a keyboard alone ([docs/keyboard.md](keyboard.md)).
+A tour of everything on the screen, and adlerOS's own apps: My Computer,
+Notepad, adlermd, Music, Gallery, Documents and the Terminal. Every part
+works with a mouse, a touch screen, or a keyboard alone
+([docs/keyboard.md](keyboard.md)).
+
+## How it fits
+
+adlerOS sits on top of a homelab; it doesn't replace any of it. The base is
+the homelab a person built: the containers and how they're set up, the
+storage they keep their files in, the network between them, and each app
+with its own accounts and data. That base is meant to just work, with
+adlerOS running or not. adlerOS brings it under one roof: one place to open
+your apps, start, stop and update them, see what they're doing, and work
+from. You can live in it day to day, but nothing depends on it: stop it and
+every app keeps running as it was.
+
+**Your storage** is where that shows most. Next to the containers is the
+folder they keep their files in: Immich's photos, Navidrome's music,
+Paperless's documents, your notes, and the rest. On its own it's a folder
+on a server, only really usable through File Browser or ssh. In adlerOS
+it's a shared desktop and workspace: My Computer, the Desktop, Notepad and
+adlermd open and change it in place, and the apps that use it see the same
+files.
+
+**Music, Gallery and Documents** are a layer over Navidrome, Immich and
+Paperless-ngx. They ask those apps through the apps' own APIs (with a login
+or key you make in each) and show what they know the same way, in one
+place. They don't replace the apps or change how they're set up: the photos
+stay Immich's and the documents Paperless's, and what you do here (a play,
+an upload) goes to the app as if you'd done it there. They need the apps
+for the rich parts (albums, people, tags, search inside a document);
+without one, each still shows the files themselves, and says what
+connecting adds. **Open Immich** and **Open Paperless**, in their sides,
+are a click away for the rest.
+
+So: make your account in each app you install, as you would without
+adlerOS, then give Music, Gallery and Documents the login or key they ask
+for (each one's section below says how, and so does the welcome).
 
 ## Logging in
 
@@ -19,15 +54,32 @@ Settings.
 <!-- screenshot: the welcome asking where the compose folders are -->
 ![The welcome](screenshots/welcome.png)
 
-The first time anyone logs in, adlerOS welcomes you. On its own it asks
-**where your containers are**: the folders holding your compose files, one
-per line (filled in with what `install.sh` was told). **Look for apps** sets
-them and looks there while you watch, then says what it found, collection by
-collection. In a homelab it shows instead **the apps you can add**: the
-catalog's, by collection, each with a button to its App Store card. Then a
-short look around: your apps, the dock, search, the bell, and where My Computer and
-desktop mode are. **Skip the tour** (or Escape) ends it; it doesn't come back
-by itself, but **Settings → Welcome tour** (or Alt+Space "welcome") shows it again.
+The first time anyone logs in, adlerOS welcomes you, in a few steps:
+
+1. **What adlerOS is**: a roof over your homelab (or the Docker apps on this
+   machine), not a replacement for any of it ([How it fits](#how-it-fits)).
+2. **Your apps.** On its own it asks **where your containers are**: the
+   folders holding your compose files, one per line (filled in with what
+   `install.sh` was told). **Look for apps** sets them and looks there while
+   you watch, then says what it found, collection by collection; it only
+   reads them. In a homelab it shows instead **the apps you can add**: the
+   catalog's, by collection, each with a button to its App Store card.
+3. **Make your accounts**: every app keeps its own, so open each one once
+   it's installed and make yours (the first is usually its admin). adlerOS
+   doesn't sign in to your apps or change what's in them.
+4. **Your storage, as a desktop**: what My Computer makes of the storage
+   folder, with a button to open it.
+5. **Apps on top of your apps**: Music, Gallery and Documents, each with
+   whether it's connected to Navidrome, Immich or Paperless, asked as you
+   look.
+6. **Connecting them**: for each one that isn't, the steps from where it is
+   (install the app, make your account, make the login or key, put it in the
+   settings file), and what it shows meanwhile. **Check again** asks again.
+7. A short look around: your apps, the dock, search, the bell, and where the
+   rest is.
+
+**Skip the tour** (or Escape) ends it; it doesn't come back by itself, but
+**Settings → Welcome tour** (or Alt+Space "welcome") shows it again.
 
 ## The desktop
 
@@ -538,7 +590,9 @@ that only what changed, so it opens straight away.
   through where you've been. Plays are counted (after half a
   minute), for Home, Your station and Most played. With `NAVIDROME_USER`
   and `NAVIDROME_PASSWORD` in the settings file, they go to Navidrome too
-  (now playing, then played), when it plays the same music folder.
+  (now playing, then played), when it plays the same music folder. Music
+  needs nothing else: it plays your files on its own, and Home says
+  whether it's connected to Navidrome (and how, if it isn't).
 - Put away (another window over it, minimized), it keeps playing; closing it
   stops it. The queue and where you were in the song are kept on this
   device, for next time.
@@ -549,8 +603,18 @@ Your photos and videos as Immich has them: open it from All apps, the dock,
 or Alt+Space "gallery". It needs a key from Immich (Immich → Account
 Settings → API Keys → New API Key) that may read: `asset.read`,
 `asset.view`, `asset.download`, `album.read`, `person.read`, `memory.read`,
-`face.read` and `map.read`. Put it in the settings file as `IMMICH_API_KEY`; until then,
-Gallery says the same.
+`face.read` and `map.read`. Put it in the settings file as `IMMICH_API_KEY`.
+
+Until then (or while Immich isn't answering), Gallery shows **the photos
+themselves**: the ones in your Gallery folder (`GALLERY_DIR` in your
+storage, `Gallery` if it isn't set; Immich's library, if that's what's
+there), by month, dated by the day folder Immich put them in or else the
+file's date. A photo's tile is the small picture the camera saved in it, or
+the photo itself; HEIC photos and videos are tiles with their name. A click
+opens one (a browser that can't show HEIC offers the download), the arrows
+go through the rest, and **i** shows the file. Albums, people, places, the
+map, memories and search are what Immich knows, so they wait for it, each
+saying how to connect; a note above the photos says what connecting adds.
 
 - **Photos**: the whole timeline, newest first, by month and then day, in
   rows that fill the width; **On this day** above it. Months are fetched as
@@ -582,6 +646,15 @@ Alt+Space "documents". The files in your storage are only numbers
 words Paperless read in them are in Paperless, so Documents asks it, with a
 token (in Paperless: your name → My Profile → API Auth Token) in the
 settings file as `PAPERLESS_TOKEN`. Paperless has to be running.
+
+Until then, Documents shows **the files themselves**: Paperless's originals
+in your Documents folder (`DOCUMENTS_DIR` in your storage, `Documents` if
+it isn't set), as Document 1, 2… by their numbers, with Paperless's own
+thumbnails, opening as the searchable PDF it made of them when there is
+one; in any other folder, every document in it. Find them by name, and sort
+by newest, oldest or name. Tags, correspondents, types, the inbox, search
+inside them and adding documents are Paperless's, so they wait for it;
+**Connect Paperless** in the side says how.
 
 - **All documents**, newest first (or oldest, recently added, by title or
   correspondent), as a grid of their first pages or as rows; the **Inbox**,

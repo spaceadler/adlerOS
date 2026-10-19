@@ -5,8 +5,10 @@
 // in it, its albums); the arrows (or a swipe) go through the rest. adlerOS's
 // server asks Immich (IMMICH_API_KEY): the page never sees the key. Months
 // are fetched as you come to them, and let go when you're far past, so the
-// whole library scrolls lightly. Uses el, svg, $, api, toast, openMenu,
-// registerWindow, registerNav, openApp.
+// whole library scrolls lightly. Before it's connected (or while Immich is
+// off), the photos themselves, from your Gallery folder by day, with what
+// connecting adds. Uses el, svg, $, api, toast, openMenu, fileUrl,
+// downloadFile, registerWindow, registerNav, openApp.
 "use strict";
 
 const GA_ICONS = {
@@ -109,6 +111,11 @@ async function galleryCheck() {
   if (gallery.status.ok && gallery.status.missing?.some((p) => p === "asset.read" || p === "asset.view")) {
     gallery.status = { ...gallery.status, ok: false, error: "refused" };
   }
+  if (!gallery.status.ok) {
+    $("ga-main").replaceChildren(el("div", { class: "ga-empty" }, el("p", {}, "Looking through your photos…")));
+    gallery.local = await gaGet("local").catch(() => null);
+  }
+  gaRenderSide();
   gaRender();
 }
 
@@ -124,6 +131,7 @@ function gaRenderSide() {
   };
   nav.replaceChildren(item("photos", "Photos", "photos"), item("albums", "Albums", "albums"), item("people", "People", "people"),
     item("places", "Places", "places"), item("map", "Map", "map"), item("favorites", "Favorites", "favorites"));
+  $("ga-search").placeholder = gallery.status?.ok === false ? "Search needs Immich" : "Search your photos";
   const immich = gaImmichApp();
   if (immich) {
     const b = el("button", { type: "button", class: "ga-nav ga-nav-out" }, svg(GA_ICONS.immich), el("span", {}, "Open Immich"));
@@ -168,8 +176,18 @@ function gaRender(scroll = 0) {
   gaStopTimeline();
   gallery.grid = null;
   gallery.map = null;
-  if (!gallery.status?.ok) return main.replaceChildren(gaSetupPage());
   const v = gallery.view;
+  if (!gallery.status?.ok) {
+    // The files themselves: Photos from the folder; the rest is Immich's.
+    if (!gallery.local?.found || (v.kind !== "photos" && v.kind !== "connect")) return main.replaceChildren(gaSetupPage(v.kind));
+    if (v.kind === "connect") return main.replaceChildren(gaSetupPage());
+    const page = el("div", { class: "ga-page" });
+    main.replaceChildren(page);
+    main.scrollTop = 0;
+    gaLocalPhotos(page);
+    if (scroll) requestAnimationFrame(() => { main.scrollTop = scroll; });
+    return;
+  }
   const page = el("div", { class: "ga-page" });
   // A key that can't do all of it: what's missing (On this day, say).
   if (gallery.status.missing?.length) page.append(el("p", { class: "ga-note" }, `Immich's key can't ${gallery.status.missing.join(", ")}: some of Gallery won't show. A new key with those permissions fixes it.`));
@@ -191,23 +209,30 @@ function gaRender(scroll = 0) {
     .catch((e) => { if (e.message !== "login") page.replaceChildren(el("div", { class: "ga-empty" }, el("p", {}, e.message))); });
 }
 
-// Not set up yet, or Immich said no: what to do about it.
-function gaSetupPage() {
+// Not set up yet, or Immich said no: what to do about it (asked for one
+// of Immich's own parts, which).
+const GA_NEEDS = { albums: "Albums", people: "People", places: "Places", map: "The map", favorites: "Favorites", search: "Search" };
+function gaSetupPage(asked = null) {
   const s = gallery.status || {};
   const retry = el("button", { type: "button", class: "button-primary" }, "Try again");
   retry.addEventListener("click", galleryCheck);
+  const photos = el("button", { type: "button", class: "button-secondary" }, "See the photos meanwhile");
+  photos.addEventListener("click", () => gaShow({ kind: "photos" }));
   const perms = el("p", { class: "ga-perms" }, ...(s.permissions || []).map((p) => el("code", {}, p)));
   const body = s.error === "noimmich"
-    ? [el("h2", {}, "Gallery shows your photos from Immich"), el("p", {}, "Immich isn't among your apps here. If it runs elsewhere, set IMMICH_URL in adlerOS's settings file (.env) to its address.")]
+    ? [el("h2", {}, "Gallery shows your photos from Immich"), el("p", {}, `Immich isn't among your apps here. If it runs elsewhere, set IMMICH_URL in ${settingsFile()} to its address.`)]
     : s.error === "nokey"
       ? [el("h2", {}, "Gallery shows your photos from Immich"),
         el("p", {}, "It needs a key from Immich: in Immich, Account Settings → API Keys → New API Key, with these permissions (it only reads):"), perms,
-        el("p", {}, "Then put it in adlerOS's settings file (.env) as IMMICH_API_KEY=…, and restart adlerOS."),
+        el("p", {}, `Then put it in ${settingsFile()} as IMMICH_API_KEY=…${settingsThen()}.`),
         el("p", { class: "ga-dim" }, `It'll ask Immich at ${s.url}.`)]
       : s.error === "refused"
-        ? [el("h2", {}, "Immich didn't take the key"), el("p", {}, "IMMICH_API_KEY in adlerOS's settings file isn't one Immich knows (deleted, or mistyped). Make a new one, with these permissions:"), perms]
-        : [el("h2", {}, "Can't reach Immich"), el("p", {}, s.error ? `${s.url || "Immich"}: ${s.error}` : "Immich didn't answer.")];
-  return el("div", { class: "ga-empty ga-setup" }, ...body, retry);
+        ? [el("h2", {}, "Immich didn't take the key"), el("p", {}, `IMMICH_API_KEY in ${settingsFile()} isn't one Immich knows (deleted, or mistyped). Make a new one, with these permissions:`), perms]
+        : [el("h2", {}, "Can't reach Immich"), el("p", {}, s.error ? `${s.url || "Immich"}: ${s.error}` : "Immich didn't answer."),
+          el("p", { class: "ga-dim" }, "Is it running? The App Store starts it.")];
+  const lead = GA_NEEDS[asked] ? [el("p", { class: "ga-kicker" }, `${GA_NEEDS[asked]}: Immich's`),
+    el("p", {}, `${GA_NEEDS[asked]} come from what Immich knows of your photos (its albums, the faces and places it found, what's in them), so they're here once Gallery's connected to it.`)] : [];
+  return el("div", { class: "ga-empty ga-setup" }, ...lead, ...body, el("div", { class: "ga-setup-actions" }, ...(gallery.local?.found ? [photos] : []), retry));
 }
 
 // ---------------------------------------------------------- the timeline
@@ -334,10 +359,12 @@ function gaLayout(assets, width, { byDay = true } = {}) {
 
 function gaTile(a, w, h, source) {
   // Low: the photo you open goes ahead of a few hundred of these.
-  const img = el("img", { src: gaThumb(a.id), alt: "", loading: "lazy", decoding: "async", draggable: "false", fetchpriority: "low" });
+  const src = a.local ? (a.kind === "image" ? `/api/gallery/local-thumb?path=${encodeURIComponent(a.id)}` : null) : gaThumb(a.id);
+  const img = src ? el("img", { src, alt: "", loading: "lazy", decoding: "async", draggable: "false", fetchpriority: "low" })
+    : el("span", { class: "ga-file-tile" }, a.kind === "heic" ? "HEIC" : svg(GA_ICONS.play), el("small", {}, a.name || ""));
   img.addEventListener("error", () => img.remove());
   const tile = el("button", { type: "button", class: "ga-tile", "data-id": a.id, "aria-label": a.isImage ? "Photo" : "Video" }, img,
-    ...(!a.isImage ? [el("span", { class: "ga-badge" }, svg(GA_ICONS.play), gaDuration(a.duration))] : []),
+    ...(!a.isImage && !a.local ? [el("span", { class: "ga-badge" }, svg(GA_ICONS.play), gaDuration(a.duration))] : []),
     ...(a.livePhotoVideoId ? [el("span", { class: "ga-badge ga-live" }, svg(GA_ICONS.live))] : []),
     ...(a.isFavorite ? [el("span", { class: "ga-fav" }, svg(GA_ICONS.favorites))] : []));
   tile.style.width = `${Math.floor(w)}px`;
@@ -582,6 +609,8 @@ async function gaStep(dir) {
 async function gaShowAsset(id) {
   const v = gallery.viewer;
   const a = gaFind(v.source, id) || { id, isImage: true };
+  v.file = a.local ? a : null;
+  if (a.local) return gaShowFile(a);
   v.id = id;
   v.asset = null;
   const token = ++v.token;
@@ -657,6 +686,7 @@ function gaWhen(asset) {
 async function gaRenderInfo() {
   const v = gallery.viewer;
   v.box.classList.toggle("with-info", v.info);
+  if (v.file) return; // a file's info is its own (gaShowFile)
   requestAnimationFrame(gaDrawFaces); // the photo's room changes with the info beside it
   if (!v.info || !v.asset) return v.infoBox.replaceChildren();
   const a = v.asset;
@@ -936,4 +966,93 @@ async function gaMapView(page) {
     if (e.key === "-") zoomAt(map.z - 1);
   });
   requestAnimationFrame(draw);
+}
+
+// ---------------------------------------------- the photos themselves
+
+// Before Immich: what connecting adds, said once, above the photos.
+function gaLocalNote() {
+  const s = gallery.status || {};
+  const why = s.error === "nokey" ? "These are your photos as files, by the day Immich put them in."
+    : s.error === "noimmich" ? "These are the photos in your Gallery folder, as they are."
+      : s.error === "refused" ? "Immich didn't take the key, so these are the files as they are."
+        : "Immich isn't answering, so these are the files as they are.";
+  const how = s.error === "noimmich" ? "With Immich (the App Store has it): albums, the people and places in them, a map, search by what's in them, and HEIC photos everywhere."
+    : "Connect Gallery to Immich for albums, people, places, the map, favorites, search by what's in them, and HEIC photos in every browser.";
+  const more = el("button", { type: "button", class: "ga-link ga-note-link" }, "How");
+  more.addEventListener("click", () => gaShow({ kind: "connect" }));
+  return el("div", { class: "ga-note ga-note-bar" }, el("span", {}, why, " ", how, " "), more);
+}
+
+// The folder's photos as a timeline: months (of the days they're in), then
+// days, in rows (square: a file's shape isn't known without opening it).
+function gaLocalPhotos(page) {
+  const items = gallery.local.items;
+  const months = new Map();
+  for (const x of items) {
+    const m = `${x.date.slice(0, 7)}-01`;
+    if (!months.has(m)) months.set(m, []);
+    months.get(m).push({ id: x.path, local: true, kind: x.kind, name: x.name, size: x.size, ratio: 1, isImage: x.kind !== "video",
+      fileCreatedAt: `${x.date}T12:00:00.000Z`, localOffsetHours: 0 });
+  }
+  const box = el("div", { class: "ga-timeline" });
+  page.append(gaLocalNote(), el("header", { class: "ga-head" }, el("h1", {}, "Photos"),
+    el("p", { class: "ga-dim" }, `${items.length.toLocaleString()} photos and videos in ${gallery.local.dir}`)), box);
+  if (!items.length) return page.append(el("p", { class: "ga-dim ga-none" }, "No photos in that folder."));
+  const tl = { params: {}, box, local: true, buckets: [...months].map(([timeBucket, assets]) => ({ timeBucket, count: assets.length, assets, body: null, height: 0, shown: false })) };
+  const width = () => box.clientWidth || $("ga-main").clientWidth - 48;
+  tl.buckets.forEach((b, i) => {
+    b.body = el("div", { class: "ga-month-body" });
+    b.body.style.height = `${gaEstimate(b.count, width())}px`;
+    b.section = el("section", { class: "ga-month", "data-i": String(i) }, el("h2", { class: "ga-month-title" }, gaMonthLabel(b.timeBucket)), b.body);
+    box.append(b.section);
+  });
+  tl.observer = new IntersectionObserver((entries) => {
+    for (const en of entries) {
+      const b = tl.buckets[Number(en.target.dataset.i)];
+      if (en.isIntersecting) gaShowBucket(tl, b); else gaHideBucket(b);
+    }
+  }, { root: $("ga-main"), rootMargin: "1600px 0px" });
+  for (const b of tl.buckets) tl.observer.observe(b.section);
+  gallery.timeline = tl;
+}
+
+// One of them big: a picture as it is, a video playing; a HEIC only where
+// the browser draws one (Safari), else to download (Immich makes it one
+// every browser shows).
+function gaShowFile(a) {
+  const v = gallery.viewer;
+  v.id = a.id;
+  v.asset = null;
+  v.token++;
+  v.live.hidden = true;
+  const url = fileUrl(a.id, true);
+  let media;
+  if (a.kind === "video") media = el("video", { src: url, controls: "", autoplay: "", playsinline: "" });
+  else if (a.kind === "image") media = el("img", { class: "ga-full", src: url, alt: "" });
+  else {
+    media = el("img", { class: "ga-full", src: url, alt: "" });
+    media.addEventListener("error", () => {
+      const get = el("button", { type: "button", class: "button-secondary" }, "Download it");
+      get.addEventListener("click", () => downloadFile(a.id));
+      media.replaceWith(el("div", { class: "ga-empty" }, el("h2", {}, "A HEIC photo"),
+        el("p", {}, "This browser can't show HEIC (Safari can). Connected to Immich, Gallery shows them here too."), get));
+    });
+  }
+  v.stage.replaceChildren(media);
+  v.title.textContent = `${gaDayLabel(gaLocal(a))} · ${a.name}`;
+  v.infoBox.replaceChildren(el("h3", {}, "Info"),
+    el("div", { class: "ga-irow" }, el("span", { class: "ga-ilabel" }, "File"), el("span", {}, a.name), el("small", {}, bytes(a.size || 0))),
+    el("div", { class: "ga-irow" }, el("span", { class: "ga-ilabel" }, "Day"), el("span", {}, gaDayLabel(gaLocal(a)))),
+    el("div", { class: "ga-irow" }, el("span", { class: "ga-ilabel" }, "Folder"), el("span", {}, a.id.split("/").slice(0, -1).join("/"))),
+    el("p", { class: "ga-dim" }, "Immich knows more about it: the camera, where it was taken, who's in it, its albums."));
+  v.box.classList.toggle("with-info", v.info);
+  for (const dir of [1, -1]) {
+    gaNeighbor(v.source, a.id, dir).then((n) => {
+      if (n?.kind !== "image") return;
+      const pre = new Image();
+      pre.fetchPriority = "low";
+      pre.src = fileUrl(n.id, true);
+    });
+  }
 }

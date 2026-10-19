@@ -845,10 +845,32 @@ function musicHomeView() {
   const hello = hour < 5 ? "Good night" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   return el("div", { class: "mu-page" }, musicHead(hello, `${muCount(music.all.length, "song")} in your library`,
     musicButton("Shuffle all", "shuffle", () => musicRadio({ kind: "all", label: "Your library" }), "primary")),
+  musicNavidromeNote(),
   musicShelf("Recently played", recentAlbums.map(musicAlbumCard)),
   musicShelf("Stations for you", stations.map(musicStationCard), () => musicShow({ kind: "radio" })),
   musicShelf("Recently added", added.map(musicAlbumCard), () => { music.sort.albums = "added"; musicShow({ kind: "albums" }); }),
   musicShelf("Your playlists", lists.map(musicListCard), () => musicShow({ kind: "playlists" })));
+}
+
+// Navidrome (same music folder): whether plays go there too. Music plays
+// your files on its own; connected, what you play is Navidrome's too (now
+// playing, then played: in its app, and the ones on your phone).
+function musicNavidromeNote() {
+  const box = el("div", { class: "mu-connect" });
+  const draw = (st) => {
+    if (st?.ok) return box.replaceChildren(el("span", { class: "mu-connect-dot ok" }), el("span", {}, "Connected to Navidrome: what you play shows there too."));
+    const why = !st ? "" : !st.configured
+      ? "Music plays your files on its own. Connected to Navidrome, what you play shows there too (now playing, then played), in its app and the Subsonic apps on your phone."
+      : `Navidrome isn't answering${st.url ? ` at ${st.url}` : ""}, so plays stay here for now.`;
+    if (!why) return box.replaceChildren();
+    const how = el("button", { type: "button", class: "mu-link mu-connect-how" }, st.configured ? "Is it running?" : "How");
+    how.addEventListener("click", () => toast(st.configured ? "The App Store starts Navidrome; then plays go to it again."
+      : `Put your Navidrome login in ${settingsFile()}, as NAVIDROME_USER and NAVIDROME_PASSWORD${settingsThen()}.`));
+    box.replaceChildren(el("span", { class: "mu-connect-dot" }), el("span", {}, why, " "), how);
+  };
+  if (music.navidrome !== undefined) draw(music.navidrome);
+  else api("/api/music/navidrome").then(({ status, body }) => { music.navidrome = status === 200 ? body : null; draw(music.navidrome); }).catch(() => {});
+  return box;
 }
 
 // Stations: yours (what you play), your library shuffled, your artists,
