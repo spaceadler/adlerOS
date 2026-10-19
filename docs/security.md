@@ -141,6 +141,12 @@ checked. A key that may only read is enough, and that's all Gallery needs.
 The map's tiles come from CARTO (OpenStreetMap's map): your browser asks
 them for the part of the world you're looking at; no photo goes to them.
 
+**Documents** asks Paperless with `PAPERLESS_TOKEN`, which stays on the
+server, for the list, one document's details and metadata, its thumbnail,
+preview and original, and the tags, correspondents and types; files you
+add go to Paperless's own upload. The token is your Paperless user's, so it
+may do what you may there; Documents only reads, and adds what you give it.
+
 **Notes** (adlermd, Notepad) are yours, but may come from anywhere (a vault
 someone shared). Their HTML is rebuilt from an allowlist, never inserted as
 is: formatting tags and their plain attributes, with no scripts, forms,

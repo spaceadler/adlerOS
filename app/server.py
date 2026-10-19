@@ -98,7 +98,7 @@ JOBS = DATA / "agent" / "jobs"
 ICON_OVERRIDES = Path(os.environ.get("OS_ICON_DIR", "/icons"))
 # adlerOS's own dock icons (./icons can replace each): All apps, and the ones
 # you pin like any app.
-DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "adlermd", "music", "gallery")
+DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "adlermd", "music", "gallery", "documents")
 DOCK_MAX_PINS = 16
 # The widgets you can put on the desktop, with the defaults and the limit.
 WIDGET_CATALOG = STATIC / "widgets-catalog.json"
@@ -440,7 +440,7 @@ def search_url():
 # adlerOS's own, pinned (and unpinned, moved about) like any app; in the dock
 # from the start, in this order, until you take them out.
 BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal",
-                "adleros:notepad", "adleros:adlermd", "adleros:music", "adleros:gallery")
+                "adleros:notepad", "adleros:adlermd", "adleros:music", "adleros:gallery", "adleros:documents")
 DOCK_FIRST = BUILTIN_PINS[:5]  # a new dock's (Notepad, adlermd and Music: in All apps, for you to pin)
 DOCK_SEED = 2  # 1: My Computer and the Terminal pinned; 2: the App Store, Settings and Live Usage too
 
@@ -2037,6 +2037,106 @@ def gallery_asset_lite(a):
             "livePhotoVideoId": a.get("livePhotoVideoId")}
 
 
+# -------------------------------------------------------------- documents
+
+# Documents: your papers as Paperless-ngx has them (titles, correspondents,
+# types, tags, dates, the words it read in them), through its API with
+# PAPERLESS_TOKEN (Paperless: My Profile, API Auth Token). The files in
+# storage/Documents are only numbers (0000001.pdf): the rest is in
+# Paperless's database. The page never sees the token. Paperless is at
+# PAPERLESS_URL, else this machine's Tailscale address and its port.
+PAPERLESS_ORDER = ("created", "-created", "added", "-added", "title", "-title", "correspondent__name", "-correspondent__name",
+                   "archive_serial_number", "-archive_serial_number", "page_count", "-page_count")
+PAPERLESS_LIST_FIELDS = "id,title,correspondent,document_type,tags,created,added,page_count,mime_type,archive_serial_number,original_file_name,notes"
+UPLOAD_PAPERLESS_LIMIT = 200 * 1024 * 1024
+_paperless = {"version": None}
+
+
+def paperless():
+    """(url, token), or (url or None, None) when there's no token."""
+    url = install_setting("PAPERLESS_URL").rstrip("/")
+    if not url:
+        host = install_setting("TS_IP") if HOMELAB_MODE else install_setting("ADLEROS_HOST")
+        app = next((a for a in installed_apps() if a["id"] in ("paperless-ngx", "paperless")), None)
+        url = f"http://{host}:{app['port']}" if host and app and app.get("port") else None
+    return url, install_setting("PAPERLESS_TOKEN") or None
+
+
+def paperless_open(path, query=None, data=None, method="GET", headers=None, timeout=30):
+    url, token = paperless()
+    if not url or not token:
+        raise LookupError("not set up")
+    # The newest API it speaks (it says, once asked): without, Paperless answers as its first.
+    accept = "application/json" + (f"; version={_paperless['version']}" if _paperless["version"] else "")
+    request = urllib.request.Request(f"{url}/api/{path}" + (f"?{urllib.parse.urlencode(query, doseq=True)}" if query else ""),
+                                     data=data, method=method, headers={"Authorization": f"Token {token}", "Accept": accept, **(headers or {})})
+    r = urllib.request.urlopen(request, timeout=timeout)
+    if not _paperless["version"] and (r.headers.get("X-Api-Version") or "").isdigit():
+        _paperless["version"] = r.headers["X-Api-Version"]
+    return r
+
+
+def paperless_json(path, query=None, body=None, method="GET"):
+    data = json.dumps(body).encode() if body is not None else None
+    with paperless_open(path, query, data, method, {"Content-Type": "application/json"} if data else None) as r:
+        return json.loads(r.read())
+
+
+def paperless_all(path):
+    """Every one of a list (tags, correspondents…), page by page."""
+    out, page = [], 1
+    while page <= 50:
+        got = paperless_json(path, {"page": page, "page_size": 250})
+        out += got.get("results") or []
+        if not got.get("next"):
+            break
+        page += 1
+    return out
+
+
+def documents_status():
+    url, token = paperless()
+    out = {"url": url, "configured": bool(url and token)}
+    if not url:
+        return {**out, "error": "nopaperless"}
+    if not token:
+        return {**out, "error": "notoken"}
+    try:
+        got = paperless_json("documents/", {"page_size": 1, "fields": "id"})
+        out.update(ok=True, count=got.get("count", 0), version=_paperless["version"])
+    except urllib.error.HTTPError as e:
+        out["error"] = "refused" if e.code in (401, 403) else f"paperless {e.code}"
+    except (OSError, ValueError) as e:
+        out["error"] = f"unreachable ({e})"
+    return out
+
+
+def documents_query(query):
+    """Only these of the page's query, each as Paperless wants it."""
+    out = {"fields": PAPERLESS_LIST_FIELDS, "truncate_content": "true"}
+    for k in ("page", "page_size", "ordering", "query", "title_content", "tags__id__all", "tags__id__in", "correspondent__id",
+              "document_type__id", "is_in_inbox", "created__date__gte", "created__date__lte"):
+        v = query.get(k, [None])[0]
+        if v is None or v == "":
+            continue
+        if k in ("page", "page_size", "correspondent__id", "document_type__id") and not (v.isdigit() and 0 < int(v) <= (100 if k == "page_size" else 10 ** 9)):
+            raise ValueError(f"{k}: a number")
+        if k in ("tags__id__all", "tags__id__in") and not re.fullmatch(r"\d+(,\d+){0,30}", v):
+            raise ValueError(f"{k}: numbers")
+        if k == "ordering" and v not in PAPERLESS_ORDER:
+            raise ValueError("ordering: not one Documents knows")
+        if k == "is_in_inbox" and v not in ("true", "false"):
+            raise ValueError("is_in_inbox: true or false")
+        if k.startswith("created__") and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+            raise ValueError(f"{k}: a date")
+        if k in ("query", "title_content") and len(v) > 300:
+            raise ValueError(f"{k}: too long")
+        out[k] = v
+    if "query" in out:
+        out.pop("fields")  # a search's hits come with Paperless's own (where it matched)
+    return out
+
+
 def locate(path, must_exist=True):
     """(place, real path) for '/user/Documents/a.txt', else (None, None). '..'
     and links that lead out of their place are refused."""
@@ -2673,6 +2773,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.music_get(path[len("/api/music/"):], query)
         if path.startswith("/api/gallery/"):
             return self.gallery_get(path[len("/api/gallery/"):], query)
+        if path.startswith("/api/paperless/"):
+            return self.documents_get(path[len("/api/paperless/"):], query)
         if path.startswith("/api/frame/"):
             app = next((a for a in installed_apps() if a["id"] == path[len("/api/frame/"):]), None)
             if not app:
@@ -3239,6 +3341,101 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as e:
             return self.send_json(502, {"error": f"can't reach Immich ({e})"})
 
+    # Documents: what it asks Paperless, passed on (the token stays here).
+    def documents_get(self, what, query):
+        try:
+            if what == "status":
+                return self.send_json(200, documents_status())
+            if what == "list":
+                return self.send_json(200, paperless_json("documents/", documents_query(query)))
+            if what == "meta":
+                return self.send_json(200, {
+                    "tags": [{k: t.get(k) for k in ("id", "name", "color", "text_color", "is_inbox_tag", "document_count", "parent")} for t in paperless_all("tags/")],
+                    "correspondents": [{k: c.get(k) for k in ("id", "name", "document_count", "last_correspondence")} for c in paperless_all("correspondents/")],
+                    "types": [{k: t.get(k) for k in ("id", "name", "document_count")} for t in paperless_all("document_types/")],
+                })
+            kind, _, did = what.partition("/")
+            if not did.isdigit() or not 0 < int(did) < 10 ** 9:
+                return self.send_json(404, {"error": "not found"})
+            if kind == "doc":
+                return self.send_json(200, paperless_json(f"documents/{did}/"))
+            if kind == "metadata":
+                return self.send_json(200, paperless_json(f"documents/{did}/metadata/"))
+            if kind == "thumb":
+                return self.paperless_stream(f"documents/{did}/thumb/", None, ("image/",), cache=3600)
+            if kind == "preview":
+                return self.paperless_stream(f"documents/{did}/preview/", None, ("application/pdf", "image/"), inline_pdf=True)
+            if kind == "download":
+                return self.paperless_stream(f"documents/{did}/download/", {"original": "true"}, None, download=True)
+            return self.send_json(404, {"error": "not found"})
+        except LookupError:
+            return self.send_json(409, {"error": "Documents isn't set up", "status": documents_status()})
+        except ValueError as e:
+            return self.send_json(400, {"error": str(e)})
+        except urllib.error.HTTPError as e:
+            return self.send_json(e.code if e.code in (400, 401, 403, 404) else 502, {"error": f"Paperless said {e.code}", "paperless": e.code})
+        except OSError as e:
+            return self.send_json(502, {"error": f"can't reach Paperless ({e})"})
+
+    def paperless_stream(self, path, query, kinds, cache=0, download=False, inline_pdf=False):
+        """A thumbnail, a preview or an original from Paperless, as it sends it."""
+        try:
+            r = paperless_open(path, query, timeout=60)
+        except urllib.error.HTTPError as e:
+            return self.send(e.code if e.code == 404 else 502, b"")
+        with r:
+            ctype = (r.headers.get("Content-Type") or "application/octet-stream").split(";")[0].strip().lower()
+            if kinds and not ctype.startswith(kinds):
+                return self.send(502, b"not a picture or a PDF")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream" if download else ctype)
+            if r.headers.get("Content-Length"):
+                self.send_header("Content-Length", r.headers["Content-Length"])
+            given = r.headers.get("Content-Disposition") or ""
+            self.send_header("Content-Disposition", ("attachment" + given[given.index(";"):] if ";" in given else "attachment") if download else "inline")
+            # A PDF keeps the browser's own viewer; anything else can't run a thing.
+            self.send_header("Content-Security-Policy", "default-src 'none'" if inline_pdf and ctype == "application/pdf" else "default-src 'none'; sandbox")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cache-Control", f"private, max-age={cache}" if cache else "private, no-cache")
+            self.end_headers()
+            if self.command == "HEAD":
+                return
+            try:
+                while chunk := r.read(256 * 1024):
+                    self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    def documents_upload(self, query):
+        """A file for Paperless to read (PUT, the file as the body): its task's id."""
+        name = query.get("name", [""])[0]
+        try:
+            length = int(self.headers.get("Content-Length", "-1"))
+        except ValueError:
+            length = -1
+        if not good_name(name) or len(name) > 200:
+            return self.send_json(400, {"error": "a file name"})
+        if not 0 < length <= UPLOAD_PAPERLESS_LIMIT:
+            return self.send_json(413, {"error": "too big (200 MB at most)"})
+        data = self.rfile.read(length)
+        if len(data) != length:
+            return self.send_json(400, {"error": "the upload stopped part-way"})
+        boundary = secrets.token_hex(16)
+        quoted = name.replace('"', "_").replace("\r", "_").replace("\n", "_")
+        body = (f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{quoted}"\r\n'
+                f"Content-Type: application/octet-stream\r\n\r\n").encode() + data + f"\r\n--{boundary}--\r\n".encode()
+        try:
+            with paperless_open("documents/post_document/", data=body, method="POST", timeout=120,
+                                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"}) as r:
+                task = json.loads(r.read() or b'""')
+        except LookupError:
+            return self.send_json(409, {"error": "Documents isn't set up"})
+        except urllib.error.HTTPError as e:
+            return self.send_json(e.code if e.code in (400, 401, 403, 413) else 502, {"error": f"Paperless said {e.code}"})
+        except OSError as e:
+            return self.send_json(502, {"error": f"can't reach Paperless ({e})"})
+        return self.send_json(200, {"ok": True, "task": task})
+
     def gallery_search(self, body):
         # {query, page}: Immich's smart search; {city, country, page}: a place's photos, newest first.
         query, city = body.get("query"), body.get("city")
@@ -3464,12 +3661,14 @@ class Handler(BaseHTTPRequestHandler):
         file as the body. A cross-site page can't send a PUT with your cookie."""
         url = urllib.parse.urlsplit(self.path)
         query = urllib.parse.parse_qs(url.query)
-        if url.path != "/api/files/upload":
+        if url.path not in ("/api/files/upload", "/api/paperless/upload"):
             return self.send(404, b"not found")
         if self.cross_site():
             return self.send_json(403, {"error": "only adlerOS's own page can do that"})
         if not self.logged_in():
             return self.send_json(401, {"error": "login required"})
+        if url.path == "/api/paperless/upload":
+            return self.documents_upload(query)
         if not places_on():
             return self.send_json(404, {"error": "no storage folder is mounted"})
         _search_wake.set()  # a new file to find
