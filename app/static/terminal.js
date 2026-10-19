@@ -560,9 +560,10 @@ function measureTerminal(t) {
   const probe = el("span", { class: "term-probe" }, "W".repeat(10));
   box.append(probe);
   const r = probe.getBoundingClientRect();
+  const scale = drawnScale(box); // a zoomed window draws it bigger than its own pixels
   probe.remove();
-  const cw = r.width / 10 || 8;
-  const ch = r.height || 17;
+  const cw = r.width / 10 / scale || 8;
+  const ch = r.height / scale || 17;
   const width = box.clientWidth || window.innerWidth - 80;
   const height = box.clientHeight || window.innerHeight - 200;
   return { cols: Math.max(20, Math.floor((width - 16) / cw)), rows: Math.max(5, Math.floor((height - 8) / ch)) };

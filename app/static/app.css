@@ -1198,6 +1198,8 @@ body.arranging .app:nth-child(2n) .app-icon { animation-delay: -0.12s; }
   animation: fade-in 0.7s ease-out 0.2s both;
 }
 .sheet-tint { position: absolute; inset: 0; background: rgb(0 0 0 / calc(1 - var(--glass))); }
+/* A window's zoom (windows.js): its content, not its bar, edges or backdrop. */
+.sheet > :not(.sheet-bg, .sheet-close, .win-bar, .win-grip) { zoom: var(--win-zoom, 1); }
 .sheet::after {
   content: "";
   position: absolute;
@@ -2175,6 +2177,10 @@ body.wm .sheet:not(.active) .win-bar { color: rgb(255 255 255 / 0.55); backgroun
 .win-lights:hover .win-button svg, .win-lights .win-button:focus-visible svg { opacity: 1; }
 body.wm .sheet:not(.active) .win-lights:not(:hover) .win-button { background: rgb(255 255 255 / 0.2); box-shadow: none; }
 .win-extras { display: flex; flex-shrink: 0; justify-content: flex-end; gap: 2px; min-width: 64px; }
+/* Its zoom, when it isn't 100% (windows.js): a click puts it back. */
+.win-zoom { align-self: center; margin-right: 4px; padding: 0 8px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 0.12); color: rgb(255 255 255 / 0.8); font: 500 11px/20px var(--font, inherit); font-variant-numeric: tabular-nums; cursor: pointer; }
+.win-zoom:hover { background: rgb(255 255 255 / 0.2); color: #fff; }
+.win-zoom[hidden] { display: none; }
 .win-button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.9); }
 .win-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 /* Resize from any edge (inside it: the window clips what's outside). */

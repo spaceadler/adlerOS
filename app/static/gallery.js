@@ -665,8 +665,9 @@ function gaDrawFaces() {
   if (!v.info || !img || !v.faces?.length || !img.naturalWidth) return;
   const s = v.stage.getBoundingClientRect();
   const r = img.getBoundingClientRect();
+  const k = drawnScale(v.stage); // screen pixels to the stage's own (a zoomed window)
   const layer = el("div", { class: "ga-faces" });
-  Object.assign(layer.style, { left: `${r.left - s.left}px`, top: `${r.top - s.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+  Object.assign(layer.style, { left: `${(r.left - s.left) / k}px`, top: `${(r.top - s.top) / k}px`, width: `${r.width / k}px`, height: `${r.height / k}px` });
   for (const f of v.faces) {
     const [x1, y1, x2, y2] = f.box;
     const [w, h] = f.size;
@@ -924,10 +925,12 @@ async function gaMapView(page) {
       const [a, b] = [...down.values()];
       const z = pinch.z + Math.round(Math.log2(Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, pinch.d)));
       const r = box.getBoundingClientRect();
-      if (z !== map.z) zoomAt(z, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+      const k = drawnScale(box);
+      if (z !== map.z) zoomAt(z, ((a.x + b.x) / 2 - r.left) / k, ((a.y + b.y) / 2 - r.top) / k);
       return;
     }
-    const world = GA_TILE * 2 ** map.z;
+    // On screen, in a zoomed window, a drag is bigger than in the map's own pixels.
+    const world = GA_TILE * 2 ** map.z * drawnScale(box);
     map.cx -= (e.clientX - was.x) / world;
     map.cy = Math.max(0, Math.min(1, map.cy - (e.clientY - was.y) / world));
     down.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -945,18 +948,23 @@ async function gaMapView(page) {
   };
   box.addEventListener("pointerup", up);
   box.addEventListener("pointercancel", up);
+  // A new size (the window resized, or zoomed): drawn again for it.
+  new ResizeObserver(() => { if (!map.raf && map.drawn) map.raf = requestAnimationFrame(() => { map.raf = 0; draw(); }); }).observe(box);
   let wheelAt = 0;
   box.addEventListener("wheel", (e) => {
     e.preventDefault();
     if (Date.now() - wheelAt < 180) return;
     wheelAt = Date.now();
+    if (e.ctrlKey) return; // Ctrl and the wheel zoom the window itself
     const r = box.getBoundingClientRect();
-    zoomAt(map.z + (e.deltaY < 0 ? 1 : -1), e.clientX - r.left, e.clientY - r.top);
+    const k = drawnScale(box);
+    zoomAt(map.z + (e.deltaY < 0 ? 1 : -1), (e.clientX - r.left) / k, (e.clientY - r.top) / k);
   }, { passive: false });
   box.addEventListener("dblclick", (e) => {
     if (e.target.closest(".ga-pin, .ga-map-zoom, .ga-map-panel")) return;
     const r = box.getBoundingClientRect();
-    zoomAt(map.z + 1, e.clientX - r.left, e.clientY - r.top);
+    const k = drawnScale(box);
+    zoomAt(map.z + 1, (e.clientX - r.left) / k, (e.clientY - r.top) / k);
   });
   box.addEventListener("keydown", (e) => {
     const step = 80 / (GA_TILE * 2 ** map.z);
