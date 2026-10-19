@@ -1,4 +1,4 @@
-// Obsidian's Bases in adlerMD: a .base file (or a ```base block in a note)
+// Obsidian's Bases in adlermd: a .base file (or a ```base block in a note)
 // is YAML that picks notes (filters), works things out (formulas) and shows
 // them in views, a table or cards. Its expressions are Bases' own small
 // language; here, the parts notes use most: file.name, .basename, .path,

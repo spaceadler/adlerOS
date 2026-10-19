@@ -273,7 +273,9 @@ async function refreshDesk() {
 function renderDesk() {
   const grid = $("desk");
   if (!desk.on) {
-    grid.replaceChildren(el("p", { class: "desk-empty" }, "No Desktop folder yet: set DESKTOP_DIR (in adlerOS's .env) and run ./install.sh again."));
+    // No files to show, but the apps you put here (and your folder, the widgets) still.
+    grid.replaceChildren(el("p", { class: "desk-empty" }, "No Desktop folder yet: set DESKTOP_DIR (in adlerOS's .env) and run ./install.sh again."),
+      ...deskAppNodes(), ...deskWidgetNodes());
     return;
   }
   const had = document.activeElement?.closest?.("#desk") ? document.activeElement.dataset.file : null;

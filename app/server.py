@@ -144,7 +144,7 @@ IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".avif")
 # frame-src: your apps' own pages, in desktop mode's windows. Any web page,
 # since an app may redirect elsewhere (its login, https); whether it may be
 # framed is the app's call, and adlerOS asks it first (/api/frame). img-src
-# https: pictures from the internet, in a note (adlerMD, Notepad).
+# https: pictures from the internet, in a note (adlermd, Notepad).
 PAGE_CSP = ("default-src 'self'; img-src 'self' data: https:; style-src 'self'; script-src 'self'; "
             "connect-src 'self'; frame-src http: https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 # Icons come from a third party: even opened directly, an SVG can't run code.
@@ -440,8 +440,8 @@ def search_url():
 # adlerOS's own, pinned (and unpinned, moved about) like any app; in the dock
 # from the start, in this order, until you take them out.
 BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal",
-                "adleros:notepad", "adleros:adlermd")
-DOCK_FIRST = BUILTIN_PINS[:5]  # a new dock's (Notepad and adlerMD: in All apps, for you to pin)
+                "adleros:notepad", "adleros:adlermd", "adleros:music")
+DOCK_FIRST = BUILTIN_PINS[:5]  # a new dock's (Notepad, adlermd and Music: in All apps, for you to pin)
 DOCK_SEED = 2  # 1: My Computer and the Terminal pinned; 2: the App Store, Settings and Live Usage too
 
 
@@ -1363,10 +1363,10 @@ def search_files(q, limit=40):
 
 # ---------------------------------------------------------------- notes
 
-# adlerMD's vaults: folders of notes, Obsidian's way, so a vault Obsidian
+# adlermd's vaults: folders of notes, Obsidian's way, so a vault Obsidian
 # keeps works here and back (its .obsidian settings are read, never
 # written). The first is NOTES_DIR in your storage (a homelab's Notes, by
-# default); you add more from adlerMD.
+# default); you add more from adlermd.
 VAULT_MAX = 20000  # files listed in one vault
 NOTE_MAX = 2 * 1024 * 1024
 OBSIDIAN_FILES = ("app.json", "appearance.json", "graph.json", "daily-notes.json", "templates.json", "bookmarks.json")
@@ -1399,7 +1399,7 @@ def vault_list():
 
 def note_facts(real, st):
     """What a note says about itself: its links, embeds, tags, headings and
-    frontmatter (as written; adlerMD reads it). Kept until it changes."""
+    frontmatter (as written; adlermd reads it). Kept until it changes."""
     with _notes_lock:
         cached = _notes_cache.get(str(real))
     if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
@@ -1446,7 +1446,7 @@ def vault_walk(top):
 
 
 def vault_index(vault):
-    """Everything adlerMD needs to know about a vault at once: its folders,
+    """Everything adlermd needs to know about a vault at once: its folders,
     its files (notes with their facts), its Obsidian settings."""
     place, top = locate(vault)
     if not top or not top.is_dir():
@@ -2837,7 +2837,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(409, {"error": error})
         return self.send_json(202, {"ok": True, "job": job})
 
-    # adlerMD: its vaults, a vault's index, search in it, renames that keep
+    # adlermd: its vaults, a vault's index, search in it, renames that keep
     # links working.
     def notes_get(self, what, query):
         if not places_on():

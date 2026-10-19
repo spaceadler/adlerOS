@@ -1,4 +1,4 @@
-// adlerMD's graph: notes as dots, their links as lines, pulled into shape
+// adlermd's graph: notes as dots, their links as lines, pulled into shape
 // by forces (graph.json's centre, repel and link strengths, and link
 // distance), on a canvas. Drag the space to move round, the wheel zooms, a
 // dot can be dragged; click one to open it (Ctrl: in a new tab). Hovering

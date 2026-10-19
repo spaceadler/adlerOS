@@ -33,7 +33,7 @@ room.
 
 The mouse's **side buttons** go back (the one nearer your palm) and
 forward, in the window under the pointer: My Computer's folders, Settings'
-categories, adlerMD's notes and folders (each tab its own). They never take
+categories, adlermd's notes and folders (each tab its own). They never take
 the browser off adlerOS; nor does its own back (Alt+Left, its button), which
 goes back in the window in front instead.
 
@@ -92,7 +92,7 @@ Three of Hyprland's had two jobs there (C: clipboard and centre, J: emoji
 and down, P: wallpaper and wider); here they move windows, and the
 wallpaper is Alt+Shift+P.
 
-## In adlerMD
+## In adlermd
 
 | Key | Does |
 | --- | --- |
@@ -117,7 +117,7 @@ wallpaper is Alt+Shift+P.
 | Enter | Play the song that's picked (with the rest of the list after it) |
 | Up, Down | Pick the song above or below |
 | Ctrl+F | Search |
-| Media keys | Play, pause, next, previous (the browser passes them on) |
+| Media keys, a phone's lock screen | Play, pause, next, previous (the browser passes them on) |
 | Mouse side buttons | Back and forward through where you've been |
 
 ## Typing
