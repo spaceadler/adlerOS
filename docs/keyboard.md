@@ -128,6 +128,7 @@ wallpaper is Alt+Shift+P.
 | i | Its info |
 | Escape | Close the photo |
 | Ctrl+F | Search |
+| Arrows, +, − (the map) | Move it, zoom in and out |
 | Mouse side buttons | Back and forward (in a photo: the one before and after) |
 
 ## Typing

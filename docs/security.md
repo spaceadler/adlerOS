@@ -135,9 +135,11 @@ do more than play.
 
 **Gallery** asks Immich with `IMMICH_API_KEY`, which stays on the server:
 the page asks adlerOS, and adlerOS asks Immich only for the timeline,
-albums, people, memories, one photo's details, search, thumbnails, videos
-and originals, each id checked. A key that may only read is enough, and
-that's all Gallery needs.
+albums, people, places, the map's points, memories, one photo's details
+and faces, search, thumbnails, videos, originals and album zips, each id
+checked. A key that may only read is enough, and that's all Gallery needs.
+The map's tiles come from CARTO (OpenStreetMap's map): your browser asks
+them for the part of the world you're looking at; no photo goes to them.
 
 **Notes** (adlermd, Notepad) are yours, but may come from anywhere (a vault
 someone shared). Their HTML is rebuilt from an allowlist, never inserted as
