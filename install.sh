@@ -4,16 +4,22 @@
 #   ./install.sh             ask a few things, then set up and start adlerOS
 #   ./install.sh --yes       take the current values (or the guesses), no questions
 #   ./install.sh --no-host   skip the helper's systemd units and sudo rule
+#   ./install.sh --connect   only connect Music, Gallery and Documents to
+#                            Navidrome, Immich and Paperless (a full run's last step)
+#   ./install.sh --homelab DIR [--connect]
+#                            run by a homelab's install.sh (spaceadler/homelab):
+#                            adlerOS's own questions, or its apps' connections
 #
 # It finds the apps in your compose folders and sorts them into collections,
-# sets up the helper that starts and stops them for adlerOS, and starts
-# adlerOS on port 8686. Safe to run again: the password and secrets in .env
-# are kept, and apps it already knows aren't touched.
+# sets up the helper that starts and stops them for adlerOS, starts adlerOS on
+# port 8686, and connects its apps to theirs. Safe to run again: the password
+# and secrets in .env are kept, apps it already knows aren't touched, and an
+# app that's connected stays as it is.
 set -euo pipefail
 
 ADLEROS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$ADLEROS_DIR/.env"
-ASSUME_YES=0 DO_HOST=1
+ASSUME_YES=0 DO_HOST=1 CONNECT_ONLY=0 HOMELAB=""
 
 say() { printf '%s\n' "$*"; }
 step() { printf '\n==> %s\n' "$*"; }
@@ -196,6 +202,27 @@ install_terminal() {
     info "terminal: on (admin mode and your password; log: journalctl -u adleros-terminal)"
 }
 
+# Music, Gallery and Documents: the login or key each needs from Navidrome,
+# Immich and Paperless (agent/connect.py, which asks only what it must, and
+# offers to make an admin where the app has none yet).
+connect() {
+    step "Connecting Music, Gallery and Documents"
+    local args=("$@")
+    interactive || args+=(--yes)
+    python3 -I "$ADLEROS_DIR/agent/connect.py" "${args[@]}" ||
+        warn "that didn't finish; ./install.sh --connect tries again"
+}
+
+# In a homelab, its install.sh does the rest (the container, the helper, the
+# password); these are adlerOS's own questions, asked when it runs this.
+homelab_settings() {
+    step "adlerOS's settings"
+    ENV_FILE=$HOMELAB/containers/core/os/.env
+    [ -f "$ENV_FILE" ] || die "no $ENV_FILE yet (the homelab's install.sh makes it)"
+    ask OS_NAME "Your first name, for the greeting" ""
+    info "saved to containers/core/os/.env"
+}
+
 discover() {
     step "Looking for your apps"
     if ! docker info >/dev/null 2>&1; then
@@ -212,7 +239,7 @@ start() {
     port=$(env_get ADLEROS_PORT)
     host=$(env_get ADLEROS_HOST)
     say ""
-    say "    adlerOS: http://${host:-localhost}:${port:-8686}"
+    say "    adlerOS: http://${host:-$(guess_host)}:${port:-8686}"
     if [ -n "${NEW_PASSWORD:-}" ]; then
         say "    Password: $NEW_PASSWORD   (it's OS_PASSWORD in .env; change it in Settings)"
     else
@@ -226,11 +253,25 @@ main() {
         case $1 in
         -y | --yes) ASSUME_YES=1 && shift ;;
         --no-host) DO_HOST=0 && shift ;;
-        -h | --help) sed -n '2,12p' "$0" | sed -E 's/^# ?//' && exit 0 ;;
+        --connect) CONNECT_ONLY=1 && shift ;;
+        --homelab) HOMELAB=${2?--homelab needs a homelab folder} && shift 2 ;;
+        --homelab=*) HOMELAB=${1#*=} && shift ;;
+        -h | --help) sed -n '2,19p' "$0" | sed -E 's/^# ?//' && exit 0 ;;
         *) die "unknown option '$1' (see --help)" ;;
         esac
     done
     [ "$(id -u)" -ne 0 ] || die "run this as your normal user, not root; it uses sudo where it needs to"
+    if [ -n "$HOMELAB" ]; then
+        HOMELAB=$(cd "$HOMELAB" && pwd) || die "no folder $HOMELAB"
+        [ -f "$HOMELAB/homelab.env" ] || die "$HOMELAB isn't a homelab (it has no homelab.env)"
+        if [ $CONNECT_ONLY = 1 ]; then connect --homelab "$HOMELAB"; else homelab_settings; fi
+        return
+    fi
+    if [ $CONNECT_ONLY = 1 ]; then
+        [ -f "$ENV_FILE" ] || die "no .env yet: run ./install.sh first"
+        connect --standalone "$ADLEROS_DIR"
+        return
+    fi
     for c in docker python3 openssl envsubst; do
         command -v $c >/dev/null || die "'$c' is missing; install it first (envsubst is in gettext)"
     done
@@ -239,6 +280,7 @@ main() {
     if [ $DO_HOST = 1 ]; then install_agent; fi
     discover
     start
+    connect --standalone "$ADLEROS_DIR"
 }
 
 main "$@"

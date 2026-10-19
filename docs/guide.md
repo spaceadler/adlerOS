@@ -75,6 +75,9 @@ The first time anyone logs in, adlerOS welcomes you, in a few steps:
 6. **Connecting them**: for each one that isn't, the steps from where it is
    (install the app, make your account, make the login or key, put it in the
    settings file), and what it shows meanwhile. **Check again** asks again.
+   Or let the installer do it, in a terminal: `./install.sh --connect` in
+   adlerOS's folder (in a homelab, `./install.sh` in the homelab's), which
+   makes each key with your login, and the admin where an app has none yet.
 7. A short look around: your apps, the dock, search, the bell, and where the
    rest is.
 

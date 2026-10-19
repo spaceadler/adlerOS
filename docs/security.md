@@ -147,6 +147,17 @@ preview and original, and the tags, correspondents and types; files you
 add go to Paperless's own upload. The token is your Paperless user's, so it
 may do what you may there; Documents only reads, and adds what you give it.
 
+**Connecting them** (`install.sh`, in a terminal, through
+`agent/connect.py`) makes those keys with each app's own API, at the
+address adlerOS knows it at: Paperless's token from a login (in a homelab,
+the admin login its `install.sh` made), an Immich key that may only read,
+made in a session that's logged out straight after, and Navidrome's login,
+checked with a Subsonic ping. Where Immich or Navidrome has no admin yet,
+it offers to make yours, with the email, name and password you type. The
+passwords you type go only to the app and aren't saved, except Navidrome's,
+which Music needs; the keys are written into the settings file in place,
+readable only by you.
+
 Without a key or token, **Gallery and Documents** read only their own
 folder in your storage (`GALLERY_DIR`, `DOCUMENTS_DIR`), the same files My
 Computer can open: a list of what's in it, and for Gallery a photo's small

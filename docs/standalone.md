@@ -18,9 +18,12 @@ manage them, without moving or changing anything.
 
 ```bash
 cd ~/docker   # wherever your compose folders are: adlerOS is one of them
-git clone https://git.spaceadler.com/spaceadler/adleros.git
+git clone https://github.com/spaceadler/adleros.git
 cd adleros && ./install.sh
 ```
+
+(The same code is at `https://git.spaceadler.com/spaceadler/adleros.git`,
+where it's pushed first.)
 
 Any folder works (`~/adleros` too). Next to your other apps it's one of them:
 its compose file, settings and data in its own folder. It never lists itself,
@@ -52,10 +55,18 @@ for them, and looks there.) Then it:
    something; `/usr/local/libexec/adleros/power` and `/etc/sudoers.d/adleros`
    so it can restart and shut down, and nothing else as root,
 3. **finds your apps** (below),
-4. starts adlerOS, and prints its address and password.
+4. starts adlerOS, and prints its address and password,
+5. **connects Music, Gallery and Documents** to Navidrome, Immich and
+   Paperless, if it found them: it asks for your login in each (or, where
+   Immich or Navidrome has no admin yet, offers to make yours), makes the
+   key or token through the app's own API, and writes it into `.env`. What
+   you type goes only to the app and isn't saved, except Navidrome's login,
+   which Music needs. One that's connected is left alone; say no to any of
+   them and it shows the files themselves.
 
 `./install.sh --yes` takes the guesses (or what's already in `.env`) without
-asking. `--no-host` skips the helper: adlerOS shows your apps, but can't start
+asking. `./install.sh --connect` does only step 5, for when you've installed
+Immich (say) later. `--no-host` skips the helper: adlerOS shows your apps, but can't start
 or stop them. Running it again is safe: it keeps the password and the apps it
 knows, and adds new ones.
 

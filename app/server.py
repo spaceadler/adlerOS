@@ -271,6 +271,9 @@ def installed_apps():
         if app["genre"] != "core" and app["id"] not in chosen:
             continue
         if app["id"] == "vaultwarden" and vault_host:
+            # Bound to loopback on purpose (HTTPS only, by tailscale serve or
+            # nginx), so it's checked at its HTTPS name instead of its port.
+            app = {**app, "check": vault_host}
             url = f"https://{vault_host}"
         else:
             url = f"{scheme}://{app['sub']}.{domain}"
@@ -815,7 +818,7 @@ def image_updates():
     found = None
     for path in ("/api/v3/json", "/api/v2/json", "/json"):
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{cup['port']}{path}", timeout=4) as r:
+            with urllib.request.urlopen(f"http://{local_address()}:{cup['port']}{path}", timeout=4) as r:
                 data = json.loads(r.read(5_000_000))
         except (OSError, ValueError):
             continue
@@ -840,19 +843,39 @@ _status_lock = threading.Lock()
 _pool = ThreadPoolExecutor(max_workers=16)
 
 
-def _port_up(port):
+def local_address():
+    """This machine, as adlerOS reaches its apps: its Tailscale address (TS_IP
+    in a homelab, ADLEROS_HOST standalone), never loopback."""
+    return (install_setting("TS_IP") if HOMELAB_MODE else install_setting("ADLEROS_HOST")) or socket.gethostname()
+
+
+def _up(target):
+    """Whether it answers: a port (a number) at this machine's address, or a
+    name (an app served only over HTTPS) at port 443 there, asked for that
+    name: any answer but a proxy's 5xx (its app is down) is up."""
+    host = local_address()
     try:
-        with socket.create_connection(("127.0.0.1", port), timeout=0.8):
-            return True
+        if isinstance(target, int):
+            with socket.create_connection((host, target), timeout=0.8):
+                return True
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE  # only whether it answers
+        with socket.create_connection((host, 443), timeout=0.8) as raw, context.wrap_socket(raw, server_hostname=target) as tls:
+            tls.settimeout(2)
+            tls.sendall(f"HEAD / HTTP/1.1\r\nHost: {target}\r\nConnection: close\r\n\r\n".encode())
+            status = tls.recv(64).split(b" ", 2)
+            return len(status) > 1 and status[1].isdigit() and int(status[1]) < 500
     except OSError:
         return False
 
 
 def app_status(apps):
-    """{app id: up?}: whether each app's port answers. An imported app with
-    no port can't be checked, so it counts as up."""
-    ports = port_status({a["port"] for a in apps if a["port"]})
-    return {a["id"]: ports[a["port"]] if a["port"] else True for a in apps}
+    """{app id: up?}: whether each app's port answers (or its HTTPS name, for
+    one bound to loopback). An imported app with no port can't be checked,
+    so it counts as up."""
+    up = port_status({a.get("check") or a["port"] for a in apps if a.get("check") or a["port"]})
+    return {a["id"]: up[a.get("check") or a["port"]] if a.get("check") or a["port"] else True for a in apps}
 
 
 # ----------------------------------------------------------- app windows
@@ -868,10 +891,11 @@ def frame_headers(app):
     can add headers), else at its port on this machine (no DNS needed). None
     if it doesn't answer."""
     host = urllib.parse.urlsplit(app["url"]).hostname or ""
-    own_name = host not in ("127.0.0.1", "localhost", os.environ.get("ADLEROS_HOST", ""))
+    here = local_address()
+    own_name = host not in ("127.0.0.1", "localhost", here)
     urls = [app["url"]] if own_name or not app.get("port") else []
     if app.get("port"):
-        urls += [f"http://127.0.0.1:{app['port']}/", f"https://127.0.0.1:{app['port']}/"]
+        urls += [f"http://{here}:{app['port']}/", f"https://{here}:{app['port']}/"]
     context = ssl.create_default_context()
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE  # only to read its headers: its own certificate, often
@@ -952,12 +976,12 @@ def frame_answer(app, host, secure):
 
 
 def port_status(ports):
-    """{port: up?} for every port, checked in parallel, cached STATUS_TTL."""
+    """{port (or HTTPS name): up?} for each, checked in parallel, cached STATUS_TTL."""
     now = time.monotonic()
     with _status_lock:
         result = {p: up for p, (at, up) in _status.items() if p in ports and now - at < STATUS_TTL}
     todo = [p for p in ports if p not in result]
-    for port, up in zip(todo, _pool.map(_port_up, todo)):
+    for port, up in zip(todo, _pool.map(_up, todo)):
         result[port] = up
         with _status_lock:
             _status[port] = (time.monotonic(), up)
@@ -2699,6 +2723,10 @@ def allowed_networks():
     if not items or "anyone" in items:
         return None
     found = [ipaddress.ip_network("127.0.0.0/8"), ipaddress.ip_network("::1/128")]
+    try:
+        found.append(ipaddress.ip_network(local_address()))  # its own address, as its health check asks
+    except ValueError:
+        pass  # a name, not an address
     for item in items:
         try:
             found += [ipaddress.ip_network(n) for n in TAILNET] if item == "tailscale" else [ipaddress.ip_network(item, strict=False)]

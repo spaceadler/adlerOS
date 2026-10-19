@@ -13,13 +13,14 @@ Docker, and your compose files stay yours.
 
 ```bash
 cd ~/docker   # wherever your compose folders are: adlerOS is one of them
-git clone https://git.spaceadler.com/spaceadler/adleros.git
+git clone https://github.com/spaceadler/adleros.git
 cd adleros && ./install.sh
 ```
 
 It asks a few things (your name, this machine's address, where your compose
-files are, your timezone…), finds your apps, and prints the address and a
-password: `http://<this machine>:8686`. It never lists itself among them, so
+files are, your timezone…), finds your apps, prints the address and a
+password (`http://<this machine>:8686`), and offers to connect Music, Gallery
+and Documents to Navidrome, Immich and Paperless. It never lists itself among them, so
 you can't stop it from inside it. Open it on your phone and *Add to Home
 Screen*: it opens like an app.
 
@@ -126,8 +127,9 @@ backups) and **Extras**.
   Docker. Your apps come from your compose folders; new ones from adlerOS's
   store. See [docs/standalone.md](docs/standalone.md).
 - **Inside a homelab built from
-  [spaceadler/homelab](https://git.spaceadler.com/spaceadler/homelab):** its
-  `install.sh` fetches adlerOS into `containers/core/os/adleros` and runs it in
+  [spaceadler/homelab](https://github.com/spaceadler/homelab):** its
+  `install.sh` fetches adlerOS into `containers/core/os/adleros`, runs
+  adlerOS's own installer for its questions and connections, and runs it in
   *homelab mode*: apps come from the homelab's catalog, and the App Store
   installs and deletes them through the homelab's `install.sh`. See
   [docs/homelab.md](docs/homelab.md).

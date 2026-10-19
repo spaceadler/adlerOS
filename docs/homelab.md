@@ -1,6 +1,6 @@
 # adlerOS in spaceadler/homelab
 
-[spaceadler/homelab](https://git.spaceadler.com/spaceadler/homelab) is a
+[spaceadler/homelab](https://github.com/spaceadler/homelab) is a
 clone-and-run homelab: one `install.sh`, a catalog of apps in collections, and
 adlerOS as its home screen. There, adlerOS runs in **homelab mode**.
 
@@ -8,8 +8,22 @@ adlerOS as its home screen. There, adlerOS runs in **homelab mode**.
 
 - The homelab's `install.sh` fetches adlerOS into
   `containers/core/os/adleros/` (a shallow git checkout, never committed to
-  the homelab) and updates it on every run. `ADLEROS_REPO` and `ADLEROS_REF`
-  in `homelab.env` pick another copy or version.
+  the homelab) and updates it on every run: from GitHub, else each of
+  `ADLEROS_MIRRORS` (by default the Gitea it's pushed to). `ADLEROS_REPO`
+  and `ADLEROS_REF` in `homelab.env` pick another copy or version.
+- adlerOS is optional there: `ADLEROS=off` (or `./install.sh --no-adleros`,
+  or no to its first question) sets the homelab up without it, and without
+  the helper, which is adlerOS's.
+- It runs adlerOS's own installer twice, in homelab mode: `install.sh
+  --homelab <the homelab>` before the apps start, for adlerOS's own
+  questions (your name, into `containers/core/os/.env`; the homelab's
+  installer asks none of them), and `install.sh --homelab <the homelab>
+  --connect` once they're up, which connects Music, Gallery and Documents
+  (`agent/connect.py`): Documents by itself, with the admin login
+  `install.sh` gave Paperless; Gallery and Music with your Immich and
+  Navidrome logins, making the admin where there's none yet. The keys go
+  into `homelab.env`. The summary at the end shows adlerOS's password the
+  first time.
 - `containers/core/os/docker-compose.yml` runs adlerOS's `app/` from there,
   with `ADLEROS_MODE: homelab`, at `os.<domain>` and port 8686.
 - The helper is `homelab-agent.path` and `.service`, running adlerOS's
