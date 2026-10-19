@@ -322,7 +322,10 @@ function welcomeHow(l, s, st) {
   const perms = (st.permissions || []).map((p) => el("code", {}, p));
   const file = settingsFile();
   const install = `Install ${l.over} (the App Store has it), or if it runs elsewhere, put its address in ${file} as ${l.id === "music" ? "NAVIDROME_URL" : l.id === "gallery" ? "IMMICH_URL" : "PAPERLESS_URL"}=…`;
-  const account = `Open ${l.over} and make your account.`;
+  // A homelab's install.sh makes Paperless's admin itself.
+  const account = state.mode !== "standalone" && l.id === "documents"
+    ? "Log in to Paperless as admin: install.sh made the account, with the password PAPERLESS_ADMIN_PASSWORD in containers/productivity/paperless-ngx/.env."
+    : `Open ${l.over} and make your account.`;
   const key = {
     music: [`Your Navidrome login is all it takes: put it in ${file} as NAVIDROME_USER=… and NAVIDROME_PASSWORD=…${settingsThen()}.`],
     gallery: ["In Immich: Account Settings → API Keys → New API Key, with these permissions (they only read):", el("span", { class: "welcome-perms" }, ...perms),
@@ -361,6 +364,9 @@ const welcomeConnect = {
       title: "Connecting them",
       body: [
         welcomeText(`Each takes one login or key, made in that app and put in ${settingsFile()}. It stays on this server; your browser never sees it.`),
+        welcomeText(state.mode === "standalone"
+          ? "Or let adlerOS's installer do it: ./install.sh --connect in adlerOS's folder, in a terminal, makes each one's key with your login (and the admin, where an app has none yet)."
+          : "Or let the installer do it: ./install.sh again in your homelab's folder, in a terminal, connects Documents by itself, and Gallery and Music with your login (making their admin, where they have none yet)."),
         box,
       ],
       extra: [again],
