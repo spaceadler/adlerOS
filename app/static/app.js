@@ -458,6 +458,7 @@ const BUILTIN_PINS = {
   "adleros:terminal": { name: "Terminal", icon: "terminal", dock: "terminal", open: () => toggleTerminal() },
   "adleros:notepad": { name: "Notepad", icon: "notepad", dock: "notepad", open: () => openNotepad() },
   "adleros:adlermd": { name: "adlerMD", icon: "adlermd", dock: "adlermd", open: () => toggleAdlermd() },
+  "adleros:music": { name: "Music", icon: "music", dock: "music", open: () => toggleMusic() },
 };
 // A pin: an installed app, or one of those.
 const pinFor = (id) => appById(id) || (BUILTIN_PINS[id] && { id, builtin: BUILTIN_PINS[id] });
@@ -548,6 +549,7 @@ function buildDock() {
   markDockOpen("files", isOpen("files"));
   markDockOpen("terminal", isOpen("terminal"));
   markDockOpen("adlermd", isOpen("adlermd"));
+  markDockOpen("music", isOpen("music"));
   markDockOpen("notepad", [...pads.keys()].some((id) => isOpen(id)));
   winDock();
 }
@@ -679,7 +681,7 @@ const newWindowItem = (id) => (desktopMode() && NEW_WINDOW[id] ? [{ label: "New 
 
 // What a right-click (or a long press) on `target` offers.
 // The window a dock item opens, if it's open: its id, for Close.
-const DOCK_WINDOWS = { "app-store": "store", settings: "settings", "live-usage": "usage", files: "files", terminal: "terminal", adlermd: "adlermd" };
+const DOCK_WINDOWS = { "app-store": "store", settings: "settings", "live-usage": "usage", files: "files", terminal: "terminal", adlermd: "adlermd", music: "music" };
 function openWindowFor(item) {
   const id = item?.dataset.window || DOCK_WINDOWS[item?.dataset.dock] || (item?.dataset.app && !BUILTIN_PINS[item.dataset.app] ? `app-${item.dataset.app}` : null);
   return id && wm.windows.has(id) && isOpen(id) ? id : null;
@@ -1122,6 +1124,7 @@ const ACTIONS = [
   { id: "files", name: "My Computer", keywords: "files folders storage documents upload download trash desktop mailbox root computer finder explorer" },
   { id: "notepad", name: "Notepad", keywords: "notepad text editor edit write txt plain" },
   { id: "adlermd", name: "adlerMD", keywords: "adlermd notes markdown md obsidian vault wiki journal daily graph" },
+  { id: "music", name: "Music", keywords: "music songs albums artists playlists radio player play listen lyrics spotify mp3" },
   { id: "desktop-mode", name: "Desktop mode or home screen", keywords: "desktop mode windows window manager floating side by side home screen switch" },
   { id: "welcome", name: "Welcome tour", keywords: "welcome tour intro introduction start first help guide find apps compose folders" },
   { id: "logout", name: "Log out", keywords: "log out sign out lock exit" },
@@ -1220,6 +1223,7 @@ function runResult(i) {
   else if (r.action.id === "files") openFiles(filesHome());
   else if (r.action.id === "notepad") openNotepad();
   else if (r.action.id === "adlermd") openAdlermd();
+  else if (r.action.id === "music") openMusic();
   else if (r.action.id === "desktop-mode") setDesktopMode(!desktopMode());
   else if (r.action.id === "welcome") openWelcome();
   else if (r.action.id === "logout") confirmLogout();

@@ -312,16 +312,17 @@ function entryMenu(entry, path, f) {
 }
 
 // A folder opens in this window (from the desktop: the one in front, if
-// one's open); a text file in Notepad (Markdown: adlerMD's quick look); the
-// rest in windows of their own.
+// one's open); a text file in Notepad (Markdown: adlerMD's quick look); a
+// song or a playlist in Music; the rest in windows of their own.
 function openEntry(entry, path, f = null) {
   if (entry.outside) return toast("That link leads outside its place, so adlerOS won't open it.");
   if (entry.dir) {
     const into = f || (filesOpen() ? frontFiles() : null);
     return into ? showFolder(path, into) : openFiles(path);
   }
+  if (/\.m3u8?$/i.test(entry.name)) return musicPlayListFile(path); // a playlist: in Music
   if (entry.kind === "text") return openNotepad(path);
-  if (entry.kind === "audio") return playSong(entry, path);
+  if (entry.kind === "audio") return playSong(entry, path); // in Music
   if (["image", "video", "pdf"].includes(entry.kind)) return viewFile(entry, path);
   return downloadFile(path);
 }
@@ -351,26 +352,6 @@ function viewFile(entry, path) {
 function closeViewer() {
   $("viewer-body").replaceChildren(); // a video stops
   closeWindow("viewer");
-}
-
-// A song plays in a window of its own, so the rest of adlerOS stays yours
-// meanwhile: minimized it keeps playing, another song takes its place, and
-// closing it stops it.
-function playSong(entry, path) {
-  const audio = $("music-audio");
-  $("music-name").textContent = entry.name;
-  $("music").dataset.path = path;
-  audio.src = fileUrl(path, true);
-  openWindow("music");
-  audio.play().catch(() => {}); // the browser may want a click on play first
-}
-
-function closeMusic() {
-  const audio = $("music-audio");
-  audio.pause();
-  audio.removeAttribute("src");
-  audio.load();
-  closeWindow("music");
 }
 
 // ------------------------------------------------------------- changing
@@ -737,15 +718,9 @@ function wireFiles(f) {
 
 const firstFiles = makeFileWin("files", $("files"));
 registerWindow("files", { title: "My Computer", close: () => closeFiles(firstFiles), dock: "files", size: [980, 640] });
-// Half the width of a picture's preview and a quarter taller; over the home
-// screen it floats above the dock (float), with everything else still open;
-// it floats when windows tile, too (floats).
-registerWindow("music", { title: "Music", close: closeMusic, size: [490, 260], float: true, floats: true });
 registerWindow("viewer", { title: "Viewer", close: closeViewer, size: [980, 680], float: true });
-$("music-close").addEventListener("click", closeMusic);
 $("viewer-close").addEventListener("click", closeViewer);
 $("viewer-download").addEventListener("click", () => downloadFile($("viewer").dataset.path));
-$("music-download").addEventListener("click", () => downloadFile($("music").dataset.path));
 document.addEventListener("pointermove", fileMove);
 document.addEventListener("pointerup", fileUp);
 document.addEventListener("pointercancel", fileUp);
