@@ -1396,8 +1396,17 @@ const muAction = (action, run) => { try { navigator.mediaSession.setActionHandle
 if ("mediaSession" in navigator) {
   muAction("play", () => music.audio.play().catch(() => {}));
   muAction("pause", () => music.audio.pause());
-  muAction("previoustrack", musicPrev);
+  muAction("previoustrack", musicPrevSong);
   muAction("seekto", (d) => { if (Number.isFinite(d.seekTime)) music.audio.currentTime = d.seekTime; });
+}
+
+// The lock screen's previous: the song before, straight away (the bar's
+// button starts this one again first, once it's past 3 seconds; there that's
+// what you'd expect, on a lock screen it just looks like nothing happened).
+function musicPrevSong() {
+  if (music.at > 0) { music.at--; return musicStart(true); }
+  if (music.repeat === "all" && music.queue.length > 1) { music.at = music.queue.length - 1; return musicStart(true); }
+  music.audio.currentTime = 0;
 }
 
 // Next only when there's a next one (greyed out on the lock screen otherwise).
