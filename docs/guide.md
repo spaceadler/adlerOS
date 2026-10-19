@@ -320,6 +320,15 @@ you deleted. A card's *First time* note says what to do on first login.
 Installing or deleting can take a minute or two; **Details** on the card shows
 it working.
 
+**Add a website…** makes any address an app: give it the address (the name
+fills in from it) and a page on your home screen. It opens in a window like
+the rest; a site that won't be shown inside another page (many big ones
+refuse) opens in the Firefox app instead, if you have it, else in a tab.
+It's an app in every other way too (the dock, the Desktop, search), with
+its icon from dashboard-icons when there's one by its name, else a letter.
+Its App Store card says *Website*; **Remove** takes it away (the site isn't
+touched). Nothing runs for it.
+
 A few things need **admin mode** (Settings → System): deleting apps, and
 stopping, restarting or updating core apps (DNS, your reverse proxy, the
 password manager), since your network and logins depend on them. Without

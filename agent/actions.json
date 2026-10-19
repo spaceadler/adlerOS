@@ -261,6 +261,36 @@
       }
     ]
   },
+  "app-add-site": {
+    "label": "Adding a website",
+    "description": "Adds a website as an app (registry/<app>/app.json, or containers/extras in a homelab): it opens in a window like the rest. Nothing runs.",
+    "params": {
+      "name": {
+        "pattern": "^[^\\u0000-\\u001f]{1,40}$",
+        "maxLength": 40
+      },
+      "url": {
+        "pattern": "^https?://[^\\s\"'<>\\\\]{1,300}$",
+        "maxLength": 310
+      },
+      "collection": {
+        "pattern": "^(system|media|knowledge|productivity|life|files|extras)?$"
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/apps.py",
+          "site",
+          "{param:name}",
+          "{param:url}",
+          "{param:collection}"
+        ]
+      }
+    ]
+  },
   "app-forget": {
     "label": "Removing from adlerOS",
     "admin": "core",

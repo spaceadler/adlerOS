@@ -164,7 +164,8 @@ async function appAction(app, action) {
   if (action === "app-forget") {
     const ok = await confirmDialog({
       title: `Remove ${name} from adlerOS?`,
-      body: "It leaves your home screen and the App Store. Its containers keep running and its files stay where they are; you can import it again.",
+      body: app.site ? "It leaves your home screen and the App Store. The website itself isn't touched; you can add it again."
+        : "It leaves your home screen and the App Store. Its containers keep running and its files stay where they are; you can import it again.",
       button: "Remove",
       destructive: true,
     });
@@ -300,7 +301,79 @@ function button(label, cls, onClick, disabled = false) {
   return b;
 }
 
+// A website you added: its address, opened like an app, and Remove.
+function siteCard(app) {
+  const open = el("button", { type: "button", class: "chip-button" }, "Open");
+  open.addEventListener("click", () => openApp(app));
+  const busy = store.busy[app.id];
+  return el("div", { class: "store-card", "data-app": app.id },
+    el("div", { class: "store-head" }, el("span", { class: "store-icon" }, plateFor(app)),
+      el("div", { class: "store-name" }, el("div", { class: "row-title" }, app.name),
+        el("div", { class: "store-state site" }, busy ? `${VERBS[busy.action]}…` : "Website")),
+      open),
+    el("p", { class: "row-description" }, app.url),
+    el("div", { class: "store-actions" }, busy ? "" : button("Remove", "destructive", () => appAction(app, "app-forget"))));
+}
+
+// Add a website: its address and a name, and it's an app like the rest,
+// opened in a window (or the Firefox app, for a site that won't be framed).
+function siteDialog() {
+  const url = el("input", { class: "field-input", type: "text", inputmode: "url", placeholder: "Address: https://…", spellcheck: "false", autocapitalize: "off", required: "" });
+  const name = el("input", { class: "field-input", type: "text", placeholder: "Name", maxlength: "40", required: "" });
+  const names = Object.fromEntries((state.collections || []).map((c) => [c.id, c.name]));
+  const where = el("select", { class: "field-input", "aria-label": "Its page on the home screen" },
+    ...["extras", "system", "media", "knowledge", "productivity", "life", "files"].map((id) =>
+      el("option", { value: id }, names[id] || id[0].toUpperCase() + id.slice(1))));
+  const error = el("p", { class: "error", role: "alert" });
+  const add = el("button", { type: "submit", class: "button-primary wide" }, "Add");
+  const cancel = el("button", { type: "button", class: "button-secondary" }, "Cancel");
+  const full = () => (/^https?:\/\//i.test(url.value.trim()) ? url.value.trim() : `https://${url.value.trim()}`);
+  // The name, until you type one: the site's own (example.com: Example).
+  let named = false;
+  name.addEventListener("input", () => { named = Boolean(name.value); });
+  url.addEventListener("input", () => {
+    if (named) return;
+    let host = "";
+    try { host = new URL(full()).hostname.replace(/^www\./, ""); } catch { /* not yet an address */ }
+    const word = host.split(".").slice(-2, -1)[0] || host;
+    name.value = word ? word[0].toUpperCase() + word.slice(1) : "";
+  });
+  const form = el("form", {}, url, name, where, error);
+  const dialog = el("div", { class: "dialog material", role: "dialog", "aria-modal": "true" },
+    el("h2", {}, "Add a website"),
+    el("p", {}, "It becomes an app on your home screen, and opens in a window like the rest. A site that won't be shown inside another page opens in the Firefox app (if you have it), else in a tab."),
+    form, el("div", { class: "dialog-actions" }, cancel, add));
+  cancel.addEventListener("click", closeModal);
+  const submit = async (e) => {
+    e.preventDefault();
+    error.textContent = "";
+    let address;
+    try { address = new URL(full()); } catch { return (error.textContent = "That isn't an address."); }
+    if (!/^https?:$/.test(address.protocol) || !address.hostname) return (error.textContent = "An http:// or https:// address.");
+    if (!name.value.trim()) return (error.textContent = "Give it a name.");
+    add.disabled = true;
+    const { status, body } = await postAction("app-add-site", { name: name.value.trim(), url: address.href, collection: where.value });
+    if (status === 401) return showLock();
+    const job = status === 202 ? await waitForJob(body) : null;
+    add.disabled = false;
+    if (!job || job.status !== "done") {
+      error.textContent = status === 409 ? `Wait for "${body?.job?.label || "the current job"}" to finish first.`
+        : status === 400 && body?.error === "unknown action" ? "adlerOS's helper doesn't know this yet: run ./install.sh again."
+          : (job?.log || []).filter((l) => !l.startsWith("$")).pop() || job?.error || body?.error || "That didn't work.";
+      return;
+    }
+    closeModal();
+    await refresh();
+    renderStore();
+    toast(`${name.value.trim()} is on your home screen, in ${where.selectedOptions[0].textContent}.`);
+  };
+  form.addEventListener("submit", submit);
+  add.addEventListener("click", submit);
+  openModal(dialog);
+}
+
 function storeCard(app) {
+  if (app.site) return siteCard(app);
   const s = store.status?.[app.id];
   const busy = store.busy[app.id];
   const st = busy ? "busy" : s ? s.state : "checking";
@@ -778,6 +851,7 @@ function importRunStep() {
 registerWindow("store", { title: "App Store", close: closeStore, dock: "app-store", size: [1100, 780] });
 $("store-close").addEventListener("click", closeStore);
 $("store-import").addEventListener("click", startImport);
+$("store-add-site").addEventListener("click", siteDialog);
 $("store-search").addEventListener("input", (e) => {
   store.query = e.target.value;
   renderStore();

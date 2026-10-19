@@ -229,6 +229,7 @@ def registry_apps(installed=True):
         apps.append({"id": folder.name, "genre": collection, "sub": "-", "port": port, "icon": icon,
                      "name": info["name"][:40], "about": str(info.get("about", ""))[:200], "url": info["url"],
                      "imported": True, "known": str(info.get("known", "")), "note": str(info.get("note", ""))[:300],
+                     "site": info.get("source") == "site",  # a website you added: no containers
                      # "https": only in a window when adlerOS is on HTTPS too; "tab": never.
                      "window": info.get("window") if info.get("window") in ("https", "tab") else ""})
     return apps
@@ -2931,7 +2932,7 @@ class Handler(BaseHTTPRequestHandler):
                 {"id": a["id"], "name": a["name"], "about": a["about"], "genre": a["genre"],
                  "url": a["url"], "hasIcon": a["icon"].startswith("di:"), "icon": a["icon"],
                  "imported": bool(a.get("imported")), "note": a.get("note", ""), "up": status[a["id"]],
-                 "home": a.get("home"), "known": a.get("known", "")} for a in apps],
+                 "home": a.get("home"), "known": a.get("known", ""), "site": bool(a.get("site"))} for a in apps],
                 "available": [{"id": a["id"], "name": a["name"], "about": a["about"], "genre": a["genre"],
                                "hasIcon": a["icon"].startswith("di:"), "icon": a["icon"],
                                "imported": bool(a.get("imported")), "store": bool(a.get("store"))}
