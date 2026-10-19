@@ -1,0 +1,80 @@
+# adlerOS in a homelab (spaceadler/homelab), at os.<DOMAIN> (the bare domain
+# redirects here). install.sh --homelab <the homelab> writes this into the
+# homelab's containers/core/os/, with .env beside it (the homelab's settings
+# this needs, adlerOS's password and session key), and starts it there: your
+# apps come from the homelab's catalog, one page per collection, and the App
+# Store installs and deletes them through the homelab's install.sh.
+#
+# Python's standard library and plain HTML/CSS/JS, nothing to build. It has no
+# Docker or root access: it runs as you, read-only, with no capabilities.
+# Anything that changes the machine is a request it queues in ./data/agent
+# for the helper on the host (homelab-agent, running adlerOS's agent.py),
+# which runs only what adlerOS's agent/actions.json and the homelab's
+# scripts/agent/actions.json allow.
+services:
+  os:
+    image: python:3.13-alpine
+    container_name: homelab-os
+    restart: unless-stopped
+    user: ${PUID:?run ./install.sh}:${PGID:?run ./install.sh}
+    # Host network: it checks each app at TS_IP:<port> (Vaultwarden, bound to
+    # loopback, at its HTTPS name), and port 8686 is guarded by ufw like any
+    # other host service: open on tailscale0, closed on the LAN.
+    network_mode: host
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command: ["python", "-u", "/app/server.py"]
+    environment:
+      ADLEROS_MODE: homelab
+      OS_PASSWORD: ${OS_PASSWORD:?run ./install.sh}
+      OS_SESSION_SECRET: ${OS_SESSION_SECRET:?run ./install.sh}
+      OS_NAME: ${OS_NAME:-}
+      OS_PORT: 8686
+      TZ: ${TZ:?run ./install.sh}
+      # This machine's Tailscale address, for the health check below.
+      TS_IP: ${TS_IP:?run ./install.sh}
+      # Files' places as they are on this machine: Root is this homelab, its
+      # mailbox/ the Desktop, STORAGE_DIR the User folder.
+      ADLEROS_HOST_ROOT: ${HOMELAB_DIR:?run ./install.sh}
+      ADLEROS_HOST_DESKTOP: ${HOMELAB_DIR:?run ./install.sh}/mailbox
+      ADLEROS_HOST_STORAGE: ${STORAGE_DIR:?run ./install.sh}
+      # Who it answers, besides ufw: your tailnet (and this machine's nginx).
+      ADLEROS_NETWORKS: ${ADLEROS_NETWORKS:-tailscale}
+      PYTHONDONTWRITEBYTECODE: 1
+    volumes:
+      # adlerOS itself: the copy the homelab's install.sh fetched (ADLEROS_DIR).
+      - ${ADLEROS_DIR:?run ./install.sh}/app:/app:ro
+      - ${ADLEROS_DIR:?run ./install.sh}/catalog:/adleros/catalog:ro
+      - ${ADLEROS_DIR:?run ./install.sh}/agent:/adleros/agent:ro
+      # App icons, fetched once from dashboard-icons and served from here, so
+      # your browser never talks to a third party.
+      - ./data:/data
+      # Your wallpaper: put an image here (the first one, by name, is used).
+      # Empty: the built-in aurora, photographed from the ISS (NASA, public domain).
+      - ./wallpaper:/wallpaper:ro
+      # Your own dock icons: app-store, settings or live-usage (.svg/.png/.webp)
+      # here replace the built-in ones. Kept out of git.
+      - ./icons:/icons:ro
+      - ${HOMELAB_DIR:?run ./install.sh}/containers/catalog.tsv:/homelab/catalog.tsv:ro
+      # Apps you imported in the App Store (the helper writes these).
+      - ${HOMELAB_DIR:?run ./install.sh}/containers/extras:/homelab/extras:ro
+      - ${HOMELAB_DIR:?run ./install.sh}/homelab.env:/homelab/homelab.env:ro
+      # Read-only, for Settings: what the helper may do (it never runs
+      # anything itself, only queues requests in ./data/agent), when the
+      # last backup ran, and which OS this is.
+      - ${HOMELAB_DIR:?run ./install.sh}/scripts/agent:/homelab/agent:ro
+      - ${HOMELAB_DIR:?run ./install.sh}/backup:/homelab/backup:ro
+      # Your files, read-write, for adlerOS's Files window: User, and the
+      # mailbox as its Desktop.
+      - ${STORAGE_DIR:?run ./install.sh}:/storage
+      - ${HOMELAB_DIR:?run ./install.sh}/mailbox:/places/desktop
+      # The whole homelab as Files' Root, read-only: changing it goes through
+      # the helper, in admin mode, and only with ADLEROS_TERMINAL=on.
+      - ${HOMELAB_DIR:?run ./install.sh}:/places/root:ro
+      - /etc/os-release:/host/os-release:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, urllib.request as u; u.urlopen('http://' + os.environ['TS_IP'] + ':8686/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

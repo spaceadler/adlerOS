@@ -1,0 +1,19 @@
+# Rendered by adlerOS's install.sh --homelab into /etc/systemd/system/homelab-agent.service.
+# Started by homelab-agent.path whenever the home screen queues a request.
+[Unit]
+Description=Homelab helper: runs what the home screen asks for
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=${AGENT_USER}
+Group=${AGENT_GROUP}
+WorkingDirectory=${HOMELAB_DIR}
+# adlerOS's helper, in homelab mode: it also runs this homelab's own actions
+# (scripts/agent/actions.json).
+Environment=HOMELAB_DIR=${HOMELAB_DIR}
+ExecStart=/usr/bin/python3 -I ${ADLEROS_DIR}/agent/agent.py
+# install.sh can take a while on a first run of a big app.
+TimeoutStartSec=4h
+PrivateTmp=yes

@@ -1,25 +1,33 @@
 #!/usr/bin/env bash
-# install.sh: put adlerOS on a machine that already runs Docker.
+# install.sh: put adlerOS on a machine. One adlerOS, two ways in:
+#
+#   your own homelab (standalone): run it here, over the Docker apps you run
+#   yourself. It asks a few things, finds your apps, sets up its helper and
+#   starts adlerOS.
+#
+#   the homelab ecosystem (spaceadler/homelab): that repository's install.sh
+#   fetches this copy and runs it with --homelab <the homelab>. The same
+#   adlerOS, with the homelab's settings and folders: its container goes in
+#   the homelab's containers/core/os/ (from homelab/ here), its address into
+#   the homelab's nginx, and its helper runs the homelab's own actions too.
 #
 #   ./install.sh             ask a few things, then set up and start adlerOS
 #   ./install.sh --yes       take the current values (or the guesses), no questions
 #   ./install.sh --no-host   skip the helper's systemd units and sudo rule
 #   ./install.sh --connect   only connect Music, Gallery and Documents to
 #                            Navidrome, Immich and Paperless (a full run's last step)
-#   ./install.sh --homelab DIR [--connect]
-#                            run by a homelab's install.sh (spaceadler/homelab):
-#                            adlerOS's own questions, or its apps' connections
+#   ./install.sh --homelab DIR [--no-host] [--no-start] [--connect]
+#                            in a homelab from spaceadler/homelab (its install.sh
+#                            runs this): set up adlerOS there, or only connect
 #
-# It finds the apps in your compose folders and sorts them into collections,
-# sets up the helper that starts and stops them for adlerOS, starts adlerOS on
-# port 8686, and connects its apps to theirs. Safe to run again: the password
-# and secrets in .env are kept, apps it already knows aren't touched, and an
-# app that's connected stays as it is.
+# Safe to run again: the password and secrets are kept, apps it already knows
+# aren't touched, and an app that's connected stays as it is.
 set -euo pipefail
 
 ADLEROS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$ADLEROS_DIR/.env"
-ASSUME_YES=0 DO_HOST=1 CONNECT_ONLY=0 HOMELAB=""
+ASSUME_YES=0 DO_HOST=1 DO_START=1 CONNECT_ONLY=0 HOMELAB="" OS_DIR=""
+DOCKER=${DOCKER:-docker}
 
 say() { printf '%s\n' "$*"; }
 step() { printf '\n==> %s\n' "$*"; }
@@ -133,20 +141,26 @@ configure() {
     info "saved to .env (only you can read it)"
 }
 
-# The helper runs as you and starts when adlerOS queues a request; root only
-# for restart and shut down, through a sudo rule for exactly that script.
-install_agent() {
-    step "The adlerOS helper"
-    local lib=/usr/local/libexec/adleros units=/etc/systemd/system tmp unit
-    if [[ $ADLEROS_DIR =~ [[:space:]\|\&\\] ]]; then
-        warn "this folder's path has a space or one of | & \\; move it for the helper to work"
-        return
-    fi
+# Whether the helper can be set up here: systemd, sudo, and folders whose
+# paths it can use (in its units and its sudo rule).
+helper_possible() {
+    local path
+    for path in "$@"; do
+        if [[ $path =~ [[:space:]\|\&\\] ]]; then
+            warn "$path has a space or one of | & \\ in it; move it for the helper to work"
+            return 1
+        fi
+    done
     command -v systemctl >/dev/null || {
         warn "no systemd here: adlerOS works, but can't start or stop apps"
-        return
+        return 1
     }
     sudo -v || die "needs sudo for the helper (or run with --no-host)"
+}
+
+# Restart and shut down: root only through a sudo rule for exactly that script.
+install_power() {
+    local lib=/usr/local/libexec/adleros tmp
     tmp=$(mktemp)
     sudo install -d -m 0755 -o root -g root "$lib"
     sudo install -m 0755 -o root -g root "$ADLEROS_DIR/agent/power" "$lib/power"
@@ -155,27 +169,48 @@ install_agent() {
         echo "# may run exactly these as root, without a password, and nothing else."
         echo "$USER ALL=(root) NOPASSWD: $lib/power reboot, $lib/power poweroff"
     } >"$tmp"
-    sudo visudo -cf "$tmp" >/dev/null || die "the generated sudoers rule didn't validate; nothing was installed"
+    if ! sudo visudo -cf "$tmp" >/dev/null; then
+        rm -f "$tmp"
+        die "the generated sudoers rule didn't validate; nothing was installed"
+    fi
     sudo install -m 0440 -o root -g root "$tmp" /etc/sudoers.d/adleros
+    rm -f "$tmp"
+}
+
+# install_units NAME TEMPLATES DATA: NAME.service and NAME.path, rendered from
+# TEMPLATES.service.template and .path.template, and the .path started.
+install_units() {
+    local name=$1 from=$2 data=$3 tmp unit
+    tmp=$(mktemp)
     for unit in service path; do
         # Single quotes on purpose: envsubst takes the names, not the values.
         # shellcheck disable=SC2016
-        AGENT_USER=$USER AGENT_GROUP=$(id -gn) ADLEROS_DIR=$ADLEROS_DIR \
-            envsubst '${AGENT_USER} ${AGENT_GROUP} ${ADLEROS_DIR}' \
-            <"$ADLEROS_DIR/agent/adleros-agent.$unit.template" >"$tmp"
-        sudo install -m 0644 -o root -g root "$tmp" "$units/adleros-agent.$unit"
+        AGENT_USER=$USER AGENT_GROUP=$(id -gn) ADLEROS_DIR=$ADLEROS_DIR ADLEROS_DATA=$data HOMELAB_DIR=$HOMELAB \
+            envsubst '${AGENT_USER} ${AGENT_GROUP} ${ADLEROS_DIR} ${ADLEROS_DATA} ${HOMELAB_DIR}' \
+            <"$from.$unit.template" >"$tmp"
+        sudo install -m 0644 -o root -g root "$tmp" "/etc/systemd/system/$name.$unit"
     done
     rm -f "$tmp"
     sudo systemctl daemon-reload
-    sudo systemctl enable --now adleros-agent.path >/dev/null 2>&1
-    info "ready (log: journalctl -u adleros-agent)"
-    install_terminal
+    sudo systemctl enable --now "$name.path" >/dev/null 2>&1
 }
 
-# The terminal host: only when ADLEROS_TERMINAL=on, and gone again when off.
+# The helper runs as you and starts when adlerOS queues a request; root only
+# for restart and shut down.
+install_agent() {
+    step "The adlerOS helper"
+    helper_possible "$ADLEROS_DIR" || return 0
+    install_power
+    install_units adleros-agent "$ADLEROS_DIR/agent/adleros-agent" "$ADLEROS_DIR/data"
+    info "ready (log: journalctl -u adleros-agent)"
+    install_terminal "$(env_get ADLEROS_TERMINAL)" "$ADLEROS_DIR/data"
+}
+
+# install_terminal SETTING DATA: the terminal host, only when SETTING
+# (ADLEROS_TERMINAL) is on, and gone again when it's off.
 install_terminal() {
-    local units=/etc/systemd/system tmp unit
-    case $(env_get ADLEROS_TERMINAL) in
+    local units=/etc/systemd/system
+    case $1 in
     on | yes | true | 1) ;;
     *)
         if [ -e "$units/adleros-terminal.path" ]; then
@@ -187,18 +222,7 @@ install_terminal() {
         return
         ;;
     esac
-    local data=$ADLEROS_DIR/data
-    tmp=$(mktemp)
-    for unit in service path; do
-        # shellcheck disable=SC2016
-        AGENT_USER=$USER AGENT_GROUP=$(id -gn) ADLEROS_DIR=$ADLEROS_DIR ADLEROS_DATA=$data HOMELAB_DIR="" \
-            envsubst '${AGENT_USER} ${AGENT_GROUP} ${ADLEROS_DIR} ${ADLEROS_DATA} ${HOMELAB_DIR}' \
-            <"$ADLEROS_DIR/agent/adleros-terminal.$unit.template" >"$tmp"
-        sudo install -m 0644 -o root -g root "$tmp" "$units/adleros-terminal.$unit"
-    done
-    rm -f "$tmp"
-    sudo systemctl daemon-reload
-    sudo systemctl enable --now adleros-terminal.path >/dev/null 2>&1
+    install_units adleros-terminal "$ADLEROS_DIR/agent/adleros-terminal" "$2"
     info "terminal: on (admin mode and your password; log: journalctl -u adleros-terminal)"
 }
 
@@ -211,16 +235,6 @@ connect() {
     interactive || args+=(--yes)
     python3 -I "$ADLEROS_DIR/agent/connect.py" "${args[@]}" ||
         warn "that didn't finish; ./install.sh --connect tries again"
-}
-
-# In a homelab, its install.sh does the rest (the container, the helper, the
-# password); these are adlerOS's own questions, asked when it runs this.
-homelab_settings() {
-    step "adlerOS's settings"
-    ENV_FILE=$HOMELAB/containers/core/os/.env
-    [ -f "$ENV_FILE" ] || die "no $ENV_FILE yet (the homelab's install.sh makes it)"
-    ask OS_NAME "Your first name, for the greeting" ""
-    info "saved to containers/core/os/.env"
 }
 
 discover() {
@@ -248,15 +262,82 @@ start() {
     say "    Only reachable from your own network or VPN? Good: keep it that way."
 }
 
+# ------------------------------------------------------------- in a homelab
+
+# A setting of the homelab's (homelab.env), quotes stripped.
+homelab_get() { sed -n "s/^$1=//p" "$HOMELAB/homelab.env" | tail -n1 | sed -E 's/^"(.*)"$/\1/'; }
+
+# copy_in_place FROM TO: TO gets FROM's contents, staying the same file when
+# it's there (a container that mounts one file alone would go on seeing a
+# replaced file's old copy).
+copy_in_place() { if [ -f "$2" ]; then cat "$1" >"$2"; else cp "$1" "$2"; fi; }
+
+# Docker as you, or through sudo until a new login puts you in its group.
+use_docker() { $DOCKER info >/dev/null 2>&1 || DOCKER="sudo docker"; }
+
+# adlerOS's container in the homelab's containers/core/os/: its compose file
+# (homelab/docker-compose.yml here), its .env (the homelab's settings it
+# needs, again every run; its password and session key, made once; your
+# name), and its address, os.<domain>, among the homelab's nginx sites.
+homelab_configure() {
+    step "adlerOS, for your homelab"
+    [ -f "$ADLEROS_DIR/homelab/docker-compose.yml" ] || die "this copy of adlerOS has no homelab/ folder; update it"
+    mkdir -p "$OS_DIR/data" "$OS_DIR/wallpaper" "$OS_DIR/icons"
+    if [ ! -f "$ENV_FILE" ]; then
+        printf '%s\n' "# adlerOS's container in this homelab (written by adlerOS's install.sh --homelab)." \
+            "# OS_PASSWORD is its password until you change it in Settings." >"$ENV_FILE"
+    fi
+    chmod 600 "$ENV_FILE"
+    [ -n "$(env_get OS_PASSWORD)" ] || env_set OS_PASSWORD "$(openssl rand -base64 64 | tr -dc 'A-Za-z0-9' | cut -c1-32)"
+    [ -n "$(env_get OS_SESSION_SECRET)" ] || env_set OS_SESSION_SECRET "$(openssl rand -hex 32)"
+    ask OS_NAME "Your first name, for the greeting" ""
+    local k sites=$HOMELAB/containers/core/nginx/sites
+    for k in DOMAIN TZ PUID PGID STORAGE_DIR TS_IP VAULT_HOST URL_SCHEME ADLEROS_NETWORKS; do
+        env_set "$k" "$(homelab_get "$k")"
+    done
+    env_set HOMELAB_DIR "$HOMELAB"
+    env_set ADLEROS_DIR "$ADLEROS_DIR"
+    copy_in_place "$ADLEROS_DIR/homelab/docker-compose.yml" "$OS_DIR/docker-compose.yml"
+    if [ -d "$sites" ]; then
+        # shellcheck disable=SC2016 # envsubst takes the name, not the value
+        TS_IP=$(env_get TS_IP) envsubst '${TS_IP}' <"$ADLEROS_DIR/homelab/nginx.conf.template" >"$sites/os.conf"
+        info "nginx: os.$(env_get DOMAIN) → $(env_get TS_IP):8686"
+    fi
+    info "containers/core/os: docker-compose.yml, and .env (only you can read it)"
+}
+
+# The helper (homelab-agent): adlerOS's agent.py, which in a homelab also runs
+# the homelab's own actions (its scripts/agent/actions.json).
+homelab_helper() {
+    step "The helper"
+    helper_possible "$HOMELAB" "$ADLEROS_DIR" || return 0
+    install_power
+    install_units homelab-agent "$ADLEROS_DIR/homelab/homelab-agent" "$OS_DIR/data"
+    info "ready: what adlerOS asks for, and the homelab's own actions (log: journalctl -u homelab-agent)"
+    install_terminal "$(homelab_get ADLEROS_TERMINAL)" "$OS_DIR/data"
+}
+
+homelab_start() {
+    step "Starting adlerOS"
+    use_docker
+    if ! (cd "$OS_DIR" && $DOCKER compose up -d --remove-orphans --quiet-pull 2>&1 | sed 's/^/    /'); then
+        warn "adlerOS didn't start; see: cd containers/core/os && docker compose logs"
+        return 0
+    fi
+    info "adlerOS: $(env_get URL_SCHEME)://os.$(env_get DOMAIN) (or http://$(env_get TS_IP):8686)"
+    info "its password: OS_PASSWORD in containers/core/os/.env"
+}
+
 main() {
     while [ $# -gt 0 ]; do
         case $1 in
         -y | --yes) ASSUME_YES=1 && shift ;;
         --no-host) DO_HOST=0 && shift ;;
+        --no-start) DO_START=0 && shift ;;
         --connect) CONNECT_ONLY=1 && shift ;;
         --homelab) HOMELAB=${2?--homelab needs a homelab folder} && shift 2 ;;
         --homelab=*) HOMELAB=${1#*=} && shift ;;
-        -h | --help) sed -n '2,19p' "$0" | sed -E 's/^# ?//' && exit 0 ;;
+        -h | --help) sed -n '2,26p' "$0" | sed -E 's/^# ?//' && exit 0 ;;
         *) die "unknown option '$1' (see --help)" ;;
         esac
     done
@@ -264,7 +345,18 @@ main() {
     if [ -n "$HOMELAB" ]; then
         HOMELAB=$(cd "$HOMELAB" && pwd) || die "no folder $HOMELAB"
         [ -f "$HOMELAB/homelab.env" ] || die "$HOMELAB isn't a homelab (it has no homelab.env)"
-        if [ $CONNECT_ONLY = 1 ]; then connect --homelab "$HOMELAB"; else homelab_settings; fi
+        OS_DIR=$HOMELAB/containers/core/os
+        ENV_FILE=$OS_DIR/.env
+        if [ $CONNECT_ONLY = 1 ]; then
+            connect --homelab "$HOMELAB"
+            return
+        fi
+        for c in python3 openssl envsubst; do
+            command -v $c >/dev/null || die "'$c' is missing (the homelab's install.sh installs it)"
+        done
+        homelab_configure
+        if [ $DO_HOST = 1 ]; then homelab_helper; fi
+        if [ $DO_START = 1 ]; then homelab_start; fi
         return
     fi
     if [ $CONNECT_ONLY = 1 ]; then

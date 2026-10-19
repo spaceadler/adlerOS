@@ -6,30 +6,53 @@ adlerOS as its home screen. There, adlerOS runs in **homelab mode**.
 
 ## How it's put together
 
-- The homelab's `install.sh` fetches adlerOS into
-  `containers/core/os/adleros/` (a shallow git checkout, never committed to
-  the homelab) and updates it on every run: from GitHub, else each of
-  `ADLEROS_MIRRORS` (by default the Gitea it's pushed to). `ADLEROS_REPO`
-  and `ADLEROS_REF` in `homelab.env` pick another copy or version.
-- adlerOS is optional there: `ADLEROS=off` (or `./install.sh --no-adleros`,
-  or no to its first question) sets the homelab up without it, and without
-  the helper, which is adlerOS's.
-- It runs adlerOS's own installer twice, in homelab mode: `install.sh
-  --homelab <the homelab>` before the apps start, for adlerOS's own
-  questions (your name, into `containers/core/os/.env`; the homelab's
-  installer asks none of them), and `install.sh --homelab <the homelab>
-  --connect` once they're up, which connects Music, Gallery and Documents
-  (`agent/connect.py`): Documents by itself, with the admin login
-  `install.sh` gave Paperless; Gallery and Music with your Immich and
-  Navidrome logins, making the admin where there's none yet. The keys go
-  into `homelab.env`. The summary at the end shows adlerOS's password the
-  first time.
-- `containers/core/os/docker-compose.yml` runs adlerOS's `app/` from there,
-  with `ADLEROS_MODE: homelab`, at `os.<domain>` and port 8686.
-- The helper is `homelab-agent.path` and `.service`, running adlerOS's
-  `agent/agent.py` with `HOMELAB_DIR` set. It loads adlerOS's actions (apps,
-  restart, shut down) and the homelab's own in `scripts/agent/actions.json`
-  (apply settings, back up, update).
+The two repositories have one job each. **spaceadler/homelab** is the
+homelab: the machine's setup, the apps, their recipes, storage and
+addresses, and nothing of adlerOS. **This repository** is all of adlerOS,
+including how it runs in that homelab (`homelab/`). The homelab's
+`install.sh` only fetches adlerOS and hands over to adlerOS's installer:
+
+1. **It fetches adlerOS** into `containers/core/os/adleros/` (a shallow git
+   checkout), and updates it on every run: from GitHub, else each of
+   `ADLEROS_MIRRORS` (by default the Gitea it's pushed to). `ADLEROS_REPO`
+   and `ADLEROS_REF` in `homelab.env` pick another copy or version.
+   `ADLEROS=off` (or `--no-adleros`, or no to its first question) sets the
+   homelab up without adlerOS, and without the helper, which is adlerOS's.
+2. **Once the homelab's apps are configured, it runs `install.sh --homelab
+   <the homelab>` from that copy** (with `--no-host` and `--no-start` when
+   it has them itself). That's the same installer as standalone; the
+   argument tells it where it is, so it takes the homelab's settings
+   (`homelab.env`) and folders. It writes all of `containers/core/os/`:
+   - `docker-compose.yml`, from `homelab/docker-compose.yml` here:
+     `ADLEROS_MODE: homelab`, the homelab's catalog, extras, settings,
+     storage and mailbox mounted in;
+   - `.env`, with the password and session key (made once, then kept),
+     your name (it asks), and the homelab settings the container needs,
+     again every run;
+   - `data/`, `wallpaper/`, `icons/`;
+   - and `os.conf` among the homelab's nginx sites, from
+     `homelab/nginx.conf.template` (`os.<domain>` → its Tailscale IP, port
+     8686).
+
+   Then **the helper**: `homelab-agent.path` and `.service` (from
+   `homelab/`), running adlerOS's `agent/agent.py` with `HOMELAB_DIR` set,
+   so it loads adlerOS's actions (apps, restart, shut down) and the
+   homelab's own in its `scripts/agent/actions.json` (apply settings, back
+   up, update); the power script and its sudo rule
+   (`/etc/sudoers.d/adleros`); the terminal host, if `ADLEROS_TERMINAL=on`.
+   (The homelab's `install.sh` keeps one root step of its own for the
+   helper: its backup script and `/etc/sudoers.d/homelab`.) Last, it starts
+   adlerOS.
+3. **Once the apps are up, it runs `install.sh --homelab <the homelab>
+   --connect`**, which connects Music, Gallery and Documents
+   (`agent/connect.py`): Documents by itself, with the admin login the
+   homelab gave Paperless; Gallery and Music with your Immich and Navidrome
+   logins, making the admin where there's none yet. The keys go into
+   `homelab.env`. The homelab's summary shows adlerOS's password the first
+   time.
+
+So a fix to adlerOS, even to how it runs in a homelab, is made here, and a
+homelab picks it up on its next `./install.sh`.
 
 ## What's different from standalone
 
@@ -55,6 +78,7 @@ Root is the homelab itself, read-only unless admin mode is on and
 
 Edit `containers/core/os/adleros/` directly to try something (it's a git
 checkout: `git -C containers/core/os/adleros diff`), then send it upstream to
-adlerOS. `install.sh` won't overwrite local changes; it says it kept your
-copy. Static files (`app/static/`) show up on a reload; `app/server.py` needs
+adlerOS. The homelab's `install.sh` won't overwrite local changes; it says it
+kept your copy. A change to `homelab/` here reaches `containers/core/os/` on
+the next `./install.sh` (adlerOS's installer writes it again). Static files (`app/static/`) show up on a reload; `app/server.py` needs
 `docker compose restart` in `containers/core/os`.

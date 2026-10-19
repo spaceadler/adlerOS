@@ -2,7 +2,9 @@
 
 adlerOS doesn't need a particular setup. If a machine runs Docker and you keep
 your apps in `docker compose` files, adlerOS can find them, sort them, and
-manage them, without moving or changing anything.
+manage them, without moving or changing anything. (Starting from scratch,
+and want the homelab too? [spaceadler/homelab](https://github.com/spaceadler/homelab)
+builds one and installs adlerOS on it: see [homelab.md](homelab.md).)
 
 ## What you need
 
