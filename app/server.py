@@ -1942,14 +1942,15 @@ def music_lyrics(real):
 # ---------------------------------------------------------------- gallery
 
 # Gallery: your photos as Immich has them (the timeline, albums, people,
-# favorites, memories), through Immich's API with IMMICH_API_KEY; one that
-# may only read is enough (asset.read, asset.view, asset.download,
-# album.read, person.read, and memory.read for On this day). The page never
+# places, the map, favorites, memories), through Immich's API with
+# IMMICH_API_KEY; one that may only read is enough (asset.read, asset.view,
+# asset.download, album.read, person.read, memory.read for On this day,
+# face.read for who's where in a photo, map.read for the map). The page never
 # sees the key, nor Immich's address: adlerOS asks, and passes on what
 # Immich says, pictures and videos too. Immich is at IMMICH_URL, else at
 # this machine's Tailscale address (TS_IP, ADLEROS_HOST) and its port.
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-GALLERY_PERMISSIONS = ("asset.read", "asset.view", "asset.download", "album.read", "person.read", "memory.read")
+GALLERY_PERMISSIONS = ("asset.read", "asset.view", "asset.download", "album.read", "person.read", "memory.read", "face.read", "map.read")
 
 
 def immich():
@@ -3186,15 +3187,31 @@ class Handler(BaseHTTPRequestHandler):
                         break
                 return self.send_json(200, {"people": people})
             if what == "memories":
-                try:
-                    return self.send_json(200, immich_json("memories"))
+                try:  # today's (On this day), not every one there's been
+                    return self.send_json(200, immich_json("memories", {"for": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())}))
                 except urllib.error.HTTPError as e:
                     if e.code == 403:
                         return self.send_json(200, [])  # the key may not read them: none
                     raise
+            if what == "markers":
+                return self.send_json(200, [{k: m.get(k) for k in ("id", "lat", "lon", "city", "state", "country")}
+                                            for m in immich_json("map/markers")])
+            if what == "cities":
+                return self.send_json(200, [{"id": a["id"], "city": (a.get("exifInfo") or {}).get("city"), "state": (a.get("exifInfo") or {}).get("state"),
+                                             "country": (a.get("exifInfo") or {}).get("country")} for a in immich_json("search/cities")])
             kind, _, aid = what.partition("/")
             if not UUID_RE.match(aid):
                 return self.send_json(404, {"error": "not found"})
+            if kind == "faces":
+                return self.send_json(200, [{"box": [f.get("boundingBoxX1"), f.get("boundingBoxY1"), f.get("boundingBoxX2"), f.get("boundingBoxY2")],
+                                             "size": [f.get("imageWidth"), f.get("imageHeight")],
+                                             "person": {k: (f.get("person") or {}).get(k) for k in ("id", "name")} if f.get("person") else None}
+                                            for f in immich_json("faces", {"id": aid})])
+            if kind == "album-zip-info":
+                info = immich_json("download/info", body={"albumId": aid}, method="POST")
+                return self.send_json(200, {"totalSize": info.get("totalSize"), "parts": [a.get("size") for a in info.get("archives") or []]})
+            if kind == "album-zip":
+                return self.gallery_album_zip(aid, query)
             if kind == "asset":
                 return self.send_json(200, immich_json(f"assets/{aid}"))
             if kind == "albums-of":
@@ -3223,12 +3240,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(502, {"error": f"can't reach Immich ({e})"})
 
     def gallery_search(self, body):
-        query = body.get("query")
+        # {query, page}: Immich's smart search; {city, country, page}: a place's photos, newest first.
+        query, city = body.get("query"), body.get("city")
         page = body.get("page") or 1
-        if not isinstance(query, str) or not query.strip() or len(query) > 500 or not isinstance(page, int) or not 0 < page < 1000:
-            return self.send_json(400, {"error": "expected {query, page}"})
+        if not isinstance(page, int) or not 0 < page < 1000 or not any(isinstance(x, str) and x.strip() and len(x) <= 500 for x in (query, city)) \
+                or not all(x is None or isinstance(x, str) and len(x) <= 500 for x in (query, city, body.get("country"))):
+            return self.send_json(400, {"error": "expected {query, page} or {city, country, page}"})
         try:
-            found = immich_json("search/smart", body={"query": query.strip(), "page": page, "size": 100, "withExif": True}, method="POST")
+            if city:
+                found = immich_json("search/metadata", body={"city": city, **({"country": body["country"]} if body.get("country") else {}),
+                                                             "page": page, "size": 100, "withExif": True, "order": "desc"}, method="POST")
+            else:
+                found = immich_json("search/smart", body={"query": query.strip(), "page": page, "size": 100, "withExif": True}, method="POST")
         except LookupError:
             return self.send_json(409, {"error": "Gallery isn't set up"})
         except urllib.error.HTTPError as e:
@@ -3237,6 +3260,34 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(502, {"error": f"can't reach Immich ({e})"})
         assets = found.get("assets") or {}
         return self.send_json(200, {"items": [gallery_asset_lite(a) for a in assets.get("items") or []], "nextPage": assets.get("nextPage")})
+
+    def gallery_album_zip(self, aid, query):
+        """An album's photos as a zip (a part of it, when Immich splits a big one)."""
+        part = query.get("part", ["0"])[0]
+        if not part.isdigit():
+            return self.send_json(400, {"error": "part: a number"})
+        info = immich_json("download/info", body={"albumId": aid}, method="POST")
+        archives = info.get("archives") or []
+        if int(part) >= len(archives):
+            return self.send_json(404, {"error": "no such part"})
+        name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", immich_json(f"albums/{aid}", {"withoutAssets": "true"}).get("albumName") or "Album")[:120]
+        filename = f"{name}{f' ({int(part) + 1} of {len(archives)})' if len(archives) > 1 else ''}.zip"
+        r = immich_open("download/archive", body={"assetIds": archives[int(part)]["assetIds"]}, method="POST", timeout=120)
+        with r:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            if r.headers.get("Content-Length"):
+                self.send_header("Content-Length", r.headers["Content-Length"])
+            self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}")
+            self.send_header("Content-Security-Policy", "default-src 'none'; sandbox")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cache-Control", "private, no-store")
+            self.end_headers()
+            try:
+                while chunk := r.read(256 * 1024):
+                    self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
 
     def gallery_stream(self, path, query, kinds, cache=0, download=False):
         """A picture or a video from Immich, as it sends it (Range too: seeking)."""

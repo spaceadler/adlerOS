@@ -20,6 +20,9 @@ const GA_ICONS = {
   download: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5", "M12 15V3"],
   play: ["M7 4.5v15l12.5-7.5z"], live: ["M12 12h.01", "M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"],
   immich: ["M15 3h6v6", "M10 14 21 3", "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"],
+  places: ["M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z", "M12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
+  map: ["M1 6v16l7-4 8 4 7-4V2l-7 4-8-4z", "M8 2v16", "M16 6v16"],
+  plus: ["M12 5v14", "M5 12h14"], minus: ["M5 12h14"],
 };
 
 const gallery = {
@@ -114,13 +117,13 @@ function gaRenderSide() {
   if (!nav) return;
   const v = gallery.view;
   const item = (kind, label, icon) => {
-    const on = v.kind === kind || (kind === "albums" && v.kind === "album") || (kind === "people" && v.kind === "person");
+    const on = v.kind === kind || (kind === "albums" && v.kind === "album") || (kind === "people" && v.kind === "person") || (kind === "places" && v.kind === "place");
     const b = el("button", { type: "button", class: `ga-nav${on ? " on" : ""}` }, svg(GA_ICONS[icon]), el("span", {}, label));
     b.addEventListener("click", () => gaShow({ kind }));
     return b;
   };
   nav.replaceChildren(item("photos", "Photos", "photos"), item("albums", "Albums", "albums"), item("people", "People", "people"),
-    item("favorites", "Favorites", "favorites"));
+    item("places", "Places", "places"), item("map", "Map", "map"), item("favorites", "Favorites", "favorites"));
   const immich = gaImmichApp();
   if (immich) {
     const b = el("button", { type: "button", class: "ga-nav ga-nav-out" }, svg(GA_ICONS.immich), el("span", {}, "Open Immich"));
@@ -164,6 +167,7 @@ function gaRender(scroll = 0) {
   const main = $("ga-main");
   gaStopTimeline();
   gallery.grid = null;
+  gallery.map = null;
   if (!gallery.status?.ok) return main.replaceChildren(gaSetupPage());
   const v = gallery.view;
   const page = el("div", { class: "ga-page" });
@@ -178,7 +182,10 @@ function gaRender(scroll = 0) {
     album: () => gaAlbumView(page, v.key),
     people: () => gaPeopleView(page),
     person: () => gaPersonView(page, v.key),
-    search: () => gaSearchView(page, v.query),
+    search: () => gaSearchView(page, { query: v.query }, `“${v.query}”`, "Search"),
+    places: () => gaPlacesView(page),
+    place: () => gaSearchView(page, { city: v.key, country: v.country || null }, v.key, v.country || "Place"),
+    map: () => gaMapView(page),
   }[v.kind] || (() => gaPhotosView(page));
   Promise.resolve(go()).then(() => { if (scroll) requestAnimationFrame(() => { main.scrollTop = scroll; }); })
     .catch((e) => { if (e.message !== "login") page.replaceChildren(el("div", { class: "ga-empty" }, el("p", {}, e.message))); });
@@ -283,6 +290,8 @@ function gaHideBucket(b) {
 
 function gaRelayout() {
   const tl = gallery.timeline;
+  gaDrawFaces();
+  if (gallery.map) return gallery.map.redraw();
   if (!tl) return gallery.grid?.redraw();
   const width = tl.box.clientWidth;
   for (const b of tl.buckets) {
@@ -324,7 +333,8 @@ function gaLayout(assets, width, { byDay = true } = {}) {
 }
 
 function gaTile(a, w, h, source) {
-  const img = el("img", { src: gaThumb(a.id), alt: "", loading: "lazy", decoding: "async", draggable: "false" });
+  // Low: the photo you open goes ahead of a few hundred of these.
+  const img = el("img", { src: gaThumb(a.id), alt: "", loading: "lazy", decoding: "async", draggable: "false", fetchpriority: "low" });
   img.addEventListener("error", () => img.remove());
   const tile = el("button", { type: "button", class: "ga-tile", "data-id": a.id, "aria-label": a.isImage ? "Photo" : "Video" }, img,
     ...(!a.isImage ? [el("span", { class: "ga-badge" }, svg(GA_ICONS.play), gaDuration(a.duration))] : []),
@@ -370,7 +380,7 @@ async function gaAlbumsView(page) {
       const when = years.length ? (years[0] === years[years.length - 1] ? String(years[0]) : `${Math.min(...years)}–${Math.max(...years)}`) : "";
       const art = el("span", { class: "ga-card-art" });
       if (al.albumThumbnailAssetId) {
-        const img = el("img", { src: gaThumb(al.albumThumbnailAssetId, "preview"), alt: "", loading: "lazy" });
+        const img = el("img", { src: gaThumb(al.albumThumbnailAssetId), alt: "", loading: "lazy", fetchpriority: "low" });
         img.addEventListener("error", () => img.remove());
         art.append(img);
       }
@@ -384,10 +394,43 @@ async function gaAlbumsView(page) {
 async function gaAlbumView(page, id) {
   const al = (gallery.albums || []).find((a) => a.id === id) || await gaGet(`album/${id}`);
   const range = [al.startDate, al.endDate].filter(Boolean).map((d) => new Date(d).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }));
+  const download = el("button", { type: "button", class: "button-secondary ga-head-button" }, svg(GA_ICONS.download), "Download");
+  download.addEventListener("click", () => gaDownloadAlbum(al, download));
   const head = el("header", { class: "ga-head" }, el("p", { class: "ga-kicker" }, "Album"), el("h1", {}, al.albumName),
     el("p", { class: "ga-dim" }, [`${al.assetCount.toLocaleString()} items`, [...new Set(range)].join(" – ")].filter(Boolean).join(" · ")),
-    ...(al.description ? [el("p", { class: "ga-desc" }, al.description)] : []));
+    ...(al.description ? [el("p", { class: "ga-desc" }, al.description)] : []), ...(al.assetCount ? [download] : []));
   await gaTimelineInto(page, { albumId: id, order: al.order === "asc" ? "asc" : "desc" }, { head, empty: "This album is empty." });
+}
+
+// An album as a zip (in parts, if it's big: Immich's split).
+async function gaDownloadAlbum(al, button) {
+  button.disabled = true;
+  const info = await gaGet(`album-zip-info/${al.id}`).catch((e) => { toast(e.message); return null; });
+  button.disabled = false;
+  if (!info?.parts.length) return;
+  const get = (i) => {
+    const a = el("a", { href: `/api/gallery/album-zip/${al.id}?part=${i}`, download: "" });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    toast(`Downloading ${al.albumName}${info.parts.length > 1 ? ` (${i + 1} of ${info.parts.length})` : ""}, ${bytes(info.parts[i])}. Immich zips it first: it may take a moment to start.`);
+  };
+  if (info.parts.length === 1) return get(0);
+  const r = button.getBoundingClientRect();
+  openMenu(r.left, r.bottom + 4, info.parts.map((size, i) => ({ label: `Part ${i + 1} of ${info.parts.length} (${bytes(size)})`, run: () => get(i) })));
+}
+
+async function gaPlacesView(page) {
+  const cities = (await gaGet("cities")).filter((c) => c.city).sort((a, b) => a.city.localeCompare(b.city));
+  page.append(el("header", { class: "ga-head" }, el("h1", {}, "Places"), el("p", { class: "ga-dim" }, `${cities.length} places`)),
+    el("div", { class: "ga-cards" }, ...cities.map((c) => {
+      const img = el("img", { src: gaThumb(c.id), alt: "", loading: "lazy", fetchpriority: "low" });
+      img.addEventListener("error", () => img.remove());
+      const card = el("button", { type: "button", class: "ga-card" }, el("span", { class: "ga-card-art" }, img),
+        el("span", { class: "ga-card-title" }, c.city), el("span", { class: "ga-card-sub" }, [c.state, c.country].filter((x) => x && x !== c.city).join(", ")));
+      card.addEventListener("click", () => gaShow({ kind: "place", key: c.city, country: c.country }));
+      return card;
+    })));
 }
 
 async function gaPeopleView(page) {
@@ -417,27 +460,31 @@ async function gaPersonView(page, id) {
   await gaTimelineInto(page, { personId: id, order: "desc" }, { head });
 }
 
-// Immich's own search (what's in the photo, in words): a page of matches at
-// a time.
-async function gaSearchView(page, query) {
+// Immich's own search (what's in the photo, in words), or a place's
+// photos: a page of them at a time.
+async function gaSearchView(page, ask, title, kicker) {
   const results = { list: [], next: 1 };
   const grid = el("div", { class: "ga-timeline" });
   const more = el("button", { type: "button", class: "button-secondary ga-more" }, "More");
   const head = el("p", { class: "ga-dim" }, "Looking…");
-  page.append(el("header", { class: "ga-head" }, el("p", { class: "ga-kicker" }, "Search"), el("h1", {}, `“${query}”`), head), grid);
+  page.append(el("header", { class: "ga-head" }, el("p", { class: "ga-kicker" }, kicker), el("h1", {}, title), head), grid);
+  // A place's: by day, as the timeline is; a search's: best first.
+  const byDay = Boolean(ask.city);
   const draw = () => {
-    grid.replaceChildren(...gaLayout(results.list, grid.clientWidth, { byDay: false }).flatMap((d) => d.rows.map((row) =>
-      el("div", { class: "ga-row" }, ...row.map(({ a, w, h }) => gaTile(a, w, h, results))))));
+    grid.replaceChildren(...gaLayout(results.list, grid.clientWidth, { byDay }).map((d) => el("div", { class: "ga-day" },
+      ...(byDay ? [el("h3", { class: "ga-day-title" }, d.label)] : []),
+      ...d.rows.map((row) => el("div", { class: "ga-row" }, ...row.map(({ a, w, h }) => gaTile(a, w, h, results)))))));
   };
   const load = async () => {
     more.disabled = true;
-    const { status, body } = await api("/api/gallery/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query, page: results.next }) })
+    const { status, body } = await api("/api/gallery/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...ask, page: results.next }) })
       .catch(() => ({ status: 0 }));
     more.disabled = false;
     if (status !== 200) { head.textContent = body?.error || "Immich didn't answer."; return; }
     results.list.push(...body.items);
     results.next = body.nextPage ? Number(body.nextPage) : null;
-    head.textContent = results.list.length ? `${results.list.length}${results.next ? "+" : ""} matches` : "Nothing matches.";
+    const n = `${results.list.length}${results.next ? "+" : ""}`;
+    head.textContent = !results.list.length ? "Nothing matches." : ask.city ? `${n} photos and videos` : `${n} matches`;
     draw();
     if (results.next) page.append(more); else more.remove();
   };
@@ -543,21 +590,63 @@ async function gaShowAsset(id) {
   if (a.isImage === false) {
     media = el("video", { src: `/api/gallery/video/${id}`, controls: "", autoplay: "", playsinline: "", poster: gaThumb(id, "preview") });
   } else {
-    media = el("img", { class: "ga-full", src: gaThumb(id), alt: "" });
+    media = el("img", { class: "ga-full", src: gaThumb(id), alt: "", fetchpriority: "high" });
     const big = new Image();
+    big.fetchPriority = "high";
     big.addEventListener("load", () => { if (v.token === token) media.src = big.src; });
     big.src = gaThumb(id, "preview");
   }
   v.stage.replaceChildren(media);
   v.live.hidden = !a.livePhotoVideoId;
-  v.title.textContent = gaDayLabel(gaLocal(a));
+  // Its day, if it's known yet (a photo from the map isn't, until Immich says).
+  v.title.textContent = a.fileCreatedAt || a.localDateTime ? gaDayLabel(gaLocal(a)) : "";
   // Its neighbours' pictures, ready for the arrows.
-  for (const dir of [1, -1]) gaNeighbor(v.source, id, dir).then((n) => { if (n) new Image().src = gaThumb(n.id, "preview"); });
+  for (const dir of [1, -1]) {
+    gaNeighbor(v.source, id, dir).then((n) => {
+      if (!n) return;
+      const pre = new Image();
+      pre.fetchPriority = "low";
+      pre.src = gaThumb(n.id, "preview");
+    });
+  }
   const asset = await gaGet(`asset/${id}`).catch(() => null);
   if (v.token !== token || !asset) return;
   v.asset = asset;
   v.title.textContent = `${gaWhen(asset)} · ${asset.originalFileName}`;
+  v.live.hidden = !asset.livePhotoVideoId;
+  if (asset.type === "VIDEO" && media.tagName === "IMG") {
+    v.stage.replaceChildren(el("video", { src: `/api/gallery/video/${id}`, controls: "", autoplay: "", playsinline: "", poster: gaThumb(id, "preview") }));
+  }
+  if (media.tagName === "IMG") media.addEventListener("load", () => gaDrawFaces(), { once: false });
+  v.faces = null;
   gaRenderInfo();
+  if (asset.type === "IMAGE") {
+    v.faces = await gaGet(`faces/${id}`).catch(() => []);
+    if (v.token === token) gaDrawFaces();
+  }
+}
+
+// Who's where in it (Immich's face boxes), over the photo while its info
+// is out: a name's box lights up as you point at the name.
+function gaDrawFaces() {
+  const v = gallery.viewer;
+  if (!v) return;
+  v.stage.querySelector(".ga-faces")?.remove();
+  const img = v.stage.querySelector("img.ga-full");
+  if (!v.info || !img || !v.faces?.length || !img.naturalWidth) return;
+  const s = v.stage.getBoundingClientRect();
+  const r = img.getBoundingClientRect();
+  const layer = el("div", { class: "ga-faces" });
+  Object.assign(layer.style, { left: `${r.left - s.left}px`, top: `${r.top - s.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+  for (const f of v.faces) {
+    const [x1, y1, x2, y2] = f.box;
+    const [w, h] = f.size;
+    if (!w || !h) continue;
+    const box = el("div", { class: "ga-face-box", "data-person": f.person?.id || "" }, ...(f.person?.name ? [el("span", {}, f.person.name)] : []));
+    Object.assign(box.style, { left: `${(x1 / w) * 100}%`, top: `${(y1 / h) * 100}%`, width: `${((x2 - x1) / w) * 100}%`, height: `${((y2 - y1) / h) * 100}%` });
+    layer.append(box);
+  }
+  v.stage.append(layer);
 }
 
 function gaWhen(asset) {
@@ -568,6 +657,7 @@ function gaWhen(asset) {
 async function gaRenderInfo() {
   const v = gallery.viewer;
   v.box.classList.toggle("with-info", v.info);
+  requestAnimationFrame(gaDrawFaces); // the photo's room changes with the info beside it
   if (!v.info || !v.asset) return v.infoBox.replaceChildren();
   const a = v.asset;
   const e = a.exifInfo || {};
@@ -580,8 +670,13 @@ async function gaRenderInfo() {
   const people = (a.people || []).filter((p) => p.name).map((p) => {
     const b = el("button", { type: "button", class: "ga-chip" }, p.name);
     b.addEventListener("click", () => { gaCloseViewer(); gaShow({ kind: "person", key: p.id }); });
+    const light = (on) => v.stage.querySelectorAll(`.ga-face-box[data-person="${p.id}"]`).forEach((n) => n.classList.toggle("lit", on));
+    b.addEventListener("pointerenter", () => light(true));
+    b.addEventListener("pointerleave", () => light(false));
     return b;
   });
+  const unnamed = (a.people || []).filter((p) => !p.name).length;
+  if (unnamed) people.push(el("span", { class: "ga-dim" }, `and ${unnamed} without a name`));
   const albumsBox = el("div", { class: "ga-chips" });
   v.infoBox.replaceChildren(el("h3", {}, "Info"),
     ...(e.description ? [el("p", { class: "ga-desc" }, e.description)] : []),
@@ -626,4 +721,219 @@ function gaViewerKeys(e) {
   if (e.key === "ArrowLeft") { e.preventDefault(); e.stopPropagation(); return gaStep(-1); }
   if (e.key === "ArrowRight") { e.preventDefault(); e.stopPropagation(); return gaStep(1); }
   if (e.key === "i") { gallery.viewer.info = !gallery.viewer.info; gaRenderInfo(); }
+}
+
+// ---------------------------------------------------------------- the map
+
+// Where they were taken: OpenStreetMap's map (CARTO's dark tiles), your
+// photos on it in clusters (a click shows a cluster's, a double click or the
+// wheel zooms, a drag moves it; two fingers on a phone).
+const GA_TILE = 256;
+const gaTileUrl = (z, x, y) => `https://${"abcd"[(x + y) % 4]}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}${devicePixelRatio > 1 ? "@2x" : ""}.png`;
+const gaMercator = (lat, lon) => {
+  const s = Math.sin((Math.max(-85, Math.min(85, lat)) * Math.PI) / 180);
+  return [(lon + 180) / 360, 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)];
+};
+
+async function gaMapView(page) {
+  const markers = (await gaGet("markers")).filter((m) => Number.isFinite(m.lat) && Number.isFinite(m.lon))
+    .map((m) => { const [x, y] = gaMercator(m.lat, m.lon); return { ...m, x, y }; });
+  page.classList.add("ga-map-page");
+  const tiles = el("div", { class: "ga-tiles" });
+  const pins = el("div", { class: "ga-pins" });
+  const panel = el("aside", { class: "ga-map-panel", hidden: "" });
+  const zoomButton = (label, icon, dz) => {
+    const b = el("button", { type: "button", class: "ga-vbutton", title: label, "aria-label": label }, svg(GA_ICONS[icon]));
+    b.addEventListener("click", (e) => { e.stopPropagation(); zoomAt(map.z + dz); });
+    return b;
+  };
+  const box = el("div", { class: "ga-map", tabindex: "0", "aria-label": "Map of your photos" }, tiles, pins,
+    el("div", { class: "ga-map-zoom" }, zoomButton("Zoom in", "plus", 1), zoomButton("Zoom out", "minus", -1)),
+    el("div", { class: "ga-map-credit" }, "© OpenStreetMap contributors · © CARTO"), panel);
+  page.append(el("header", { class: "ga-head" }, el("h1", {}, "Map"), el("p", { class: "ga-dim" }, `${markers.length.toLocaleString()} photos with a place`)), box);
+  const map = { z: 2, cx: 0.5, cy: 0.5, cache: new Map() };
+  gallery.map = { redraw: () => draw() };
+
+  // At first: all of them in view.
+  if (markers.length) {
+    const xs = markers.map((m) => m.x).sort((a, b) => a - b);
+    const ys = markers.map((m) => m.y).sort((a, b) => a - b);
+    const q = (arr, f) => arr[Math.min(arr.length - 1, Math.floor(arr.length * f))];
+    const [x0, x1, y0, y1] = [q(xs, 0.01), q(xs, 0.99), q(ys, 0.01), q(ys, 0.99)]; // the odd far one doesn't zoom it all out
+    map.cx = (x0 + x1) / 2;
+    map.cy = (y0 + y1) / 2;
+    const w = box.clientWidth || 800;
+    const h = box.clientHeight || 500;
+    map.z = Math.max(1, Math.min(14, Math.floor(Math.log2(Math.min(w / ((x1 - x0) * GA_TILE || 1), h / ((y1 - y0) * GA_TILE || 1))))));
+  }
+
+  // pinsToo: false while dragging (the pins slide along; drawn again after).
+  function draw(pinsToo = true) {
+    if (!box.isConnected) return;
+    const w = box.clientWidth;
+    const h = box.clientHeight;
+    const world = GA_TILE * 2 ** map.z;
+    const left = map.cx * world - w / 2;
+    const top = map.cy * world - h / 2;
+    const n = 2 ** map.z;
+    const keep = new Set();
+    for (let ty = Math.max(0, Math.floor(top / GA_TILE)); ty <= Math.min(n - 1, Math.floor((top + h) / GA_TILE)); ty++) {
+      for (let tx = Math.floor(left / GA_TILE); tx <= Math.floor((left + w) / GA_TILE); tx++) {
+        const x = ((tx % n) + n) % n;
+        const key = `${map.z}/${tx}/${ty}`;
+        keep.add(key);
+        let img = map.cache.get(key);
+        if (!img) {
+          img = el("img", { class: "ga-tile-img", src: gaTileUrl(map.z, x, ty), alt: "", draggable: "false" });
+          map.cache.set(key, img);
+        }
+        img.style.transform = `translate(${Math.round(tx * GA_TILE - left)}px, ${Math.round(ty * GA_TILE - top)}px)`;
+        if (!img.isConnected) tiles.append(img);
+      }
+    }
+    for (const [key, img] of map.cache) if (!keep.has(key)) { img.remove(); if (map.cache.size > 300) map.cache.delete(key); }
+    if (!pinsToo) {
+      pins.style.transform = `translate(${Math.round(map.drawn.left - left)}px, ${Math.round(map.drawn.top - top)}px)`;
+      return;
+    }
+    map.drawn = { left, top };
+    pins.style.transform = "";
+    // Clusters: the ones near each other on screen, as one.
+    const cell = 70;
+    const groups = new Map();
+    for (const m of markers) {
+      const px = m.x * world - left;
+      const py = m.y * world - top;
+      if (px < -cell || py < -cell || px > w + cell || py > h + cell) continue;
+      const key = `${Math.floor(px / cell)},${Math.floor(py / cell)}`;
+      let g = groups.get(key);
+      if (!g) groups.set(key, g = { list: [], sx: 0, sy: 0 });
+      g.list.push(m);
+      g.sx += px;
+      g.sy += py;
+    }
+    pins.replaceChildren(...[...groups.values()].map((g) => {
+      const img = el("img", { src: gaThumb(g.list[0].id), alt: "", loading: "lazy", draggable: "false" });
+      img.addEventListener("error", () => img.remove());
+      const pin = el("button", { type: "button", class: "ga-pin", "aria-label": `${g.list.length} photos` }, img,
+        ...(g.list.length > 1 ? [el("span", { class: "ga-pin-count" }, g.list.length > 999 ? `${Math.floor(g.list.length / 1000)}k` : String(g.list.length))] : []));
+      pin.style.transform = `translate(${Math.round(g.sx / g.list.length) - 22}px, ${Math.round(g.sy / g.list.length) - 22}px)`;
+      pin.addEventListener("click", (e) => { e.stopPropagation(); openCluster(g.list); });
+      pin.addEventListener("dblclick", (e) => { e.stopPropagation(); fit(g.list); });
+      return pin;
+    }));
+  }
+
+  function zoomAt(z, px = box.clientWidth / 2, py = box.clientHeight / 2) {
+    z = Math.max(1, Math.min(18, Math.round(z)));
+    if (z === map.z) return;
+    // The point under the pointer stays under it.
+    const world = GA_TILE * 2 ** map.z;
+    const wx = map.cx + (px - box.clientWidth / 2) / world;
+    const wy = map.cy + (py - box.clientHeight / 2) / world;
+    const next = GA_TILE * 2 ** z;
+    map.cx = wx - (px - box.clientWidth / 2) / next;
+    map.cy = wy - (py - box.clientHeight / 2) / next;
+    map.z = z;
+    draw();
+  }
+
+  function fit(list) {
+    const xs = list.map((m) => m.x);
+    const ys = list.map((m) => m.y);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    map.cx = (x0 + x1) / 2;
+    map.cy = (y0 + y1) / 2;
+    const span = Math.max(x1 - x0, y1 - y0) * GA_TILE;
+    map.z = Math.max(map.z + 1, Math.min(18, Math.floor(Math.log2(Math.min(box.clientWidth, box.clientHeight) / Math.max(span, 1e-9)) - 0.5)));
+    map.z = Math.min(18, map.z);
+    draw();
+  }
+
+  // A cluster's photos, beside the map: where, how many, each to open.
+  function openCluster(list) {
+    const where = new Map();
+    for (const m of list) { const k = [m.city, m.country].filter(Boolean).join(", "); if (k) where.set(k, (where.get(k) || 0) + 1); }
+    const place = [...where].sort((a, b) => b[1] - a[1])[0]?.[0] || "Here";
+    const shown = list.slice(0, 300);
+    const close = el("button", { type: "button", class: "ga-vbutton", title: "Close", "aria-label": "Close" }, svg(GA_ICONS.close));
+    close.addEventListener("click", () => { panel.hidden = true; });
+    const zoom = el("button", { type: "button", class: "button-secondary" }, "Zoom in here");
+    zoom.addEventListener("click", () => fit(list));
+    const source = { list: shown.map((m) => ({ id: m.id })) };
+    panel.replaceChildren(el("div", { class: "ga-map-panel-head" }, el("div", {}, el("h3", {}, place),
+      el("p", { class: "ga-dim" }, `${list.length.toLocaleString()} photos${list.length > shown.length ? ` (the first ${shown.length})` : ""}`)), close),
+    ...(list.length > 1 ? [zoom] : []),
+    el("div", { class: "ga-map-grid" }, ...shown.map((m) => {
+      const img = el("img", { src: gaThumb(m.id), alt: "", loading: "lazy" });
+      img.addEventListener("error", () => img.remove());
+      const b = el("button", { type: "button", class: "ga-tile" }, img);
+      b.addEventListener("click", () => gaOpen(source, m.id));
+      return b;
+    })));
+    panel.hidden = false;
+  }
+
+  // Dragging, the wheel, two fingers.
+  const down = new Map();
+  let pinch = null;
+  box.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".ga-pin, .ga-map-zoom, .ga-map-panel")) return;
+    box.setPointerCapture(e.pointerId);
+    down.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (down.size === 2) {
+      const [a, b] = [...down.values()];
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: map.z };
+    }
+  });
+  box.addEventListener("pointermove", (e) => {
+    const was = down.get(e.pointerId);
+    if (!was) return;
+    if (down.size === 2 && pinch) {
+      down.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const [a, b] = [...down.values()];
+      const z = pinch.z + Math.round(Math.log2(Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, pinch.d)));
+      const r = box.getBoundingClientRect();
+      if (z !== map.z) zoomAt(z, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+      return;
+    }
+    const world = GA_TILE * 2 ** map.z;
+    map.cx -= (e.clientX - was.x) / world;
+    map.cy = Math.max(0, Math.min(1, map.cy - (e.clientY - was.y) / world));
+    down.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    box.classList.add("dragging");
+    map.moved = true;
+    if (!map.raf) map.raf = requestAnimationFrame(() => { map.raf = 0; draw(false); });
+  });
+  const up = (e) => {
+    down.delete(e.pointerId);
+    if (down.size < 2) pinch = null;
+    if (!down.size) {
+      box.classList.remove("dragging");
+      if (map.moved) { map.moved = false; draw(); }
+    }
+  };
+  box.addEventListener("pointerup", up);
+  box.addEventListener("pointercancel", up);
+  let wheelAt = 0;
+  box.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    if (Date.now() - wheelAt < 180) return;
+    wheelAt = Date.now();
+    const r = box.getBoundingClientRect();
+    zoomAt(map.z + (e.deltaY < 0 ? 1 : -1), e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+  box.addEventListener("dblclick", (e) => {
+    if (e.target.closest(".ga-pin, .ga-map-zoom, .ga-map-panel")) return;
+    const r = box.getBoundingClientRect();
+    zoomAt(map.z + 1, e.clientX - r.left, e.clientY - r.top);
+  });
+  box.addEventListener("keydown", (e) => {
+    const step = 80 / (GA_TILE * 2 ** map.z);
+    const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    if (moves[e.key]) { e.preventDefault(); e.stopPropagation(); map.cx += moves[e.key][0]; map.cy += moves[e.key][1]; draw(); }
+    if (e.key === "+" || e.key === "=") zoomAt(map.z + 1);
+    if (e.key === "-") zoomAt(map.z - 1);
+  });
+  requestAnimationFrame(draw);
 }
