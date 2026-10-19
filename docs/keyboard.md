@@ -120,6 +120,16 @@ wallpaper is Alt+Shift+P.
 | Media keys, a phone's lock screen | Play, pause, next, previous (the browser passes them on) |
 | Mouse side buttons | Back and forward through where you've been |
 
+## In Gallery
+
+| Key | Does |
+| --- | --- |
+| ←, → | The photo before or after |
+| i | Its info |
+| Escape | Close the photo |
+| Ctrl+F | Search |
+| Mouse side buttons | Back and forward (in a photo: the one before and after) |
+
 ## Typing
 
 Text boxes keep their keys: Left and Right move the cursor, letters type.

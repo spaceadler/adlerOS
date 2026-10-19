@@ -55,6 +55,7 @@ const BUILT_IN = [
   { id: "notepad", name: "Notepad", about: "Text files, one a window", open: () => openNotepad(), keywords: "notepad text editor edit write txt" },
   { id: "adlermd", name: "adlermd", about: "Your notes, in vaults (Obsidian's work too)", open: () => openAdlermd(), keywords: "adlermd notes markdown obsidian vault" },
   { id: "music", name: "Music", about: "Your songs, albums, playlists and radio", open: () => openMusic(), keywords: "music songs albums artists playlists radio lyrics" },
+  { id: "gallery", name: "Gallery", about: "Your photos and videos, from Immich", open: () => openGallery(), keywords: "gallery photos pictures albums people immich" },
 ];
 // The terminal only in admin mode.
 const builtIns = () => BUILT_IN.filter((b) => b.id !== "terminal" || state.admin);
