@@ -1,0 +1,10 @@
+# adlerOS in a homelab → http://os.<domain>. Rendered by install.sh --homelab
+# into the homelab's containers/core/nginx/sites/os.conf, TS_IP filled in.
+server {
+    include snippets/listen.conf;
+    server_name os.*;
+    location / {
+        proxy_pass http://${TS_IP}:8686;
+        include snippets/proxy.conf;
+    }
+}

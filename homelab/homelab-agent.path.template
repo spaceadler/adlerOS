@@ -1,0 +1,11 @@
+# Rendered by adlerOS's install.sh --homelab into /etc/systemd/system/homelab-agent.path.
+# Runs the helper as soon as a request appears in the home screen's queue.
+[Unit]
+Description=Start the homelab helper when the home screen asks for something
+
+[Path]
+PathExistsGlob=${HOMELAB_DIR}/containers/core/os/data/agent/queue/*.json
+Unit=homelab-agent.service
+
+[Install]
+WantedBy=multi-user.target

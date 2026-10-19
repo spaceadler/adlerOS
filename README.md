@@ -11,6 +11,11 @@ Docker, and your compose files stay yours.
 <!-- screenshot: the desktop, at 1440×900 or larger, see docs/screenshots/README.md -->
 ![adlerOS desktop](docs/screenshots/desktop.png)
 
+**Want the whole homelab, built for you?** Clone
+[spaceadler/homelab](https://github.com/spaceadler/homelab) instead: its
+installer sets up the machine and about thirty apps, and installs adlerOS
+from here as their home screen. **Have your own homelab?** Install this one:
+
 ```bash
 cd ~/docker   # wherever your compose folders are: adlerOS is one of them
 git clone https://github.com/spaceadler/adleros.git
@@ -122,18 +127,26 @@ search, AI), **Productivity** (tasks, documents, office, automation), **Life**
 (places, trips, money, food, health), **Files** (sync, git, downloads,
 backups) and **Extras**.
 
-## Two ways to run it
+## One adlerOS, two ways in
 
-- **On its own (standalone):** `./install.sh` here, on any machine that runs
-  Docker. Your apps come from your compose folders; new ones from adlerOS's
-  store. See [docs/standalone.md](docs/standalone.md).
-- **Inside a homelab built from
-  [spaceadler/homelab](https://github.com/spaceadler/homelab):** its
-  `install.sh` fetches adlerOS into `containers/core/os/adleros`, runs
-  adlerOS's own installer for its questions and connections, and runs it in
-  *homelab mode*: apps come from the homelab's catalog, and the App Store
-  installs and deletes them through the homelab's `install.sh`. See
-  [docs/homelab.md](docs/homelab.md).
+This repository is all of adlerOS: one codebase, one installer, whichever
+way you come to it.
+
+- **The ecosystem: clone [spaceadler/homelab](https://github.com/spaceadler/homelab).**
+  That repository is the homelab itself: the machine's setup (Docker,
+  Tailscale, the firewall), about thirty apps, their storage and
+  addresses. It holds no adlerOS. Its `install.sh` downloads this
+  repository and runs this `install.sh` with `--homelab <the homelab>`,
+  and that one argument is the whole difference: adlerOS takes the
+  homelab's settings and folders, its apps come from the homelab's
+  catalog, and the App Store installs and deletes them through the
+  homelab's `install.sh`. See [docs/homelab.md](docs/homelab.md).
+- **Your own homelab: clone this one.** `./install.sh` here, on any
+  machine that runs Docker. Your apps come from your compose folders; new
+  ones from adlerOS's store. See [docs/standalone.md](docs/standalone.md).
+
+Updates work the same way: a fix to adlerOS lands here, and both kinds of
+install get it (a homelab's `install.sh` fetches it again each run).
 
 ## How it stays safe
 
@@ -166,9 +179,13 @@ to the internet.
 
 ```text
 adleros/
-├── install.sh            # standalone install: settings, helper, your apps, start
+├── install.sh            # the installer: your own homelab, or --homelab for spaceadler/homelab
 ├── docker-compose.yml    # the adlerOS container (standalone)
 ├── .env.example          # its settings; install.sh makes .env from it
+├── homelab/              # how it runs in spaceadler/homelab (install.sh --homelab):
+│   ├── docker-compose.yml          # its container, written into containers/core/os/
+│   ├── nginx.conf.template         # its address, os.<domain>, in the homelab's nginx
+│   └── homelab-agent.{path,service}.template  # its helper there
 ├── app/                  # the web app: server.py (Python standard library) + static/
 ├── agent/
 │   ├── agent.py          # the helper: runs queued requests from the list below
