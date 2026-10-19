@@ -61,6 +61,7 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.parse
 from pathlib import Path
 
 ADLEROS = Path(__file__).resolve().parents[1]
@@ -540,6 +541,8 @@ def delete(app):
     if code:
         say(f"Its containers didn't all come down ({code}), so {app['name']} stays installed.")
         return code
+    if app["kind"] == "registry" and app["info"].get("source") == "site":
+        return forget(app["id"])  # a website: nothing to bring back
     if app["kind"] == "registry":
         set_registry_installed(app, False)
         say(f"{app['name']} is off your home screen. Install brings it back.")
@@ -1091,6 +1094,36 @@ def import_app(name, file, service_list, url, icon, port):
     return 0
 
 
+def add_site(name, url, collection):
+    """A website as an app: no containers, only its address, opened in a
+    window like the rest (or in the Firefox app, if it won't be framed).
+    Its icon, if dashboard-icons has one by its name (github.com: github);
+    else a letter."""
+    if not re.fullmatch(r"[^\x00-\x1f]{1,40}", name):
+        sys.exit("name: 1 to 40 characters")
+    if not re.fullmatch(r"https?://[^\s\"'<>\\]{1,300}", url):
+        sys.exit("address: an http:// or https:// address")
+    collection = collection or "extras"
+    if collection not in COLLECTIONS or collection in ("core", "background"):
+        sys.exit("collection: one of system, media, knowledge, productivity, life, files or extras")
+    host = (urllib.parse.urlsplit(url).hostname or "").removeprefix("www.")
+    if not host:
+        sys.exit("address: it has no host name")
+    apps = every_app()
+    same = next((a for a in apps.values() if a["kind"] == "registry" and a["info"].get("url", "").rstrip("/") == url.rstrip("/")), None)
+    if same:
+        sys.exit(f"{url} is already {same['name']} in adlerOS")
+    labels = host.split(".")
+    guess = labels[-2] if len(labels) > 1 else labels[0]
+    app_id = new_app_id(name, apps)
+    write_record(app_id, {"name": name, "files": [], "services": None, "url": url,
+                          "icon": f"di:{guess}" if re.fullmatch(r"[a-z0-9-]{1,64}", guess) else "", "port": None,
+                          "about": host, "collection": collection, "source": "site", "known": "",
+                          "added": time.strftime("%Y-%m-%d"), "installed": True})
+    say(f"+ {name}: {url}")
+    return 0
+
+
 def forget(app_id):
     app = registry_app(app_id) if APP_ID.fullmatch(app_id) else None
     if not app:
@@ -1241,6 +1274,8 @@ def main(argv):
         return set_roots(argv[1])
     if len(argv) == 7 and argv[0] == "import":
         return import_app(*argv[1:])
+    if len(argv) == 4 and argv[0] == "site":
+        return add_site(*argv[1:])
     if len(argv) == 2 and argv[0] == "forget":
         return forget(argv[1])
     if len(argv) == 1 and argv[0] == "usage":
@@ -1269,7 +1304,7 @@ def main(argv):
         return 0
     if len(argv) != 2 or argv[0] not in COMMANDS or not APP_ID.fullmatch(argv[1]):
         sys.exit(f"usage: apps.py status | usage | discover | set-roots FOLDERS | logs APP | {{{'|'.join(COMMANDS)}}} APP | scan PATH | forget APP"
-                 " | import NAME FILE SERVICES URL ICON PORT")
+                 " | import NAME FILE SERVICES URL ICON PORT | site NAME URL COLLECTION")
     app = every_app().get(argv[1])
     if not app:
         sys.exit(f"{argv[1]}: not an app the App Store manages")

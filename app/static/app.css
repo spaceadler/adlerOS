@@ -1670,6 +1670,8 @@ a.chip-button { text-decoration: none; }
 .dot.busy { background: #60a5fa; animation: pulse 1.2s ease-in-out infinite; }
 .store-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .importing .store-header .chip-button, .importing .settings-rail { display: none; }
+.store-head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.store-state.site::before { display: none; }
 
 /* Import: a folder, the files found, then one file at a time. */
 .import { display: flex; flex-direction: column; gap: 14px; max-width: 1100px; }
