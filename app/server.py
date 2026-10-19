@@ -2699,10 +2699,11 @@ class Watcher:
 
 def trusted_proxies():
     """Who may tell adlerOS a visitor's real address and scheme (X-Real-IP,
-    X-Forwarded-Proto): this machine, and ADLEROS_TRUSTED_PROXIES (addresses or
+    X-Forwarded-Proto): this machine (its own Tailscale address too, which a
+    homelab's nginx comes from), and ADLEROS_TRUSTED_PROXIES (addresses or
     networks, comma-separated: your reverse proxy's, e.g. its Docker network)."""
     found = []
-    for item in ["127.0.0.1", "::1", *os.environ.get("ADLEROS_TRUSTED_PROXIES", "").replace(" ", ",").split(",")]:
+    for item in ["127.0.0.1", "::1", local_address(), *os.environ.get("ADLEROS_TRUSTED_PROXIES", "").replace(" ", ",").split(",")]:
         try:
             found.append(ipaddress.ip_network(item.strip(), strict=False))
         except ValueError:
