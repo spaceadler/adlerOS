@@ -131,6 +131,8 @@ To add your own, see [customizing](customizing.md#store-apps).
 | `MUSIC_DIR` | Music's songs and playlists, a folder in `STORAGE_DIR` (`Media/Music`) |
 | `NAVIDROME_USER`, `NAVIDROME_PASSWORD` | your Navidrome login: what Music plays shows up there too (none: off) |
 | `NAVIDROME_URL` | where Navidrome is, if not at `ADLEROS_HOST` and its port in the store (none) |
+| `IMMICH_API_KEY` | Gallery's key from Immich, one that may read your photos, albums, people and memories (none: Gallery says how to make one) |
+| `IMMICH_URL` | where Immich is, if not at `ADLEROS_HOST` and its port in the store (none) |
 | `ADLEROS_TERMINAL` | `on` lets the Terminal window open shells (in admin mode); re-run `./install.sh` after changing it |
 | `ADLEROS_TERMINAL_DIR` | where a new terminal starts, e.g. `~/homelab` (your home folder); takes effect on the next one |
 | `ADLEROS_NETWORKS` | who it answers: `tailscale`, `anyone`, or addresses and networks; everyone else gets nothing ([security](security.md#who-it-answers)) |

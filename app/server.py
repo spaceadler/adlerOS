@@ -98,7 +98,7 @@ JOBS = DATA / "agent" / "jobs"
 ICON_OVERRIDES = Path(os.environ.get("OS_ICON_DIR", "/icons"))
 # adlerOS's own dock icons (./icons can replace each): All apps, and the ones
 # you pin like any app.
-DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "adlermd", "music")
+DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "adlermd", "music", "gallery")
 DOCK_MAX_PINS = 16
 # The widgets you can put on the desktop, with the defaults and the limit.
 WIDGET_CATALOG = STATIC / "widgets-catalog.json"
@@ -440,7 +440,7 @@ def search_url():
 # adlerOS's own, pinned (and unpinned, moved about) like any app; in the dock
 # from the start, in this order, until you take them out.
 BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal",
-                "adleros:notepad", "adleros:adlermd", "adleros:music")
+                "adleros:notepad", "adleros:adlermd", "adleros:music", "adleros:gallery")
 DOCK_FIRST = BUILTIN_PINS[:5]  # a new dock's (Notepad, adlermd and Music: in All apps, for you to pin)
 DOCK_SEED = 2  # 1: My Computer and the Terminal pinned; 2: the App Store, Settings and Live Usage too
 
@@ -1939,6 +1939,103 @@ def music_lyrics(real):
     return {"text": text, "synced": bool(re.search(r"^\s*\[\d+:\d+(?:[.:]\d+)?\]", text, re.M))}
 
 
+# ---------------------------------------------------------------- gallery
+
+# Gallery: your photos as Immich has them (the timeline, albums, people,
+# favorites, memories), through Immich's API with IMMICH_API_KEY; one that
+# may only read is enough (asset.read, asset.view, asset.download,
+# album.read, person.read, and memory.read for On this day). The page never
+# sees the key, nor Immich's address: adlerOS asks, and passes on what
+# Immich says, pictures and videos too. Immich is at IMMICH_URL, else at
+# this machine's Tailscale address (TS_IP, ADLEROS_HOST) and its port.
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+GALLERY_PERMISSIONS = ("asset.read", "asset.view", "asset.download", "album.read", "person.read", "memory.read")
+
+
+def immich():
+    """(url, key), or (url or None, None) when there's no key."""
+    url = install_setting("IMMICH_URL").rstrip("/")
+    if not url:
+        host = install_setting("TS_IP") if HOMELAB_MODE else install_setting("ADLEROS_HOST")
+        app = next((a for a in installed_apps() if a["id"] == "immich"), None)
+        url = f"http://{host}:{app['port']}" if host and app and app.get("port") else None
+    return url, install_setting("IMMICH_API_KEY") or None
+
+
+def immich_open(path, query=None, body=None, method="GET", headers=None, timeout=20):
+    url, key = immich()
+    if not url or not key:
+        raise LookupError("not set up")
+    full = f"{url}/api/{path}" + (f"?{urllib.parse.urlencode(query)}" if query else "")
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(full, data=data, method=method, headers={
+        "x-api-key": key, "Accept": "application/json", **({"Content-Type": "application/json"} if data else {}), **(headers or {})})
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
+def immich_json(path, query=None, body=None, method="GET"):
+    with immich_open(path, query, body, method) as r:
+        return json.loads(r.read())
+
+
+def gallery_query(query, keys):
+    """Only these of the page's query, each as Immich wants it."""
+    out = {}
+    for k in keys:
+        v = query.get(k, [None])[0]
+        if v is None or v == "":
+            continue
+        if k in ("albumId", "personId", "id") and not UUID_RE.match(v):
+            raise ValueError(f"{k}: not an id")
+        if k in ("isFavorite", "withHidden") and v not in ("true", "false"):
+            raise ValueError(f"{k}: true or false")
+        if k == "order" and v not in ("asc", "desc"):
+            raise ValueError("order: asc or desc")
+        if k == "visibility" and v not in ("timeline", "archive"):
+            raise ValueError("visibility: timeline or archive")
+        if k == "timeBucket" and not re.match(r"^\d{4}-\d{2}-\d{2}[T0-9:.Z+-]*$", v):
+            raise ValueError("timeBucket: a date")
+        if k == "size" and v not in ("thumbnail", "preview", "fullsize"):
+            raise ValueError("size: thumbnail, preview or fullsize")
+        out[k] = v
+    return out
+
+
+def gallery_status():
+    """Whether Gallery can see your photos, and if not, why."""
+    url, key = immich()
+    out = {"url": url, "configured": bool(url and key), "permissions": list(GALLERY_PERMISSIONS)}
+    if not url:
+        return {**out, "error": "noimmich"}
+    if not key:
+        return {**out, "error": "nokey"}
+    try:
+        with urllib.request.urlopen(f"{url}/api/server/version", timeout=6) as r:
+            v = json.loads(r.read())
+        out["version"] = f"{v.get('major')}.{v.get('minor')}.{v.get('patch')}"
+        me = immich_json("api-keys/me")
+        has = set(me.get("permissions") or [])
+        out["missing"] = [] if "all" in has else [p for p in GALLERY_PERMISSIONS if p not in has]
+        out["ok"] = True
+    except urllib.error.HTTPError as e:
+        out["error"] = "refused" if e.code in (401, 403) else f"immich {e.code}"
+    except (OSError, ValueError) as e:
+        out["error"] = f"unreachable ({e})"
+    return out
+
+
+def gallery_asset_lite(a):
+    """A search hit as the timeline has them (what a grid needs)."""
+    exif = a.get("exifInfo") or {}
+    w, h = a.get("width") or exif.get("exifImageWidth"), a.get("height") or exif.get("exifImageHeight")
+    if exif.get("orientation") in ("5", "6", "7", "8") and w and h:
+        w, h = h, w
+    return {"id": a["id"], "isImage": a.get("type") == "IMAGE", "ratio": (w / h) if w and h else 1,
+            "isFavorite": bool(a.get("isFavorite")), "fileCreatedAt": a.get("fileCreatedAt"),
+            "localDateTime": a.get("localDateTime"), "duration": a.get("duration"),
+            "livePhotoVideoId": a.get("livePhotoVideoId")}
+
+
 def locate(path, must_exist=True):
     """(place, real path) for '/user/Documents/a.txt', else (None, None). '..'
     and links that lead out of their place are refused."""
@@ -2573,6 +2670,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.notes_get(path[len("/api/notes/"):], query)
         if path.startswith("/api/music/"):
             return self.music_get(path[len("/api/music/"):], query)
+        if path.startswith("/api/gallery/"):
+            return self.gallery_get(path[len("/api/gallery/"):], query)
         if path.startswith("/api/frame/"):
             app = next((a for a in installed_apps() if a["id"] == path[len("/api/frame/"):]), None)
             if not app:
@@ -2645,6 +2744,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.notes_post(path[len("/api/notes/"):], body)
         if path.startswith("/api/music/"):
             return self.music_post(path[len("/api/music/"):], body)
+        if path == "/api/gallery/search":
+            return self.gallery_search(body)
         if path == "/api/terminal":
             return self.open_terminal(body)
         if path.startswith("/api/terminal/"):
@@ -3060,6 +3161,115 @@ class Handler(BaseHTTPRequestHandler):
             _music["playlists"] = [*[p for p in _music["playlists"] if p["id"] not in (found["id"], save.get("id"))], found]
             _music["at"] = 0
         return self.send_json(200, found)
+
+    # Gallery: what it asks Immich, passed on (the key stays here).
+    def gallery_get(self, what, query):
+        try:
+            if what == "status":
+                return self.send_json(200, gallery_status())
+            filters = ("albumId", "personId", "isFavorite", "order", "visibility")
+            if what == "buckets":
+                return self.send_json(200, immich_json("timeline/buckets", gallery_query(query, filters)))
+            if what == "bucket":
+                q = gallery_query(query, (*filters, "timeBucket"))
+                if "timeBucket" not in q:
+                    raise ValueError("timeBucket: a date")
+                return self.send_json(200, immich_json("timeline/bucket", q))
+            if what == "albums":
+                return self.send_json(200, immich_json("albums"))
+            if what == "people":
+                people = []
+                for page in range(1, 21):
+                    got = immich_json("people", {"withHidden": "false", "page": page, "size": 500})
+                    people += got.get("people") or []
+                    if not got.get("hasNextPage"):
+                        break
+                return self.send_json(200, {"people": people})
+            if what == "memories":
+                try:
+                    return self.send_json(200, immich_json("memories"))
+                except urllib.error.HTTPError as e:
+                    if e.code == 403:
+                        return self.send_json(200, [])  # the key may not read them: none
+                    raise
+            kind, _, aid = what.partition("/")
+            if not UUID_RE.match(aid):
+                return self.send_json(404, {"error": "not found"})
+            if kind == "asset":
+                return self.send_json(200, immich_json(f"assets/{aid}"))
+            if kind == "albums-of":
+                return self.send_json(200, immich_json("albums", {"assetId": aid}))
+            if kind == "album":
+                return self.send_json(200, immich_json(f"albums/{aid}", {"withoutAssets": "true"}))
+            if kind == "person":
+                return self.send_json(200, immich_json(f"people/{aid}"))
+            if kind == "thumb":
+                size = gallery_query(query, ("size",)).get("size", "thumbnail")
+                return self.gallery_stream(f"assets/{aid}/thumbnail", {"size": size}, ("image/",), cache=86400)
+            if kind == "face":
+                return self.gallery_stream(f"people/{aid}/thumbnail", None, ("image/",), cache=86400)
+            if kind == "video":
+                return self.gallery_stream(f"assets/{aid}/video/playback", None, ("video/",))
+            if kind == "original":
+                return self.gallery_stream(f"assets/{aid}/original", None, None, download=True)
+            return self.send_json(404, {"error": "not found"})
+        except LookupError:
+            return self.send_json(409, {"error": "Gallery isn't set up", "status": gallery_status()})
+        except ValueError as e:
+            return self.send_json(400, {"error": str(e)})
+        except urllib.error.HTTPError as e:
+            return self.send_json(e.code if e.code in (400, 401, 403, 404) else 502, {"error": f"Immich said {e.code}", "immich": e.code})
+        except OSError as e:
+            return self.send_json(502, {"error": f"can't reach Immich ({e})"})
+
+    def gallery_search(self, body):
+        query = body.get("query")
+        page = body.get("page") or 1
+        if not isinstance(query, str) or not query.strip() or len(query) > 500 or not isinstance(page, int) or not 0 < page < 1000:
+            return self.send_json(400, {"error": "expected {query, page}"})
+        try:
+            found = immich_json("search/smart", body={"query": query.strip(), "page": page, "size": 100, "withExif": True}, method="POST")
+        except LookupError:
+            return self.send_json(409, {"error": "Gallery isn't set up"})
+        except urllib.error.HTTPError as e:
+            return self.send_json(e.code if e.code in (400, 401, 403) else 502, {"error": f"Immich said {e.code}", "immich": e.code})
+        except OSError as e:
+            return self.send_json(502, {"error": f"can't reach Immich ({e})"})
+        assets = found.get("assets") or {}
+        return self.send_json(200, {"items": [gallery_asset_lite(a) for a in assets.get("items") or []], "nextPage": assets.get("nextPage")})
+
+    def gallery_stream(self, path, query, kinds, cache=0, download=False):
+        """A picture or a video from Immich, as it sends it (Range too: seeking)."""
+        try:
+            r = immich_open(path, query, headers={"Range": self.headers["Range"]} if self.headers.get("Range") else None, timeout=60)
+        except LookupError:
+            return self.send(409, b"Gallery isn't set up")
+        except urllib.error.HTTPError as e:
+            return self.send(e.code if e.code in (404, 416) else 502, b"")
+        except OSError:
+            return self.send(502, b"can't reach Immich")
+        with r:
+            ctype = (r.headers.get("Content-Type") or "application/octet-stream").split(";")[0].strip().lower()
+            if kinds and not ctype.startswith(kinds):
+                return self.send(502, b"not a picture or a video")
+            self.send_response(r.status)
+            self.send_header("Content-Type", "application/octet-stream" if download else ctype)
+            for name in ("Content-Length", "Content-Range", "Accept-Ranges"):
+                if r.headers.get(name):
+                    self.send_header(name, r.headers[name])
+            given = r.headers.get("Content-Disposition") or ""
+            self.send_header("Content-Disposition", ("attachment" + given[given.index(";"):] if ";" in given else "attachment") if download else "inline")
+            self.send_header("Content-Security-Policy", "default-src 'none'; sandbox")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cache-Control", f"private, max-age={cache}" if cache else "private, no-cache")
+            self.end_headers()
+            if self.command == "HEAD":
+                return
+            try:
+                while chunk := r.read(256 * 1024):
+                    self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # the page stopped it (a video sought elsewhere)
 
     def music_list_file(self, pid, virtual):
         """(real file, place) for a playlist's id, if it may change."""

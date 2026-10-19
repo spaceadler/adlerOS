@@ -543,6 +543,30 @@ that only what changed, so it opens straight away.
   stops it. The queue and where you were in the song are kept on this
   device, for next time.
 
+## Gallery
+
+Your photos and videos as Immich has them: open it from All apps, the dock,
+or Alt+Space "gallery". It needs a key from Immich (Immich → Account
+Settings → API Keys → New API Key) that may read: `asset.read`,
+`asset.view`, `asset.download`, `album.read`, `person.read` and
+`memory.read`. Put it in the settings file as `IMMICH_API_KEY`; until then,
+Gallery says the same.
+
+- **Photos**: the whole timeline, newest first, by month and then day, in
+  rows that fill the width; **On this day** above it. Months are fetched as
+  you come to them and let go when you're far past, so even tens of
+  thousands scroll lightly.
+- **Albums**, **People** (the ones you've named first; the rest a click
+  away), **Favorites**, and **Search**: Immich's own, by what's in the
+  photo ("beach at sunset", "a red car").
+- A photo opens big (a video plays). The arrows, or a swipe, go through the
+  rest, past a month's end too; **i** shows what Immich knows (when, the
+  file, the camera and its settings, where, who's in it, its albums), and
+  the download button gets the original. Escape, or a swipe down, closes it.
+- The mouse's side buttons go back and forward (in a photo: the one before
+  and after). **Open Immich** in the side opens Immich itself, for
+  anything Gallery doesn't do (uploading, sharing, editing).
+
 ## Terminal
 
 <!-- screenshot: the Terminal window running htop -->
