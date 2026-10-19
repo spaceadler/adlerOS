@@ -1366,7 +1366,7 @@ function musicPosition() {
   try { navigator.mediaSession.setPositionState({ duration: a.duration, position: Math.min(a.currentTime, a.duration), playbackRate: a.playbackRate || 1 }); } catch { /* not this browser */ }
 }
 
-music.audio.addEventListener("play", () => { musicBarUpdate(); musicPosition(); });
+music.audio.addEventListener("play", () => { musicBarUpdate(); musicPosition(); musicMediaNext(); });
 music.audio.addEventListener("pause", () => { musicBarUpdate(); musicPosition(); musicSave(); });
 music.audio.addEventListener("loadedmetadata", () => { musicBarTime(); musicPosition(); });
 for (const type of ["seeked", "durationchange", "ratechange"]) music.audio.addEventListener(type, musicPosition);
@@ -1403,12 +1403,6 @@ music.audio.addEventListener("volumechange", () => { if (music.built) musicBarUp
 // song, like a phone's own player (no ±10 s buttons: with them, a phone
 // shows those instead), and dragging along the song.
 const muAction = (action, run) => { try { navigator.mediaSession.setActionHandler(action, run); } catch { /* not this browser */ } };
-if ("mediaSession" in navigator) {
-  muAction("play", () => music.audio.play().catch(() => {}));
-  muAction("pause", () => music.audio.pause());
-  muAction("previoustrack", musicPrevSong);
-  muAction("seekto", (d) => { if (Number.isFinite(d.seekTime)) music.audio.currentTime = d.seekTime; });
-}
 
 // The lock screen's previous: the song before, straight away (the bar's
 // button starts this one again first, once it's past 3 seconds; there that's
@@ -1419,9 +1413,15 @@ function musicPrevSong() {
   music.audio.currentTime = 0;
 }
 
-// Next only when there's a next one (greyed out on the lock screen otherwise).
+// Told again with each song (and when the queue changes): an iPhone keeps
+// only what it was told once something plays, so the buttons said at the
+// start were greyed out there. Next only when there's a next one.
 function musicMediaNext() {
   if (!("mediaSession" in navigator)) return;
+  muAction("play", () => music.audio.play().catch(() => {}));
+  muAction("pause", () => music.audio.pause());
+  muAction("previoustrack", musicPrevSong);
+  muAction("seekto", (d) => { if (Number.isFinite(d.seekTime)) music.audio.currentTime = d.seekTime; });
   const more = music.at < music.queue.length - 1 || (music.repeat === "all" && music.queue.length > 1) || Boolean(music.radio);
   muAction("nexttrack", more ? () => musicNext() : null);
 }
