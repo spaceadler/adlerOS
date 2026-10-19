@@ -633,7 +633,7 @@ function reloadAppWindow(id) {
 // The mouse's side buttons: back (the one nearer your palm) and forward,
 // in the window under the pointer (else the one in front) that has
 // somewhere to go back to: My Computer's folders, Settings' categories,
-// adlerMD's notes and folders (registerNav). Never the page itself, which
+// adlermd's notes and folders (registerNav). Never the page itself, which
 // would leave adlerOS: the browser's own back is cancelled, and for one
 // that goes anyway (or its own back: Alt+Left, its button), adlerOS keeps a
 // step of history of its own, and going back from it goes back in the

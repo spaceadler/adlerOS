@@ -126,7 +126,7 @@ a tab instead. adlerOS's own page may frame any web page (`frame-src http:
 https:`), since an app's page can redirect to its login or to HTTPS; it still
 runs only its own scripts.
 
-**Notes** (adlerMD, Notepad) are yours, but may come from anywhere (a vault
+**Notes** (adlermd, Notepad) are yours, but may come from anywhere (a vault
 someone shared). Their HTML is rebuilt from an allowlist, never inserted as
 is: formatting tags and their plain attributes, with no scripts, forms,
 event handlers, ids or classes, and style only for how text looks (no

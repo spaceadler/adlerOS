@@ -312,7 +312,7 @@ function entryMenu(entry, path, f) {
 }
 
 // A folder opens in this window (from the desktop: the one in front, if
-// one's open); a text file in Notepad (Markdown: adlerMD's quick look); a
+// one's open); a text file in Notepad (Markdown: adlermd's quick look); a
 // song or a playlist in Music; the rest in windows of their own.
 function openEntry(entry, path, f = null) {
   if (entry.outside) return toast("That link leads outside its place, so adlerOS won't open it.");
@@ -573,7 +573,7 @@ function renderTrash(f) {
 
 // ------------------------------------------------------------ in Notepad
 
-// A text file is Notepad's (a Markdown one, adlerMD's quick look):
+// A text file is Notepad's (a Markdown one, adlermd's quick look):
 // Edit as text from the menus, the desktop's too.
 function editFile(path) { return openNotepad(path, { markdown: false }); }
 

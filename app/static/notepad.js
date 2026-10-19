@@ -2,8 +2,8 @@
 // Windows'). File: New, Open…, Save, Save as…; View: word wrap. A Markdown
 // file opened from My Computer (or the desktop) is a Notepad too, with its
 // preview beside it or instead (Edit, Read, Split) and File → Load vault,
-// for adlerMD's whole vault. Opening adlerMD itself is the vault.
-// Also the file picker (Open…, Save as…) adlerMD uses too.
+// for adlermd's whole vault. Opening adlermd itself is the vault.
+// Also the file picker (Open…, Save as…) adlermd uses too.
 // Uses $, el, svg, api, toast, state, registerWindow, openWindow,
 // closeWindow, isOpen, openMenu, openModal, closeModal, confirmDialog,
 // showLock, desktopMode, winLoad, winSave, mdRender, fileUrl, parentOf,
@@ -17,7 +17,7 @@ let padCount = 0;
 
 // A file in Notepad: the window it's in already, or a new one. No path: the
 // Notepad you used last (one that's hidden behind another window, say), or
-// an empty one. markdown: adlerMD's quick look at a Markdown file.
+// an empty one. markdown: adlermd's quick look at a Markdown file.
 async function openNotepad(path = null, { markdown = path ? /\.(md|markdown)$/i.test(path) : false } = {}) {
   if (path) {
     const open = [...pads.values()].find((p) => p.path === path);
@@ -65,14 +65,14 @@ function makePad({ markdown }) {
   close.addEventListener("click", () => closePad(pad));
   const bar = el("div", { class: "pad-bar" },
     menuButton("File", () => padFileMenu(pad)), menuButton("View", () => padViewMenu(pad)), title, status, close);
-  pad.section = el("section", { id, class: `sheet pad-sheet${markdown ? " pad-md" : ""}`, "aria-label": markdown ? "adlerMD" : "Notepad", hidden: "" },
+  pad.section = el("section", { id, class: `sheet pad-sheet${markdown ? " pad-md" : ""}`, "aria-label": markdown ? "adlermd" : "Notepad", hidden: "" },
     el("div", { class: "sheet-bg", "aria-hidden": "true" }, el("div", { class: "sheet-wallpaper" }), el("div", { class: "sheet-tint" })),
     bar, el("div", { class: "pad-body" }, area, preview));
   document.body.insertBefore(pad.section, $("modal"));
   pads.set(id, pad);
   // Closing it (its ✕, Alt+W) asks about unsaved changes and then goes;
   // another window over it on the home screen only hides it.
-  registerWindow(id, { title: markdown ? "adlerMD" : "Notepad", close: () => closePad(pad), hide: () => closeWindow(id), dock: markdown ? null : "notepad",
+  registerWindow(id, { title: markdown ? "adlermd" : "Notepad", close: () => closePad(pad), hide: () => closeWindow(id), dock: markdown ? null : "notepad",
     icon: markdown ? "adlermd" : "notepad", size: [820, 600] });
   area.addEventListener("input", () => {
     setPadDirty(pad, true);
@@ -352,7 +352,7 @@ async function padOpenFile(pad) {
   openNotepad(path);
 }
 
-// File → Load vault: adlerMD with its vault (this file's, if it's in one).
+// File → Load vault: adlermd with its vault (this file's, if it's in one).
 async function padLoadVault(pad) {
   if (!(await padMayLeave(pad, "load the vault"))) return;
   const path = pad.path;
@@ -382,7 +382,7 @@ function choiceDialog({ title, body, choices }) {
 
 // Open… and Save as…: your places and their folders. Resolves with the
 // chosen path, or null. save: a name to type, and folders only to pick.
-// folder: a folder itself is what's picked (adlerMD's Open folder as vault).
+// folder: a folder itself is what's picked (adlermd's Open folder as vault).
 function filePicker({ title, save = false, folder = false, start = "/user", name = "" }) {
   return new Promise((resolve) => {
     let answered = false;

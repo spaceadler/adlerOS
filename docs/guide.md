@@ -371,7 +371,7 @@ Desktop and User themselves: opening one takes you there.
 - **Double-click** a folder to go in (a click picks it; on a touch screen a
   tap opens it; Enter too); the path at the top takes you back up, and the
   mouse's side buttons back and forward through where you've been. A text
-  file opens in Notepad (a Markdown one in adlerMD's quick look); anything else that opens gets a window of its
+  file opens in Notepad (a Markdown one in adlermd's quick look); anything else that opens gets a window of its
   own, so the rest of adlerOS stays usable while it's open:
   - a **picture, video or PDF**: the **Viewer** (in desktop mode, drag and
     resize it like any window; over the home screen it floats over My Computer),
@@ -435,17 +435,17 @@ readable here (Root without admin mode) opens read-only: Save as… puts a
 copy somewhere you can change. Closing one with changes asks first.
 
 A **Markdown** file (`.md`) opened from My Computer or the desktop opens
-the same way, as adlerMD's quick look: as it reads, edited where you click
-(View → Live, as in adlerMD), its text (Source), how it reads (Read, or
+the same way, as adlermd's quick look: as it reads, edited where you click
+(View → Live, as in adlermd), its text (Source), how it reads (Read, or
 Ctrl+E), or both side by side; for a quick note you'll throw away. Its
-**File → Load vault** opens adlerMD with your vault instead (the file's own,
+**File → Load vault** opens adlermd with your vault instead (the file's own,
 if it's in one); with changes it asks whether to save them first.
 
-## adlerMD
+## adlermd
 
 Your notes, in **vaults**, Obsidian's way: a vault is a folder of Markdown
 notes and their attachments, and an Obsidian vault works here as it is (and
-back: adlerMD reads `.obsidian`'s settings and never writes them, so the
+back: adlermd reads `.obsidian`'s settings and never writes them, so the
 Obsidian on your laptop, through Syncthing, keeps its own). Open it from
 All apps, the dock or the desktop; it opens your vault: the first is
 `NOTES_DIR` in your storage (in a homelab, `Notes`), and the vault name at
@@ -459,8 +459,9 @@ vault**.
   the middle button) in a new one. Over a note is the path to it, the vault
   first: click a folder in it to see what's in that folder (its folders,
   notes and files, to open, drag or right-click), and **↑** (or Backspace)
-  goes up a folder; the mouse's side buttons go back and forward through
-  where the tab has been. It saves as you go. If Obsidian (or
+  goes up a folder; from a PDF or a picture, it goes back to the note it's
+  from (the one you opened it from, else the one that links to it). The
+  mouse's side buttons go back and forward through where the tab has been. It saves as you go. If Obsidian (or
   anything) changed the note meanwhile, you choose: keep yours, theirs, or
   both.
 - **Live** (Obsidian's Live Preview): the note as it reads, and you edit it
@@ -530,8 +531,10 @@ that only what changed, so it opens straight away.
   what you added), then the rest; drag to reorder, or remove. **Lyrics**
   follow the song as it plays (an `.lrc` beside it, as spotdl makes them, or
   the song's own); a click on a line goes there.
-- Your keyboard's media keys work, and so do the mouse's side buttons (back
-  and forward through where you've been). Plays are counted (after half a
+- Your keyboard's media keys work, and so does a phone's lock screen
+  (previous, play, next, and dragging along the song; next only when there's
+  a song after this one). The mouse's side buttons go back and forward
+  through where you've been. Plays are counted (after half a
   minute), for Home, Your station and Most played.
 - Put away (another window over it, minimized), it keeps playing; closing it
   stops it. The queue and where you were in the song are kept on this

@@ -1091,6 +1091,7 @@ function musicSetShuffle(on) {
 
 function musicCycleRepeat() {
   music.repeat = { off: "all", all: "one", one: "off" }[music.repeat];
+  musicMediaNext();
   musicBarUpdate();
   musicSaveSoon();
 }
@@ -1102,6 +1103,7 @@ function musicNowPlaying() {
   musicBarUpdate();
   musicMarkPlaying();
   musicRenderPanel();
+  musicMediaNext();
   if (music.panel === "lyrics") musicLyricsLoad(id);
   if ("mediaSession" in navigator && s) {
     navigator.mediaSession.metadata = new MediaMetadata({
@@ -1214,6 +1216,7 @@ function musicSetPanel(panel) {
 }
 
 function musicRenderPanel() {
+  musicMediaNext();
   const box = $("mu-panel");
   if (!box || !music.panel) return box?.replaceChildren();
   const close = musicIconButton("Close", "close", () => musicSetPanel(null), "mu-panel-close");
@@ -1386,15 +1389,22 @@ music.audio.addEventListener("error", () => {
 });
 music.audio.addEventListener("volumechange", () => { if (music.built) musicBarUpdate(); });
 
+// The phone's lock screen and the keyboard's media keys: previous and next
+// song, like a phone's own player (no ±10 s buttons: with them, a phone
+// shows those instead), and dragging along the song.
+const muAction = (action, run) => { try { navigator.mediaSession.setActionHandler(action, run); } catch { /* not this browser */ } };
 if ("mediaSession" in navigator) {
-  const on = (action, run) => { try { navigator.mediaSession.setActionHandler(action, run); } catch { /* not this browser */ } };
-  on("play", () => music.audio.play().catch(() => {}));
-  on("pause", () => music.audio.pause());
-  on("previoustrack", musicPrev);
-  on("nexttrack", () => musicNext());
-  on("seekto", (d) => { if (Number.isFinite(d.seekTime)) music.audio.currentTime = d.seekTime; });
-  on("seekbackward", (d) => { music.audio.currentTime = Math.max(0, music.audio.currentTime - (d.seekOffset || 10)); });
-  on("seekforward", (d) => { music.audio.currentTime += d.seekOffset || 10; });
+  muAction("play", () => music.audio.play().catch(() => {}));
+  muAction("pause", () => music.audio.pause());
+  muAction("previoustrack", musicPrev);
+  muAction("seekto", (d) => { if (Number.isFinite(d.seekTime)) music.audio.currentTime = d.seekTime; });
+}
+
+// Next only when there's a next one (greyed out on the lock screen otherwise).
+function musicMediaNext() {
+  if (!("mediaSession" in navigator)) return;
+  const more = music.at < music.queue.length - 1 || (music.repeat === "all" && music.queue.length > 1) || Boolean(music.radio);
+  muAction("nexttrack", more ? () => musicNext() : null);
 }
 
 // --------------------------------------------------- kept on this device

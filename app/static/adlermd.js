@@ -1,4 +1,4 @@
-// adlerMD: Markdown notes in vaults, Obsidian's way, so one vault works in
+// adlermd: Markdown notes in vaults, Obsidian's way, so one vault works in
 // both (Obsidian on a laptop through Syncthing, and here). A vault is a
 // folder: its notes, its attachments, and the .obsidian settings it reads
 // (how links are written, where attachments and new notes go, line breaks,
@@ -6,7 +6,7 @@
 // side, with search and tags; notes in tabs, to edit, read, or both side by
 // side, saved as you go; backlinks, outgoing links and the outline; the
 // graph (mdgraph.js); Bases (mdbases.js).
-// Opening adlerMD (All apps, the dock, the desktop) opens your vault. A
+// Opening adlermd (All apps, the dock, the desktop) opens your vault. A
 // Markdown file opened from My Computer is Notepad's quick look instead,
 // and its File → Load vault comes here (notepad.js).
 // Uses $, el, svg, api, toast, registerWindow, openWindow, closeWindow,
@@ -82,7 +82,7 @@ function mdRelative(fromDir, to) {
 
 // ---------------------------------------------------------------- vaults
 
-// Opening adlerMD: its window, your vault in it; `path` (a file in My
+// Opening adlermd: its window, your vault in it; `path` (a file in My
 // Computer, from Notepad's Load vault): its vault, and it open.
 async function openAdlermd(path = null) {
   mdBuild();
@@ -190,7 +190,7 @@ function mdWelcome() {
   open.addEventListener("click", mdOpenFolderVault);
   $("md-main").replaceChildren(el("div", { class: "md-welcome" },
     el("img", { src: "/static/dock/adlermd.svg", alt: "", class: "md-welcome-icon" }),
-    el("h2", {}, "adlerMD"),
+    el("h2", {}, "adlermd"),
     el("p", {}, "A vault is a folder of notes. Make a new one, or open a folder you have (an Obsidian vault works as it is)."),
     el("div", { class: "md-welcome-actions" }, make, open)));
   $("md-side").replaceChildren();
@@ -251,13 +251,13 @@ function mdBuild() {
     b.addEventListener("click", run);
     return b;
   };
-  const close = el("button", { class: "sheet-close md-close", type: "button", "aria-label": "Close adlerMD" }, svg(["M18 6 6 18", "m6 6 12 12"]));
+  const close = el("button", { class: "sheet-close md-close", type: "button", "aria-label": "Close adlermd" }, svg(["M18 6 6 18", "m6 6 12 12"]));
   close.addEventListener("click", closeAdlermd);
-  const section = el("section", { id: "adlermd", class: "sheet md-sheet", "aria-label": "adlerMD", hidden: "" },
+  const section = el("section", { id: "adlermd", class: "sheet md-sheet", "aria-label": "adlermd", hidden: "" },
     el("div", { class: "sheet-bg", "aria-hidden": "true" }, el("div", { class: "sheet-wallpaper" }), el("div", { class: "sheet-tint" })),
     close,
     el("div", { class: "md-shell" },
-      el("nav", { class: "md-ribbon", "aria-label": "adlerMD" },
+      el("nav", { class: "md-ribbon", "aria-label": "adlermd" },
         ribbonButton("Files", ["M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"], () => mdPane("files")),
         ribbonButton("Search (Ctrl+Shift+F)", ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"], () => mdPane("search")),
         ribbonButton("Tags", ["M12 2H2v10l9.3 9.3a1 1 0 0 0 1.4 0l8.6-8.6a1 1 0 0 0 0-1.4z", "M7 7h.01"], () => mdPane("tags")),
@@ -271,7 +271,7 @@ function mdBuild() {
       el("div", { class: "md-center" }, el("div", { class: "md-tabs", id: "md-tabs", role: "tablist" }), el("div", { class: "md-main", id: "md-main" })),
       el("aside", { class: "md-right", id: "md-right" })));
   document.body.insertBefore(section, $("modal"));
-  registerWindow("adlermd", { title: "adlerMD", close: closeAdlermd, hide: () => closeWindow("adlermd"), dock: "adlermd", size: [1180, 760] });
+  registerWindow("adlermd", { title: "adlermd", close: closeAdlermd, hide: () => closeWindow("adlermd"), dock: "adlermd", size: [1180, 760] });
   section.addEventListener("keydown", mdKeys);
   section.classList.toggle("md-no-right", !adler.right);
 }
@@ -584,7 +584,7 @@ function mdRenderTabs() {
     return tab;
   }));
   const now = mdTab();
-  titleWindow("adlermd", now && now.kind !== "graph" ? `${mdTabName(now)} — adlerMD` : "adlerMD");
+  titleWindow("adlermd", now && now.kind !== "graph" ? `${mdTabName(now)} — adlermd` : "adlermd");
 }
 
 function mdTabName(t) {
@@ -674,7 +674,7 @@ function mdNoteView(tab) {
       mdCaretToLine(source, tab.gotoLine);
       tab.gotoLine = null;
     } else if (tab.mode === "edit" && tab.writable) source.focus({ preventScroll: true });
-    else if (document.activeElement === document.body) read.focus({ preventScroll: true }); // so its keys (Ctrl+E) still reach adlerMD
+    else if (document.activeElement === document.body) read.focus({ preventScroll: true }); // so its keys (Ctrl+E) still reach adlermd
     mdFit(source);
   });
   source.addEventListener("input", () => mdFit(source));
@@ -698,7 +698,7 @@ function mdLiveNote(tab, title, head, read) {
       mdLiveGoto(live, tab.gotoLine);
       tab.gotoLine = null;
     } else if (tab.writable && !mdFrontmatter(tab.text).body.trim()) mdLiveAtEnd(live, null, { focus: false }); // somewhere to start
-    if (document.activeElement === document.body) read.focus({ preventScroll: true }); // so its keys (Ctrl+E) still reach adlerMD
+    if (document.activeElement === document.body) read.focus({ preventScroll: true }); // so its keys (Ctrl+E) still reach adlermd
   });
   return el("div", { class: "md-note" }, head, scroll);
 }
@@ -864,8 +864,13 @@ function mdCrumbs(tab) {
   const folder = tab.kind === "folder" ? tab.path : mdFolderOf(tab.path);
   const parts = folder ? folder.split("/") : [];
   const above = tab.kind !== "folder" ? folder : folder ? mdFolderOf(folder) : null;
-  const up = el("button", { type: "button", class: "md-icon-button md-up", title: "Up one folder", "aria-label": "Up one folder" }, svg(["M12 19V5", "m5 12 7-7 7 7"]));
-  if (above === null) up.disabled = true;
+  // A PDF or a picture: up is the note it's from (where you opened it, else
+  // the one that links to it), not the folder it's kept in.
+  const home = tab.kind === "file" ? mdFileHome(tab) : null;
+  const label = home ? `Back to ${mdNoteName(home.path)}` : "Up one folder";
+  const up = el("button", { type: "button", class: "md-icon-button md-up", title: label, "aria-label": label }, svg(["M12 19V5", "m5 12 7-7 7 7"]));
+  if (home) up.addEventListener("click", (e) => (home.back && !(e.ctrlKey || e.metaKey) ? mdNav(-1) : mdOpen(home.path, { newTab: e.ctrlKey || e.metaKey })));
+  else if (above === null) up.disabled = true;
   else up.addEventListener("click", (e) => mdOpenFolder(above, { newTab: e.ctrlKey || e.metaKey }));
   const crumb = (label, path, here) => {
     if (here) return el("span", { class: "md-crumb current", "aria-current": "page" }, label);
@@ -877,8 +882,17 @@ function mdCrumbs(tab) {
   const sep = () => el("span", { class: "md-crumb-sep", "aria-hidden": "true" }, "›");
   const items = [crumb(adler.index.name, "", tab.kind === "folder" && !folder)];
   parts.forEach((name, i) => items.push(sep(), crumb(name, parts.slice(0, i + 1).join("/"), tab.kind === "folder" && i === parts.length - 1)));
-  if (tab.kind === "base") items.push(sep(), crumb(tab.path.split("/").pop(), null, true));
+  if (tab.kind === "base" || tab.kind === "file") items.push(sep(), crumb(tab.path.split("/").pop(), null, true));
   return [up, el("nav", { class: "md-crumbs", "aria-label": "Folder" }, ...items)];
+}
+
+// The note a file belongs to: the one this tab came from, else the first
+// that links to it. {path, back: it's the one before, in this tab}.
+function mdFileHome(tab) {
+  const last = tab.back?.[tab.back.length - 1];
+  if (last?.kind === "note" && adler.names.has(last.path)) return { path: last.path, back: true };
+  const linking = [...(adler.backlinks.get(tab.path) || [])].filter((p) => adler.names.has(p)).sort();
+  return linking.length ? { path: linking[0], back: false } : null;
 }
 
 // A folder in a tab (this one, unless its note has changes not saved):
@@ -989,12 +1003,13 @@ function mdFileView(tab) {
   const kind = padKind(tab.path);
   const media = kind === "image" ? el("img", { src: url, alt: tab.path }) : kind === "video" ? el("video", { src: url, controls: "" })
     : kind === "audio" ? el("audio", { src: url, controls: "" }) : kind === "pdf" ? el("iframe", { src: url, title: tab.path }) : null;
+  const head = el("div", { class: "md-note-head" }, ...mdCrumbs(tab));
   if (!media) {
     const open = el("button", { type: "button", class: "button-secondary" }, "Open it");
     open.addEventListener("click", () => openEntry({ name: tab.path.split("/").pop(), dir: false, kind: padKind(tab.path), size: 0 }, mdFull(tab.path)));
-    return el("div", { class: "md-empty" }, el("p", {}, tab.path), open);
+    return el("div", { class: "md-note" }, head, el("div", { class: "md-empty" }, el("p", {}, tab.path), open));
   }
-  return el("div", { class: `md-file md-file-${kind}` }, media);
+  return el("div", { class: "md-note" }, head, el("div", { class: `md-file md-file-${kind}` }, media));
 }
 
 // ------------------------------------------------------------- editing

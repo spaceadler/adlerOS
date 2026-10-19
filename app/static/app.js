@@ -457,7 +457,7 @@ const BUILTIN_PINS = {
   "adleros:files": { name: "My Computer", icon: "files", dock: "files", open: () => toggleFiles() },
   "adleros:terminal": { name: "Terminal", icon: "terminal", dock: "terminal", open: () => toggleTerminal() },
   "adleros:notepad": { name: "Notepad", icon: "notepad", dock: "notepad", open: () => openNotepad() },
-  "adleros:adlermd": { name: "adlerMD", icon: "adlermd", dock: "adlermd", open: () => toggleAdlermd() },
+  "adleros:adlermd": { name: "adlermd", icon: "adlermd", dock: "adlermd", open: () => toggleAdlermd() },
   "adleros:music": { name: "Music", icon: "music", dock: "music", open: () => toggleMusic() },
 };
 // A pin: an installed app, or one of those.
@@ -528,13 +528,10 @@ function buildDock() {
   // divider and All apps. The terminal shows only in admin mode (its pin
   // waits until then).
   let pinned = state.dock.map(pinFor).filter((p) => p && (p.id !== "adleros:terminal" || state.admin));
-  let fixed = DOCK_FIXED;
-  // A phone's dock holds four, like an iPhone's (its App Library is past the
-  // last page): All apps only while there's room.
-  if (phoneLayout()) {
-    pinned = pinned.slice(0, PHONE_DOCK);
-    fixed = fixed.slice(0, PHONE_DOCK - pinned.length);
-  }
+  const fixed = DOCK_FIXED;
+  // A phone's dock holds four, like an iPhone's: All apps always, and the
+  // first three pins.
+  if (phoneLayout()) pinned = pinned.slice(0, PHONE_DOCK - fixed.length);
   // Rebuilt only when the pins, their icons or their status change.
   const key = `${dockKeyFor(pinned)}|${fixed.map((f) => f.id).join(",")}|${state.admin}`;
   if (key === dockKey) return;
@@ -1123,7 +1120,7 @@ const ACTIONS = [
   { id: "terminal", name: "Terminal", keywords: "terminal shell console ssh bash command line admin" },
   { id: "files", name: "My Computer", keywords: "files folders storage documents upload download trash desktop mailbox root computer finder explorer" },
   { id: "notepad", name: "Notepad", keywords: "notepad text editor edit write txt plain" },
-  { id: "adlermd", name: "adlerMD", keywords: "adlermd notes markdown md obsidian vault wiki journal daily graph" },
+  { id: "adlermd", name: "adlermd", keywords: "adlermd notes markdown md obsidian vault wiki journal daily graph" },
   { id: "music", name: "Music", keywords: "music songs albums artists playlists radio player play listen lyrics spotify mp3" },
   { id: "desktop-mode", name: "Desktop mode or home screen", keywords: "desktop mode windows window manager floating side by side home screen switch" },
   { id: "welcome", name: "Welcome tour", keywords: "welcome tour intro introduction start first help guide find apps compose folders" },
