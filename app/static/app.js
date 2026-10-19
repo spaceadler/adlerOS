@@ -65,6 +65,12 @@ function svg(paths, viewBox = "0 0 24 24") {
   return s;
 }
 
+// Where this install's settings are, for a page that asks you to set one: a
+// homelab's homelab.env (read as you save it), or standalone adlerOS's .env
+// (mounted as one file, so adlerOS sees a change once it restarts).
+function settingsFile() { return state.mode === "standalone" ? "adlerOS's settings file (.env)" : "homelab.env"; }
+function settingsThen() { return state.mode === "standalone" ? ", and restart adlerOS" : ""; }
+
 async function api(path, options = {}) {
   const response = await fetch(path, { credentials: "same-origin", ...options });
   let body = null;

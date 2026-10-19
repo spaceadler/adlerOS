@@ -23,6 +23,24 @@ password: `http://<this machine>:8686`. It never lists itself among them, so
 you can't stop it from inside it. Open it on your phone and *Add to Home
 Screen*: it opens like an app.
 
+## On top, not instead
+
+adlerOS sits on top of a homelab a person built and set up; it doesn't
+replace any of it. The containers, their storage and the network between
+them are the base, and they just work, with adlerOS running or not.
+adlerOS brings them under one roof, to manage, use and work from. You can
+live in it, but nothing depends on it.
+
+Your **storage folder** is the clearest case: next to the containers, full
+of what they keep (photos, music, documents, notes), but on its own only
+usable through File Browser or ssh. adlerOS makes it a shared desktop and
+workspace. **Music, Gallery and Documents** are a layer over Navidrome,
+Immich and Paperless-ngx: they ask those apps (with a login or key you make
+in each) and show what they know in one place, the same way. They don't
+replace them or change them, and need them for the rich parts; without
+one, each still shows the files themselves. More in
+[the guide](docs/guide.md#how-it-fits).
+
 ## What you get
 
 - **A desktop.** A greeting, up to three widgets (system stats, storage,
@@ -44,8 +62,11 @@ Screen*: it opens like an app.
   finished or failed, the disk is filling up, it's running hot.
 - **All apps**, A to Z, and **search** (Alt+Space or `/`) across apps,
   settings and every file in your homelab by name.
-- **A welcome** on the first login: where are your containers (it looks there
-  while you watch), or in a homelab the apps you can add, then a short tour.
+- **A welcome** on the first login: what adlerOS is (and isn't), where your
+  containers are (it looks there while you watch) or in a homelab the apps
+  you can add, making your accounts in them, your storage, and connecting
+  Music, Gallery and Documents to their apps (each one's connection, live);
+  then a short tour.
 - **Keyboard first.** Every part works with arrow keys, Enter and Escape: a
   keyboard and a TV is enough. Press `?` for the keys.
 - **Admin mode.** Restart and shut down, deleting apps, and stopping core
@@ -63,11 +84,14 @@ Screen*: it opens like an app.
   callouts, backlinks, the graph and Bases.
 - **Music**: your songs by album, artist and playlist (your `.m3u8` files,
   spotdl's included), a queue, shuffle and repeat, lyrics that follow the
-  song, and radio made from your own library.
+  song, and radio made from your own library. With your Navidrome login,
+  what you play counts there too.
 - **Gallery**: your photos from Immich, by month and day, albums, people,
-  favorites, On this day and search, each photo big with its details.
+  places and the map, favorites, On this day and search, each photo big
+  with its details. Without an Immich key, the photos in your storage.
 - **Documents**: your papers from Paperless, by tag, correspondent and
   type, searched by what they say, each with its preview and details.
+  Without a Paperless token, the files in your storage.
 - **Firefox** in the store: a real browser running on the machine, in your
   browser. With My Computer and the terminal, an old laptop is enough to work on
   your homelab.

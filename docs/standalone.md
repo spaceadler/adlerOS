@@ -131,10 +131,12 @@ To add your own, see [customizing](customizing.md#store-apps).
 | `MUSIC_DIR` | Music's songs and playlists, a folder in `STORAGE_DIR` (`Media/Music`) |
 | `NAVIDROME_USER`, `NAVIDROME_PASSWORD` | your Navidrome login: what Music plays shows up there too (none: off) |
 | `NAVIDROME_URL` | where Navidrome is, if not at `ADLEROS_HOST` and its port in the store (none) |
-| `IMMICH_API_KEY` | Gallery's key from Immich, one that may read your photos, albums, people and memories (none: Gallery says how to make one) |
+| `IMMICH_API_KEY` | Gallery's key from Immich, one that may read your photos, albums, people and memories (none: Gallery shows the photos themselves, and says how to make one) |
 | `IMMICH_URL` | where Immich is, if not at `ADLEROS_HOST` and its port in the store (none) |
-| `PAPERLESS_TOKEN` | Documents' token from Paperless-ngx (My Profile → API Auth Token) (none: Documents says how to make one) |
+| `GALLERY_DIR` | the photos Gallery shows without Immich, a folder in `STORAGE_DIR` (`Gallery`) |
+| `PAPERLESS_TOKEN` | Documents' token from Paperless-ngx (My Profile → API Auth Token) (none: Documents shows the files themselves, and says how to make one) |
 | `PAPERLESS_URL` | where Paperless is, if not at `ADLEROS_HOST` and its port in the store (none) |
+| `DOCUMENTS_DIR` | the files Documents shows without Paperless, a folder in `STORAGE_DIR` (`Documents`) |
 | `ADLEROS_TERMINAL` | `on` lets the Terminal window open shells (in admin mode); re-run `./install.sh` after changing it |
 | `ADLEROS_TERMINAL_DIR` | where a new terminal starts, e.g. `~/homelab` (your home folder); takes effect on the next one |
 | `ADLEROS_NETWORKS` | who it answers: `tailscale`, `anyone`, or addresses and networks; everyone else gets nothing ([security](security.md#who-it-answers)) |

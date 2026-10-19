@@ -56,6 +56,7 @@ import secrets
 import shutil
 import socket
 import ssl
+import struct
 import sys
 import threading
 import time
@@ -2137,6 +2138,172 @@ def documents_query(query):
     return out
 
 
+# --------------------------------------------- without Immich, Paperless
+
+# Gallery and Documents before they're connected (or while Immich or
+# Paperless is off): the files themselves, from their folders in your
+# storage. Immich's library is by day (library/<you>/<year>/<day>/), so
+# that's each photo's day; Paperless's are numbers, with its thumbnails and
+# searchable PDFs beside them. Kept, and looked over again (in the
+# background) when it's over five minutes old.
+GALLERY_SHOWN = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"}
+GALLERY_HEIC = {".heic", ".heif"}
+GALLERY_VIDEO = {".mp4", ".mov", ".webm", ".m4v", ".3gp", ".mkv"}
+DOCUMENT_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".tif", ".tiff", ".txt", ".md", ".rtf", ".csv", ".doc", ".docx",
+                     ".odt", ".ods", ".odp", ".xls", ".xlsx", ".ppt", ".pptx", ".epub", ".eml", ".html"}
+_local_lists = {}
+_local_lock = threading.Lock()
+
+
+def media_root(key, default):
+    """(its path in adlerOS, its real folder or None) for a folder setting (GALLERY_DIR…)."""
+    rel = install_setting(key, default).strip("/")
+    place, real = locate(f"/user/{rel}")
+    return (place_path(place, real), real) if real and real.is_dir() else (f"/user/{rel}", None)
+
+
+def local_cached(key, make):
+    """make()'s answer, kept: when it's over five minutes old, the old one
+    straight away while a new one is made (a big library takes a while)."""
+    def remake():
+        try:
+            data = make()
+        except Exception as e:  # a bad folder never stops the server
+            print(f"{key}: couldn't look round ({e})", file=sys.stderr, flush=True)
+            data = None
+        with _local_lock:
+            old = _local_lists.get(key)
+            _local_lists[key] = (time.time(), data if data is not None else (old[1] if old else None), False)
+        return data
+    with _local_lock:
+        hit = _local_lists.get(key)
+        if hit and hit[1] is not None:
+            if time.time() - hit[0] > 300 and not hit[2]:
+                _local_lists[key] = (hit[0], hit[1], True)
+                threading.Thread(target=remake, name=key, daemon=True).start()
+            return hit[1]
+    return remake() or {"dir": None, "found": False, "items": []}
+
+
+def gallery_local():
+    virtual, top = media_root("GALLERY_DIR", "Gallery")
+    if not top:
+        return {"dir": virtual, "found": False, "items": []}
+
+    def make():
+        immich_layout = (top / "library").is_dir() or (top / "upload").is_dir()
+        roots = [top / "library", top / "upload"] if immich_layout else [top]
+        items = []
+        for root in roots:
+            for dirpath, dirnames, filenames in os.walk(root):
+                dirnames[:] = [d for d in dirnames if not d.startswith(".") and d != TRASH]
+                day = re.search(r"(\d{4}-\d{2}-\d{2})$", dirpath)
+                for name in filenames:
+                    suffix = os.path.splitext(name)[1].lower()
+                    kind = "image" if suffix in GALLERY_SHOWN else "heic" if suffix in GALLERY_HEIC else "video" if suffix in GALLERY_VIDEO else None
+                    if not kind or name.startswith("."):
+                        continue
+                    real = os.path.join(dirpath, name)
+                    try:
+                        st = os.stat(real)
+                    except OSError:
+                        continue
+                    items.append({"path": f"{virtual}/{os.path.relpath(real, top)}", "name": name, "kind": kind, "size": st.st_size,
+                                  "date": day.group(1) if day else time.strftime("%Y-%m-%d", time.localtime(st.st_mtime))})
+                if len(items) > 200000:
+                    break
+        items.sort(key=lambda x: (x["date"], x["name"]), reverse=True)
+        return {"dir": virtual, "found": True, "immich": immich_layout, "items": items}
+    return local_cached("gallery", make)
+
+
+def documents_local():
+    virtual, top = media_root("DOCUMENTS_DIR", "Documents")
+    if not top:
+        return {"dir": virtual, "found": False, "items": []}
+
+    def make():
+        media = top / "documents"
+        paperless_layout = (media / "originals").is_dir()
+        root = media / "originals" if paperless_layout else top
+        items = []
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if not d.startswith(".") and d != TRASH]
+            for name in filenames:
+                stem, suffix = os.path.splitext(name)
+                if name.startswith(".") or suffix.lower() not in DOCUMENT_SUFFIXES:
+                    continue
+                real = os.path.join(dirpath, name)
+                try:
+                    st = os.stat(real)
+                except OSError:
+                    continue
+                rel = os.path.relpath(real, top)
+                item = {"path": f"{virtual}/{rel}", "name": name, "suffix": suffix.lower().lstrip("."), "size": st.st_size, "mtime": st.st_mtime}
+                if paperless_layout:
+                    # Paperless's own: its number, its thumbnail, its searchable PDF.
+                    inner = os.path.relpath(real, media / "originals")
+                    if stem.isdigit():
+                        item["number"] = int(stem)
+                        if (media / "thumbnails" / f"{stem}.webp").is_file():
+                            item["thumb"] = f"{virtual}/documents/thumbnails/{stem}.webp"
+                    archive = media / "archive" / (os.path.splitext(inner)[0] + ".pdf")
+                    if archive.is_file():
+                        item["archive"] = f"{virtual}/documents/archive/{os.path.splitext(inner)[0]}.pdf"
+                items.append(item)
+                if len(items) > 50000:
+                    break
+        items.sort(key=lambda x: -x["mtime"])
+        return {"dir": virtual, "found": True, "paperless": paperless_layout, "items": items}
+    return local_cached("documents", make)
+
+
+def exif_thumbnail(real):
+    """The small JPEG most cameras keep in a photo's EXIF, turned the way the
+    photo is (its own EXIF orientation, put on it), or None."""
+    with open(real, "rb") as f:
+        data = f.read(160 * 1024)
+    if data[:2] != b"\xff\xd8":
+        return None
+    i = 2
+    while i + 4 <= len(data) and data[i] == 0xFF:
+        marker, size = data[i + 1], struct.unpack(">H", data[i + 2:i + 4])[0]
+        if marker == 0xE1 and data[i + 4:i + 10] == b"Exif\x00\x00":
+            tiff = data[i + 10:i + 2 + size]
+            bo = "<" if tiff[:2] == b"II" else ">"
+            u16 = lambda at: struct.unpack(bo + "H", tiff[at:at + 2])[0]  # noqa: E731
+            u32 = lambda at: struct.unpack(bo + "I", tiff[at:at + 4])[0]  # noqa: E731
+            ifd0 = u32(4)
+            orientation = 1
+            for k in range(u16(ifd0)):
+                at = ifd0 + 2 + 12 * k
+                if u16(at) == 0x0112:
+                    orientation = u16(at + 8)
+            ifd1 = u32(ifd0 + 2 + 12 * u16(ifd0))
+            if not ifd1 or ifd1 + 2 > len(tiff):
+                return None
+            off = length = None
+            for k in range(u16(ifd1)):
+                at = ifd1 + 2 + 12 * k
+                if u16(at) == 0x0201:
+                    off = u32(at + 8)
+                elif u16(at) == 0x0202:
+                    length = u32(at + 8)
+            thumb = tiff[off:off + length] if off and length and off + length <= len(tiff) else b""
+            if thumb[:2] != b"\xff\xd8":
+                return None
+            if orientation in range(2, 9):
+                # A tiny EXIF of its own, with only the orientation: the browser turns it.
+                ifd = b"MM\x00\x2a\x00\x00\x00\x08\x00\x01" + b"\x01\x12\x00\x03\x00\x00\x00\x01" + struct.pack(">H", orientation) + b"\x00\x00\x00\x00\x00\x00"
+                app1 = b"Exif\x00\x00" + ifd
+                thumb = b"\xff\xd8\xff\xe1" + struct.pack(">H", len(app1) + 2) + app1 + thumb[2:]
+            return thumb
+        if marker == 0xDA:
+            return None
+        i += 2 + size
+    return None
+
+
 def locate(path, must_exist=True):
     """(place, real path) for '/user/Documents/a.txt', else (None, None). '..'
     and links that lead out of their place are refused."""
@@ -3176,6 +3343,16 @@ class Handler(BaseHTTPRequestHandler):
         if not places_on():
             return self.send_json(404, {"error": "no storage folder is mounted"})
         item = query.get("id", [""])[0]
+        if what == "navidrome":
+            # Whether plays go to Navidrome too (and if not, why not).
+            cfg = navidrome()
+            if not cfg:
+                return self.send_json(200, {"configured": False})
+            try:
+                navidrome_call(cfg, "ping.view")
+                return self.send_json(200, {"configured": True, "ok": True, "url": cfg[0]})
+            except (OSError, ValueError, urllib.error.URLError) as e:
+                return self.send_json(200, {"configured": True, "ok": False, "url": cfg[0], "error": str(e)})
         if what == "library":
             lib = music_library()
             if lib["songs"] is None:
@@ -3295,6 +3472,10 @@ class Handler(BaseHTTPRequestHandler):
                     if e.code == 403:
                         return self.send_json(200, [])  # the key may not read them: none
                     raise
+            if what == "local":
+                return self.gallery_local_reply()
+            if what == "local-thumb":
+                return self.gallery_local_thumb(query.get("path", [""])[0])
             if what == "markers":
                 return self.send_json(200, [{k: m.get(k) for k in ("id", "lat", "lon", "city", "state", "country")}
                                             for m in immich_json("map/markers")])
@@ -3346,6 +3527,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if what == "status":
                 return self.send_json(200, documents_status())
+            if what == "local":
+                return self.send_json(200, documents_local())
             if what == "list":
                 return self.send_json(200, paperless_json("documents/", documents_query(query)))
             if what == "meta":
@@ -3435,6 +3618,25 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as e:
             return self.send_json(502, {"error": f"can't reach Paperless ({e})"})
         return self.send_json(200, {"ok": True, "task": task})
+
+    def gallery_local_reply(self):
+        body = json.dumps(gallery_local(), separators=(",", ":")).encode()
+        headers = [("Cache-Control", "no-store"), ("Vary", "Accept-Encoding")]
+        if "gzip" in self.headers.get("Accept-Encoding", ""):
+            body = gzip.compress(body, 6)
+            headers.append(("Content-Encoding", "gzip"))
+        return self.send(200, body, "application/json", headers)
+
+    def gallery_local_thumb(self, path):
+        """A photo small: its EXIF thumbnail, else (a picture a browser draws) itself."""
+        virtual, top = media_root("GALLERY_DIR", "Gallery")
+        place, real = locate(path)
+        if not top or not real or not real.is_file() or not real.is_relative_to(top.resolve()) or real.suffix.lower() not in GALLERY_SHOWN:
+            return self.send(404, b"no picture")
+        thumb = exif_thumbnail(real) if real.suffix.lower() in (".jpg", ".jpeg") else None
+        if thumb:
+            return self.send(200, thumb, "image/jpeg", [("Cache-Control", "private, max-age=86400")], csp="default-src 'none'; sandbox")
+        return self.send_file_stream(real, inline=True)
 
     def gallery_search(self, body):
         # {query, page}: Immich's smart search; {city, country, page}: a place's photos, newest first.

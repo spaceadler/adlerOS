@@ -3,8 +3,11 @@
 // document by what it says). A document opens with its preview beside what
 // Paperless knows (its notes, its text too); files dropped on the window (or
 // Add documents) go to Paperless to read. adlerOS's server asks Paperless
-// (PAPERLESS_TOKEN): the page never sees the token. Uses el, svg, $, api,
-// toast, openApp, registerWindow, registerNav, bytes, winLoad/winSave.
+// (PAPERLESS_TOKEN): the page never sees the token. Before it's connected
+// (or while Paperless is off), the files themselves, from your Documents
+// folder, with what connecting adds. Uses el, svg, $, api, toast, openApp,
+// openFiles, fileUrl, downloadFile, registerWindow, registerNav, bytes,
+// winLoad/winSave.
 "use strict";
 
 const DOCS_KEY = "adleros.documents";
@@ -98,6 +101,7 @@ async function docsCheck() {
   $("doc-main").replaceChildren(el("div", { class: "doc-empty" }, el("p", {}, "Asking Paperless…")));
   docs.status = await docGet("status").catch((e) => ({ error: e.message }));
   if (docs.status.ok) docs.meta = docIndexMeta(await docGet("meta").catch(() => ({ tags: [], correspondents: [], types: [] })));
+  else docs.local = await docGet("local").catch(() => null);
   docRenderSide();
   docRender();
 }
@@ -124,6 +128,13 @@ function docRenderSide() {
     b.addEventListener("click", () => docShow({ kind: "list", filter }));
     return b;
   };
+  $("doc-search").placeholder = docs.status?.ok ? "Search inside them" : "Find by name";
+  if (!docs.status?.ok) {
+    const all = item("All documents", "all", {}, docs.local?.items.length ?? null);
+    const connect = el("button", { type: "button", class: `doc-nav doc-nav-connect${docs.view.kind === "connect" ? " on" : ""}` }, svg(DOC_ICONS.open), el("span", {}, "Connect Paperless"));
+    connect.addEventListener("click", () => docShow({ kind: "connect" }));
+    return nav.replaceChildren(all, connect);
+  }
   const m = docs.meta;
   const parts = [item("All documents", "all", {}, docs.status?.count ?? null)];
   if (m?.inbox.length) parts.push(item("Inbox", "inbox", { inbox: true }));
@@ -177,11 +188,13 @@ function docRender(scroll = 0) {
   const main = $("doc-main");
   docs.list?.observer?.disconnect();
   docs.list = null;
-  if (!docs.status?.ok) return main.replaceChildren(docSetupPage());
+  const local = !docs.status?.ok;
+  if (local && (docs.view.kind === "connect" || !docs.local?.found)) return main.replaceChildren(docSetupPage());
   const page = el("div", { class: "doc-page" });
   main.replaceChildren(page);
   main.scrollTop = 0;
-  const done = docs.view.kind === "doc" ? docDocView(page, docs.view.id) : docListView(page, docs.view.filter || {});
+  const done = local ? (docs.view.kind === "doc" ? docLocalDoc(page, docs.view.id) : docLocalList(page, docs.view.filter || {}))
+    : docs.view.kind === "doc" ? docDocView(page, docs.view.id) : docListView(page, docs.view.filter || {});
   Promise.resolve(done).then(() => { if (scroll) requestAnimationFrame(() => { main.scrollTop = scroll; }); })
     .catch((e) => { if (e.message !== "login") page.replaceChildren(el("div", { class: "doc-empty" }, el("p", {}, e.message))); });
 }
@@ -191,17 +204,19 @@ function docSetupPage() {
   const retry = el("button", { type: "button", class: "button-primary" }, "Try again");
   retry.addEventListener("click", docsCheck);
   const body = s.error === "nopaperless"
-    ? [el("h2", {}, "Documents shows your papers from Paperless"), el("p", {}, "Paperless-ngx isn't among your apps here. If it runs elsewhere, set PAPERLESS_URL in adlerOS's settings file (.env) to its address.")]
+    ? [el("h2", {}, "Documents shows your papers from Paperless"), el("p", {}, `Paperless-ngx isn't among your apps here. If it runs elsewhere, set PAPERLESS_URL in ${settingsFile()} to its address.`)]
     : s.error === "notoken"
       ? [el("h2", {}, "Documents shows your papers from Paperless"),
         el("p", {}, "Paperless keeps their titles, tags and dates (the files themselves are only numbers). Documents needs a token from it: in Paperless, your name (top right) → My Profile → API Auth Token."),
-        el("p", {}, "Put it in adlerOS's settings file (.env) as PAPERLESS_TOKEN=…, and restart adlerOS."),
+        el("p", {}, `Put it in ${settingsFile()} as PAPERLESS_TOKEN=…${settingsThen()}.`),
         el("p", { class: "doc-dim" }, `It'll ask Paperless at ${s.url}.`)]
       : s.error === "refused"
-        ? [el("h2", {}, "Paperless didn't take the token"), el("p", {}, "PAPERLESS_TOKEN in adlerOS's settings file isn't one Paperless knows: make a new one (My Profile → API Auth Token).")]
+        ? [el("h2", {}, "Paperless didn't take the token"), el("p", {}, `PAPERLESS_TOKEN in ${settingsFile()} isn't one Paperless knows: make a new one (My Profile → API Auth Token).`)]
         : [el("h2", {}, "Can't reach Paperless"), el("p", {}, `${s.url || "Paperless"} didn't answer. Is it running? (The App Store starts it.)`),
           ...(s.error ? [el("p", { class: "doc-dim" }, s.error)] : [])];
-  return el("div", { class: "doc-empty doc-setup" }, ...body, retry);
+  const files = el("button", { type: "button", class: "button-secondary" }, "See the files meanwhile");
+  files.addEventListener("click", () => docShow({ kind: "list", filter: {} }));
+  return el("div", { class: "doc-empty doc-setup" }, ...body, el("div", { class: "doc-setup-actions" }, ...(docs.local?.found ? [files] : []), retry));
 }
 
 // --------------------------------------------------------------- the list
@@ -424,4 +439,79 @@ async function docUpload(files) {
       if (docs.view.kind === "list") docRender($("doc-main").scrollTop);
     }, wait);
   }
+}
+
+// ------------------------------------------------- the files themselves
+
+// What connecting adds, said once, above the files.
+function docLocalNote() {
+  const s = docs.status || {};
+  const why = s.error === "notoken" ? "These are your documents as files. Paperless keeps their titles, tags and correspondents, and the words it read in them."
+    : s.error === "nopaperless" ? "These are the documents in your Documents folder, as they are."
+      : s.error === "refused" ? "Paperless didn't take the token, so these are the files as they are."
+        : "Paperless isn't answering, so these are the files as they are.";
+  const how = s.error === "nopaperless" ? "With Paperless-ngx (the App Store has it), they'd be read, named and tagged, and found by what they say."
+    : s.error === "notoken" ? "Connect Documents to Paperless and they'll have their names and tags here, and you can search what they say."
+      : s.error === "refused" ? "A new token (Paperless → My Profile → API Auth Token) fixes it."
+        : "When it's running again (the App Store starts it), they'll have their names, tags and search back.";
+  const more = el("button", { type: "button", class: "doc-link" }, "How");
+  more.addEventListener("click", () => docShow({ kind: "connect" }));
+  return el("div", { class: "doc-note-bar" }, el("p", {}, why, " ", how, " "), more);
+}
+
+const docLocalName = (x) => (x.number ? `Document ${x.number}` : x.name.replace(/\.[^.]+$/, ""));
+
+function docLocalList(page, f) {
+  const sorts = [["new", "Newest first"], ["old", "Oldest first"], ["name", "Name"]];
+  const by = docs.prefs.localSort || "new";
+  const q = (f.query || "").toLowerCase();
+  const items = docs.local.items.filter((x) => !q || x.name.toLowerCase().includes(q) || docLocalName(x).toLowerCase().includes(q))
+    .sort(by === "name" ? (a, b) => docLocalName(a).localeCompare(docLocalName(b), undefined, { numeric: true }) : by === "old" ? (a, b) => a.mtime - b.mtime : (a, b) => b.mtime - a.mtime);
+  const sort = el("select", { class: "field-input doc-sort", "aria-label": "Sort by" },
+    ...sorts.map(([v, label]) => el("option", { value: v, ...(v === by ? { selected: "" } : {}) }, label)));
+  sort.addEventListener("change", () => { docs.prefs.localSort = sort.value; docSavePrefs(); docRender(); });
+  page.append(docLocalNote(), el("header", { class: "doc-head" }, el("div", {},
+    ...(q ? [el("p", { class: "doc-kicker" }, "Names with")] : []), el("h1", {}, q ? `“${f.query}”` : "All documents"),
+    el("p", { class: "doc-dim" }, `${items.length.toLocaleString()} ${items.length === 1 ? "file" : "files"} in ${docs.local.dir}`)),
+  el("div", { class: "doc-head-tools" }, sort)));
+  if (!items.length) return page.append(el("p", { class: "doc-dim doc-none" }, q ? "No file's name has that (searching what they say needs Paperless)." : "No documents in that folder."));
+  page.append(el("div", { class: "doc-grid" }, ...items.map((x) => {
+    const thumb = el("span", { class: "doc-thumb" });
+    const src = x.thumb || (/^(png|jpe?g|webp|gif)$/.test(x.suffix) ? x.path : null);
+    if (src) {
+      const img = el("img", { src: fileUrl(src, true), alt: "", loading: "lazy", decoding: "async" });
+      img.addEventListener("error", () => img.remove());
+      thumb.append(img);
+    } else thumb.append(el("span", { class: "doc-kind" }, x.suffix.toUpperCase()));
+    const card = el("button", { type: "button", class: "doc-card" }, thumb, el("span", { class: "doc-card-title" }, docLocalName(x)),
+      el("span", { class: "doc-card-sub" }, [x.number ? x.name : "", new Date(x.mtime * 1000).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })].filter(Boolean).join(" · ")));
+    card.addEventListener("click", () => docShow({ kind: "doc", id: x.path }));
+    return card;
+  })));
+}
+
+function docLocalDoc(page, path) {
+  const x = docs.local.items.find((i) => i.path === path);
+  if (!x) return page.append(el("p", { class: "doc-dim" }, "That file isn't there any more."));
+  page.classList.add("doc-page-doc");
+  const back = el("button", { type: "button", class: "doc-icon", title: "Back", "aria-label": "Back" }, svg(DOC_ICONS.back));
+  back.addEventListener("click", () => (docs.back.length ? docNav(-1) : docShow({ kind: "list", filter: {} })));
+  const download = el("button", { type: "button", class: "button-secondary doc-button" }, svg(DOC_ICONS.download), "Download");
+  download.addEventListener("click", () => downloadFile(x.path));
+  const shown = x.archive || x.path;
+  const pdf = /\.pdf$/i.test(shown);
+  const picture = /^(png|jpe?g|webp|gif)$/.test(x.suffix);
+  const preview = pdf ? el("iframe", { class: "doc-preview", src: fileUrl(shown, true), title: docLocalName(x) })
+    : picture ? el("img", { class: "doc-preview doc-preview-img", src: fileUrl(x.path, true), alt: "" })
+      : el("div", { class: "doc-empty" }, el("p", {}, `A .${x.suffix} file: download it to open it.`));
+  const row = (label, value) => el("div", { class: "doc-irow" }, el("span", { class: "doc-ilabel" }, label), el("span", {}, value));
+  const where = el("button", { type: "button", class: "doc-link" }, "Show in My Computer");
+  where.addEventListener("click", () => openFiles(x.path.split("/").slice(0, -1).join("/")));
+  page.append(docLocalNote(), el("header", { class: "doc-head doc-head-doc" }, back, el("div", { class: "doc-head-title" }, el("h1", {}, docLocalName(x)),
+    el("p", { class: "doc-dim" }, x.name)), download),
+  el("div", { class: "doc-split" }, el("div", { class: "doc-preview-box" }, preview),
+    el("aside", { class: "doc-info" }, row("File", x.name), row("Size", bytes(x.size)),
+      row(x.number ? "Added" : "Changed", new Date(x.mtime * 1000).toLocaleDateString([], { day: "numeric", month: "long", year: "numeric" })),
+      ...(x.archive ? [row("Shown", "Paperless's searchable PDF of it")] : []),
+      el("div", { class: "doc-irow" }, where))));
 }
