@@ -1012,7 +1012,11 @@ function musicStart(play = true, at = 0) {
   audio.src = muUrl(id);
   if (at > 0) audio.addEventListener("loadedmetadata", () => { audio.currentTime = Math.min(at, (audio.duration || at) - 1); }, { once: true });
   music.counted = false;
-  if (play) audio.play().catch(() => {}); // the browser may want a click first
+  if (play) {
+    audio.play().catch(() => {}); // the browser may want a click first
+    // Now playing (to Navidrome, if it's set up).
+    api("/api/music/playing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }).catch(() => {});
+  }
   musicNowPlaying();
   musicRadioMore();
   musicSaveSoon();
@@ -1354,9 +1358,18 @@ function musicLyricsFollow(jump = false) {
 
 // ---------------------------------------------------------- the audio
 
-music.audio.addEventListener("play", musicBarUpdate);
-music.audio.addEventListener("pause", () => { musicBarUpdate(); musicSave(); });
-music.audio.addEventListener("loadedmetadata", musicBarTime);
+// Where in the song, for the phone's lock screen: its bar, to drag along.
+function musicPosition() {
+  const a = music.audio;
+  music.posAt = Date.now();
+  if (!("mediaSession" in navigator) || !Number.isFinite(a.duration) || a.duration <= 0) return;
+  try { navigator.mediaSession.setPositionState({ duration: a.duration, position: Math.min(a.currentTime, a.duration), playbackRate: a.playbackRate || 1 }); } catch { /* not this browser */ }
+}
+
+music.audio.addEventListener("play", () => { musicBarUpdate(); musicPosition(); });
+music.audio.addEventListener("pause", () => { musicBarUpdate(); musicPosition(); musicSave(); });
+music.audio.addEventListener("loadedmetadata", () => { musicBarTime(); musicPosition(); });
+for (const type of ["seeked", "durationchange", "ratechange"]) music.audio.addEventListener(type, musicPosition);
 music.audio.addEventListener("timeupdate", () => {
   musicBarTime();
   if (music.panel === "lyrics") musicLyricsFollow();
@@ -1370,10 +1383,7 @@ music.audio.addEventListener("timeupdate", () => {
     music.plays.recent = [id, ...music.plays.recent.filter((r) => r !== id)].slice(0, 300);
     api("/api/music/played", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }).catch(() => {});
   }
-  if ("mediaSession" in navigator && Number.isFinite(a.duration) && a.duration > 0 && Date.now() - (music.posAt || 0) > 4000) {
-    music.posAt = Date.now();
-    try { navigator.mediaSession.setPositionState({ duration: a.duration, position: Math.min(a.currentTime, a.duration), playbackRate: a.playbackRate }); } catch { /* not this browser */ }
-  }
+  if (Date.now() - (music.posAt || 0) > 4000) musicPosition();
   if (Date.now() - (music.savedAt || 0) > 5000) musicSave();
 });
 music.audio.addEventListener("ended", () => {

@@ -532,10 +532,13 @@ that only what changed, so it opens straight away.
   follow the song as it plays (an `.lrc` beside it, as spotdl makes them, or
   the song's own); a click on a line goes there.
 - Your keyboard's media keys work, and so does a phone's lock screen
-  (previous, play, next, and dragging along the song; next only when there's
-  a song after this one). The mouse's side buttons go back and forward
+  (previous and next song, play, and dragging along the song; next only when
+  there's a song after this one). An iPhone shows either song buttons or
+  ±10 seconds, never both; Music asks for the song buttons. The mouse's side buttons go back and forward
   through where you've been. Plays are counted (after half a
-  minute), for Home, Your station and Most played.
+  minute), for Home, Your station and Most played. With `NAVIDROME_USER`
+  and `NAVIDROME_PASSWORD` in the settings file, they go to Navidrome too
+  (now playing, then played), when it plays the same music folder.
 - Put away (another window over it, minimized), it keeps playing; closing it
   stops it. The queue and where you were in the song are kept on this
   device, for next time.
