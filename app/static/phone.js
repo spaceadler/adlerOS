@@ -40,9 +40,21 @@ function scrollParent(node, stop) {
   return null;
 }
 
+// Every window of adlerOS's, built now or later (Music, Gallery, an app's
+// window are made the first time they open): registerWindow calls this.
+// On a phone, and on any touch screen outside desktop mode (a tablet).
+function sheetSwipeable(sheet) {
+  if (!sheet || sheet.dataset.swipe) return;
+  sheet.dataset.swipe = "1";
+  sheet.addEventListener("touchstart", sheetTouchStart, { passive: true });
+  sheet.addEventListener("touchmove", sheetTouchMove, { passive: false });
+  sheet.addEventListener("touchend", sheetTouchEnd);
+  sheet.addEventListener("touchcancel", sheetTouchEnd);
+}
+
 function sheetTouchStart(e) {
   const sheet = e.currentTarget;
-  if (!phoneLayout() || e.touches.length !== 1 || !isOpen(sheet.id)) return;
+  if (desktopMode() || e.touches.length !== 1 || !isOpen(sheet.id)) return;
   const t = e.touches[0];
   // From its top edge, always; from anywhere else when what's under the
   // finger is scrolled to the top (the terminal: its top edge only).
@@ -129,13 +141,7 @@ PHONE_QUERY.addEventListener("change", applyPhone);
 tickPhoneClock();
 setInterval(tickPhoneClock, 15000);
 
-for (const id of wm.windows.keys()) {
-  const sheet = $(id);
-  sheet.addEventListener("touchstart", sheetTouchStart, { passive: true });
-  sheet.addEventListener("touchmove", sheetTouchMove, { passive: false });
-  sheet.addEventListener("touchend", sheetTouchEnd);
-  sheet.addEventListener("touchcancel", sheetTouchEnd);
-}
+for (const id of wm.windows.keys()) sheetSwipeable($(id)); // the ones made before this file
 $("desktop").addEventListener("touchstart", homeTouchStart, { passive: true });
 $("desktop").addEventListener("touchmove", homeTouchMove, { passive: true });
 $("desktop").addEventListener("touchend", () => { phone.home = null; });

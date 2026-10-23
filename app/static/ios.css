@@ -164,6 +164,14 @@ body.phone .sheet::before {
   transform: translateX(-50%);
 }
 body.phone .sheet.swiping { transition: none; }
+/* A tablet's home screen (a touch screen, no desktop mode): the same. */
+@media (pointer: coarse) {
+  body:not(.wm):not(.phone) .sheet::before {
+    content: ""; position: absolute; top: 6px; left: 50%; z-index: 7; width: 38px; height: 5px;
+    border-radius: 3px; background: rgb(255 255 255 / 0.32); transform: translateX(-50%);
+  }
+  body:not(.wm) .sheet.swiping { transition: none; }
+}
 body.phone .sheet-close { top: 16px; right: 14px; width: 30px; height: 30px; background: rgb(118 118 128 / 0.24); }
 body.phone .sheet-close svg { width: 14px; height: 14px; }
 body.phone .store-title { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
