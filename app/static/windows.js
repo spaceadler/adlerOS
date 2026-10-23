@@ -379,7 +379,13 @@ function winPointerMove(e) {
   const g = wm.geometry[d.id];
   if (d.tiled) {
     if (d.kind !== "move") return;
-    Object.assign($(d.id).style, { left: `${Math.round(d.box.x + dx)}px`, top: `${Math.round(d.box.y + dy)}px` });
+    const sheet = $(d.id);
+    const x = Math.round(d.box.x + dx);
+    const y = Math.round(d.box.y + dy);
+    Object.assign(sheet.style, { left: `${x}px`, top: `${y}px` });
+    // Its blurred wallpaper comes along: what's behind it now, not where it was.
+    sheet.style.setProperty("--win-x", `${x}px`);
+    sheet.style.setProperty("--win-y", `${y}px`);
     d.at = [e.clientX, e.clientY];
     return;
   }
