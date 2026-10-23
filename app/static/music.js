@@ -274,6 +274,8 @@ function musicShow(view, push = true) {
     music.fwd = [];
   }
   music.view = { ...view };
+  // Up next or the lyrics in the list's place (a narrow window): out of the way.
+  if (music.panel && getComputedStyle($("mu-main")).visibility === "hidden") musicSetPanel(null);
   musicRender();
   musicRenderSide();
 }
