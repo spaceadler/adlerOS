@@ -2756,7 +2756,7 @@ body:not(.wm) .mu-side { padding-top: 22px; }
 .mu-button.primary:hover { filter: brightness(1.1); }
 .mu-button.secondary { background: rgb(255 255 255 / 0.12); color: #fff; }
 .mu-button.secondary:hover { background: rgb(255 255 255 / 0.18); }
-.field-input.mu-sort { width: auto; height: 34px; padding: 0 12px; font-size: 13px; }
+.field-input.mu-sort { width: auto; height: 34px; padding: 0 30px 0 12px; font-size: 13px; }
 .mu-icon { position: relative; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: none; color: rgb(255 255 255 / 0.75); cursor: pointer; }
 .mu-icon:hover { background: rgb(255 255 255 / 0.1); color: #fff; }
 .mu-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
@@ -2808,7 +2808,7 @@ body:not(.wm) .mu-side { padding-top: 22px; }
 .mu-grid-row { position: absolute; right: 0; left: 0; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 20px; }
 
 .mu-table { font-size: 13.5px; }
-.mu-thead, .mu-row { display: grid; grid-template-columns: 40px minmax(0, 2.2fr) minmax(0, 1.4fr) minmax(0, 1.4fr) 56px; align-items: center; gap: 14px; }
+.mu-thead, .mu-row { display: grid; grid-template-columns: 40px minmax(0, 2.2fr) minmax(0, 1.4fr) minmax(0, 1.4fr) 30px 56px; align-items: center; gap: 14px; }
 .mu-thead { padding: 6px 10px; border-bottom: 1px solid rgb(255 255 255 / 0.08); font-size: 12px; color: rgb(255 255 255 / 0.45); }
 .mu-tbody { position: relative; }
 .mu-row { height: 52px; padding: 0 10px; border-radius: 8px; outline: none; user-select: none; }
@@ -2828,6 +2828,16 @@ body:not(.wm) .mu-side { padding-top: 22px; }
 .mu-num svg { display: none; width: 14px; height: 14px; fill: currentColor; stroke: none; }
 .mu-row:hover .mu-num { font-size: 0; color: #fff; }
 .mu-row:hover .mu-num svg { display: block; }
+.mu-plays { font-variant-numeric: tabular-nums; }
+/* The heart: shown on the song under the mouse (or picked), and always on a favorite. */
+.mu-fav { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: none; color: rgb(255 255 255 / 0.6); opacity: 0; cursor: pointer; }
+.mu-fav svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.mu-row:hover .mu-fav, .mu-row.selected .mu-fav, .mu-fav.on { opacity: 1; }
+.mu-fav:hover { color: #fff; }
+.mu-fav.on { color: var(--mu-accent); }
+.mu-fav.on svg path, .mu-bar-fav.on svg path { fill: currentColor; }
+@media (pointer: coarse) { .mu-fav:not(.on) { opacity: 0.5; } }
+.mu-bar-fav { flex-shrink: 0; }
 .mu-row.dragging { opacity: 0.4; }
 .mu-row.drop-above { box-shadow: inset 0 2px 0 var(--mu-accent); }
 .mu-row.drop-below { box-shadow: inset 0 -2px 0 var(--mu-accent); }
@@ -2890,7 +2900,7 @@ body:not(.wm) .mu-panel-head { padding-top: 58px; }
 @container sheet (max-width: 900px) {
   .mu-shell, .mu-shell.with-panel { grid-template-columns: 190px minmax(0, 1fr); }
   .mu-shell.with-panel .mu-panel { z-index: 5; grid-row: 1; grid-column: 2; justify-self: end; width: min(340px, 100%); background: rgb(18 18 22 / 0.97); }
-  .mu-thead, .mu-row { grid-template-columns: 40px minmax(0, 2fr) minmax(0, 1.2fr) 52px; }
+  .mu-thead, .mu-row { grid-template-columns: 40px minmax(0, 2fr) minmax(0, 1.2fr) 30px 52px; }
   .mu-col-album { display: none; }
   .mu-bar { grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px 14px; }
   .mu-bar-seek { grid-row: 2; grid-column: 1 / -1; }
@@ -2910,7 +2920,7 @@ body:not(.wm) .mu-panel-head { padding-top: 58px; }
   body:not(.wm) .mu-panel-head { padding-top: 12px; }
   .mu-bar { grid-row: 3; }
   .mu-page { padding: 18px 16px 40px; }
-  .mu-thead, .mu-row { grid-template-columns: 40px minmax(0, 1fr) 48px; }
+  .mu-thead, .mu-row { grid-template-columns: 40px minmax(0, 1fr) 30px 48px; }
   .mu-col-artist { display: none; }
   .mu-cell-title .mu-sub { display: block; }
   .mu-hero { flex-direction: column; align-items: flex-start; gap: 16px; }

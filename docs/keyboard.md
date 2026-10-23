@@ -126,6 +126,7 @@ wallpaper is Alt+Shift+P.
 | Space | Play or pause |
 | Enter | Play the song that's picked (with the rest of the list after it) |
 | Up, Down | Pick the song above or below |
+| L | A heart (a favorite) on the picked song, else the one playing; again takes it off |
 | Ctrl+F | Search |
 | Media keys, a phone's lock screen | Play, pause, next, previous (the browser passes them on) |
 | Mouse side buttons | Back and forward through where you've been |
