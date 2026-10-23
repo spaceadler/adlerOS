@@ -100,6 +100,7 @@ function registerWindow(id, { title, close, hide = null, dock = null, icon = nul
   wm.windows.set(id, { id, title, close, hide, dock, icon, size, app, float, floats, copy });
   if (!$(id).querySelector(":scope > .win-bar")) winFrame(id, title, extras);
   winZoomApply(id);
+  if (typeof sheetSwipeable === "function") sheetSwipeable($(id)); // swiped down to close (phone.js)
 }
 
 function winFrame(id, title, extras) {
