@@ -2592,7 +2592,7 @@ body:not(.wm) .md-side-head { padding-top: 14px; }
 .md-count { margin-left: 6px; font-size: 11.5px; font-weight: 500; color: rgb(255 255 255 / 0.45); }
 .md-center { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .md-tabs { display: flex; flex-shrink: 0; gap: 2px; overflow-x: auto; padding: 6px 8px 0; border-bottom: 1px solid rgb(255 255 255 / 0.07); scrollbar-width: none; }
-body:not(.wm) .md-tabs { padding-right: 56px; }
+body:not(.wm) .md-tabs { padding-right: 56px; -webkit-mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; }
 .md-tab { display: flex; flex-shrink: 0; align-items: center; gap: 6px; max-width: 220px; padding: 6px 6px 6px 12px; border-radius: 8px 8px 0 0; font-size: 13px; color: rgb(255 255 255 / 0.6); cursor: pointer; }
 .md-tab:hover { background: rgb(255 255 255 / 0.05); }
 .md-tab.active { background: rgb(255 255 255 / 0.09); color: #fff; }
@@ -2915,6 +2915,8 @@ body:not(.wm) .mu-panel-head { padding-top: 58px; }
   .mu-shell, .mu-shell.with-panel { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; }
   .mu-side { grid-row: 1; flex-direction: row; align-items: center; gap: 6px; overflow-x: auto; padding: 10px 12px; border-right: 0; border-bottom: 1px solid rgb(255 255 255 / 0.07); }
   body:not(.wm) .mu-side { padding-top: 14px; padding-right: 56px; }
+  /* The strip ends before the X: what scrolls under it is hidden; its line goes on. */
+  body:not(.wm) .mu-side { -webkit-mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; }
   .mu-search-box { flex: 0 0 150px; margin: 0; }
   .mu-side-nav { flex-direction: row; gap: 2px; }
   .mu-side-title, .mu-nav-list, .mu-nav-new { display: none; }
@@ -3040,7 +3042,7 @@ body:not(.wm) .ga-vbar { padding-right: 56px; }
 @container sheet (max-width: 640px) {
   .ga-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .ga-side { flex-direction: row; align-items: center; gap: 6px; overflow-x: auto; padding: 10px 12px; border-right: 0; border-bottom: 1px solid rgb(255 255 255 / 0.07); }
-  body:not(.wm) .ga-side { padding-top: 14px; padding-right: 56px; }
+  body:not(.wm) .ga-side { padding-top: 14px; padding-right: 56px; -webkit-mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; }
   .ga-search-box { flex: 0 0 150px; margin: 0; }
   .ga-side-nav { flex-direction: row; gap: 2px; }
   .ga-nav { width: auto; white-space: nowrap; }
@@ -3176,7 +3178,7 @@ button.doc-tag { cursor: pointer; }
 @container sheet (max-width: 640px) {
   .doc-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .doc-side { flex-direction: row; align-items: center; gap: 6px; overflow-x: auto; padding: 10px 12px; border-right: 0; border-bottom: 1px solid rgb(255 255 255 / 0.07); }
-  body:not(.wm) .doc-side { padding-top: 14px; padding-right: 56px; }
+  body:not(.wm) .doc-side { padding-top: 14px; padding-right: 56px; -webkit-mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; }
   .doc-search-box { flex: 0 0 150px; margin: 0; }
   .doc-side-nav { flex-direction: row; gap: 2px; }
   .doc-side-title, .doc-more { display: none; }
