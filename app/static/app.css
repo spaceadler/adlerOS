@@ -2739,7 +2739,7 @@ body:not(.wm) .mu-side { padding-top: 22px; }
 .mu-nav-new svg { stroke: rgb(255 255 255 / 0.6); }
 .mu-side-title { margin: 16px 10px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: rgb(255 255 255 / 0.4); }
 
-.mu-main { grid-row: 1; min-width: 0; min-height: 0; overflow-y: auto; outline: none; }
+.mu-main { grid-row: 1; grid-column: 2; min-width: 0; min-height: 0; overflow-y: auto; outline: none; }
 .mu-page { padding: 26px 32px 60px; }
 .mu-empty { display: grid; place-items: center; align-content: center; height: 100%; padding: 40px; color: rgb(255 255 255 / 0.6); text-align: center; }
 .mu-empty h2 { margin: 0 0 8px; color: #fff; }
@@ -2849,25 +2849,28 @@ body:not(.wm) .mu-side { padding-top: 22px; }
 .mu-list-row .mu-title { flex: 1; }
 .mu-list-row:hover, .mu-list-row:focus-visible { background: rgb(255 255 255 / 0.07); }
 
-.mu-bar { grid-row: 2; grid-column: 1 / -1; display: grid; grid-template-columns: minmax(150px, 1fr) auto minmax(180px, 1.3fr) auto; align-items: center; gap: 22px; padding: 10px 20px; border-top: 1px solid rgb(255 255 255 / 0.08); background: rgb(0 0 0 / 0.35); }
-.mu-bar-now { display: flex; align-items: center; gap: 12px; min-width: 0; }
+/* The player: what's playing on the left, the tools on the right, and the
+   controls (the song's line under them) in the middle of the window, at
+   any width: the two sides are always the same size. */
+.mu-bar { grid-row: 2; grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 560px) minmax(0, 1fr); grid-template-areas: "now controls tools" "now seek tools"; align-items: center; gap: 4px 22px; padding: 10px 20px; border-top: 1px solid rgb(255 255 255 / 0.08); background: rgb(0 0 0 / 0.35); }
+.mu-bar-now { grid-area: now; display: flex; align-items: center; gap: 12px; min-width: 0; }
 .mu-bar-art { flex-shrink: 0; width: 50px; cursor: pointer; }
 .mu-bar-art .mu-art { width: 50px; border-radius: 6px; }
 .mu-bar-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
 .mu-bar-title, .mu-bar-artist { max-width: 100%; overflow: hidden; text-align: left; white-space: nowrap; text-overflow: ellipsis; }
 .mu-bar-title { font-size: 14px; font-weight: 600; }
 .mu-bar-artist { font-size: 12.5px; color: rgb(255 255 255 / 0.6); }
-.mu-bar-controls { display: flex; align-items: center; gap: 6px; }
+.mu-bar-controls { grid-area: controls; justify-self: center; display: flex; align-items: center; gap: 6px; }
 .mu-bar-controls .mu-play { width: 44px; height: 44px; background: #fff; color: #111; }
 .mu-bar-controls .mu-play:hover { background: #fff; color: #000; transform: scale(1.05); }
 .mu-play svg { width: 20px; height: 20px; }
-.mu-bar-seek { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mu-bar-seek { grid-area: seek; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .mu-bar-time { flex-shrink: 0; width: 42px; font-size: 12px; color: rgb(255 255 255 / 0.55); font-variant-numeric: tabular-nums; text-align: center; }
 .mu-seek, .mu-volume { flex: 1; min-width: 0; height: 4px; margin: 0; border-radius: 2px; background: linear-gradient(to right, #fff var(--done, 0%), rgb(255 255 255 / 0.2) var(--done, 0%)); cursor: pointer; appearance: none; }
 .mu-seek::-webkit-slider-thumb, .mu-volume::-webkit-slider-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; opacity: 0; transition: opacity 0.12s; appearance: none; }
 .mu-seek:hover::-webkit-slider-thumb, .mu-volume:hover::-webkit-slider-thumb { opacity: 1; }
 .mu-seek::-moz-range-thumb, .mu-volume::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: #fff; }
-.mu-bar-tools { display: flex; align-items: center; gap: 4px; }
+.mu-bar-tools { grid-area: tools; justify-self: end; display: flex; align-items: center; gap: 4px; }
 .mu-volume { flex: none; width: 90px; margin-right: 6px; }
 
 .mu-panel { grid-row: 1; display: none; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid rgb(255 255 255 / 0.07); background: rgb(0 0 0 / 0.18); }
@@ -2896,14 +2899,15 @@ body:not(.wm) .mu-panel-head { padding-top: 58px; }
 .mu-lyrics.synced .mu-line:hover { color: rgb(255 255 255 / 0.75); }
 .mu-lyrics.synced .mu-line.now { color: #fff; }
 
-/* A narrower window: no album column; Up next or the lyrics over the list. */
+/* A narrower window (a half of the screen, tiled): no album column; Up next
+   or the lyrics in the list's place, on the same glass. */
 @container sheet (max-width: 900px) {
   .mu-shell, .mu-shell.with-panel { grid-template-columns: 190px minmax(0, 1fr); }
-  .mu-shell.with-panel .mu-panel { z-index: 5; grid-row: 1; grid-column: 2; justify-self: end; width: min(340px, 100%); background: rgb(18 18 22 / 0.97); }
+  .mu-shell.with-panel .mu-main { visibility: hidden; }
+  .mu-shell.with-panel .mu-panel { z-index: 5; grid-row: 1; grid-column: 2; border-left: 0; }
   .mu-thead, .mu-row { grid-template-columns: 40px minmax(0, 2fr) minmax(0, 1.2fr) 30px 52px; }
   .mu-col-album { display: none; }
-  .mu-bar { grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px 14px; }
-  .mu-bar-seek { grid-row: 2; grid-column: 1 / -1; }
+  .mu-bar { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); grid-template-areas: "now controls tools" "seek seek seek"; gap: 6px 14px; }
   .mu-volume, .mu-mute { display: none; }
 }
 /* A phone: the side as a strip along the top, one column of songs. */
@@ -2927,6 +2931,10 @@ body:not(.wm) .mu-panel-head { padding-top: 58px; }
   .mu-hero > .mu-art { width: 160px; height: 160px; }
   .mu-hero h1 { font-size: 28px; }
   .mu-bar-controls .mu-shuffle, .mu-bar-controls .mu-repeat { display: none; }
+}
+/* Narrower still: the controls on a line of their own, in the middle. */
+@container sheet (max-width: 520px) {
+  .mu-bar { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "now tools" "controls controls" "seek seek"; }
 }
 
 /* Gallery (gallery.js): the side, the timeline (months, days, rows that
