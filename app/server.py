@@ -3425,7 +3425,8 @@ class Handler(BaseHTTPRequestHandler):
             # A folder takes its place as "folder:<id>".
             order = body["order"]
             folder_ids = set(changes["folders"] if "folders" in changes else app_folders())
-            ids = {a["id"] for a in installed_apps()} | {f"folder:{f}" for f in folder_ids}
+            # adlerOS's own apps too: the home screen's first page is theirs.
+            ids = {a["id"] for a in installed_apps()} | {f"folder:{f}" for f in folder_ids} | set(BUILTIN_PINS)
             if (not isinstance(order, dict) or not order or len(order) > 50
                     or not all(isinstance(c, str) and re.fullmatch(r"[a-z0-9-]{1,40}", c) for c in order)
                     or not all(isinstance(v, list) and len(v) <= 200 and len(set(map(str, v))) == len(v)

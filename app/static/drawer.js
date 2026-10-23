@@ -104,7 +104,8 @@ function renderLibrary() {
   };
   const own = builtIns().map((b) => ({ ...b }));
   const folders = [folder("adlerOS", own, "adleros"),
-    ...groupApps().map((c) => folder(c.name, c.apps.map((app) => ({ app, name: app.name })), c.id))];
+    ...groupApps().filter((c) => c.id !== "core" || state.admin) // Core: only in admin mode, as on the home screen
+      .map((c) => folder(c.name, c.apps.map((app) => ({ app, name: app.name })), c.id))];
   $("drawer-grid").classList.add("library");
   $("drawer-grid").replaceChildren(...folders);
   $("drawer-empty").hidden = true;

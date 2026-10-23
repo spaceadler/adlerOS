@@ -1104,8 +1104,8 @@ def add_site(name, url, collection):
     if not re.fullmatch(r"https?://[^\s\"'<>\\]{1,300}", url):
         sys.exit("address: an http:// or https:// address")
     collection = collection or "extras"
-    if collection not in COLLECTIONS or collection in ("core", "background"):
-        sys.exit("collection: one of system, media, knowledge, productivity, life, files or extras")
+    if collection not in COLLECTIONS or collection == "background":
+        sys.exit("collection: one of core, system, media, knowledge, productivity, life, files or extras")
     host = (urllib.parse.urlsplit(url).hostname or "").removeprefix("www.")
     if not host:
         sys.exit("address: it has no host name")

@@ -50,8 +50,9 @@ one, each still shows the files themselves. More in
 ## What you get
 
 - **A desktop.** A greeting, up to three widgets (system stats, storage,
-  apps up and down, the clock…), a web search bar, and your apps as icons,
-  one page per collection. An app that stops answering turns dim and says
+  apps up and down, the clock…), a web search bar, and your apps as icons:
+  adlerOS's own on the first page, then one page per collection (Core's
+  only in admin mode). An app that stops answering turns dim and says
   *Offline*.
 - **A dock** of the apps you pin, plus All apps, the App Store, Settings and
   Live Usage. It magnifies like a Mac's.
@@ -121,9 +122,9 @@ becomes two apps, each starting and stopping only its own containers. Anything
 it doesn't know goes in **Extras**, named after its folder. Teach it an app by
 adding a line to that file.
 
-The collections are **Core** (DNS, proxies, VPN, passwords), **System**
+The collections are **Core** (DNS, proxies, VPN: shown in admin mode), **System**
 (dashboards, monitoring), **Media**, **Knowledge** (notes, wikis, bookmarks,
-search, AI), **Productivity** (tasks, documents, office, automation), **Life**
+search, AI), **Productivity** (tasks, documents, office, passwords, automation), **Life**
 (places, trips, money, food, health), **Files** (sync, git, downloads,
 backups) and **Extras**.
 

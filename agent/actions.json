@@ -274,7 +274,7 @@
         "maxLength": 310
       },
       "collection": {
-        "pattern": "^(system|media|knowledge|productivity|life|files|extras)?$"
+        "pattern": "^(core|system|media|knowledge|productivity|life|files|extras)?$"
       }
     },
     "steps": [

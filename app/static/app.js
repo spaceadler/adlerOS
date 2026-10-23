@@ -152,6 +152,7 @@ function plateFor(app) {
 }
 
 function tile(app, index) {
+  if (app.builtin) return ownTile(app, index);
   const plate = plateFor(app);
   const warning = el("span", { class: "warning", hidden: "" },
     svg(["M12 9v4", "M12 17h.01", "M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"]));
@@ -176,6 +177,24 @@ function tile(app, index) {
   link.addEventListener("animationend", () => { link.style.animation = "none"; }, { once: true });
   state.tiles.set(app.id, { link, label, plate, warning, app });
   setStatus(app);
+  return link;
+}
+
+// One of adlerOS's own apps on the home screen: its own icon (the dock's),
+// opening its window. Its menu is the dock's for it (pin, Add to desktop).
+function ownTile(app, index) {
+  const plate = el("img", { src: `/api/dock-icon/${app.icon}`, alt: "", draggable: "false" });
+  const warning = el("span", { class: "warning", hidden: "" });
+  const label = el("span", { class: "app-label" }, app.name);
+  const link = el("a", { class: "app own-app", href: "#", title: app.about || app.name, draggable: "false", "data-app": app.id },
+    el("span", { class: "app-icon builtin-icon" }, plate, warning), label);
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    app.builtin.open();
+  });
+  link.style.animationDelay = `${index * 10}ms`;
+  link.addEventListener("animationend", () => { link.style.animation = "none"; }, { once: true });
+  state.tiles.set(app.id, { link, label, plate, warning, app });
   return link;
 }
 
@@ -244,7 +263,7 @@ function layout(force = false) {
   root.setProperty("--web-search-h", `${searchH}px`);
   area.style.height = `${PAGE_TITLE_H + perCol * g.appH + (perCol - 1) * g.appYGap}px`;
 
-  const groups = groupApps();
+  const groups = homeGroups();
   state.grid = { perRow, perCol };
   const key = gridKey(groups);
   if (!force && key === state.layoutKey) return;
@@ -264,6 +283,32 @@ function gridKey(groups) {
 // none are under Extras, last. Within one, apps go in the order you dragged
 // them into, then alphabetically.
 const PAGE_TITLE_H = 18;
+
+// The home screen's first page: adlerOS's own apps, in this order until you
+// drag them about (the Terminal only in admin mode).
+const OWN_PAGE = ["adleros:files", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:adlermd", "adleros:notepad",
+  "adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:terminal"];
+
+function ownApps() {
+  const saved = state.order.adleros || [];
+  const rank = (id) => (saved.includes(id) ? saved.indexOf(id) : saved.length + OWN_PAGE.indexOf(id));
+  return OWN_PAGE.filter((id) => id !== "adleros:terminal" || state.admin)
+    .sort((a, b) => rank(a) - rank(b))
+    .map((id) => {
+      const b = BUILTIN_PINS[id];
+      const about = (typeof BUILT_IN !== "undefined" ? BUILT_IN : []).find((x) => `adleros:${x.id}` === id)?.about || "";
+      return { id, name: b.name, icon: b.icon, about, builtin: b, up: true, genre: "adleros" };
+    });
+}
+
+// The home screen's pages: adlerOS's own first, then the collections, with
+// Core (DNS, the proxy: what your network needs) only in admin mode. The
+// App Store and search have them all, always.
+function homeGroups() {
+  const own = ownApps();
+  return [{ id: "adleros", name: "adlerOS", apps: own, items: own.map((app) => ({ key: app.id, app })) },
+    ...groupApps().filter((c) => c.id !== "core" || state.admin)];
+}
 
 function groupApps() {
   const known = new Set(state.collections.map((c) => c.id));
@@ -939,11 +984,12 @@ function edgeTurn(e) {
 function turnWhileDragging(dir) {
   const page = $("pages").children[state.page + dir];
   drag.edge = 0; // still at the edge: the next move turns again
-  // A folder stays in its collection (its apps can move, one by one).
-  if (!drag.active || !page || drag.item.dataset.folder) return;
+  // A folder stays in its collection (its apps can move, one by one), and
+  // adlerOS's own apps on their page: it's theirs alone.
+  if (!drag.active || !page || drag.item.dataset.folder || drag.item.classList.contains("own-app")) return;
   goToPage(state.page + dir);
   const grid = page.querySelector(".app-grid");
-  if (grid && grid !== drag.container) {
+  if (grid && grid !== drag.container && grid.dataset.collection !== "adleros") {
     grid.append(drag.item);
     drag.container = grid;
     drag.crossed = true;
@@ -1118,7 +1164,7 @@ async function saveArrangement(kind, container) {
     buildDock();
   } else {
     Object.assign(state.order, body.order);
-    state.layoutKey = gridKey(groupApps());
+    state.layoutKey = gridKey(homeGroups());
   }
   if (!$("settings").hidden) renderSide();
 }

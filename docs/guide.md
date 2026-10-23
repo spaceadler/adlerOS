@@ -103,7 +103,11 @@ The first time anyone logs in, adlerOS welcomes you, in a few steps:
   <!-- screenshot: the widget picker -->
   ![Edit widgets](screenshots/widgets-picker.png)
 
-- **Your apps**, one page per collection, its name above it. Swipe, use the
+- **Your apps**: adlerOS's own first (My Computer, Music, Gallery,
+  Documents, adlermd, Notepad, the App Store, Settings, Live Usage, and the
+  Terminal in admin mode), then one page per collection, its name above it.
+  **Core** (DNS, your proxy, the VPN: what your network needs) is only there
+  in admin mode; the App Store and search have it always. Swipe, use the
   dots under them, or the arrows at the sides to move between pages. An app
   that doesn't answer turns dim and says *Offline*. An app with no web page
   (a game server, a bot) opens its App Store card instead.
