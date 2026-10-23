@@ -616,7 +616,8 @@ that only what changed, so it opens straight away.
   needs nothing else: it plays your files on its own, and Home says
   whether it's connected to Navidrome (and how, if it isn't).
 - Put away (another window over it, minimized), it keeps playing; closing it
-  stops it. The queue and where you were in the song are kept on this
+  stops it, except on a phone, where it keeps playing like an iPhone's music
+  (the lock screen, or Music again, pauses it). The queue and where you were in the song are kept on this
   device, for next time.
 
 ## Gallery

@@ -3,8 +3,9 @@
 // what you play most, with radio made from your own library (songs
 // your playlists put together, the same artists, genre and years), a queue
 // (play next, add to queue), shuffle and repeat, and lyrics that follow the
-// song (an .lrc beside it, or its own). Closing the window stops it; put
-// away (another window over it, minimized) it keeps playing. A song or an
+// song (an .lrc beside it, or its own). Closing the window stops it (on a
+// phone it keeps playing, as an iPhone's music does: the lock screen pauses
+// it); put away (another window over it, minimized) it keeps playing. A song or an
 // .m3u8 opened from My Computer plays here. The keyboard's media keys work
 // (the Media Session API), and the mouse's side buttons go back and forward.
 // Uses el, svg, $, api, toast, openMenu, nameDialog, confirmDialog, fileUrl,
@@ -177,7 +178,7 @@ function toggleMusic() { toggleWindow("music", () => openMusic()); }
 
 // Closing it stops it; putting it away (another window over it) doesn't.
 function closeMusic() {
-  music.audio.pause();
+  if (!phoneLayout()) music.audio.pause();
   musicSave();
   closeWindow("music");
 }
