@@ -219,7 +219,8 @@ body.phone .menu .destructive { color: #ff453a; }
 /* ------------------------------------------- All apps: the App Library */
 
 body.phone .drawer {
-  padding: calc(env(safe-area-inset-top) + 12px) 18px calc(var(--dock-h, 88px) + 40px);
+  /* Clear of the status bar (the time, the battery): the search and its X a little lower. */
+  padding: calc(env(safe-area-inset-top) + 28px) 18px calc(var(--dock-h, 88px) + 40px);
   background: rgb(0 0 0 / 0.3);
   -webkit-backdrop-filter: blur(40px) saturate(160%);
   backdrop-filter: blur(40px) saturate(160%);
