@@ -220,7 +220,8 @@ any).
   public domain: the aurora (`iss072e159172`) and a sunrise over Earth's limb
   (`STS052-23-022`), from [images.nasa.gov](https://images.nasa.gov).
 - **App icons:** fetched at runtime from
-  [dashboard-icons](https://github.com/homarr-labs/dashboard-icons). Each icon
+  [dashboard-icons](https://github.com/homarr-labs/dashboard-icons), or else
+  from the app's own page (its apple-touch-icon or favicon). Each icon
   belongs to its app's project.
 
 There is no licence file yet, so for now all rights are reserved by the author;

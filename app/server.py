@@ -66,6 +66,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.cookies import CookieError, SimpleCookie
+from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -1092,13 +1093,89 @@ def legible(name, svg):
                   rb"\1#1c1c1e", svg, flags=re.I)
 
 
+# An app dashboard-icons has no icon for: its own, as a phone's home screen
+# finds it. The biggest apple-touch-icon (or icon) its page names, else the
+# usual places (/apple-touch-icon.png, /favicon.svg, /favicon.ico); fetched
+# once, kept in data/icons as site-<app>.<ext>, and only if it really is a
+# picture.
+SITE_ICON_KINDS = [  # (extension, content type, does it look like one)
+    ("png", "image/png", lambda d: d.startswith(b"\x89PNG\r\n\x1a\n")),
+    ("jpg", "image/jpeg", lambda d: d.startswith(b"\xff\xd8\xff")),
+    ("webp", "image/webp", lambda d: d[:4] == b"RIFF" and d[8:12] == b"WEBP"),
+    ("gif", "image/gif", lambda d: d[:6] in (b"GIF87a", b"GIF89a")),
+    ("ico", "image/x-icon", lambda d: d.startswith(b"\x00\x00\x01\x00")),
+    ("svg", "image/svg+xml", lambda d: b"<svg" in d[:2048]),
+]
+
+
+class _IconLinks(HTMLParser):
+    """The icons a page links to: [(how good, address)], biggest first."""
+
+    def __init__(self):
+        super().__init__()
+        self.found = []
+
+    def handle_starttag(self, tag, attrs):
+        a = {k: (v or "") for k, v in attrs}
+        rel = a.get("rel", "").lower().split()
+        if tag != "link" or not a.get("href") or not ({"icon", "apple-touch-icon", "apple-touch-icon-precomposed"} & set(rel)):
+            return
+        sizes = [int(n) for n in re.findall(r"(\d+)x\d+", a.get("sizes", ""))]
+        size = 1024 if "svg" in a.get("type", "") or a["href"].split("?")[0].endswith(".svg") else max(sizes, default=0)
+        # An apple-touch-icon is made for a home screen: square, with its own background.
+        self.found.append((size + (200 if "apple-touch-icon" in " ".join(rel) else 0), a["href"]))
+
+
+def site_icon(app):
+    url = str(app.get("url") or "")
+    if not re.match(r"https?://", url):
+        return None
+    key = re.sub(r"[^a-z0-9-]", "-", app["id"])
+    for ext, ctype, _ in SITE_ICON_KINDS:
+        cached = ICONS / f"site-{key}.{ext}"
+        if cached.is_file():
+            return ctype, cached.read_bytes()
+    missing = ICONS / f"site-{key}.missing"
+    if missing.exists() and time.time() - missing.stat().st_mtime < ICON_RETRY_SECONDS:
+        return None
+    page = _fetch(url, lambda d: True) or b""
+    links = _IconLinks()
+    try:
+        links.feed(page[:512 * 1024].decode("utf-8", "replace"))
+    except Exception:  # a page that isn't HTML: the usual places, then
+        pass
+    # The usual apple-touch-icon (180px) before a small favicon the page names.
+    guesses = [(200, "/apple-touch-icon.png"), (-1, "/favicon.svg"), (-1, "/favicon.ico")]
+    tries = [urllib.parse.urljoin(url, href) for _, href in sorted(links.found + guesses, key=lambda t: -t[0])]
+    for address in dict.fromkeys(tries):
+        if not re.match(r"https?://", address):
+            continue  # a data: icon, say
+        data = _fetch(address, lambda d: any(look(d) for _, _, look in SITE_ICON_KINDS))
+        if not data:
+            continue
+        ext, ctype, _ = next(k for k in SITE_ICON_KINDS if k[2](data))
+        ICONS.mkdir(parents=True, exist_ok=True)
+        tmp = ICONS / f".site-{key}.{ext}.{secrets.token_hex(4)}"
+        tmp.write_bytes(data)
+        tmp.replace(ICONS / f"site-{key}.{ext}")
+        return ctype, data
+    ICONS.mkdir(parents=True, exist_ok=True)
+    missing.touch()
+    return None
+
+
 def app_icon(app_id):
     """(content type, bytes) of an app's icon, or None to use a lettered tile."""
     app = next((a for a in read_catalog() + registry_apps() + registry_apps(installed=False) + store_apps()
                 if a["id"] == app_id), None)
-    if not app or not app["icon"].startswith("di:"):
+    if not app:
         return None
-    name = app["icon"][3:]
+    found = dashboard_icon(app["icon"][3:]) if app["icon"].startswith("di:") else None
+    return found or site_icon(app)
+
+
+def dashboard_icon(name):
+    """(content type, bytes) of dashboard-icons' <name>, or None."""
     if not re.fullmatch(r"[a-z0-9-]+", name):
         return None
     kinds = [("svg", "image/svg+xml", lambda d: b"<svg" in d[:1024]),
@@ -3152,7 +3229,7 @@ class Handler(BaseHTTPRequestHandler):
                                         "host": {"tsIp": env.get("TS_IP", ""), "domain": env.get("DOMAIN", "")},
                                         "apps": [
                 {"id": a["id"], "name": a["name"], "about": a["about"], "genre": a["genre"],
-                 "url": a["url"], "hasIcon": a["icon"].startswith("di:"), "icon": a["icon"],
+                 "url": a["url"], "hasIcon": a["icon"].startswith("di:") or a["url"].startswith("http"), "icon": a["icon"],
                  "imported": bool(a.get("imported")), "note": a.get("note", ""), "up": status[a["id"]],
                  "home": a.get("home"), "known": a.get("known", ""), "site": bool(a.get("site"))} for a in apps],
                 "available": [{"id": a["id"], "name": a["name"], "about": a["about"], "genre": a["genre"],

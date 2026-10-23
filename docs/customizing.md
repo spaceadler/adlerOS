@@ -20,8 +20,11 @@ homelab: `containers/core/os/icons/`), then `docker compose up -d`. A square
 image works best; the dock doesn't round it for you.
 
 App icons come from [dashboard-icons](https://github.com/homarr-labs/dashboard-icons),
-fetched once and kept in `data/icons/`. An app without one gets a coloured
-tile with its initials.
+fetched once and kept in `data/icons/`. An app it doesn't have an icon for
+gets its own, as a phone's home screen finds it: the biggest
+apple-touch-icon or icon its page names, else `/apple-touch-icon.png` or
+its favicon (kept as `data/icons/site-<app>.*`). An app with neither gets a
+coloured tile with its initials.
 
 ## Widgets
 

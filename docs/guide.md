@@ -328,7 +328,8 @@ fills in from it) and a page on your home screen. It opens in a window like
 the rest; a site that won't be shown inside another page (many big ones
 refuse) opens in the Firefox app instead, if you have it, else in a tab.
 It's an app in every other way too (the dock, the Desktop, search), with
-its icon from dashboard-icons when there's one by its name, else a letter.
+its icon from dashboard-icons when there's one by its name, else the site's own (its
+apple-touch-icon or favicon), else a letter.
 Its App Store card says *Website*; **Remove** takes it away (the site isn't
 touched). Nothing runs for it.
 
