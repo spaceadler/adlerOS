@@ -44,6 +44,7 @@ on the host picks it up and runs it from the fixed list in
 scripts/agent/actions.json (see that folder).
 """
 import base64
+import calendar
 import gzip
 import hashlib
 import hmac
@@ -1620,7 +1621,8 @@ def vault_rename(vault, old, new, links=True):
 # tags are read once and kept (data/music.json, by each file's size and
 # time), and looked over again (only what changed) when Music asks and it's
 # been a minute. Playlists are its .m3u8 (.m3u) files, as spotdl and other
-# players write them; plays are counted in data/music-plays.json.
+# players write them; plays are counted in data/music-plays.json, and
+# favorites kept in data/music-favorites.json (with Navidrome: its stars).
 MUSIC_SUFFIXES = {".mp3", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".m4b", ".wav"}
 PLAYLIST_SUFFIXES = {".m3u8", ".m3u"}
 MUSIC_CACHE = DATA / "music.json"
@@ -1864,7 +1866,8 @@ def music_played(sid):
 
 
 # Navidrome (same music folder): what Music plays shows up there too, now
-# playing and then played, if NAVIDROME_USER and NAVIDROME_PASSWORD are set.
+# playing and then played, and favorites are its stars, if NAVIDROME_USER
+# and NAVIDROME_PASSWORD are set.
 # It's reached at NAVIDROME_URL, else at this machine's Tailscale address
 # (TS_IP, ADLEROS_HOST) and Navidrome's port.
 _navidrome_ids = {}  # a song's id here (its path in MUSIC_DIR) -> Navidrome's
@@ -1930,6 +1933,224 @@ def navidrome_scrobble(sid, played):
         except (OSError, ValueError, urllib.error.URLError) as e:
             print(f"music: Navidrome didn't take {sid} ({e})", file=sys.stderr, flush=True)
     threading.Thread(target=send, name="navidrome", daemon=True).start()
+
+
+def navidrome_matcher(songs):
+    """match(a song as Navidrome tells it) -> the same song's id here, or
+    None. Navidrome makes up a path (artist/album/track - title) unless its
+    player has Report Real Path on, so: the path, if it's a real one; else
+    the file's name; else the title (the album and artists deciding between
+    copies); else a title one of them says more of ("… (Live)") by the same
+    artist. Always about as long (3 s either way)."""
+    norm = lambda t: str(t or "").casefold().strip()  # noqa: E731
+    known = {s["id"]: s for s in songs}
+    by_name, by_title, by_length = {}, {}, {}
+    for s in songs:
+        by_name.setdefault(norm(posixpath.basename(s["id"])), []).append(s)
+        by_title.setdefault(norm(s["title"]), []).append(s)
+        by_length.setdefault(round(s.get("duration") or 0), []).append(s)
+
+    def close(s, h):
+        return not s.get("duration") or not h.get("duration") or abs(s["duration"] - h["duration"]) <= 3
+
+    def artists(h):
+        return ({norm(a.get("name")) for a in h.get("artists") or [] if isinstance(a, dict)}
+                or {norm(a) for a in re.split(r"\s*[/,;&]\s*", h.get("artist") or "") if a})
+
+    def best(candidates, h):
+        theirs = artists(h)
+
+        def score(s):
+            mine = {norm(a) for a in s["artists"]}
+            return (2 * (norm(s["album"]) == norm(h.get("album"))) + len(mine & theirs) / max(1, len(mine | theirs))
+                    - abs((s.get("duration") or 0) - (h.get("duration") or 0)) / 10)
+        candidates = [s for s in candidates if close(s, h)]
+        return max(candidates, key=score)["id"] if candidates else None
+
+    def match(h):
+        parts = str(h.get("path") or "").split("/")
+        for k in range(len(parts)):
+            s = known.get("/".join(parts[k:]))
+            if s and close(s, h):
+                return s["id"]
+        found = best(by_name.get(norm(parts[-1]), []), h) or best(by_title.get(norm(h.get("title")), []), h)
+        if found:
+            return found
+        title, theirs = norm(h.get("title")), artists(h)
+        near = [s for d in range(-3, 4) for s in by_length.get(round(h.get("duration") or 0) + d, [])
+                if title and norm(s["title"]) and (norm(s["title"]).startswith(title) or title.startswith(norm(s["title"])))
+                and {norm(a) for a in s["artists"]} & theirs]
+        return best(near, h)
+    return match
+
+
+def navidrome_songs(cfg):
+    """Every song Navidrome has: an empty search finds them all, 500 at a time."""
+    songs = []
+    while True:
+        page = ((navidrome_call(cfg, "search3.view", query="", songCount=500, songOffset=len(songs), artistCount=0, albumCount=0)
+                 .get("searchResult3") or {}).get("song") or [])
+        songs += page
+        if len(page) < 500 or len(songs) >= 200_000:
+            return songs
+
+
+# Favorites: the songs you've hearted (data/music-favorites.json, id -> when).
+# With Navidrome they're its stars, both ways: one starred in its app or on
+# your phone is a favorite here, and a heart here stars it there. The file
+# also keeps which ones Navidrome had starred last time ("navidrome"), so a
+# change made on one side since then is told apart from one the other side
+# hasn't heard of yet: a star gone from Navidrome was taken off there, one
+# Navidrome never had is a heart made here while it wasn't answering.
+MUSIC_FAVORITES = DATA / "music-favorites.json"
+NAVIDROME_FRESH = 30  # seconds Navidrome's stars are good for (its plays: MUSIC_FRESH)
+_favorites_lock = threading.Lock()
+_navidrome = {"at": 0, "listed": 0, "status": None, "plays": {}, "starred": {}}  # starred: id here -> Navidrome's ids
+_navidrome_lock = threading.Lock()  # one look at Navidrome at a time
+
+
+def music_favorites():
+    try:
+        data = json.loads(MUSIC_FAVORITES.read_text())
+    except (OSError, ValueError):
+        data = {}
+    data = data if isinstance(data, dict) else {}
+    songs = data.get("songs") if isinstance(data.get("songs"), dict) else {}
+    seen = data.get("navidrome") if isinstance(data.get("navidrome"), list) else []
+    return {"songs": {k: int(v) for k, v in songs.items() if isinstance(v, (int, float))},
+            "navidrome": [s for s in seen if isinstance(s, str)]}
+
+
+def save_favorites(fav):
+    write_private(MUSIC_FAVORITES, json.dumps(fav, separators=(",", ":")))
+
+
+def navidrome_seen(sid, starred):
+    """Navidrome has that song starred now (or not): remembered for next time."""
+    with _favorites_lock:
+        fav = music_favorites()
+        seen = set(fav["navidrome"])
+        (seen.add if starred else seen.discard)(sid)
+        fav["navidrome"] = sorted(seen)
+        save_favorites(fav)
+
+
+def music_favorite(sid, on):
+    """A heart put on a song (or taken off): kept, and starred (or not) in
+    Navidrome too, in the background."""
+    with _favorites_lock:
+        fav = music_favorites()
+        if on:
+            fav["songs"].setdefault(sid, int(time.time()))
+        else:
+            fav["songs"].pop(sid, None)
+        save_favorites(fav)
+    cfg = navidrome()
+    song = next((x for x in _music["songs"] or [] if x["id"] == sid), None)
+    if not cfg or not song:
+        return
+
+    def send():
+        try:
+            # Taken off: every copy Navidrome has starred, or it'd be back next time.
+            nids = (None if on else _navidrome["starred"].get(sid)) or [navidrome_id(cfg, sid, song)]
+            if not all(nids):
+                return  # a song Navidrome doesn't have
+            for nid in nids:
+                navidrome_call(cfg, "star.view" if on else "unstar.view", id=nid)
+            if on:
+                _navidrome["starred"][sid] = nids
+            else:
+                _navidrome["starred"].pop(sid, None)
+            navidrome_seen(sid, on)
+        except (OSError, ValueError, urllib.error.URLError) as e:
+            print(f"music: Navidrome didn't take the star on {sid} ({e})", file=sys.stderr, flush=True)
+    threading.Thread(target=send, name="navidrome", daemon=True).start()
+
+
+def navidrome_sync():
+    """Navidrome's stars and plays, brought here: {configured, ok, url, error}.
+    Stars put on or taken off on either side since last time go to the
+    other. Plays (every song's, every few minutes) are counted as Navidrome
+    counts them: its apps', your phone's, and Music's own, which go there."""
+    cfg = navidrome()
+    if not cfg:
+        return {"configured": False}
+    with _navidrome_lock:
+        if _navidrome["status"] and time.time() - _navidrome["at"] < NAVIDROME_FRESH:
+            return _navidrome["status"]
+        songs = _music["songs"]
+        try:
+            if not songs:
+                navidrome_call(cfg, "ping.view")  # nothing to match yet (the first look round)
+            else:
+                navidrome_bring(cfg, songs)
+            status = {"configured": True, "ok": True, "url": cfg[0]}
+        except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError) as e:
+            status = {"configured": True, "ok": False, "url": cfg[0], "error": str(e)}
+        _navidrome.update(at=time.time(), status=status)
+        return status
+
+
+def navidrome_bring(cfg, songs):
+    match = navidrome_matcher(songs)
+    if time.time() - _navidrome["listed"] > MUSIC_FRESH:
+        ids = dict.fromkeys((s["id"] for s in songs), None)  # None: not Navidrome's, no need to look again
+        plays = {}
+        for h in navidrome_songs(cfg):
+            sid = match(h)
+            if sid:
+                ids[sid] = ids[sid] or h["id"]
+                plays[sid] = plays.get(sid, 0) + int(h.get("playCount") or 0)  # copies of one song: all its plays
+        _navidrome_ids.clear()
+        _navidrome_ids.update(ids)
+        _navidrome.update(listed=time.time(), plays={k: n for k, n in plays.items() if n})
+    starred, when = {}, {}
+    for h in (navidrome_call(cfg, "getStarred2.view").get("starred2") or {}).get("song") or []:
+        sid = match(h)
+        if not sid:
+            continue
+        starred.setdefault(sid, []).append(h["id"])
+        try:
+            when[sid] = calendar.timegm(time.strptime(str(h.get("starred"))[:19], "%Y-%m-%dT%H:%M:%S"))
+        except ValueError:
+            when[sid] = int(time.time())
+    with _favorites_lock:
+        fav = music_favorites()
+        mine, seen = fav["songs"], set(fav["navidrome"])
+        for sid in starred.keys() - seen:  # starred there since
+            mine.setdefault(sid, when[sid])
+        for sid in seen - starred.keys():  # taken off there since
+            mine.pop(sid, None)
+        save_favorites(fav)
+        star = [sid for sid in mine if sid not in starred]  # hearted here, not there yet
+        unstar = [sid for sid in starred if sid not in mine]  # taken off here, not there yet
+    _navidrome["starred"] = starred  # a heart meanwhile changes it too
+    by_id = {s["id"]: s for s in songs}
+    for sid in star:
+        nid = navidrome_id(cfg, sid, by_id[sid]) if sid in by_id else None
+        if nid:
+            navidrome_call(cfg, "star.view", id=nid)
+            starred[sid] = [nid]
+    for sid in unstar:
+        for nid in starred.get(sid, []):
+            navidrome_call(cfg, "unstar.view", id=nid)
+        starred.pop(sid, None)
+    # Stopped half way (Navidrome went), the next look sorts it out: what's
+    # starred there and not remembered counts as starred there.
+    with _favorites_lock:
+        fav = music_favorites()
+        fav["navidrome"] = sorted(starred)
+        save_favorites(fav)
+
+
+def music_counts(plays):
+    """Each song's plays: Music's own, or Navidrome's where it has more."""
+    counts = dict(plays.get("counts") or {})
+    for sid, n in _navidrome["plays"].items():
+        if n > counts.get(sid, 0):
+            counts[sid] = n
+    return counts
 
 
 def music_cover(real):
@@ -3374,21 +3595,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(404, {"error": "no storage folder is mounted"})
         item = query.get("id", [""])[0]
         if what == "navidrome":
-            # Whether plays go to Navidrome too (and if not, why not).
-            cfg = navidrome()
-            if not cfg:
-                return self.send_json(200, {"configured": False})
-            try:
-                navidrome_call(cfg, "ping.view")
-                return self.send_json(200, {"configured": True, "ok": True, "url": cfg[0]})
-            except (OSError, ValueError, urllib.error.URLError) as e:
-                return self.send_json(200, {"configured": True, "ok": False, "url": cfg[0], "error": str(e)})
+            # Whether Music is connected to Navidrome (and if not, why not),
+            # with its stars and plays brought over.
+            status = navidrome_sync()
+            return self.send_json(200, {**status, "favorites": music_favorites()["songs"], "counts": music_counts(music_plays())})
         if what == "library":
             lib = music_library()
             if lib["songs"] is None:
                 return self.send_json(200, {"scanning": True, "done": lib["done"], "total": lib["total"], "dir": lib["dir"]})
+            plays = music_plays()
             body = json.dumps({"dir": lib["dir"], "found": bool(lib["top"]), "songs": lib["songs"], "playlists": lib["playlists"],
-                               "scanning": lib["scanning"], "plays": music_plays()}, separators=(",", ":")).encode()
+                               "scanning": lib["scanning"], "plays": {**plays, "counts": music_counts(plays)},
+                               "favorites": music_favorites()["songs"]}, separators=(",", ":")).encode()
             headers = [("Cache-Control", "no-store"), ("Vary", "Accept-Encoding")]
             if "gzip" in self.headers.get("Accept-Encoding", ""):
                 body = gzip.compress(body, 6)
@@ -3428,6 +3646,12 @@ class Handler(BaseHTTPRequestHandler):
             if what == "played":
                 music_played(sid)
             navidrome_scrobble(sid, played=what == "played")
+            return self.send_json(200, {"ok": True})
+        if what == "favorite":
+            real, sid = music_item(body.get("id"))
+            if not real or sid.startswith("/"):
+                return self.send_json(404, {"error": "only songs in your music folder can be favorites"})
+            music_favorite(sid, bool(body.get("on")))
             return self.send_json(200, {"ok": True})
         if what != "playlists":
             return self.send_json(404, {"error": "not found"})

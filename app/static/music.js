@@ -1,5 +1,6 @@
 // Music: your songs (MUSIC_DIR in your storage), by song, album, artist and
-// playlist (its .m3u8 files), with radio made from your own library (songs
+// playlist (its .m3u8 files), your favorites (with Navidrome, its stars) and
+// what you play most, with radio made from your own library (songs
 // your playlists put together, the same artists, genre and years), a queue
 // (play next, add to queue), shuffle and repeat, and lyrics that follow the
 // song (an .lrc beside it, or its own). Closing the window stops it; put
@@ -28,6 +29,8 @@ const MU_ICONS = {
   artists: ["M20 21a8 8 0 0 0-16 0", "M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10z"],
   playlists: ["M21 15V6", "M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z", "M12 12H3", "M16 6H3", "M12 18H3"],
   search: ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"],
+  heart: ["M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21.2l8.8-8.8a5.5 5.5 0 0 0 0-7.8z"],
+  mostplayed: ["m22 7-8.5 8.5-5-5L2 17", "M16 7h6v6"],
   more: ["M12 12h.01", "M19 12h.01", "M5 12h.01"], plus: ["M12 5v14", "M5 12h14"], close: ["M18 6 6 18", "m6 6 12 12"],
 };
 
@@ -38,6 +41,7 @@ const music = {
   extra: new Map(), // songs from elsewhere (/user/…), played from My Computer or a playlist
   all: [], albums: new Map(), artists: new Map(), playlists: [], inLists: new Map(),
   plays: { counts: {}, recent: [] },
+  favorites: new Map(), favPending: new Map(), // id → when it got its heart; hearts on their way to the server
   view: { kind: "home" }, back: [], fwd: [],
   sort: {}, selected: null, vdraw: null, menuAt: { x: 200, y: 200 },
   queue: [], at: -1, addedUntil: -1, original: null, from: "", radio: null,
@@ -101,6 +105,7 @@ async function musicLoad() {
     musicIndex(body);
     const first = !music.loaded;
     music.loaded = true;
+    music.sync = musicSync();
     if (first) musicRestore();
     musicRenderSide();
     musicRender();
@@ -114,6 +119,7 @@ function musicIndex(body) {
   music.songs = new Map(body.songs.map((s) => [s.id, s]));
   music.all = body.songs;
   music.plays = { counts: body.plays?.counts || {}, recent: body.plays?.recent || [] };
+  musicSetFavorites(body.favorites);
   music.albums = new Map();
   music.artists = new Map();
   const artist = (name) => {
@@ -209,6 +215,8 @@ function musicKeys(e) {
   }
   if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === " " && !e.target.closest("button")) { e.preventDefault(); musicToggle(); }
+  // L: a heart on the song that's picked, else the one playing.
+  if (e.key.toLowerCase() === "l") { e.preventDefault(); musicToggleFavorite(e.target.closest(".mu-row[data-id]")?.dataset.id || muCurrent()); }
 }
 
 // ------------------------------------------------------------- the side
@@ -250,15 +258,16 @@ function musicRenderSide() {
   side.replaceChildren(
     item("home", "Home", "home"), item("radio", "Radio", "radio"),
     el("h3", { class: "mu-side-title" }, "Library"),
-    item("songs", "Songs", "songs"), item("albums", "Albums", "albums"), item("artists", "Artists", "artists"), item("playlists", "Playlists", "playlists"),
+    item("songs", "Songs", "songs"), item("favorites", "Favorites", "heart"), item("mostplayed", "Most played", "mostplayed"),
+    item("albums", "Albums", "albums"), item("artists", "Artists", "artists"), item("playlists", "Playlists", "playlists"),
     el("h3", { class: "mu-side-title" }, "Playlists"), ...lists, add);
 }
 
 // ------------------------------------------------------- moving around
 
-// view: {kind: home | radio | songs | albums | artists | playlists |
-// album | artist | playlist | search, key}. Back and forward: the mouse's
-// side buttons.
+// view: {kind: home | radio | songs | favorites | mostplayed | albums |
+// artists | playlists | album | artist | playlist | search, key}. Back and
+// forward: the mouse's side buttons.
 function musicShow(view, push = true) {
   if (push && (view.kind !== music.view.kind || view.key !== music.view.key)) {
     music.back = [...music.back, { ...music.view, scroll: $("mu-main").scrollTop }].slice(-50);
@@ -291,16 +300,13 @@ function musicRender() {
       el("p", {}, `adlerOS looks for your music in ${music.dir} (MUSIC_DIR in the settings file, in your storage).`)));
   }
   const v = music.view;
-  const page = v.kind === "songs" ? musicSongsView()
-    : v.kind === "albums" ? musicAlbumsView()
-      : v.kind === "artists" ? musicArtistsView()
-        : v.kind === "playlists" ? musicPlaylistsView()
-          : v.kind === "radio" ? musicRadioView()
-            : v.kind === "album" ? musicAlbumView(music.albums.get(v.key))
-              : v.kind === "artist" ? musicArtistView(music.artists.get(v.key))
-                : v.kind === "playlist" ? musicPlaylistView(music.playlists.find((p) => p.id === v.key))
-                  : v.kind === "search" ? musicSearchView()
-                    : musicHomeView();
+  const views = {
+    songs: musicSongsView, favorites: musicFavoritesView, mostplayed: musicMostPlayedView, albums: musicAlbumsView,
+    artists: musicArtistsView, playlists: musicPlaylistsView, radio: musicRadioView, search: musicSearchView,
+    album: () => musicAlbumView(music.albums.get(v.key)), artist: () => musicArtistView(music.artists.get(v.key)),
+    playlist: () => musicPlaylistView(music.playlists.find((p) => p.id === v.key)),
+  };
+  const page = (views[v.kind] || musicHomeView)();
   main.replaceChildren(page);
   main.scrollTop = 0;
   music.vdraw?.();
@@ -447,11 +453,13 @@ function musicSorted(ids, by) {
 }
 
 // A table of songs: a click picks one, a double click (or Enter, or a tap)
-// plays from it; right-click for the rest. ctx: {ids, from, playlist, number}.
+// plays from it; the heart makes it a favorite; right-click for the rest.
+// ctx: {ids, from, playlist, number, plays (each one's, where the album goes)}.
 function musicTable(ctx) {
   const { ids } = ctx;
   const head = el("div", { class: "mu-thead", role: "row" }, el("span", {}, ctx.number ? "#" : ""), el("span", {}, "Title"),
-    el("span", { class: "mu-col-artist" }, "Artist"), el("span", { class: "mu-col-album" }, "Album"), el("span", { class: "mu-col-time" }, "Time"));
+    el("span", { class: "mu-col-artist" }, "Artist"), el("span", { class: "mu-col-album" }, ctx.plays ? "Plays" : "Album"), el("span", {}),
+    el("span", { class: "mu-col-time" }, "Time"));
   const box = el("div", { class: "mu-tbody", role: "rowgroup" });
   const row = (i) => musicRow(ids[i], i, ctx);
   if (ids.length > 300 && !ctx.playlist) music.vdraw = musicVirtual(box, { count: ids.length, height: 52, render: row });
@@ -465,12 +473,13 @@ function musicRow(id, i, ctx) {
   if (!s) return el("div", { class: "mu-row missing" });
   const artist = el("span", { class: "mu-col-artist mu-cell" }, ...s.artists.flatMap((name, k) => [
     ...(k ? [", "] : []), el("span", { class: "mu-link-text", "data-artist": muNorm(name) }, name)]));
-  const album = el("span", { class: "mu-col-album mu-cell" }, s.album ? el("span", { class: "mu-link-text", "data-album": musicAlbumKey(s) || "" }, s.album) : "");
+  const album = ctx.plays ? el("span", { class: "mu-col-album mu-cell mu-plays" }, muCount(music.plays.counts[id] || 0, "play"))
+    : el("span", { class: "mu-col-album mu-cell" }, s.album ? el("span", { class: "mu-link-text", "data-album": musicAlbumKey(s) || "" }, s.album) : "");
   const n = ctx.number ? (ctx.number === "track" ? s.track || "" : i + 1) : null;
   const r = el("div", { class: "mu-row", role: "row", tabindex: "-1", "data-id": id, "data-i": String(i), draggable: "true" },
     n !== null ? el("span", { class: "mu-num" }, String(n), svg(MU_ICONS.play)) : musicArt(id),
     el("span", { class: "mu-cell mu-cell-title" }, el("span", { class: "mu-title" }, s.title), el("span", { class: "mu-sub" }, muArtists(s))),
-    artist, album, el("span", { class: "mu-col-time mu-cell" }, muTime(s.duration)));
+    artist, album, musicFavButton(id), el("span", { class: "mu-col-time mu-cell" }, muTime(s.duration)));
   if (music.selected === id) r.classList.add("selected");
   return r;
 }
@@ -487,13 +496,14 @@ function musicTableEvents(box, ctx) {
   box.addEventListener("click", (e) => {
     const r = rowOf(e);
     if (!r) return;
+    if (e.target.closest(".mu-fav")) return musicToggleFavorite(r.dataset.id);
     const link = e.target.closest("[data-artist], [data-album]");
     if (link?.dataset.artist) return musicGo("artist", link.dataset.artist);
     if (link?.dataset.album) return musicGo("album", link.dataset.album);
     if (e.target.closest(".mu-num") || matchMedia("(pointer: coarse)").matches) return play(r);
     pick(r);
   });
-  box.addEventListener("dblclick", (e) => { const r = rowOf(e); if (r && !e.target.closest("[data-artist], [data-album]")) play(r); });
+  box.addEventListener("dblclick", (e) => { const r = rowOf(e); if (r && !e.target.closest("[data-artist], [data-album], .mu-fav")) play(r); });
   box.addEventListener("keydown", (e) => {
     const r = rowOf(e);
     if (!r) return;
@@ -536,6 +546,99 @@ function musicSongsView() {
   sort.addEventListener("change", () => { music.sort.songs = sort.value; musicSave(); musicRender(); });
   return el("div", { class: "mu-page" }, musicHead("Songs", `${muCount(ids.length, "song")}, ${muLength(ids)}`, sort, ...musicPlayButtons(ids, "Songs")),
     musicTable({ ids, from: "Songs" }));
+}
+
+// ------------------------------------------------- favorites, most played
+
+// Favorites: the songs with a heart (id → when, in seconds). With Navidrome
+// they're its stars: one starred in its app or on your phone is here, and a
+// heart here stars it there.
+function musicSetFavorites(favorites) {
+  music.favorites = new Map(Object.entries(favorites || {}));
+  for (const [id, on] of music.favPending) {
+    if (on) music.favorites.set(id, music.favorites.get(id) || Math.floor(Date.now() / 1000)); else music.favorites.delete(id);
+  }
+}
+
+function musicFavState(b, on) {
+  b.classList.toggle("on", on);
+  b.setAttribute("aria-pressed", String(on));
+  b.setAttribute("aria-label", on ? "Remove from Favorites" : "Add to Favorites");
+  b.title = on ? "Remove from Favorites (L)" : "Add to Favorites (L)";
+}
+
+// The heart beside a song (only your library's: Navidrome has no others).
+function musicFavButton(id) {
+  if (!music.songs.has(id)) return el("span", {});
+  const b = el("button", { type: "button", class: "mu-fav", tabindex: "-1" }, svg(MU_ICONS.heart));
+  musicFavState(b, music.favorites.has(id));
+  return b;
+}
+
+// The hearts on show, and the bar's, after a favorite changed.
+function musicMarkFavorites() {
+  $("mu-main")?.querySelectorAll(".mu-row[data-id] .mu-fav").forEach((b) => musicFavState(b, music.favorites.has(b.closest(".mu-row").dataset.id)));
+  musicBarUpdate();
+}
+
+// A heart put on (or taken off), straight away; back as it was if the
+// server says no. Taken off in Favorites, the song stays until you go.
+async function musicToggleFavorite(id) {
+  if (!id) return;
+  if (!music.songs.has(id)) return toast("Only songs in your music folder can be favorites.");
+  const on = !music.favorites.has(id);
+  const was = music.favorites.get(id);
+  if (on) music.favorites.set(id, Math.floor(Date.now() / 1000)); else music.favorites.delete(id);
+  music.favPending.set(id, on);
+  musicMarkFavorites();
+  const reply = await api("/api/music/favorite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, on }) })
+    .catch(() => ({ status: 0 }));
+  if (music.favPending.get(id) === on) music.favPending.delete(id);
+  if (reply.status === 200) return toast(on ? `${muSong(id).title} is in your favorites.` : `${muSong(id).title} isn't a favorite any more.`);
+  if (on) music.favorites.delete(id); else music.favorites.set(id, was);
+  musicMarkFavorites();
+  toast(reply.body?.error || "Couldn't change your favorites.");
+}
+
+// The same page again where you were on it: something it shows changed.
+function musicRefresh() {
+  const main = $("mu-main");
+  const top = main.scrollTop;
+  musicRender();
+  main.scrollTop = top;
+  music.vdraw?.();
+}
+
+function musicFavoritesView() {
+  const by = music.sort.favorites || "liked";
+  const liked = [...music.favorites].filter(([id]) => music.songs.has(id)).sort((a, b) => b[1] - a[1]).map(([id]) => id);
+  const ids = by === "liked" ? liked : musicSorted(liked, by);
+  if (!ids.length) {
+    return el("div", { class: "mu-page" }, musicHead("Favorites", ""),
+      el("p", { class: "mu-empty-line" }, `None yet. The heart beside a song (or L) makes it one${music.navidrome?.ok ? ", and stars it in Navidrome; one you star there is here too" : ""}.`));
+  }
+  const sort = el("select", { class: "field-input mu-sort", "aria-label": "Sort favorites by" },
+    ...[["liked", "Recently favorited"], ...Object.entries(MU_SORTS)].map(([k, label]) => el("option", { value: k, ...(k === by ? { selected: "" } : {}) }, label)));
+  sort.addEventListener("change", () => { music.sort.favorites = sort.value; musicSave(); musicRender(); });
+  return el("div", { class: "mu-page" },
+    musicHead("Favorites", `${muCount(ids.length, "song")}, ${muLength(ids)}`, sort, ...musicPlayButtons(ids, "Favorites", { kind: "favorites", label: "Favorites" })),
+    musicTable({ ids, from: "Favorites" }));
+}
+
+// What you play most: plays here, and with Navidrome the ones it counted
+// (its app's, your phone's) where it has more.
+function musicMostPlayedView() {
+  const counts = music.plays.counts;
+  const ids = music.all.filter((s) => counts[s.id] > 0).map((s) => s.id)
+    .sort((a, b) => counts[b] - counts[a] || muCollator.compare(muSong(a).title, muSong(b).title)).slice(0, 100);
+  if (!ids.length) {
+    return el("div", { class: "mu-page" }, musicHead("Most played", ""),
+      el("p", { class: "mu-empty-line" }, "Nothing yet: a song counts once you've listened for half a minute."));
+  }
+  return el("div", { class: "mu-page" },
+    musicHead("Most played", `The ${muCount(ids.length, "song")} you play most${music.navidrome?.ok ? ", here and in Navidrome's apps" : ""}`,
+      ...musicPlayButtons(ids, "Most played", { kind: "you", label: "Your station" })),
+    musicTable({ ids, from: "Most played", number: "index", plays: true }));
 }
 
 // ---------------------------------------------------------- the albums
@@ -804,6 +907,9 @@ function musicIdsMenu(ids, ctx = {}) {
       : ctx.album ? { kind: "album", key: ctx.album.key, label: ctx.album.title } : { kind: "song", key: ids[0], label: s?.title || "Song" }) },
     { label: "Add to playlist…", run: () => musicPickList(ids) },
   ];
+  if (s && music.songs.has(ids[0])) {
+    items.push({ label: music.favorites.has(ids[0]) ? "Remove from Favorites" : "Add to Favorites", run: () => musicToggleFavorite(ids[0]) });
+  }
   if (ctx.playlist?.writable && ctx.index !== undefined) {
     items.push({ label: `Remove from ${ctx.playlist.name}`, run: async () => {
       const left = ctx.playlist.items.filter((_, i) => i !== ctx.index);
@@ -854,25 +960,44 @@ function musicHomeView() {
   musicShelf("Your playlists", lists.map(musicListCard), () => musicShow({ kind: "playlists" })));
 }
 
-// Navidrome (same music folder): whether plays go there too. Music plays
+// Navidrome (same music folder): whether Music is connected. Music plays
 // your files on its own; connected, what you play is Navidrome's too (now
-// playing, then played: in its app, and the ones on your phone).
+// playing, then played: in its app, and the ones on your phone), your
+// favorites are its stars, and its plays count here.
 function musicNavidromeNote() {
   const box = el("div", { class: "mu-connect" });
   const draw = (st) => {
-    if (st?.ok) return box.replaceChildren(el("span", { class: "mu-connect-dot ok" }), el("span", {}, "Connected to Navidrome: what you play shows there too."));
+    if (st?.ok) return box.replaceChildren(el("span", { class: "mu-connect-dot ok" }), el("span", {}, "Connected to Navidrome: your favorites are its stars, and what you play there counts here too."));
     const why = !st ? "" : !st.configured
-      ? "Music plays your files on its own. Connected to Navidrome, what you play shows there too (now playing, then played), in its app and the Subsonic apps on your phone."
-      : `Navidrome isn't answering${st.url ? ` at ${st.url}` : ""}, so plays stay here for now.`;
+      ? "Music plays your files on its own. Connected to Navidrome, what you play shows there too (now playing, then played), in its app and the Subsonic apps on your phone; your favorites are its stars, and what you play there counts here."
+      : `Navidrome isn't answering${st.url ? ` at ${st.url}` : ""}, so plays and favorites stay here for now.`;
     if (!why) return box.replaceChildren();
     const how = el("button", { type: "button", class: "mu-link mu-connect-how" }, st.configured ? "Is it running?" : "How");
-    how.addEventListener("click", () => toast(st.configured ? "The App Store starts Navidrome; then plays go to it again."
+    how.addEventListener("click", () => toast(st.configured ? "The App Store starts Navidrome; then plays and favorites go to it again."
       : `Put your Navidrome login in ${settingsFile()}, as NAVIDROME_USER and NAVIDROME_PASSWORD${settingsThen()}.`));
     box.replaceChildren(el("span", { class: "mu-connect-dot" }), el("span", {}, why, " "), how);
   };
   if (music.navidrome !== undefined) draw(music.navidrome);
-  else api("/api/music/navidrome").then(({ status, body }) => { music.navidrome = status === 200 ? body : null; draw(music.navidrome); }).catch(() => {});
+  else (music.sync || musicSync()).then(() => draw(music.navidrome)).catch(() => {});
   return box;
+}
+
+// After the library: Navidrome's stars and plays brought over (the server
+// asks it, every half a minute at most), and whether it's answering. What
+// changed shows where you are; Favorites and Most played draw again.
+async function musicSync() {
+  const { status, body } = await api("/api/music/navidrome").catch(() => ({ status: 0 }));
+  music.navidrome = status === 200 ? body : null;
+  if (status !== 200 || !body || !music.loaded) return;
+  const before = music.favorites;
+  musicSetFavorites(body.favorites);
+  let changed = before.size !== music.favorites.size || [...music.favorites.keys()].some((id) => !before.has(id));
+  for (const [id, n] of Object.entries(body.counts || {})) {
+    if (n > (music.plays.counts[id] || 0)) { music.plays.counts[id] = n; changed = true; }
+  }
+  if (!changed) return;
+  if (music.view.kind === "favorites" || music.view.kind === "mostplayed") musicRefresh();
+  else musicMarkFavorites();
 }
 
 // Stations: yours (what you play), your library shuffled, your artists,
@@ -931,7 +1056,7 @@ function musicSearchView() {
 // ---------------------------------------------------------------- radio
 
 // Songs for a station (seed: {kind: song | artist | album | genre | playlist
-// | you | all, key}): the ones most like it, picked at random by how alike
+// | favorites | you | all, key}): the ones most like it, picked at random by how alike
 // (and no artist over and over), never one of `skip`.
 function musicRadioPick(seed, n, skip) {
   const pool = music.all.filter((s) => !skip.has(s.id));
@@ -943,7 +1068,8 @@ function musicRadioPick(seed, n, skip) {
       : seed.kind === "album" ? music.albums.get(seed.key)?.ids || []
         : seed.kind === "genre" ? music.all.filter((s) => s.genre === seed.key).map((s) => s.id)
           : seed.kind === "playlist" ? music.playlists.find((p) => p.id === seed.key)?.items || []
-            : [...Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 40).map(([id]) => id), ...music.plays.recent.slice(0, 30)];
+            : seed.kind === "favorites" ? [...music.favorites.keys()]
+              : [...Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 40).map(([id]) => id), ...music.plays.recent.slice(0, 30)];
   const artistW = new Map();
   const genreW = new Map();
   const listW = new Map();
@@ -1176,8 +1302,9 @@ function musicBar() {
   });
   const art = el("span", { class: "mu-bar-art", id: "mu-bar-art" });
   art.addEventListener("click", () => musicSetPanel(music.panel === "lyrics" ? null : "lyrics"));
+  const fav = musicIconButton("Add to Favorites", "heart", () => musicToggleFavorite(muCurrent()), "mu-bar-fav");
   return el("footer", { class: "mu-bar" },
-    el("div", { class: "mu-bar-now" }, art, el("div", { class: "mu-bar-text" }, title, artist)),
+    el("div", { class: "mu-bar-now" }, art, el("div", { class: "mu-bar-text" }, title, artist), fav),
     el("div", { class: "mu-bar-controls" },
       musicIconButton("Shuffle", "shuffle", () => musicSetShuffle(!music.shuffle), "mu-shuffle"),
       musicIconButton("Previous", "prev", musicPrev, "mu-fill"),
@@ -1199,6 +1326,9 @@ function musicBarUpdate() {
   $("mu-bar-title").textContent = s?.title || "Not playing";
   $("mu-bar-artist").textContent = s ? muArtists(s) : "";
   $("mu-bar-art").replaceChildren(musicArt(id));
+  const fav = $("music").querySelector(".mu-bar-fav");
+  fav.hidden = !id || !music.songs.has(id);
+  musicFavState(fav, Boolean(id) && music.favorites.has(id));
   const play = $("music").querySelector(".mu-play");
   play.replaceChildren(svg(audio.paused ? MU_ICONS.play : MU_ICONS.pause));
   play.classList.toggle("mu-fill", audio.paused);

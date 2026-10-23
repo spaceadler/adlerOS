@@ -576,8 +576,15 @@ that only what changed, so it opens straight away.
 - **Home**: what you've played lately, stations for you, what you added
   lately, your playlists. **Songs** (sort by title, artist, album, recently
   added, most played or length), **Albums**, **Artists** (their songs, their
-  albums, and the albums they're on), **Playlists**, and **Search** across
-  them all.
+  albums, and the albums they're on), **Favorites**, **Most played** (the
+  hundred you play most, with how often), **Playlists**, and **Search**
+  across them all.
+- **The heart** beside a song (or on the player bar, or **L**, or its menu)
+  makes it a favorite. Connected to Navidrome, favorites are its stars, both
+  ways: one you star in its app or on your phone is a favorite here (within
+  half a minute), and a heart here stars it there; one taken off on either
+  side goes on the other too. Navidrome's plays count in Most played as
+  well (every few minutes), wherever it has more than Music.
 - A click picks a song; a double-click (or Enter, or a tap) plays it, with
   the rest of that list after it. Right-click for **Play next**, **Add to
   queue**, **Start radio**, **Add to playlist**, its album and artists, and
