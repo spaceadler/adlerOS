@@ -538,6 +538,7 @@ function showAdmin(on) {
   if (!on) hideTerminal();
   dockKey = null;
   buildDock();
+  layout(true); // Core's page, the Terminal's tile
   if (drawerOpen()) renderDrawer();
   refreshFiles(); // hidden files, Root's note
 }

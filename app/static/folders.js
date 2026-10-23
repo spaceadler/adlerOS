@@ -62,7 +62,8 @@ function newFolderId(folders) {
 // An app dropped on another (or on a folder), on a collection's page.
 function mergeOnto(target, appId, collection) {
   const app = appById(appId);
-  if (!app || target.dataset.app === appId) return layout(true);
+  // adlerOS's own apps go in no folder (theirs is their page).
+  if (!app || target.dataset.app === appId || target.classList.contains("own-app") || collection === "adleros") return layout(true);
   const folders = copyFolders();
   const order = orderOf(collection).filter((k) => k !== appId);
   // Dragged here from another collection's page: it moves there too.

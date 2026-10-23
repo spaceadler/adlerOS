@@ -31,7 +31,7 @@ tailscale/tailscale	tailscale	Tailscale	core	di:tailscale	Mesh VPN	-
 cloudflare/cloudflared|cloudflared	cloudflared	Cloudflare Tunnel	core	di:cloudflare	Publishes a site without opening ports	-
 authelia/authelia	authelia	Authelia	core	di:authelia	Single sign-on and two-factor in front of apps	-
 goauthentik/server|authentik	authentik	authentik	core	di:authentik	Identity provider and single sign-on	-
-vaultwarden/server|vaultwarden	vaultwarden	Vaultwarden	core	di:vaultwarden	Password manager (Bitwarden compatible)	-
+vaultwarden/server|vaultwarden	vaultwarden	Vaultwarden	productivity	di:vaultwarden	Password manager (Bitwarden compatible)	-
 crowdsecurity/crowdsec	crowdsec	CrowdSec	core	di:crowdsec	Blocks attackers from shared signals	-
 mvance/unbound|unbound	unbound	Unbound	core	di:unbound	Recursive DNS resolver	-
 technitium/dns-server	technitium	Technitium DNS	core	di:technitium	DNS server with a web UI	5380

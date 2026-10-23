@@ -322,7 +322,7 @@ function siteDialog() {
   const name = el("input", { class: "field-input", type: "text", placeholder: "Name", maxlength: "40", required: "" });
   const names = Object.fromEntries((state.collections || []).map((c) => [c.id, c.name]));
   const where = el("select", { class: "field-input", "aria-label": "Its page on the home screen" },
-    ...["extras", "system", "media", "knowledge", "productivity", "life", "files"].map((id) =>
+    ...["extras", "system", "media", "knowledge", "productivity", "life", "files", "core"].map((id) =>
       el("option", { value: id }, names[id] || id[0].toUpperCase() + id.slice(1))));
   const error = el("p", { class: "error", role: "alert" });
   const add = el("button", { type: "submit", class: "button-primary wide" }, "Add");
