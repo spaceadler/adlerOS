@@ -653,7 +653,7 @@ saying how to connect; a note above the photos says what connecting adds.
   fingers) zooms, a drag moves it. The map itself is OpenStreetMap's, drawn
   by CARTO: they see which part of the world you look at (not your
   photos).
-- A photo opens big (a video plays). The arrows, or a swipe, go through the
+- A photo opens big, in a window of its own (a video plays): move it, resize it or tile it like any, and the photo is fitted inside it, never bigger; Gallery stays as it was behind it. The arrows, or a swipe, go through the
   rest, past a month's end too; **i** shows what Immich knows (when, the
   file, the camera and its settings, where, who's in it, its albums), with
   each face boxed on the photo (pointing at a name lights its face up),

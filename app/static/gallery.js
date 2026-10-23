@@ -143,7 +143,6 @@ function gaRenderSide() {
 const gaImmichApp = () => (typeof appById === "function" ? appById("immich") : null);
 
 function gaKeys(e) {
-  if (gallery.viewer) return gaViewerKeys(e);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") { e.preventDefault(); $("ga-search").focus(); }
 }
 
@@ -529,6 +528,23 @@ async function gaOpen(source, id) {
   await gaShowAsset(id);
 }
 
+// A photo opens in a window of its own (one, used again for the next):
+// moved, resized and tiled like any, the photo fitted inside it, and
+// Gallery as it was behind it. It floats, so on the home screen (a phone)
+// Gallery stays open under it too.
+function gaPhotoWindow() {
+  let sheet = $("ga-photo");
+  if (sheet) return sheet;
+  const close = el("button", { class: "sheet-close ga-photo-close", type: "button", "aria-label": "Close the photo" }, svg(GA_ICONS.close));
+  close.addEventListener("click", gaCloseViewer);
+  sheet = el("section", { id: "ga-photo", class: "sheet gallery-app ga-photo-sheet", "aria-label": "Photo", hidden: "" },
+    el("div", { class: "sheet-bg", "aria-hidden": "true" }, el("div", { class: "sheet-wallpaper" }), el("div", { class: "sheet-tint" })), close);
+  sheet.addEventListener("keydown", (e) => { if (gallery.viewer) gaViewerKeys(e); });
+  document.body.insertBefore(sheet, $("modal"));
+  registerWindow("ga-photo", { title: "Photo", close: gaCloseViewer, size: [1100, 760], float: true });
+  return sheet;
+}
+
 function gaBuildViewer() {
   const stage = el("div", { class: "ga-stage" });
   const button = (label, icon, run, extra = "") => {
@@ -540,7 +556,7 @@ function gaBuildViewer() {
   const info = el("aside", { class: "ga-info" });
   const live = button("Play the Live Photo", "live", () => gaPlayLive(), "ga-vlive");
   const box = el("div", { class: "ga-viewer", role: "dialog", "aria-label": "Photo", tabindex: "-1" },
-    el("div", { class: "ga-vbar" }, button("Close (Escape)", "close", gaCloseViewer), title, el("span", { class: "ga-vgap" }), live,
+    el("div", { class: "ga-vbar" }, title, el("span", { class: "ga-vgap" }), live,
       button("Info (i)", "info", () => { gallery.viewer.info = !gallery.viewer.info; gaRenderInfo(); }, "ga-vinfo"),
       button("Download the original", "download", () => gaDownload())),
     stage, button("Previous (←)", "prev", () => gaStep(-1), "ga-vprev"), button("Next (→)", "next", () => gaStep(1), "ga-vnext"), info);
@@ -556,8 +572,11 @@ function gaBuildViewer() {
     else if (dy > 110) gaCloseViewer();
   });
   stage.addEventListener("pointercancel", () => { start = null; });
-  $("gallery").append(box);
+  const sheet = gaPhotoWindow();
+  sheet.querySelector(".ga-viewer")?.remove(); // the last photo's, kept while its window faded
+  sheet.append(box);
   gallery.viewer = { box, stage, title, infoBox: info, live, info: false, id: null, asset: null, token: 0 };
+  openWindow("ga-photo");
   box.focus({ preventScroll: true });
   return gallery.viewer;
 }
@@ -566,10 +585,10 @@ function gaCloseViewer() {
   const v = gallery.viewer;
   if (!v) return;
   v.box.querySelectorAll("video").forEach((n) => n.pause());
-  v.box.remove();
   gallery.viewer = null;
+  closeWindow("ga-photo");
   const tile = $("ga-main")?.querySelector(`.ga-tile[data-id="${v.id}"]`);
-  (tile || $("ga-main"))?.focus({ preventScroll: true });
+  if (isOpen("gallery")) (tile || $("ga-main"))?.focus({ preventScroll: true });
 }
 
 // Where this one is in what it came from, and the one before or after.
@@ -629,6 +648,7 @@ async function gaShowAsset(id) {
   v.live.hidden = !a.livePhotoVideoId;
   // Its day, if it's known yet (a photo from the map isn't, until Immich says).
   v.title.textContent = a.fileCreatedAt || a.localDateTime ? gaDayLabel(gaLocal(a)) : "";
+  titleWindow("ga-photo", v.title.textContent || "Photo");
   // Its neighbours' pictures, ready for the arrows.
   for (const dir of [1, -1]) {
     gaNeighbor(v.source, id, dir).then((n) => {
@@ -642,6 +662,7 @@ async function gaShowAsset(id) {
   if (v.token !== token || !asset) return;
   v.asset = asset;
   v.title.textContent = `${gaWhen(asset)} · ${asset.originalFileName}`;
+  titleWindow("ga-photo", v.title.textContent || "Photo");
   v.live.hidden = !asset.livePhotoVideoId;
   if (asset.type === "VIDEO" && media.tagName === "IMG") {
     v.stage.replaceChildren(el("video", { src: `/api/gallery/video/${id}`, controls: "", autoplay: "", playsinline: "", poster: gaThumb(id, "preview") }));
@@ -1049,6 +1070,7 @@ function gaShowFile(a) {
   }
   v.stage.replaceChildren(media);
   v.title.textContent = `${gaDayLabel(gaLocal(a))} · ${a.name}`;
+  titleWindow("ga-photo", v.title.textContent || "Photo");
   v.infoBox.replaceChildren(el("h3", {}, "Info"),
     el("div", { class: "ga-irow" }, el("span", { class: "ga-ilabel" }, "File"), el("span", {}, a.name), el("small", {}, bytes(a.size || 0))),
     el("div", { class: "ga-irow" }, el("span", { class: "ga-ilabel" }, "Day"), el("span", {}, gaDayLabel(gaLocal(a)))),

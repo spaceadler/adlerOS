@@ -3012,6 +3012,9 @@ body:not(.wm) .ga-side { padding-top: 22px; }
 .ga-person-head { display: flex; align-items: center; gap: 18px; }
 .ga-more { display: block; margin: 18px auto 0; }
 
+/* A photo's own window (gallery.js): the viewer fills it, under its edges. */
+.ga-photo-sheet { display: flex; flex-direction: column; }
+.ga-photo-sheet .ga-viewer { position: relative; inset: auto; z-index: 2; flex: 1; min-height: 0; }
 .ga-viewer { position: absolute; inset: 0; z-index: 30; display: grid; grid-template-columns: minmax(0, 1fr) 0; grid-template-rows: auto minmax(0, 1fr); background: rgb(8 8 10 / 0.97); outline: none; }
 .ga-viewer.with-info { grid-template-columns: minmax(0, 1fr) 320px; }
 .ga-vbar { z-index: 2; grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; padding: 8px 10px; }
@@ -3023,7 +3026,9 @@ body:not(.wm) .ga-vbar { padding-right: 56px; }
 .ga-vbutton svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ga-vbutton[hidden] { display: none; }
 .with-info .ga-vinfo { background: var(--ga-accent); color: #111; }
-.ga-stage { position: relative; grid-row: 2; grid-column: 1; display: grid; place-items: center; min-height: 0; padding: 0 60px 20px; touch-action: pan-y pinch-zoom; }
+/* One cell the size of what's left of the window, so a photo bigger than it is
+   scaled down to fit (its max-height has something to be 100% of). */
+.ga-stage { position: relative; grid-row: 2; grid-column: 1; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; min-height: 0; padding: 0 60px 20px; touch-action: pan-y pinch-zoom; }
 .ga-stage > img, .ga-stage > video { grid-area: 1 / 1; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; }
 .ga-stage > .ga-live-video { z-index: 1; }
 .ga-vprev, .ga-vnext { position: absolute; top: 50%; z-index: 3; width: 44px; height: 44px; transform: translateY(-50%); }
