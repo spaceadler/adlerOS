@@ -151,10 +151,8 @@ IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".avif")
 # since an app may redirect elsewhere (its login, https); whether it may be
 # framed is the app's call, and adlerOS asks it first (/api/frame). img-src
 # https: pictures from the internet, in a note (adlermd, Notepad).
-# frame-ancestors 'self': adlerOS may show itself in its own windows (a
-# second Calendar, Music…: /?only=calendar); no other page may.
 PAGE_CSP = ("default-src 'self'; img-src 'self' data: https:; style-src 'self'; script-src 'self'; "
-            "connect-src 'self'; frame-src 'self' http: https:; frame-ancestors 'self'; base-uri 'none'; form-action 'self'")
+            "connect-src 'self'; frame-src http: https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 # Icons come from a third party: even opened directly, an SVG can't run code.
 ICON_CSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
 
@@ -4561,7 +4559,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Content-Security-Policy", csp)
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
         for name, value in headers:
             self.send_header(name, value)

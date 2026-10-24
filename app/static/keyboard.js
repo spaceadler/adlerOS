@@ -207,7 +207,7 @@ function typing(node) {
 }
 
 document.addEventListener("keydown", (e) => {
-  if (e.defaultPrevented || e.isComposing || ONLY_APP) return; // one app alone: only its own keys
+  if (e.defaultPrevented || e.isComposing) return;
   const node = document.activeElement;
   const layer = topLayer();
   // The menu for what's selected.

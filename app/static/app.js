@@ -68,16 +68,6 @@ function svg(paths, viewBox = "0 0 24 24") {
 // Where this install's settings are, for a page that asks you to set one: a
 // homelab's homelab.env (read as you save it), or standalone adlerOS's .env
 // (mounted as one file, so adlerOS sees a change once it restarts).
-// One app, alone (/?only=calendar): a second Calendar (Music, Gallery…) in a
-// window of adlerOS's own, a page of its own so it's wholly another. No
-// dock, desktop or home screen; its close closes that window.
-const ONLY_APPS = { adlermd: "adlermd", music: "music", gallery: "gallery", documents: "documents", calendar: "calendar", tasks: "tasks" };
-const ONLY_APP = (() => {
-  const want = new URLSearchParams(location.search).get("only");
-  return Object.hasOwn(ONLY_APPS, want || "") && window.parent !== window ? want : null;
-})();
-if (ONLY_APP) document.body.classList.add("only-app");
-
 function settingsFile() { return state.mode === "standalone" ? "adlerOS's settings file (.env)" : "homelab.env"; }
 function settingsThen() { return state.mode === "standalone" ? ", and restart adlerOS" : ""; }
 
@@ -745,40 +735,7 @@ function openApp(app) {
 
 // My Computer and the terminal open as many windows as you like (desktop
 // mode): another, whether or not one's open.
-const NEW_WINDOW = {
-  "adleros:files": () => newFilesWindow(), "adleros:terminal": () => newTerminalWindow(), "adleros:notepad": () => newNotepadWindow(),
-  ...Object.fromEntries(Object.keys(ONLY_APPS).map((kind) => [`adleros:${kind}`, () => newAppCopy(kind)])),
-};
-
-// Another Calendar (Music, Gallery, Documents, Tasks, adlermd): adlerOS
-// itself with only that app (/?only=calendar), in a window of its own:
-// wholly another, its own place in it, its own Music playing. Closed (its
-// window's, or its own close inside), it's gone.
-function newAppCopy(kind) {
-  const pin = BUILTIN_PINS[`adleros:${kind}`];
-  if (!desktopMode()) return pin.open();
-  let n = 2;
-  while ($(`${kind}-${n}`)) n++;
-  const id = `${kind}-${n}`;
-  const name = `${pin.name} ${n}`;
-  const frame = el("iframe", { class: "app-frame own-frame", src: `/?only=${kind}`, title: name });
-  const shield = el("div", { class: "app-shield", "aria-hidden": "true" });
-  shield.addEventListener("pointerdown", () => raiseWindow(id));
-  const sheet = el("section", { id, class: "sheet app-sheet own-copy", "aria-label": name, hidden: "" },
-    el("div", { class: "sheet-bg", "aria-hidden": "true" }, el("div", { class: "sheet-wallpaper" }), el("div", { class: "sheet-tint" })),
-    frame, shield);
-  document.body.insertBefore(sheet, $("modal"));
-  registerWindow(id, { title: name, close: () => closeWindow(id), icon: pin.icon, size: [1180, 780], copy: true });
-  openWindow(id);
-  frame.addEventListener("load", () => { try { frame.contentWindow.focus(); } catch { /* not yet */ } }, { once: true });
-}
-
-// A copy's own close (Escape, its X): its window here closes.
-window.addEventListener("message", (e) => {
-  if (e.origin !== location.origin || e.data?.adleros !== "close") return;
-  const sheet = [...document.querySelectorAll(".own-copy")].find((s) => s.querySelector("iframe")?.contentWindow === e.source);
-  if (sheet) closeWindow(sheet.id);
-});
+const NEW_WINDOW = { "adleros:files": () => newFilesWindow(), "adleros:terminal": () => newTerminalWindow(), "adleros:notepad": () => newNotepadWindow() };
 const newWindowItem = (id) => (desktopMode() && NEW_WINDOW[id] ? [{ label: "New window", run: NEW_WINDOW[id] }] : []);
 
 // What a right-click (or a long press) on `target` offers.
@@ -1419,12 +1376,6 @@ async function showDesktop() {
   $("lock").hidden = true;
   $("wallpaper").classList.remove("blurred");
   $("veil").classList.remove("on");
-  if (ONLY_APP) {
-    // Just the one app, filling the window it's in.
-    await refresh();
-    ({ adlermd: openAdlermd, music: openMusic, gallery: openGallery, documents: openDocuments, calendar: openCalendar, tasks: openTasks })[ONLY_APP]();
-    return;
-  }
   $("desktop").hidden = false;
   $("dock").hidden = false;
   state.layoutKey = "";
