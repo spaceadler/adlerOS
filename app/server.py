@@ -45,6 +45,7 @@ scripts/agent/actions.json (see that folder).
 """
 import base64
 import calendar
+import datetime
 import gzip
 import hashlib
 import hmac
@@ -64,12 +65,14 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ElementTree
 from concurrent.futures import ThreadPoolExecutor
 from http.cookies import CookieError, SimpleCookie
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import ical
 import musictags
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -101,7 +104,7 @@ JOBS = DATA / "agent" / "jobs"
 ICON_OVERRIDES = Path(os.environ.get("OS_ICON_DIR", "/icons"))
 # adlerOS's own dock icons (./icons can replace each): All apps, and the ones
 # you pin like any app.
-DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "adlermd", "music", "gallery", "documents")
+DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "adlermd", "music", "gallery", "documents", "calendar")
 DOCK_MAX_PINS = 16
 # The widgets you can put on the desktop, with the defaults and the limit.
 WIDGET_CATALOG = STATIC / "widgets-catalog.json"
@@ -447,7 +450,7 @@ def search_url():
 # adlerOS's own, pinned (and unpinned, moved about) like any app; in the dock
 # from the start, in this order, until you take them out.
 BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal",
-                "adleros:notepad", "adleros:adlermd", "adleros:music", "adleros:gallery", "adleros:documents")
+                "adleros:notepad", "adleros:adlermd", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:calendar")
 DOCK_FIRST = BUILTIN_PINS[:5]  # a new dock's (Notepad, adlermd and Music: in All apps, for you to pin)
 DOCK_SEED = 2  # 1: My Computer and the Terminal pinned; 2: the App Store, Settings and Live Usage too
 
@@ -2461,6 +2464,205 @@ def documents_query(query):
     return out
 
 
+# --------------------------------------------------------------- calendar
+
+# Calendar: your calendars as your CalDAV server has them (Radicale, in a
+# homelab), only read: CALDAV_USER and CALDAV_PASSWORD, at CALDAV_URL, else
+# Radicale at this machine's Tailscale address and its port. Found the way
+# CalDAV says (the address's principal, its calendar home, the calendars in
+# it); each calendar's events kept until its ctag (or sync token) changes,
+# looked at again at most every CALDAV_FRESH seconds. The page never sees
+# the password; it asks for days, in its own time zone, and gets each
+# repeat worked out (ical.py).
+DAV = {"d": "DAV:", "c": "urn:ietf:params:xml:ns:caldav", "cs": "http://calendarserver.org/ns/", "i": "http://apple.com/ns/ical/"}
+CALDAV_FRESH = 30
+CALDAV_MAX_DAYS = 430
+_caldav = {"key": None, "home": None, "calendars": None, "at": 0, "events": {}}
+_caldav_lock = threading.Lock()
+
+
+def caldav():
+    """(url, (user, password)), or (url or None, None) without a login."""
+    url = install_setting("CALDAV_URL").rstrip("/")
+    if not url:
+        host = install_setting("TS_IP") if HOMELAB_MODE else install_setting("ADLEROS_HOST")
+        app = next((a for a in installed_apps() if a["id"] == "radicale"), None)
+        url = f"http://{host}:{app['port']}" if host and app and app.get("port") else None
+    user, password = install_setting("CALDAV_USER"), install_setting("CALDAV_PASSWORD")
+    return url, ((user, password) if user and password else None)
+
+
+def dav(method, url, login, body=None, depth=None, timeout=20):
+    """(the URL it answered at, its body). Redirects followed here (urllib
+    won't, for PROPFIND), only on the same server: the login goes nowhere else."""
+    headers = {"Authorization": "Basic " + base64.b64encode(f"{login[0]}:{login[1]}".encode()).decode(),
+               "Content-Type": "application/xml; charset=utf-8"}
+    if depth is not None:
+        headers["Depth"] = depth
+    origin = urllib.parse.urlsplit(url)
+    for _ in range(5):
+        request = urllib.request.Request(url, data=body.encode() if body else None, method=method, headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as r:
+                return r.geturl(), r.read(20 * 1024 * 1024)
+        except urllib.error.HTTPError as e:
+            target = e.headers.get("Location") if e.code in (301, 302, 303, 307, 308) else None
+            if not target:
+                raise
+            nxt = urllib.parse.urlsplit(urllib.parse.urljoin(url, target))
+            if nxt.hostname != origin.hostname or nxt.scheme not in (origin.scheme, "https"):
+                raise
+            url = nxt.geturl()
+    raise OSError("too many redirects")
+
+
+def dav_responses(data):
+    """A multistatus: [(href, {tag: element})], each response's found props."""
+    out = []
+    for response in ElementTree.fromstring(data).findall("d:response", DAV):
+        href = response.findtext("d:href", "", DAV).strip()
+        found = {}
+        for stat in response.findall("d:propstat", DAV):
+            if " 200" not in (stat.findtext("d:status", "", DAV) or " 200"):
+                continue
+            for p in stat.find("d:prop", DAV) if stat.find("d:prop", DAV) is not None else []:
+                found[p.tag] = p
+        out.append((href, found))
+    return out
+
+
+def dav_href(element):
+    return (element.findtext("d:href", "", DAV) if element is not None else "").strip()
+
+
+def caldav_home(url, login):
+    """Its calendar home: the principal's, found from the address (or from
+    /.well-known/caldav, if the address isn't the server's DAV root)."""
+    ask = ('<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop>'
+           '<d:current-user-principal/><c:calendar-home-set/></d:prop></d:propfind>')
+    for start in (url + "/", urllib.parse.urljoin(url + "/", "/.well-known/caldav")):
+        try:
+            at, data = dav("PROPFIND", start, login, ask, "0")
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                raise
+            continue
+        found = (dav_responses(data) or [("", {})])[0][1]
+        home = dav_href(found.get(f"{{{DAV['c']}}}calendar-home-set"))
+        if home:
+            return urllib.parse.urljoin(at, home)
+        principal = dav_href(found.get(f"{{{DAV['d']}}}current-user-principal"))
+        if principal:
+            at, data = dav("PROPFIND", urllib.parse.urljoin(at, principal), login, ask, "0")
+            home = dav_href((dav_responses(data) or [("", {})])[0][1].get(f"{{{DAV['c']}}}calendar-home-set"))
+            if home:
+                return urllib.parse.urljoin(at, home)
+    raise LookupError("no calendars there")
+
+
+def caldav_calendars(home, login):
+    """The calendars in a home that hold events: [{id, href, name, color, tag}]."""
+    ask = ('<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/" '
+           'xmlns:i="http://apple.com/ns/ical/"><d:prop><d:resourcetype/><d:displayname/><i:calendar-color/><i:calendar-order/>'
+           '<c:supported-calendar-component-set/><cs:getctag/><d:sync-token/></d:prop></d:propfind>')
+    at, data = dav("PROPFIND", home, login, ask, "1")
+    out = []
+    for href, found in dav_responses(data):
+        kind = found.get(f"{{{DAV['d']}}}resourcetype")
+        if kind is None or kind.find("c:calendar", DAV) is None:
+            continue
+        comps = found.get(f"{{{DAV['c']}}}supported-calendar-component-set")
+        if comps is not None and len(comps) and not any(c.get("name", "").upper() == "VEVENT" for c in comps):
+            continue  # tasks only (or journal): not Calendar's
+        full = urllib.parse.urljoin(at, href)
+        color = (found.get(f"{{{DAV['i']}}}calendar-color").text or "").strip() if f"{{{DAV['i']}}}calendar-color" in found else ""
+        name = (found[f"{{{DAV['d']}}}displayname"].text or "").strip() if f"{{{DAV['d']}}}displayname" in found else ""
+        tag = "".join((found[k].text or "") for k in (f"{{{DAV['cs']}}}getctag", f"{{{DAV['d']}}}sync-token") if k in found)
+        order = (found[f"{{{DAV['i']}}}calendar-order"].text or "").strip() if f"{{{DAV['i']}}}calendar-order" in found else ""
+        out.append({"id": hashlib.sha1(full.encode()).hexdigest()[:12], "href": full,
+                    "name": name or urllib.parse.unquote(href.rstrip("/").rsplit("/", 1)[-1]),
+                    "color": color if re.fullmatch(r"#[0-9a-fA-F]{3,8}", color) else "", "tag": tag,
+                    "order": int(order) if order.lstrip("-").isdigit() else 10 ** 6})
+    # In the order your calendar apps put them (calendar-order), else by name.
+    return sorted(out, key=lambda c: (c["order"], c["name"].lower()))
+
+
+def caldav_events(cal, login):
+    """A calendar's events, read (ical.events), from one REPORT."""
+    ask = ('<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:getetag/><c:calendar-data/>'
+           '</d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"/></c:comp-filter></c:filter></c:calendar-query>')
+    _, data = dav("REPORT", cal["href"], login, ask, "1", timeout=60)
+    events = []
+    for _, found in dav_responses(data):
+        item = found.get(f"{{{DAV['c']}}}calendar-data")
+        if item is None or not item.text:
+            continue
+        for vcal in ical.parse(item.text):
+            if vcal["name"] == "VCALENDAR":
+                events += ical.events(vcal)
+    return events
+
+
+def calendar_state():
+    """The calendars, their events up to date (asked again after
+    CALDAV_FRESH seconds; a calendar's events only when its tag moved)."""
+    url, login = caldav()
+    if not url or not login:
+        raise LookupError("not set up")
+    with _caldav_lock:
+        key = (url, login)
+        if _caldav["key"] != key:
+            _caldav.update(key=key, home=None, calendars=None, at=0, events={})
+        if _caldav["calendars"] is None or time.time() - _caldav["at"] > CALDAV_FRESH:
+            if not _caldav["home"]:
+                _caldav["home"] = caldav_home(url, login)
+            calendars = caldav_calendars(_caldav["home"], login)
+            kept = {}
+            for cal in calendars:
+                old = _caldav["events"].get(cal["href"])
+                kept[cal["href"]] = old if old and old[0] == cal["tag"] and cal["tag"] else (cal["tag"], caldav_events(cal, login))
+            _caldav.update(calendars=calendars, events=kept, at=time.time())
+        return _caldav["calendars"], _caldav["events"]
+
+
+def calendar_status():
+    url, login = caldav()
+    out = {"url": url, "configured": bool(url and login)}
+    if not url:
+        return {**out, "error": "noserver"}
+    if not login:
+        return {**out, "error": "nologin"}
+    try:
+        calendars, _ = calendar_state()
+        out.update(ok=True, calendars=[{k: c[k] for k in ("id", "name", "color")} for c in calendars])
+    except urllib.error.HTTPError as e:
+        out["error"] = "refused" if e.code in (401, 403) else f"caldav {e.code}"
+    except LookupError:
+        out["error"] = "nocalendars"
+    except (OSError, ValueError, ElementTree.ParseError) as e:
+        out["error"] = f"unreachable ({e})"
+    return out
+
+
+def calendar_events(query):
+    """Every event on from…to (YYYY-MM-DD, the page's days, in its zone tz)."""
+    first = query.get("from", [""])[0]
+    last = query.get("to", [""])[0]
+    try:
+        first, last = datetime.date.fromisoformat(first), datetime.date.fromisoformat(last)
+    except ValueError:
+        raise ValueError("from, to: days (YYYY-MM-DD)")
+    if not 0 <= (last - first).days <= CALDAV_MAX_DAYS:
+        raise ValueError(f"from…to: up to {CALDAV_MAX_DAYS} days")
+    viewer = ical.named_zone(query.get("tz", [""])[0][:64]) or datetime.timezone.utc
+    calendars, events = calendar_state()
+    out = []
+    for cal in calendars:
+        for o in ical.expand(events.get(cal["href"], (None, []))[1], first, last, viewer):
+            out.append({**o, "calendar": cal["id"]})
+    return {"calendars": [{k: c[k] for k in ("id", "name", "color")} for c in calendars], "events": out}
+
+
 # --------------------------------------------- without Immich, Paperless
 
 # Gallery and Documents before they're connected (or while Immich or
@@ -3270,6 +3472,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.gallery_get(path[len("/api/gallery/"):], query)
         if path.startswith("/api/paperless/"):
             return self.documents_get(path[len("/api/paperless/"):], query)
+        if path.startswith("/api/calendar/"):
+            return self.calendar_get(path[len("/api/calendar/"):], query)
         if path.startswith("/api/frame/"):
             app = next((a for a in installed_apps() if a["id"] == path[len("/api/frame/"):]), None)
             if not app:
@@ -3891,6 +4095,22 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(e.code if e.code in (400, 401, 403, 404) else 502, {"error": f"Paperless said {e.code}", "paperless": e.code})
         except OSError as e:
             return self.send_json(502, {"error": f"can't reach Paperless ({e})"})
+
+    def calendar_get(self, what, query):
+        try:
+            if what == "status":
+                return self.send_json(200, calendar_status())
+            if what == "events":
+                return self.send_json(200, calendar_events(query))
+            return self.send_json(404, {"error": "not found"})
+        except LookupError:
+            return self.send_json(409, {"error": "Calendar isn't set up", "status": calendar_status()})
+        except ValueError as e:
+            return self.send_json(400, {"error": str(e)})
+        except urllib.error.HTTPError as e:
+            return self.send_json(502, {"error": f"the calendar server said {e.code}", "caldav": e.code})
+        except (OSError, ElementTree.ParseError) as e:
+            return self.send_json(502, {"error": f"can't reach the calendar server ({e})"})
 
     def paperless_stream(self, path, query, kinds, cache=0, download=False, inline_pdf=False):
         """A thumbnail, a preview or an original from Paperless, as it sends it."""

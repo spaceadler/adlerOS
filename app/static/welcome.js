@@ -9,7 +9,7 @@
 // server.
 // Uses $, el, api, toast, state, refresh, postAction, waitForJob, plateFor,
 // openStore, renderStore, store, openFiles, openMusic, openGallery,
-// openDocuments, settingsFile, settingsThen.
+// openDocuments, openCalendar, settingsFile, settingsThen.
 "use strict";
 
 const welcome = { steps: [], at: 0, spot: null, roots: "", busy: false, found: false, links: null };
@@ -260,14 +260,19 @@ const LAYERED = [
     adds: "Paperless's titles, tags and correspondents, search inside every page, and uploads to it",
     alone: "shows the files in the Documents folder (Paperless names them by number)",
   },
+  {
+    id: "calendar", name: "Calendar", over: "Radicale", apps: ["radicale"], icon: "calendar", open: () => openCalendar(),
+    adds: "your calendars in their colors, by day, week or month, every repeat worked out",
+    alone: "is an empty calendar, with how to connect it at the top",
+  },
 ];
 
 // Their connections, asked once a tour (and again on "Check again").
 function welcomeLinks(again = false) {
   if (welcome.links && !again) return welcome.links;
   const ask = (path) => api(path).then(({ status, body }) => (status === 200 && body ? body : { error: "noanswer" }), () => ({ error: "noanswer" }));
-  welcome.links = Promise.all([ask("/api/music/navidrome"), ask("/api/gallery/status"), ask("/api/paperless/status")])
-    .then(([music, gallery, documents]) => ({ music, gallery, documents }));
+  welcome.links = Promise.all([ask("/api/music/navidrome"), ask("/api/gallery/status"), ask("/api/paperless/status"), ask("/api/calendar/status")])
+    .then(([music, gallery, documents, calendar]) => ({ music, gallery, documents, calendar }));
   return welcome.links;
 }
 
@@ -279,6 +284,11 @@ function layeredState(l, st) {
   if (l.id === "music") {
     if (st.configured) return { at: 3, label: "Not answering" };
     return installed ? { at: 1, label: "Needs your login" } : { at: 0, label: `No ${l.over}` };
+  }
+  if (l.id === "calendar") {
+    if (st.error === "refused") return { at: 2, label: "Login refused" };
+    if (st.configured) return { at: 3, label: st.error === "nocalendars" ? "No calendars" : "Not answering" };
+    return st.error === "noserver" ? { at: 0, label: `No ${l.over}` } : { at: 1, label: "Needs your login" };
   }
   if (st.error === "noimmich" || st.error === "nopaperless") return { at: 0, label: `No ${l.over}` };
   if (st.error === "nokey" || st.error === "notoken") return { at: 1, label: l.id === "gallery" ? "Needs a key" : "Needs a token" };
@@ -309,7 +319,7 @@ const welcomeLayered = {
     return {
       title: "Apps on top of your apps",
       body: [
-        welcomeText("Music, Gallery and Documents sit on top of Navidrome, Immich and Paperless. They read what those apps already know, through the apps' own APIs, and show it the same way, all in one place."),
+        welcomeText("Music, Gallery, Documents and Calendar sit on top of Navidrome, Immich, Paperless and Radicale. They read what those apps already know, through the apps' own APIs, and show it the same way, all in one place."),
         el("div", { class: "welcome-apps" }, ...rows),
         welcomeText("They don't replace those apps or touch how your homelab is set up: the photos stay Immich's and the documents Paperless's, and what you do here (a play, an upload) goes to the app, as if you'd done it there. They need those apps for the good parts; without them, each still shows the files themselves, and says what connecting adds."),
       ],
@@ -321,21 +331,24 @@ const welcomeLayered = {
 function welcomeHow(l, s, st) {
   const perms = (st.permissions || []).map((p) => el("code", {}, p));
   const file = settingsFile();
-  const install = `Install ${l.over} (the App Store has it), or if it runs elsewhere, put its address in ${file} as ${l.id === "music" ? "NAVIDROME_URL" : l.id === "gallery" ? "IMMICH_URL" : "PAPERLESS_URL"}=…`;
+  const install = `Install ${l.over} (the App Store has it), or if it runs elsewhere, put its address in ${file} as ${{ music: "NAVIDROME_URL", gallery: "IMMICH_URL", documents: "PAPERLESS_URL", calendar: "CALDAV_URL" }[l.id]}=…${l.id === "calendar" ? " (any CalDAV server's)" : ""}`;
   // A homelab's install.sh makes Paperless's admin itself.
   const account = state.mode !== "standalone" && l.id === "documents"
     ? "Log in to Paperless as admin: install.sh made the account, with the password PAPERLESS_ADMIN_PASSWORD in containers/productivity/paperless-ngx/.env."
-    : `Open ${l.over} and make your account.`;
+    : l.id === "calendar" ? `Have a login for ${l.over}, and a calendar in it (your phone's calendar app can make one).`
+      : `Open ${l.over} and make your account.`;
   const key = {
     music: [`Your Navidrome login is all it takes: put it in ${file} as NAVIDROME_USER=… and NAVIDROME_PASSWORD=…${settingsThen()}.`],
     gallery: ["In Immich: Account Settings → API Keys → New API Key, with these permissions (they only read):", el("span", { class: "welcome-perms" }, ...perms),
       `Put it in ${file} as IMMICH_API_KEY=…${settingsThen()}.`],
     documents: ["In Paperless: your name (top right) → My Profile → API Auth Token.", `Put it in ${file} as PAPERLESS_TOKEN=…${settingsThen()}.`],
+    calendar: [`Your ${l.over} login is all it takes: put it in ${file} as CALDAV_USER=… and CALDAV_PASSWORD=…${settingsThen()}.`],
   }[l.id];
   const steps = s.at === 0 ? [install, account, ...key]
     : s.at === 1 ? [account, ...key]
-      : s.at === 2 ? [`${l.over} doesn't know the ${l.id === "music" ? "login" : l.id === "gallery" ? "key" : "token"} in ${file} (deleted, or mistyped). Make a new one:`, ...key]
-        : [`${l.over} isn't answering${st.url ? ` at ${st.url}` : ""}. Is it running? The App Store starts it.`];
+      : s.at === 2 ? [`${l.over} doesn't know the ${l.id === "music" || l.id === "calendar" ? "login" : l.id === "gallery" ? "key" : "token"} in ${file} (deleted, or mistyped). Make a new one:`, ...key]
+        : st.error === "nocalendars" ? [`${l.over} answered at ${st.url}, but has no calendars for that login. Make one (your phone's calendar app can), or check CALDAV_URL.`]
+          : [`${l.over} isn't answering${st.url ? ` at ${st.url}` : ""}. Is it running? The App Store starts it.`];
   const items = [];
   for (const step of steps) {
     if (typeof step === "string") items.push(el("li", {}, step));
@@ -383,7 +396,7 @@ const TOUR = [
   },
   {
     spot: "#dock",
-    view: () => ({ title: "The dock", body: [welcomeText("The apps you keep here (Music, Gallery and Documents too), then adlerOS's own: All apps, always here, the App Store (start, stop, update, install), Settings, and Live Usage.")] }),
+    view: () => ({ title: "The dock", body: [welcomeText("The apps you keep here (Music, Gallery, Documents and Calendar too), then adlerOS's own: All apps, always here, the App Store (start, stop, update, install), Settings, and Live Usage.")] }),
   },
   {
     spot: "#search-open",
@@ -396,7 +409,7 @@ const TOUR = [
   {
     view: () => ({
       title: "And the rest",
-      body: [welcomeText("My Computer, Music, Gallery, Documents and adlermd are in All apps. On a computer, Settings → Desktop mode puts windows side by side, and the mouse's side buttons go back and forward in them. Press ? for every key; it all works without a mouse."),
+      body: [welcomeText("My Computer, Music, Gallery, Documents, Calendar and adlermd are in All apps. On a computer, Settings → Desktop mode puts windows side by side, and the mouse's side buttons go back and forward in them. Press ? for every key; it all works without a mouse."),
         welcomeText("This tour is in Settings, if you want it again.")],
     }),
   },
