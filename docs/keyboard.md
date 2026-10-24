@@ -150,6 +150,20 @@ wallpaper is Alt+Shift+P.
 | Escape | Back from a document |
 | Mouse side buttons | Back and forward |
 
+## In Tasks
+
+| Key | Does |
+| --- | --- |
+| N | Add a task (the box at the top) |
+| ↑ ↓ (or J K) | From task to task |
+| Space or X | Done, or not |
+| Enter | Open it |
+| E | Its name |
+| Delete | Delete it |
+| L, B | The project as a list, as a board |
+| / or Ctrl+F | Search |
+| Escape | Close the task that's open |
+
 ## In Calendar
 
 | Key | Does |

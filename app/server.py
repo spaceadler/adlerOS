@@ -104,7 +104,7 @@ JOBS = DATA / "agent" / "jobs"
 ICON_OVERRIDES = Path(os.environ.get("OS_ICON_DIR", "/icons"))
 # adlerOS's own dock icons (./icons can replace each): All apps, and the ones
 # you pin like any app.
-DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "adlermd", "music", "gallery", "documents", "calendar")
+DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "adlermd", "music", "gallery", "documents", "calendar", "tasks")
 DOCK_MAX_PINS = 16
 # The widgets you can put on the desktop, with the defaults and the limit.
 WIDGET_CATALOG = STATIC / "widgets-catalog.json"
@@ -450,7 +450,7 @@ def search_url():
 # adlerOS's own, pinned (and unpinned, moved about) like any app; in the dock
 # from the start, in this order, until you take them out.
 BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal",
-                "adleros:notepad", "adleros:adlermd", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:calendar")
+                "adleros:notepad", "adleros:adlermd", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:tasks")
 DOCK_FIRST = BUILTIN_PINS[:5]  # a new dock's (Notepad, adlermd and Music: in All apps, for you to pin)
 DOCK_SEED = 2  # 1: My Computer and the Terminal pinned; 2: the App Store, Settings and Live Usage too
 
@@ -3242,6 +3242,649 @@ def calendar_events(query):
     return {"calendars": [{k: c[k] for k in ("id", "name", "color")} for c in calendars], "events": out}
 
 
+# ------------------------------------------------------------------ tasks
+
+# Tasks: your to-dos as Vikunja has them (projects, each a list and a board
+# of buckets; due dates, priorities, labels, repeats), through its API:
+# VIKUNJA_TOKEN (Vikunja: Settings, API Tokens), or VIKUNJA_USER and
+# VIKUNJA_PASSWORD (a login; its session kept here), at VIKUNJA_URL, else
+# Vikunja at this machine's Tailscale address and its port. The page never
+# sees them. Before it's connected, the same kept here (data/tasks.json):
+# once it is, they're moved to Vikunja (a copy of them kept, as
+# tasks-moved-<when>.json), so nothing you did meanwhile is lost.
+TASKS_FILE = DATA / "tasks.json"
+VIKUNJA_NULL = "0001-01-01T00:00:00Z"
+_vikunja = {"jwt": None, "key": None}
+_tasks_lock = threading.Lock()
+TASK_FIELDS = ("title", "description", "done", "due", "priority", "labels", "repeat", "project", "color", "favorite")
+
+
+def vikunja():
+    """(api url, token or (user, password)), or (url or None, None)."""
+    url = install_setting("VIKUNJA_URL").rstrip("/")
+    if not url:
+        host = install_setting("TS_IP") if HOMELAB_MODE else install_setting("ADLEROS_HOST")
+        app = next((a for a in installed_apps() if a["id"] == "vikunja"), None)
+        url = f"http://{host}:{app['port']}" if host and app and app.get("port") else None
+    token = install_setting("VIKUNJA_TOKEN")
+    user, password = install_setting("VIKUNJA_USER"), install_setting("VIKUNJA_PASSWORD")
+    return (url + "/api/v1") if url else None, (token or ((user, password) if user and password else None))
+
+
+def vk(method, path, body=None, query=None, again=True):
+    """Vikunja's answer (JSON) to one request; LookupError without a login."""
+    url, login = vikunja()
+    if not url or not login:
+        raise LookupError("not set up")
+    if isinstance(login, tuple):
+        if _vikunja["key"] != login or not _vikunja["jwt"]:
+            r = urllib.request.Request(f"{url}/login", data=json.dumps({"username": login[0], "password": login[1], "long_token": True}).encode(),
+                                       method="POST", headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(r, timeout=20) as answer:
+                _vikunja.update(jwt=json.loads(answer.read())["token"], key=login)
+        bearer = _vikunja["jwt"]
+    else:
+        bearer = login
+    target = f"{url}{path}" + (f"?{urllib.parse.urlencode(query)}" if query else "")
+    data = json.dumps(body).encode() if body is not None else None
+    r = urllib.request.Request(target, data=data, method=method,
+                               headers={"Authorization": f"Bearer {bearer}", **({"Content-Type": "application/json"} if data else {})})
+    try:
+        with urllib.request.urlopen(r, timeout=30) as answer:
+            raw = answer.read(10 * 1024 * 1024)
+            return json.loads(raw) if raw.strip() else None
+    except urllib.error.HTTPError as e:
+        if e.code == 401 and isinstance(login, tuple) and again:
+            _vikunja["jwt"] = None  # its session ran out: log in again, once
+            return vk(method, path, body, query, again=False)
+        raise
+
+
+def vk_all(path, query=None, limit=40):
+    """Every page of a list."""
+    out, page = [], 1
+    while page <= limit:
+        got = vk("GET", path, query={**(query or {}), "page": page, "per_page": 50})
+        if not isinstance(got, list):
+            break
+        out += got
+        if len(got) < 50:
+            break
+        page += 1
+    return out
+
+
+def task_text(html):
+    """Vikunja's description (HTML) as text: paragraphs and lines kept."""
+    if not html:
+        return ""
+    t = re.sub(r"(?i)<br\s*/?>", "\n", html)
+    t = re.sub(r"(?i)</(p|h[1-6]|blockquote)>", "\n\n", t)  # a paragraph: a blank line after it
+    t = re.sub(r"(?i)</(div|li)>", "\n", t)
+    t = re.sub(r"(?i)<li[^>]*>", "• ", t)
+    t = re.sub(r"<[^>]+>", "", t)
+    t = t.replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"').replace("&#39;", "'").replace("&amp;", "&")
+    return re.sub(r"\n{3,}", "\n\n", t).strip()
+
+
+def task_html(text):
+    """Text as Vikunja's editor writes it: a <p> a paragraph."""
+    import html as html_lib
+    paras = [p for p in re.split(r"\n\s*\n", text.strip()) if p.strip()]
+    return "".join(f"<p>{html_lib.escape(p).replace(chr(10), '<br>')}</p>" for p in paras)
+
+
+def vk_date(value):
+    return None if not value or value.startswith("0001-") else value
+
+
+REPEATS = {"daily": 86400, "weekly": 7 * 86400, "yearly": 365 * 86400}
+
+
+def vk_task(t):
+    """A Vikunja task as the page has them."""
+    every, mode = t.get("repeat_after") or 0, t.get("repeat_mode") or 0
+    repeat = None
+    if mode == 1:
+        repeat = {"kind": "monthly"}
+    elif every:
+        kind = next((k for k, v in REPEATS.items() if v == every), None)
+        repeat = {"kind": kind} if kind else {"kind": "days", "days": max(1, every // 86400)}
+        if mode == 2:
+            repeat["fromDone"] = True
+    return {"id": str(t["id"]), "project": str(t.get("project_id")), "title": t.get("title") or "", "description": task_text(t.get("description")),
+            "done": bool(t.get("done")), "doneAt": vk_date(t.get("done_at")), "due": vk_date(t.get("due_date")),
+            "priority": t.get("priority") or 0, "labels": [str(l["id"]) for l in t.get("labels") or []],
+            "position": t.get("position") or 0, "bucket": str(t["bucket_id"]) if t.get("bucket_id") else None, "repeat": repeat,
+            "percent": t.get("percent_done") or 0, "identifier": t.get("identifier") or "", "favorite": bool(t.get("is_favorite")),
+            "color": t.get("hex_color") or "", "created": t.get("created"), "updated": t.get("updated")}
+
+
+def vk_projects():
+    out = []
+    for p in vk("GET", "/projects", query={"is_archived": "false"}) or []:
+        if p.get("id", 0) <= 0:
+            continue  # saved filters, Favorites: not projects
+        views = p.get("views") or []
+        kanban = next((v for v in views if v.get("view_kind") == "kanban"), None)
+        lst = next((v for v in views if v.get("view_kind") == "list"), None)
+        out.append({"id": str(p["id"]), "title": p.get("title") or "", "color": p.get("hex_color") or "", "parent": str(p["parent_project_id"]) if p.get("parent_project_id") else None,
+                    "position": p.get("position") or 0, "archived": bool(p.get("is_archived")), "board": str(kanban["id"]) if kanban else None,
+                    "list": str(lst["id"]) if lst else None, "doneBucket": str(kanban.get("done_bucket_id")) if kanban and kanban.get("done_bucket_id") else None,
+                    "defaultBucket": str(kanban.get("default_bucket_id")) if kanban and kanban.get("default_bucket_id") else None})
+    return sorted(out, key=lambda p: (p["position"], p["title"].lower()))
+
+
+def vk_id(value, what="id"):
+    value = str(value or "")
+    if not value.isdigit() or not 0 < int(value) < 10 ** 12:
+        raise ValueError(f"{what}: a number")
+    return int(value)
+
+
+# ---------------------------------------------------- kept here, meanwhile
+
+def tasks_local():
+    try:
+        data = json.loads(TASKS_FILE.read_text())
+    except (OSError, ValueError):
+        data = {}
+    if not isinstance(data, dict) or not isinstance(data.get("projects"), list):
+        data = {"projects": [{"id": "l-inbox", "title": "Inbox", "color": "", "position": 0,
+                              "buckets": [{"id": "lb-todo", "title": "To-Do", "position": 100}, {"id": "lb-doing", "title": "Doing", "position": 200},
+                                          {"id": "lb-done", "title": "Done", "position": 300}], "doneBucket": "lb-done"}],
+                "tasks": [], "labels": [], "next": 1}
+    return data
+
+
+def tasks_local_save(data):
+    write_private(TASKS_FILE, json.dumps(data, indent=1))
+
+
+def local_id(data, kind):
+    n = data.get("next", 1)
+    data["next"] = n + 1
+    return f"{kind}{n}"
+
+
+def local_projects(data):
+    return [{"id": p["id"], "title": p["title"], "color": p.get("color", ""), "parent": None, "position": p.get("position", 0), "archived": False,
+             "board": "local", "list": "local", "doneBucket": p.get("doneBucket"), "defaultBucket": (p.get("buckets") or [{}])[0].get("id")}
+            for p in data["projects"]]
+
+
+# ------------------------------------------------------------ either way
+
+def tasks_status():
+    url, login = vikunja()
+    out = {"url": url[:-len("/api/v1")] if url else None, "configured": bool(url and login), "local": True}
+    if not url:
+        return {**out, "error": "novikunja"}
+    if not login:
+        return {**out, "error": "nologin"}
+    try:
+        me = vk("GET", "/user")
+        out.update(ok=True, local=False, user=me.get("name") or me.get("username"))
+        moved = tasks_move_in()
+        if moved:
+            out["moved"] = moved
+    except urllib.error.HTTPError as e:
+        out["error"] = "refused" if e.code in (401, 403) else f"vikunja {e.code}"
+    except (OSError, ValueError, KeyError) as e:
+        out["error"] = f"unreachable ({e})"
+    return out
+
+
+def tasks_connected():
+    url, login = vikunja()
+    return bool(url and login)
+
+
+def tasks_move_in():
+    """What was kept here while Vikunja wasn't connected: into Vikunja (its
+    projects by name, made where they're missing; buckets by name; labels by
+    name), then the file put aside. How many tasks moved."""
+    with _tasks_lock:
+        if not TASKS_FILE.is_file():
+            return 0
+        data = tasks_local()
+        if not data["tasks"] and all(p["id"] == "l-inbox" for p in data["projects"]):
+            TASKS_FILE.rename(TASKS_FILE.with_name(f"tasks-moved-{time.strftime('%Y%m%d-%H%M%S')}.json"))
+            return 0
+        projects = {p["title"].lower(): p for p in vk_projects()}
+        labels = {l.get("title", "").lower(): l for l in vk_all("/labels")}
+        label_ids = {}
+        for l in data.get("labels") or []:
+            got = labels.get(l["title"].lower()) or vk("PUT", "/labels", {"title": l["title"], "hex_color": l.get("color", "")})
+            label_ids[l["id"]] = got["id"]
+        moved = 0
+        for lp in data["projects"]:
+            tasks = [t for t in data["tasks"] if t["project"] == lp["id"]]
+            if not tasks and lp["id"] == "l-inbox":
+                continue
+            vp = projects.get(lp["title"].lower())
+            if not vp:
+                vk("PUT", "/projects", {"title": lp["title"], "hex_color": lp.get("color", "")})
+                vp = {p["title"].lower(): p for p in vk_projects()}[lp["title"].lower()]
+            buckets = {}
+            if vp.get("board"):
+                have = {b["title"].lower(): b for b in vk("GET", f"/projects/{vp['id']}/views/{vp['board']}/buckets") or []}
+                for b in lp.get("buckets") or []:
+                    got = have.get(b["title"].lower()) or vk("PUT", f"/projects/{vp['id']}/views/{vp['board']}/buckets", {"title": b["title"]})
+                    buckets[b["id"]] = got["id"]
+            for t in sorted(tasks, key=lambda t: t.get("position", 0)):
+                made = vk("PUT", f"/projects/{vp['id']}/tasks", vk_body({}, t))
+                for lid in t.get("labels") or []:
+                    if lid in label_ids:
+                        vk("PUT", f"/tasks/{made['id']}/labels", {"label_id": label_ids[lid]})
+                if t.get("bucket") in buckets and not t.get("done"):
+                    vk("POST", f"/projects/{vp['id']}/views/{vp['board']}/buckets/{buckets[t['bucket']]}/tasks", {"task_id": made["id"]})
+                moved += 1
+                # In Vikunja now: out of the file (stopped halfway, the rest move next time, nothing twice).
+                data["tasks"] = [x for x in data["tasks"] if x["id"] != t["id"]]
+                tasks_local_save(data)
+        TASKS_FILE.rename(TASKS_FILE.with_name(f"tasks-moved-{time.strftime('%Y%m%d-%H%M%S')}.json"))
+        return moved
+
+
+def vk_body(task, f):
+    """A Vikunja task (as it is: task) with the page's changes (f) in it."""
+    body = dict(task)
+    for k in ("labels", "assignees", "attachments", "buckets", "reactions", "related_tasks", "comments", "created_by", "subscription"):
+        body.pop(k, None)
+    if "title" in f:
+        body["title"] = f["title"]
+    if "description" in f:
+        body["description"] = task_html(f["description"])
+    if "done" in f:
+        body["done"] = bool(f["done"])
+    if "due" in f:
+        body["due_date"] = f["due"] or VIKUNJA_NULL
+    if "priority" in f:
+        body["priority"] = f["priority"]
+    if "favorite" in f:
+        body["is_favorite"] = bool(f["favorite"])
+    if "color" in f:
+        body["hex_color"] = f["color"].lstrip("#")
+    if "repeat" in f:
+        r = f["repeat"] or {}
+        kind = r.get("kind")
+        body["repeat_mode"] = 1 if kind == "monthly" else (2 if r.get("fromDone") else 0)
+        body["repeat_after"] = 0 if kind in (None, "monthly") else REPEATS.get(kind) or int(r.get("days") or 1) * 86400
+    return body
+
+
+def task_fields(f):
+    """What the page sent for a task, checked."""
+    if not isinstance(f, dict):
+        raise ValueError("task: an object")
+    out = {}
+    if "title" in f:
+        if not isinstance(f["title"], str) or not f["title"].strip() or len(f["title"]) > 250:
+            raise ValueError("title: up to 250 characters")
+        out["title"] = f["title"].strip()
+    if "description" in f:
+        if not isinstance(f["description"], str) or len(f["description"]) > 50000:
+            raise ValueError("description: text")
+        out["description"] = f["description"]
+    if "done" in f:
+        out["done"] = bool(f["done"])
+    if "favorite" in f:
+        out["favorite"] = bool(f["favorite"])
+    if "due" in f:
+        if f["due"]:
+            try:
+                when = datetime.datetime.fromisoformat(str(f["due"]).replace("Z", "+00:00"))
+            except ValueError:
+                raise ValueError("due: a time")
+            if not when.tzinfo:
+                raise ValueError("due: a time with its zone")
+            out["due"] = when.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        else:
+            out["due"] = None
+    if "priority" in f:
+        if f["priority"] not in (0, 1, 2, 3, 4, 5):
+            raise ValueError("priority: 0 to 5")
+        out["priority"] = f["priority"]
+    if "labels" in f:
+        if not isinstance(f["labels"], list) or len(f["labels"]) > 50:
+            raise ValueError("labels: a list")
+        out["labels"] = [str(x) for x in f["labels"]]
+    if "repeat" in f:
+        r = f["repeat"]
+        if r is not None and (not isinstance(r, dict) or r.get("kind") not in ("daily", "weekly", "monthly", "yearly", "days")):
+            raise ValueError("repeat: daily, weekly, monthly, yearly or every so many days")
+        if r and r.get("kind") == "days" and not (isinstance(r.get("days"), int) and 1 <= r["days"] <= 3650):
+            raise ValueError("repeat: every 1 to 3650 days")
+        out["repeat"] = r
+    if "color" in f:
+        if not re.fullmatch(r"#?([0-9a-fA-F]{6})?", str(f["color"])):
+            raise ValueError("color: #rrggbb")
+        out["color"] = str(f["color"])
+    return out
+
+
+def tasks_read(what, query):
+    """projects, labels, list (a project's), board (its buckets), due (open
+    ones due before a day, across projects), search."""
+    if not tasks_connected():
+        return tasks_read_local(what, query)
+    if what == "projects":
+        return {"projects": vk_projects()}
+    if what == "labels":
+        return {"labels": [{"id": str(l["id"]), "title": l.get("title") or "", "color": l.get("hex_color") or ""} for l in vk_all("/labels")]}
+    if what in ("list", "board"):
+        pid = vk_id(query.get("project", [""])[0], "project")
+        project = next((p for p in vk_projects() if p["id"] == str(pid)), None)
+        if not project:
+            raise KeyError("no such project")
+        if what == "board":
+            if not project["board"]:
+                return {"buckets": []}
+            got = vk("GET", f"/projects/{pid}/views/{project['board']}/tasks", query={"per_page": 200}) or []
+            return {"buckets": [{"id": str(b["id"]), "title": b.get("title") or "", "position": b.get("position") or 0, "limit": b.get("limit") or 0,
+                                 "tasks": [vk_task(t) for t in b.get("tasks") or []]} for b in got]}
+        done = query.get("done", ["false"])[0] == "true"
+        q = {"filter": f"done = {'true' if done else 'false'}", "sort_by": "done_at" if done else "position", "order_by": "desc" if done else "asc"}
+        tasks = vk_all(f"/projects/{pid}/views/{project['list']}/tasks", q, limit=4 if done else 40) if project["list"] else []
+        return {"tasks": [vk_task(t) for t in tasks]}
+    if what == "due":
+        until = query.get("until", [""])[0]
+        if not re.fullmatch(r"\d{4}-\d\d-\d\d", until):
+            raise ValueError("until: a day")
+        tz = query.get("tz", ["UTC"])[0][:64]
+        got = vk_all("/tasks", {"filter": f"done = false && due_date < {until}", "filter_timezone": tz, "sort_by": "due_date", "order_by": "asc"}, limit=10)
+        return {"tasks": [vk_task(t) for t in got if vk_date(t.get("due_date"))]}
+    if what == "search":
+        text = query.get("q", [""])[0][:200]
+        got = vk_all("/tasks", {"s": text, "filter": "done = false"}, limit=4) if text else []
+        return {"tasks": [vk_task(t) for t in got]}
+    raise KeyError("not found")
+
+
+def tasks_read_local(what, query):
+    data = tasks_local()
+    task = lambda t: {"id": t["id"], "project": t["project"], "title": t["title"], "description": t.get("description", ""), "done": bool(t.get("done")),
+                      "doneAt": t.get("doneAt"), "due": t.get("due"), "priority": t.get("priority", 0), "labels": t.get("labels", []),
+                      "position": t.get("position", 0), "bucket": t.get("bucket"), "repeat": t.get("repeat"), "percent": 0, "identifier": "",
+                      "favorite": bool(t.get("favorite")), "color": t.get("color", ""), "created": t.get("created"), "updated": t.get("updated")}
+    if what == "projects":
+        return {"projects": local_projects(data)}
+    if what == "labels":
+        return {"labels": data.get("labels") or []}
+    if what in ("list", "board"):
+        pid = query.get("project", [""])[0]
+        project = next((p for p in data["projects"] if p["id"] == pid), None)
+        if not project:
+            raise KeyError("no such project")
+        tasks = sorted((t for t in data["tasks"] if t["project"] == pid), key=lambda t: t.get("position", 0))
+        if what == "board":
+            first = (project.get("buckets") or [{}])[0].get("id")
+            return {"buckets": [{"id": b["id"], "title": b["title"], "position": b.get("position", 0), "limit": 0,
+                                 "tasks": [task(t) for t in tasks if (t.get("bucket") or first) == b["id"]]} for b in project.get("buckets") or []]}
+        done = query.get("done", ["false"])[0] == "true"
+        shown = [task(t) for t in tasks if bool(t.get("done")) == done]
+        if done:
+            shown.sort(key=lambda t: t.get("doneAt") or "", reverse=True)
+        return {"tasks": shown}
+    if what == "due":
+        until = query.get("until", [""])[0]
+        return {"tasks": sorted((task(t) for t in data["tasks"] if not t.get("done") and t.get("due") and t["due"][:10] < until), key=lambda t: t["due"])}
+    if what == "search":
+        text = query.get("q", [""])[0].lower()
+        return {"tasks": [task(t) for t in data["tasks"] if text and not t.get("done") and text in t["title"].lower()]}
+    raise KeyError("not found")
+
+
+def tasks_write(body):
+    """A change: task-create, task-update, task-delete, task-move (to a
+    bucket, a place), project-create/update/delete, bucket-create/update/
+    delete, label-create."""
+    action = body.get("action")
+    if not isinstance(action, str):
+        raise ValueError("action")
+    if not tasks_connected():
+        with _tasks_lock:
+            data = tasks_local()
+            out = tasks_write_local(data, action, body)
+            tasks_local_save(data)
+            return out
+    if action == "task-create":
+        pid = vk_id(body.get("project"), "project")
+        f = task_fields(body.get("task") or {})
+        if "title" not in f:
+            raise ValueError("title")
+        made = vk("PUT", f"/projects/{pid}/tasks", vk_body({}, f))
+        for lid in f.get("labels") or []:
+            vk("PUT", f"/tasks/{made['id']}/labels", {"label_id": vk_id(lid, "label")})
+        if body.get("bucket"):
+            project = next((p for p in vk_projects() if p["id"] == str(pid)), None)
+            if project and project["board"]:
+                vk("POST", f"/projects/{pid}/views/{project['board']}/buckets/{vk_id(body['bucket'], 'bucket')}/tasks", {"task_id": made["id"]})
+        return {"task": vk_task(vk("GET", f"/tasks/{made['id']}"))}
+    if action == "task-update":
+        tid = vk_id(body.get("id"), "task")
+        f = task_fields(body.get("task") or {})
+        current = vk("GET", f"/tasks/{tid}")
+        if body.get("project") and str(body["project"]) != str(current.get("project_id")):
+            current["project_id"] = vk_id(body["project"], "project")
+        changed = vk("POST", f"/tasks/{tid}", vk_body(current, f))
+        if "labels" in f:
+            have = {str(l["id"]) for l in current.get("labels") or []}
+            want = set(f["labels"])
+            for lid in want - have:
+                vk("PUT", f"/tasks/{tid}/labels", {"label_id": vk_id(lid, "label")})
+            for lid in have - want:
+                vk("DELETE", f"/tasks/{tid}/labels/{vk_id(lid, 'label')}")
+        return {"task": vk_task(vk("GET", f"/tasks/{tid}") if "labels" in f else changed)}
+    if action == "task-delete":
+        vk("DELETE", f"/tasks/{vk_id(body.get('id'), 'task')}")
+        return {"ok": True}
+    if action == "task-move":
+        tid = vk_id(body.get("id"), "task")
+        pid = vk_id(body.get("project"), "project")
+        project = next((p for p in vk_projects() if p["id"] == str(pid)), None)
+        if not project or not project["board"]:
+            raise KeyError("no such project")
+        if body.get("bucket"):
+            vk("POST", f"/projects/{pid}/views/{project['board']}/buckets/{vk_id(body['bucket'], 'bucket')}/tasks", {"task_id": tid})
+        if body.get("position") is not None:
+            view = project["board"] if body.get("view") == "board" else project["list"]
+            vk("POST", f"/tasks/{tid}/position", {"task_id": tid, "project_view_id": vk_id(view, "view"), "position": float(body["position"])})
+        return {"task": vk_task(vk("GET", f"/tasks/{tid}"))}
+    if action in ("project-create", "project-update"):
+        title = str(body.get("title") or "").strip()[:250]
+        if action == "project-create":
+            if not title:
+                raise ValueError("title")
+            made = vk("PUT", "/projects", {"title": title, "hex_color": str(body.get("color") or "").lstrip("#")})
+            return {"project": next((p for p in vk_projects() if p["id"] == str(made["id"])), None)}
+        pid = vk_id(body.get("id"), "project")
+        current = vk("GET", f"/projects/{pid}")
+        current.pop("views", None)
+        if title:
+            current["title"] = title
+        if "color" in body:
+            current["hex_color"] = str(body["color"] or "").lstrip("#")
+        if "archived" in body:
+            current["is_archived"] = bool(body["archived"])
+        vk("POST", f"/projects/{pid}", current)
+        return {"ok": True}
+    if action == "project-delete":
+        vk("DELETE", f"/projects/{vk_id(body.get('id'), 'project')}")
+        return {"ok": True}
+    if action in ("bucket-create", "bucket-update", "bucket-delete"):
+        pid = vk_id(body.get("project"), "project")
+        project = next((p for p in vk_projects() if p["id"] == str(pid)), None)
+        if not project or not project["board"]:
+            raise KeyError("no such project")
+        base = f"/projects/{pid}/views/{project['board']}/buckets"
+        if action == "bucket-create":
+            title = str(body.get("title") or "").strip()[:250]
+            if not title:
+                raise ValueError("title")
+            return {"bucket": vk("PUT", base, {"title": title})}
+        bid = vk_id(body.get("id"), "bucket")
+        if action == "bucket-delete":
+            vk("DELETE", f"{base}/{bid}")
+            return {"ok": True}
+        current = next((b for b in vk("GET", base) or [] if b["id"] == bid), None)
+        if not current:
+            raise KeyError("no such bucket")
+        current.pop("tasks", None)
+        if body.get("title"):
+            current["title"] = str(body["title"]).strip()[:250]
+        if "limit" in body:
+            current["limit"] = max(0, int(body["limit"] or 0))
+        vk("POST", f"{base}/{bid}", current)
+        return {"ok": True}
+    if action == "label-create":
+        title = str(body.get("title") or "").strip()[:250]
+        if not title:
+            raise ValueError("title")
+        made = vk("PUT", "/labels", {"title": title, "hex_color": str(body.get("color") or "").lstrip("#")})
+        return {"label": {"id": str(made["id"]), "title": made.get("title"), "color": made.get("hex_color") or ""}}
+    raise ValueError("action: not one Tasks knows")
+
+
+def task_next_due(due, repeat):
+    """When a repeating task is due next: a day, a week, a month, a year or
+    so many days on (from its due date; from now, if it repeats from when it's done)."""
+    when = datetime.datetime.fromisoformat(due.replace("Z", "+00:00"))
+    now = datetime.datetime.now(datetime.timezone.utc)
+    base = max(when, now) if repeat.get("fromDone") else when
+    if repeat.get("fromDone"):
+        base = now.replace(hour=when.hour, minute=when.minute, second=0)
+    kind = repeat.get("kind")
+    if kind == "monthly":
+        m = base.month % 12 + 1
+        y = base.year + (base.month == 12)
+        nxt = base.replace(year=y, month=m, day=min(base.day, calendar.monthrange(y, m)[1]))
+    else:
+        nxt = base + datetime.timedelta(seconds=REPEATS.get(kind) or int(repeat.get("days") or 1) * 86400)
+    while not repeat.get("fromDone") and nxt <= now - datetime.timedelta(days=1) and kind != "monthly":
+        nxt += datetime.timedelta(seconds=REPEATS.get(kind) or int(repeat.get("days") or 1) * 86400)
+    return nxt.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def tasks_write_local(data, action, body):
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    find = lambda kind, i: next((x for x in data[kind] if x["id"] == str(i)), None)
+    if action == "task-create":
+        project = find("projects", body.get("project"))
+        f = task_fields(body.get("task") or {})
+        if not project or "title" not in f:
+            raise ValueError("project, title")
+        same = [t for t in data["tasks"] if t["project"] == project["id"]]
+        t = {"id": local_id(data, "lt"), "project": project["id"], "created": now, "updated": now,
+             "position": (max((x.get("position", 0) for x in same), default=0) + 65536),
+             "bucket": body.get("bucket") or (project.get("buckets") or [{}])[0].get("id"), **f}
+        if t.get("done"):
+            t["doneAt"] = now
+            t["bucket"] = project.get("doneBucket") or t["bucket"]
+        data["tasks"].append(t)
+        return {"task": t}
+    if action == "task-update":
+        t = find("tasks", body.get("id"))
+        if not t:
+            raise KeyError("no such task")
+        f = task_fields(body.get("task") or {})
+        project = find("projects", body.get("project") or t["project"]) or find("projects", t["project"])
+        repeat = f.get("repeat", t.get("repeat"))
+        if f.get("done") and not t.get("done") and repeat and (f.get("due", t.get("due"))):
+            # Done, and it repeats: due again (from its due date, or from now), as Vikunja does.
+            f = {**f, "done": False, "due": task_next_due(f.get("due", t.get("due")), repeat)}
+        if f.get("done") and not t.get("done"):
+            t["doneAt"] = now
+            if project.get("doneBucket"):
+                t["bucket"] = project["doneBucket"]
+        elif "done" in f and not f["done"] and t.get("done"):
+            t["doneAt"] = None
+            if t.get("bucket") == project.get("doneBucket"):
+                t["bucket"] = (project.get("buckets") or [{}])[0].get("id")
+        if project["id"] != t["project"]:
+            t["project"], t["bucket"] = project["id"], (project.get("buckets") or [{}])[0].get("id")
+        t.update(f, updated=now)
+        return {"task": t}
+    if action == "task-delete":
+        data["tasks"] = [t for t in data["tasks"] if t["id"] != str(body.get("id"))]
+        return {"ok": True}
+    if action == "task-move":
+        t = find("tasks", body.get("id"))
+        if not t:
+            raise KeyError("no such task")
+        project = find("projects", t["project"])
+        if body.get("bucket"):
+            t["bucket"] = str(body["bucket"])
+            done = t["bucket"] == project.get("doneBucket")
+            if done != bool(t.get("done")):
+                t["done"], t["doneAt"] = done, now if done else None
+        if body.get("position") is not None:
+            t["position"] = float(body["position"])
+        t["updated"] = now
+        return {"task": t}
+    if action == "project-create":
+        title = str(body.get("title") or "").strip()[:250]
+        if not title:
+            raise ValueError("title")
+        p = {"id": local_id(data, "lp"), "title": title, "color": str(body.get("color") or ""), "position": len(data["projects"]),
+             "buckets": [{"id": local_id(data, "lb"), "title": t, "position": (i + 1) * 100} for i, t in enumerate(("To-Do", "Doing", "Done"))]}
+        p["doneBucket"] = p["buckets"][-1]["id"]
+        data["projects"].append(p)
+        return {"project": local_projects({"projects": [p]})[0]}
+    if action == "project-update":
+        p = find("projects", body.get("id"))
+        if not p:
+            raise KeyError("no such project")
+        if body.get("title"):
+            p["title"] = str(body["title"]).strip()[:250]
+        if "color" in body:
+            p["color"] = str(body["color"] or "")
+        return {"ok": True}
+    if action == "project-delete":
+        if len(data["projects"]) <= 1:
+            raise ValueError("the last project stays")
+        pid = str(body.get("id"))
+        data["projects"] = [p for p in data["projects"] if p["id"] != pid]
+        data["tasks"] = [t for t in data["tasks"] if t["project"] != pid]
+        return {"ok": True}
+    if action in ("bucket-create", "bucket-update", "bucket-delete"):
+        p = find("projects", body.get("project"))
+        if not p:
+            raise KeyError("no such project")
+        if action == "bucket-create":
+            title = str(body.get("title") or "").strip()[:250]
+            if not title:
+                raise ValueError("title")
+            b = {"id": local_id(data, "lb"), "title": title, "position": max((x.get("position", 0) for x in p["buckets"]), default=0) + 100}
+            p["buckets"].append(b)
+            return {"bucket": b}
+        b = next((x for x in p["buckets"] if x["id"] == str(body.get("id"))), None)
+        if not b:
+            raise KeyError("no such bucket")
+        if action == "bucket-delete":
+            if len(p["buckets"]) <= 1:
+                raise ValueError("the last bucket stays")
+            p["buckets"].remove(b)
+            for t in data["tasks"]:
+                if t.get("bucket") == b["id"]:
+                    t["bucket"] = p["buckets"][0]["id"]
+            if p.get("doneBucket") == b["id"]:
+                p["doneBucket"] = None
+            return {"ok": True}
+        if body.get("title"):
+            b["title"] = str(body["title"]).strip()[:250]
+        return {"ok": True}
+    if action == "label-create":
+        title = str(body.get("title") or "").strip()[:250]
+        if not title:
+            raise ValueError("title")
+        label = {"id": local_id(data, "ll"), "title": title, "color": str(body.get("color") or "")}
+        data.setdefault("labels", []).append(label)
+        return {"label": label}
+    raise ValueError("action: not one Tasks knows")
+
+
 # --------------------------------------------- without Immich, Paperless
 
 # Gallery and Documents before they're connected (or while Immich or
@@ -4053,6 +4696,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.documents_get(path[len("/api/paperless/"):], query)
         if path.startswith("/api/calendar/"):
             return self.calendar_get(path[len("/api/calendar/"):], query)
+        if path.startswith("/api/tasks/"):
+            return self.tasks_get(path[len("/api/tasks/"):], query)
         if path.startswith("/api/frame/"):
             app = next((a for a in installed_apps() if a["id"] == path[len("/api/frame/"):]), None)
             if not app:
@@ -4127,6 +4772,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.music_post(path[len("/api/music/"):], body)
         if path == "/api/calendar/event":
             return self.calendar_post(body)
+        if path == "/api/tasks/change":
+            return self.tasks_post(body)
         if path == "/api/gallery/search":
             return self.gallery_search(body)
         if path == "/api/terminal":
@@ -4822,6 +5469,42 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(e.code if e.code in (400, 401, 403, 404) else 502, {"error": f"Paperless said {e.code}", "paperless": e.code})
         except OSError as e:
             return self.send_json(502, {"error": f"can't reach Paperless ({e})"})
+
+    def tasks_get(self, what, query):
+        try:
+            if what == "status":
+                return self.send_json(200, tasks_status())
+            return self.send_json(200, tasks_read(what, query))
+        except KeyError as e:
+            return self.send_json(404, {"error": str(e).strip("'")})
+        except LookupError:
+            return self.send_json(409, {"error": "Tasks isn't connected to Vikunja"})
+        except ValueError as e:
+            return self.send_json(400, {"error": str(e)})
+        except urllib.error.HTTPError as e:
+            return self.send_json(502, {"error": f"Vikunja said {e.code}", "vikunja": e.code})
+        except OSError as e:
+            return self.send_json(502, {"error": f"can't reach Vikunja ({e})"})
+
+    def tasks_post(self, body):
+        if not isinstance(body, dict):
+            return self.send_json(400, {"error": "a JSON object"})
+        try:
+            return self.send_json(200, tasks_write(body))
+        except KeyError as e:
+            return self.send_json(404, {"error": str(e).strip("'")})
+        except LookupError:
+            return self.send_json(409, {"error": "Tasks isn't connected to Vikunja"})
+        except (ValueError, TypeError) as e:
+            return self.send_json(400, {"error": str(e)})
+        except urllib.error.HTTPError as e:
+            try:
+                said = json.loads(e.read()).get("message")
+            except (ValueError, AttributeError, OSError):
+                said = None
+            return self.send_json(502, {"error": f"Vikunja said {e.code}{f': {said}' if said else ''}", "vikunja": e.code})
+        except OSError as e:
+            return self.send_json(502, {"error": f"can't reach Vikunja ({e})"})
 
     def calendar_post(self, body):
         if not isinstance(body, dict):

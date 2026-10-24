@@ -58,6 +58,7 @@ const BUILT_IN = [
   { id: "gallery", name: "Gallery", about: "Your photos and videos, from Immich", open: () => openGallery(), keywords: "gallery photos pictures albums people immich" },
   { id: "documents", name: "Documents", about: "Your papers, from Paperless", open: () => openDocuments(), keywords: "documents papers paperless pdf scans" },
   { id: "calendar", name: "Calendar", about: "Your calendars, from Radicale (CalDAV)", open: () => openCalendar(), keywords: "calendar events schedule radicale caldav agenda" },
+  { id: "tasks", name: "Tasks", about: "Your to-dos, from Vikunja: lists and boards", open: () => openTasks(), keywords: "tasks todo to-do vikunja kanban board lists projects reminders" },
 ];
 // The terminal only in admin mode.
 const builtIns = () => BUILT_IN.filter((b) => b.id !== "terminal" || state.admin);

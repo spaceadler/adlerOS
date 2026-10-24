@@ -147,6 +147,15 @@ preview and original, and the tags, correspondents and types; files you
 add go to Paperless's own upload. The token is your Paperless user's, so it
 may do what you may there; Documents only reads, and adds what you give it.
 
+**Tasks** asks Vikunja with `VIKUNJA_TOKEN` (or a session from
+`VIKUNJA_USER` and `VIKUNJA_PASSWORD`, kept in memory, logged in again when
+it runs out), which stays on the server: projects, their views and
+buckets, tasks, labels, and the changes you make to them. A change is made
+to the task as Vikunja has it then (fetched first: Vikunja's update would
+otherwise clear what it isn't sent). Before it's connected, the same is
+kept in `data/tasks.json`, readable only by you; once it is, those move to
+Vikunja and the file is put aside.
+
 **Music's stations** are addresses you added (data/radio-stations.json).
 The server opens only those: a station's stream (or its playlist, to find
 the stream) is fetched and passed to your browser as it comes, so an
