@@ -429,8 +429,22 @@ function tkCard(t) {
   card.addEventListener("click", () => tkOpen(t));
   card.addEventListener("contextmenu", (e) => { e.preventDefault(); openMenu(e.clientX, e.clientY, tkTaskMenu(t)); });
   card.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/x-adleros-task", t.id); e.dataTransfer.effectAllowed = "move"; card.classList.add("dragging"); tk.dragging = card; });
-  card.addEventListener("dragend", () => { card.classList.remove("dragging"); tk.dragging = null; });
+  card.addEventListener("dragend", (e) => {
+    card.classList.remove("dragging");
+    tk.dragging = null;
+    if (e.dataTransfer?.dropEffect === "none") tkRender(); // dropped nowhere: back as it was
+    else tkBoardCounts();
+  });
   return card;
+}
+
+// Each bucket's count: the cards in it now (as one's dragged in or out, too).
+function tkBoardCounts() {
+  for (const col of document.querySelectorAll("#tk-main .tk-column")) {
+    const n = col.querySelectorAll(".tk-cards > .tk-card").length;
+    const count = col.querySelector(".tk-col-title .tk-group-count");
+    if (count) count.textContent = String(n);
+  }
 }
 
 // A card dropped in a bucket: there (done, in Done), in its place among them.
@@ -444,6 +458,7 @@ function tkDropColumn(col, cards, project, bucket) {
       const r = over.getBoundingClientRect();
       cards.insertBefore(tk.dragging, e.clientY < r.top + r.height / 2 ? over : over.nextSibling);
     } else if (!over && e.target.closest(".tk-cards, .tk-column") && tk.dragging.parentElement !== cards) cards.append(tk.dragging);
+    tkBoardCounts();
   });
   col.addEventListener("dragleave", (e) => { if (!col.contains(e.relatedTarget)) col.classList.remove("drop"); });
   col.addEventListener("drop", async (e) => {
@@ -457,6 +472,10 @@ function tkDropColumn(col, cards, project, bucket) {
     const moved = t.bucket !== bucket.id;
     t.bucket = bucket.id;
     t.position = position;
+    tkBoardCounts();
+    // The board's own lists follow too (a redraw shows the same).
+    for (const b of tk.buckets || []) b.tasks = b.tasks.filter((x) => x.id !== t.id);
+    tk.buckets?.find((b) => b.id === bucket.id)?.tasks.push(t);
     const got = await tkSend({ action: "task-move", id: t.id, project: project.id, ...(moved ? { bucket: bucket.id } : {}), position, view: "board" });
     if (got && moved && project.doneBucket && (bucket.id === project.doneBucket) !== t.done) tkShow(tk.view);
     else if (!got) tkShow(tk.view);

@@ -207,7 +207,7 @@ function renderFiles(f) {
   const rows = (f.path === "/" ? shown : sortEntries(shown)).map((entry) => {
     const path = entry.place && f.path === "/" ? `/${entry.place}` : join(f.path, entry.name);
     const row = el("button", { type: "button", class: `file-row${entry.outside ? " outside" : ""}`, "data-file": path,
-      ...(entry.dir ? { "data-dir": "1" } : {}), ...(entry.place ? { "data-place": entry.place } : {}),
+      ...(entry.dir ? { "data-dir": "1" } : {}), ...(entry.place ? { "data-place": entry.place } : {}), ...(entry.kept ? { "data-kept": "1" } : {}),
       title: entry.outside ? "A link to somewhere outside this place" : entry.place ? `${entry.name}: your ${PLACE_NAMES[entry.place]}` : entry.name },
     el("span", { class: `file-icon ${entry.kind}` }, svg(entry.place ? PLACE_ICONS[entry.place] : FILE_ICONS[entry.kind] || FILE_ICONS.file)),
     el("span", { class: "file-name" }, entry.name, entry.place && f.path !== "/" ? el("span", { class: "file-from" }, `Your ${PLACE_NAMES[entry.place]}`) : ""),
@@ -282,6 +282,8 @@ function renderTools(f) {
 // The keys for a file or folder in the list.
 function entryKeys(e, entry, path, row, f) {
   const mod = e.ctrlKey || e.metaKey;
+  // A place, or one of Root's own folders: opened, never deleted, renamed, cut or copied.
+  if ((entry.place || entry.kept) && (e.key === "Delete" || e.key === "F2" || (mod && "cx".includes(e.key.toLowerCase())))) { e.preventDefault(); return; }
   // Several picked (this one among them): Delete, copy and cut are for all of them.
   const many = row.classList.contains("selected") ? pickedPaths(f) : [];
   const these = many.length > 1 ? many : [path];
@@ -309,7 +311,8 @@ function selectRow(row, f) {
 // it away, Shift and a click everything from the last one you clicked to
 // it; dragging across the list's empty part picks what the box touches.
 // Places (in My Computer's top level) can't be picked with others.
-const pickable = (f) => [...f.part("list").querySelectorAll(".file-row[data-file]:not([data-place])")];
+// Neither can Root's own folders (backup, containers, dev: kept, like the places).
+const pickable = (f) => [...f.part("list").querySelectorAll(".file-row[data-file]:not([data-place]):not([data-kept])")];
 const pickedPaths = (f) => [...f.part("list").querySelectorAll(".file-row.selected[data-file]")].map((r) => r.dataset.file);
 
 function setPicked(f, paths) {
@@ -319,7 +322,7 @@ function setPicked(f, paths) {
 
 function pickRow(row, f, e) {
   const path = row.dataset.file;
-  if (row.dataset.place) { setPicked(f, [path]); f.anchor = null; return; }
+  if (row.dataset.place || row.dataset.kept) { setPicked(f, [path]); f.anchor = null; return; }
   const rows = pickable(f);
   if (e.shiftKey && f.anchor && rows.some((r) => r.dataset.file === f.anchor)) {
     const a = rows.findIndex((r) => r.dataset.file === f.anchor), b = rows.indexOf(row);
@@ -386,6 +389,9 @@ function dragBox(e, area, items, set, picked) {
     cancelAnimationFrame(raf);
     document.body.classList.remove("drag-boxing");
     if (box) { box.remove(); dragBox.justDid = Date.now(); } else if (!adding) set([]);
+    // The keys (Delete, Ctrl+C…) go where the picking was.
+    if (!area.hasAttribute("tabindex")) area.tabIndex = -1;
+    area.focus({ preventScroll: true });
   };
   addEventListener("pointermove", move);
   addEventListener("pointerup", up);
@@ -396,7 +402,7 @@ function entryMenu(entry, path, f) {
   if (entry.outside) return [{ label: "Can't open: it leads outside this place", run: () => {} }];
   const items = [{ label: "Open", run: () => openEntry(entry, path, f) }];
   if (entry.dir && desktopMode()) items.push({ label: "Open in a new window", run: () => newFilesWindow(path) });
-  if (entry.place) return items; // a place itself: open it, nothing else
+  if (entry.place || entry.kept) return items; // a place itself, or Root's own folder: open it, nothing else
   if (entry.kind === "text" || (!entry.dir && entry.size < 2 * 1024 * 1024 && entry.kind === "file")) {
     items.push({ label: "Open in Notepad", run: () => editFile(path) });
   }
@@ -695,7 +701,7 @@ const fileDrag = { row: null, suppress: false };
 function fileDown(e) {
   const row = e.target.closest(".files-list .file-row[data-file]");
   const f = fileWinOf(row);
-  if (!row || !f || row.dataset.place || e.button !== 0 || e.pointerType !== "mouse" || f.view !== "folder") return;
+  if (!row || !f || row.dataset.place || row.dataset.kept || e.button !== 0 || e.pointerType !== "mouse" || f.view !== "folder") return;
   Object.assign(fileDrag, { row, f, pointerId: e.pointerId, x: e.clientX, y: e.clientY, active: false, over: null });
 }
 
@@ -827,6 +833,17 @@ function wireFiles(f) {
     if (f.view !== "folder" || !e.dataTransfer?.files.length) return;
     e.preventDefault();
     uploadFiles(e.dataTransfer.files, f.path, f);
+  });
+  // Delete, Ctrl+C, Ctrl+X: whatever's picked (a row with the focus has its own keys).
+  drop.addEventListener("keydown", (e) => {
+    if (e.defaultPrevented || f.view !== "folder" || e.target.matches("textarea, input, select")) return;
+    const kept = new Set([...f.part("list").querySelectorAll(".file-row[data-kept], .file-row[data-place]")].map((r) => r.dataset.file));
+    const picked = pickedPaths(f).filter((p) => p.split("/").filter(Boolean).length > 1 && !kept.has(p)); // a place itself (/user), Root's own folders: never
+    if (!picked.length) return;
+    const mod = e.ctrlKey || e.metaKey;
+    if (e.key === "Delete" && f.writable) { e.preventDefault(); deletePaths(picked); }
+    else if (mod && e.key.toLowerCase() === "c") { e.preventDefault(); clipPaths(picked, true); }
+    else if (mod && e.key.toLowerCase() === "x" && f.writable) { e.preventDefault(); clipPaths(picked, false); }
   });
   // Ctrl+V in the window pastes into the folder you're in.
   drop.addEventListener("keydown", (e) => {
