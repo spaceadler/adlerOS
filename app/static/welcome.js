@@ -233,7 +233,7 @@ const welcomeStorage = {
       title: "Your storage, as a desktop",
       body: [
         welcomeText("Next to the containers is your storage folder: the photos Immich keeps, the music Navidrome plays, Paperless's documents, your notes, and the rest. On its own it's a folder on a server, reached with File Browser or ssh."),
-        welcomeText("My Computer makes it a desktop to work from: open and edit what's in it, move it, upload to it, keep things on the Desktop, and every app reads the same folders. adlermd writes your notes in it, as the Markdown files they are."),
+        welcomeText("My Computer makes it a desktop to work from: open and edit what's in it, move it, upload to it, keep things on the Desktop, and every app reads the same folders. Luna writes your notes in it, as the Markdown files they are."),
       ],
       extra: [open],
     };
@@ -420,7 +420,7 @@ const TOUR = [
   {
     view: () => ({
       title: "And the rest",
-      body: [welcomeText("My Computer, Music, Gallery, Documents, Calendar, Tasks and adlermd are in All apps. On a computer, Settings → Desktop mode puts windows side by side, and the mouse's side buttons go back and forward in them. Press ? for every key; it all works without a mouse."),
+      body: [welcomeText("My Computer, Music, Gallery, Documents, Calendar, Tasks and Luna are in All apps. On a computer, Settings → Desktop mode puts windows side by side, and the mouse's side buttons go back and forward in them. Press ? for every key; it all works without a mouse."),
         welcomeText("This tour is in Settings, if you want it again.")],
     }),
   },

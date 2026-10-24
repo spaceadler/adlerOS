@@ -140,7 +140,7 @@ To add your own, see [customizing](customizing.md#store-apps).
 | `DESKTOP_DIR` | Files' Desktop (read-write), on the desktop in desktop mode (`STORAGE_DIR/Desktop`) |
 | `FILES_ROOT` | Files' Root, read-only: your homelab's folder, say (none) |
 | `WALLPAPER_DIR` | a folder in `STORAGE_DIR` with your wallpapers (`Other/Wallpapers`) |
-| `NOTES_DIR` | adlermd's first vault, a folder in `STORAGE_DIR` (none: adlermd asks you to make or open one) |
+| `NOTES_DIR` | Luna's first vault, a folder in `STORAGE_DIR` (none: Luna asks you to make or open one) |
 | `MUSIC_DIR` | Music's songs and playlists, a folder in `STORAGE_DIR` (`Media/Music`) |
 | `NAVIDROME_USER`, `NAVIDROME_PASSWORD` | your Navidrome login: what Music plays shows up there too (none: off) |
 | `NAVIDROME_URL` | where Navidrome is, if not at `ADLEROS_HOST` and its port in the store (none) |

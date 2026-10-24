@@ -1,4 +1,4 @@
-// adlermd: Markdown notes in vaults, Obsidian's way, so one vault works in
+// Luna: Markdown notes in vaults, Obsidian's way, so one vault works in
 // both (Obsidian on a laptop through Syncthing, and here). A vault is a
 // folder: its notes, its attachments, and the .obsidian settings it reads
 // (how links are written, where attachments and new notes go, line breaks,
@@ -6,7 +6,7 @@
 // side, with search and tags; notes in tabs, to edit, read, or both side by
 // side, saved as you go; backlinks, outgoing links and the outline; the
 // graph (mdgraph.js); Bases (mdbases.js).
-// Opening adlermd (All apps, the dock, the desktop) opens your vault. A
+// Opening Luna (All apps, the dock, the desktop) opens your vault. A
 // Markdown file opened from My Computer is Notepad's quick look instead,
 // and its File → Load vault comes here (notepad.js).
 // Uses $, el, svg, api, toast, registerWindow, openWindow, closeWindow,
@@ -82,11 +82,11 @@ function mdRelative(fromDir, to) {
 
 // ---------------------------------------------------------------- vaults
 
-// Opening adlermd: its window, your vault in it; `path` (a file in My
+// Opening Luna: its window, your vault in it; `path` (a file in My
 // Computer, from Notepad's Load vault): its vault, and it open.
-async function openAdlermd(path = null) {
+async function openLuna(path = null) {
   mdBuild();
-  openWindow("adlermd");
+  openWindow("luna");
   const { status, body } = await api("/api/notes/vaults").catch(() => ({ status: 0 }));
   if (status === 401) return showLock();
   if (status !== 200) return toast(body?.error || "Can't reach your notes right now.");
@@ -97,7 +97,7 @@ async function openAdlermd(path = null) {
   if (vault !== adler.vault || !adler.index) await mdLoadVault(vault);
   if (holding) mdOpen(mdRel(path));
 }
-function toggleAdlermd() { toggleWindow("adlermd", () => openAdlermd()); }
+function toggleLuna() { toggleWindow("luna", () => openLuna()); }
 
 async function mdLoadVault(vault) {
   if (adler.vault && adler.vault !== vault) await mdSaveAll();
@@ -123,7 +123,7 @@ async function mdLoadVault(vault) {
   const tab = mdTab();
   if (tab && tab.text === null) mdLoadTab(tab);
   clearInterval(adler.refreshTimer);
-  adler.refreshTimer = setInterval(() => { if (isOpen("adlermd") && !document.hidden) mdRefreshIndex(); }, 30000);
+  adler.refreshTimer = setInterval(() => { if (isOpen("luna") && !document.hidden) mdRefreshIndex(); }, 30000);
 }
 
 // The index again (after a save, a rename, every half minute): notes that
@@ -174,7 +174,7 @@ function mdIndex() {
 
 function mdApplyLook() {
   const look = mdSetting("appearance");
-  const box = $("adlermd");
+  const box = $("luna");
   box.style.setProperty("--md-accent", look.accentColor || "#8b7cf6");
   box.style.setProperty("--md-font-size", `${Number(look.baseFontSize) || 16}px`);
   box.classList.toggle("md-readable", mdSetting("app").readableLineLength !== false);
@@ -189,8 +189,8 @@ function mdWelcome() {
   make.addEventListener("click", mdCreateVault);
   open.addEventListener("click", mdOpenFolderVault);
   $("md-main").replaceChildren(el("div", { class: "md-welcome" },
-    el("img", { src: "/static/dock/adlermd.svg", alt: "", class: "md-welcome-icon" }),
-    el("h2", {}, "adlermd"),
+    el("img", { src: "/static/dock/luna.svg", alt: "", class: "md-welcome-icon" }),
+    el("h2", {}, "Luna"),
     el("p", {}, "A vault is a folder of notes. Make a new one, or open a folder you have (an Obsidian vault works as it is)."),
     el("div", { class: "md-welcome-actions" }, make, open)));
   $("md-side").replaceChildren();
@@ -204,7 +204,7 @@ async function mdCreateVault() {
   const name = await nameDialog({ title: "Name the vault", value: "Notes", button: "Create" });
   if (!name) return;
   const reply = await mdPost("vaults", { create: { in: where, name } });
-  if (reply?.vault) return openAdlermd().then(() => mdLoadVault(reply.vault));
+  if (reply?.vault) return openLuna().then(() => mdLoadVault(reply.vault));
 }
 
 async function mdOpenFolderVault() {
@@ -212,7 +212,7 @@ async function mdOpenFolderVault() {
   if (!where) return;
   const reply = await mdPost("vaults", { add: where, use: true });
   if (reply?.vault) {
-    await openAdlermd();
+    await openLuna();
     mdLoadVault(reply.vault);
   }
 }
@@ -235,7 +235,7 @@ function mdVaultMenu(x, y) {
       ? [{ label: "Take this vault off the list (its folder stays)", run: async () => {
         await mdPost("vaults", { remove: adler.vault });
         adler.vault = null;
-        openAdlermd();
+        openLuna();
       } }] : []),
     { label: "Show the vault in My Computer", run: () => openFiles(adler.vault) },
   ]);
@@ -251,13 +251,13 @@ function mdBuild() {
     b.addEventListener("click", run);
     return b;
   };
-  const close = el("button", { class: "sheet-close md-close", type: "button", "aria-label": "Close adlermd" }, svg(["M18 6 6 18", "m6 6 12 12"]));
-  close.addEventListener("click", closeAdlermd);
-  const section = el("section", { id: "adlermd", class: "sheet md-sheet", "aria-label": "adlermd", hidden: "" },
+  const close = el("button", { class: "sheet-close md-close", type: "button", "aria-label": "Close Luna" }, svg(["M18 6 6 18", "m6 6 12 12"]));
+  close.addEventListener("click", closeLuna);
+  const section = el("section", { id: "luna", class: "sheet md-sheet", "aria-label": "Luna", hidden: "" },
     el("div", { class: "sheet-bg", "aria-hidden": "true" }, el("div", { class: "sheet-wallpaper" }), el("div", { class: "sheet-tint" })),
     close,
     el("div", { class: "md-shell" },
-      el("nav", { class: "md-ribbon", "aria-label": "adlermd" },
+      el("nav", { class: "md-ribbon", "aria-label": "Luna" },
         ribbonButton("Files", ["M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"], () => mdPane("files")),
         ribbonButton("Search (Ctrl+Shift+F)", ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"], () => mdPane("search")),
         ribbonButton("Tags", ["M12 2H2v10l9.3 9.3a1 1 0 0 0 1.4 0l8.6-8.6a1 1 0 0 0 0-1.4z", "M7 7h.01"], () => mdPane("tags")),
@@ -271,21 +271,21 @@ function mdBuild() {
       el("div", { class: "md-center" }, el("div", { class: "md-tabs", id: "md-tabs", role: "tablist" }), el("div", { class: "md-main", id: "md-main" })),
       el("aside", { class: "md-right", id: "md-right" })));
   document.body.insertBefore(section, $("modal"));
-  registerWindow("adlermd", { title: "adlermd", close: closeAdlermd, hide: () => closeWindow("adlermd"), dock: "adlermd", size: [1180, 760] });
+  registerWindow("luna", { title: "Luna", close: closeLuna, hide: () => closeWindow("luna"), dock: "luna", size: [1180, 760] });
   section.addEventListener("keydown", mdKeys);
   section.classList.toggle("md-no-right", !adler.right);
 }
 
-async function closeAdlermd() {
+async function closeLuna() {
   await mdSaveAll();
-  closeWindow("adlermd");
+  closeWindow("luna");
 }
 
 function mdKeys(e) {
   const mod = e.ctrlKey || e.metaKey;
   // Alt+↑: up, as the ↑ by the note's path goes (its folder's note, the one above).
   if (e.altKey && !mod && e.key === "ArrowUp") {
-    const up = $("adlermd").querySelector(".md-main .md-up:not([disabled])");
+    const up = $("luna").querySelector(".md-main .md-up:not([disabled])");
     if (up) { e.preventDefault(); up.click(); }
     return;
   }
@@ -308,7 +308,7 @@ function mdKeys(e) {
 function mdToggleRight() {
   adler.right = !adler.right;
   winSave("adleros.mdRight", adler.right);
-  $("adlermd").classList.toggle("md-no-right", !adler.right);
+  $("luna").classList.toggle("md-no-right", !adler.right);
 }
 
 function mdPane(name) {
@@ -394,20 +394,20 @@ function mdTree() {
   const tree = el("div", { class: "md-tree", role: "tree" }, ...draw(root, "", 0));
   // Dropped on the empty space below: to the vault's top.
   tree.addEventListener("dragover", (e) => { if (e.target === tree) e.preventDefault(); });
-  tree.addEventListener("drop", (e) => { if (e.target === tree) { e.preventDefault(); mdMoveInto(e.dataTransfer.getData("text/x-adlermd"), ""); } });
+  tree.addEventListener("drop", (e) => { if (e.target === tree) { e.preventDefault(); mdMoveInto(e.dataTransfer.getData("text/x-luna"), ""); } });
   return tree;
 }
 
 // Drag a file or folder onto a folder to move it there (its links follow).
 function mdDragRow(row, path, isFolder) {
-  row.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/x-adlermd", path); e.dataTransfer.effectAllowed = "move"; });
+  row.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/x-luna", path); e.dataTransfer.effectAllowed = "move"; });
   if (!isFolder) return;
-  row.addEventListener("dragover", (e) => { if (e.dataTransfer.types.includes("text/x-adlermd")) { e.preventDefault(); row.classList.add("drop-target"); } });
+  row.addEventListener("dragover", (e) => { if (e.dataTransfer.types.includes("text/x-luna")) { e.preventDefault(); row.classList.add("drop-target"); } });
   row.addEventListener("dragleave", () => row.classList.remove("drop-target"));
   row.addEventListener("drop", (e) => {
     e.preventDefault();
     row.classList.remove("drop-target");
-    mdMoveInto(e.dataTransfer.getData("text/x-adlermd"), path);
+    mdMoveInto(e.dataTransfer.getData("text/x-luna"), path);
   });
 }
 
@@ -554,7 +554,7 @@ async function mdNav(dir) {
   adler.tabs[adler.active] = tab;
   mdActivate(adler.active);
 }
-registerNav("adlermd", (dir) => mdNav(dir));
+registerNav("luna", (dir) => mdNav(dir));
 
 async function mdActivate(i) {
   // Where you were in what's showing (not the tab that's taken its place).
@@ -597,7 +597,7 @@ function mdRenderTabs() {
     return tab;
   }));
   const now = mdTab();
-  titleWindow("adlermd", now && now.kind !== "graph" ? `${mdTabName(now)} — adlermd` : "adlermd");
+  titleWindow("luna", now && now.kind !== "graph" ? `${mdTabName(now)} — Luna` : "Luna");
 }
 
 function mdTabName(t) {
@@ -687,7 +687,7 @@ function mdNoteView(tab) {
       mdCaretToLine(source, tab.gotoLine);
       tab.gotoLine = null;
     } else if (tab.mode === "edit" && tab.writable) source.focus({ preventScroll: true });
-    else if (document.activeElement === document.body) read.focus({ preventScroll: true }); // so its keys (Ctrl+E) still reach adlermd
+    else if (document.activeElement === document.body) read.focus({ preventScroll: true }); // so its keys (Ctrl+E) still reach Luna
     mdFit(source);
   });
   source.addEventListener("input", () => mdFit(source));
@@ -714,7 +714,7 @@ function mdLiveNote(tab, title, head, read) {
       mdLiveGoto(live, tab.gotoLine);
       tab.gotoLine = null;
     } else if (tab.writable && !mdFrontmatter(tab.text).body.trim()) mdLiveAtEnd(live, null, { focus: false }); // somewhere to start
-    if (document.activeElement === document.body) read.focus({ preventScroll: true }); // so its keys (Ctrl+E) still reach adlermd
+    if (document.activeElement === document.body) read.focus({ preventScroll: true }); // so its keys (Ctrl+E) still reach Luna
   });
   const note = el("div", { class: "md-note" }, head, scroll);
   mdNoteDrops(note, tab);
@@ -1047,11 +1047,11 @@ function mdFolderView(tab) {
   const list = el("div", { class: "md-folder-list" }, ...(rows.length ? rows
     : [el("p", { class: "md-right-empty" }, exists ? "Nothing in this folder yet." : "This folder isn't in the vault any more.")]));
   // Dropped on the list (not on a folder in it): moved into this folder.
-  list.addEventListener("dragover", (e) => { if (exists && !e.target.closest(".md-folder-row") && e.dataTransfer.types.includes("text/x-adlermd")) e.preventDefault(); });
+  list.addEventListener("dragover", (e) => { if (exists && !e.target.closest(".md-folder-row") && e.dataTransfer.types.includes("text/x-luna")) e.preventDefault(); });
   list.addEventListener("drop", (e) => {
     if (e.target.closest(".md-folder-row")) return;
     e.preventDefault();
-    mdMoveInto(e.dataTransfer.getData("text/x-adlermd"), path);
+    mdMoveInto(e.dataTransfer.getData("text/x-luna"), path);
   });
   const scroll = el("div", { class: "md-scroll" }, el("div", { class: "md-page" }, el("h1", { class: "md-folder-title" }, name), list));
   const view = el("div", { class: "md-note md-folder", tabindex: "-1" }, head, scroll);

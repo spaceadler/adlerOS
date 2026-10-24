@@ -1,7 +1,7 @@
 # Using adlerOS
 
 A tour of everything on the screen, and adlerOS's own apps: My Computer,
-Notepad, adlermd, Music, Gallery, Documents, Calendar, Tasks and the Terminal. Every part
+Notepad, Luna, Music, Gallery, Documents, Calendar, Tasks and the Terminal. Every part
 works with a mouse, a touch screen, or a keyboard alone
 ([docs/keyboard.md](keyboard.md)).
 
@@ -21,7 +21,7 @@ folder they keep their files in: Immich's photos, Navidrome's music,
 Paperless's documents, your notes, and the rest. On its own it's a folder
 on a server, only really usable through File Browser or ssh. In adlerOS
 it's a shared desktop and workspace: My Computer, the Desktop, Notepad and
-adlermd open and change it in place, and the apps that use it see the same
+Luna open and change it in place, and the apps that use it see the same
 files.
 
 **Music, Gallery and Documents** are a layer over Navidrome, Immich and
@@ -104,7 +104,7 @@ The first time anyone logs in, adlerOS welcomes you, in a few steps:
   ![Edit widgets](screenshots/widgets-picker.png)
 
 - **Your apps**: adlerOS's own first (My Computer, Music, Gallery,
-  Documents, adlermd, Notepad, the App Store, Settings, Live Usage, and the
+  Documents, Luna, Notepad, the App Store, Settings, Live Usage, and the
   Terminal in admin mode), then one page per collection, its name above it.
   **Core** (DNS, your proxy, the VPN: what your network needs) is only there
   in admin mode; the App Store and search have it always. Swipe, use the
@@ -215,7 +215,7 @@ made phone-narrow leaves it until it's wide again.
   My Computer over the Terminal is just My Computer. How much shows is **Settings →
   Window transparency**, from 0.00 (solid) to 1.00, the same on the home
   screen; your apps' own pages stay solid. **Ctrl and + − 0** (or Ctrl and
-  the wheel) zoom just the window you're in (adlermd's text bigger, the rest
+  the wheel) zoom just the window you're in (Luna's text bigger, the rest
   as it was), each kind of window keeping its own; its bar shows it, and a
   click there puts it back ([keyboard](keyboard.md#zoom)). The
   Search pill sits at the top, level with the bell.
@@ -443,7 +443,7 @@ Desktop and User themselves: opening one takes you there.
 - **Double-click** a folder to go in (a click picks it; on a touch screen a
   tap opens it; Enter too); the path at the top takes you back up, and the
   mouse's side buttons back and forward through where you've been. A text
-  file opens in Notepad (a Markdown one in adlermd's quick look); anything else that opens gets a window of its
+  file opens in Notepad (a Markdown one in Luna's quick look); anything else that opens gets a window of its
   own, so the rest of adlerOS stays usable while it's open:
   - a **picture, video or PDF**: the **Viewer** (in desktop mode, drag and
     resize it like any window; over the home screen it floats over My Computer),
@@ -514,17 +514,17 @@ readable here (Root without admin mode) opens read-only: Save as… puts a
 copy somewhere you can change. Closing one with changes asks first.
 
 A **Markdown** file (`.md`) opened from My Computer or the desktop opens
-the same way, as adlermd's quick look: as it reads, edited where you click
-(View → Live, as in adlermd), its text (Source), how it reads (Read, or
+the same way, as Luna's quick look: as it reads, edited where you click
+(View → Live, as in Luna), its text (Source), how it reads (Read, or
 Ctrl+E), or both side by side; for a quick note you'll throw away. Its
-**File → Load vault** opens adlermd with your vault instead (the file's own,
+**File → Load vault** opens Luna with your vault instead (the file's own,
 if it's in one); with changes it asks whether to save them first.
 
-## adlermd
+## Luna
 
 Your notes, in **vaults**, Obsidian's way: a vault is a folder of Markdown
 notes and their attachments, and an Obsidian vault works here as it is (and
-back: adlermd reads `.obsidian`'s settings and never writes them, so the
+back: Luna reads `.obsidian`'s settings and never writes them, so the
 Obsidian on your laptop, through Syncthing, keeps its own). Open it from
 All apps, the dock or the desktop; it opens your vault: the first is
 `NOTES_DIR` in your storage (in a homelab, `Notes`), and the vault name at

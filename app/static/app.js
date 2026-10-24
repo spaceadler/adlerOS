@@ -4,6 +4,22 @@
 // catalog can inject markup.
 "use strict";
 
+// adlermd is Luna (since 2026-10-24): what this browser kept under its old
+// name (the desktop's apps and their places, window sizes, its zoom) moves
+// over, once.
+try {
+  for (const key of Object.keys(localStorage)) {
+    if (!key.startsWith("adleros.")) continue;
+    const value = localStorage.getItem(key);
+    const now = value && value.includes("adlermd") ? value.replace(/adleros:adlermd/g, "adleros:luna").replace(/"adlermd"/g, '"luna"') : value;
+    const name = key.includes("adlermd") ? key.replace(/adlermd/g, "luna") : key;
+    if (name !== key || now !== value) {
+      localStorage.setItem(name, now);
+      if (name !== key) localStorage.removeItem(key);
+    }
+  }
+} catch { /* nothing kept here */ }
+
 const $ = (id) => document.getElementById(id);
 const REFRESH_MS = 30000;
 
@@ -286,7 +302,7 @@ const PAGE_TITLE_H = 18;
 
 // The home screen's first page: adlerOS's own apps, in this order until you
 // drag them about (the Terminal only in admin mode).
-const OWN_PAGE = ["adleros:files", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:tasks", "adleros:adlermd", "adleros:notepad",
+const OWN_PAGE = ["adleros:files", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:tasks", "adleros:luna", "adleros:notepad",
   "adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:terminal"];
 
 function ownApps() {
@@ -511,7 +527,7 @@ const BUILTIN_PINS = {
   "adleros:files": { name: "My Computer", icon: "files", dock: "files", open: () => toggleFiles() },
   "adleros:terminal": { name: "Terminal", icon: "terminal", dock: "terminal", open: () => toggleTerminal() },
   "adleros:notepad": { name: "Notepad", icon: "notepad", dock: "notepad", open: () => openNotepad() },
-  "adleros:adlermd": { name: "adlermd", icon: "adlermd", dock: "adlermd", open: () => toggleAdlermd() },
+  "adleros:luna": { name: "Luna", icon: "luna", dock: "luna", open: () => toggleLuna() },
   "adleros:music": { name: "Music", icon: "music", dock: "music", open: () => toggleMusic() },
   "adleros:gallery": { name: "Gallery", icon: "gallery", dock: "gallery", open: () => toggleGallery() },
   "adleros:documents": { name: "Documents", icon: "documents", dock: "documents", open: () => toggleDocuments() },
@@ -603,7 +619,7 @@ function buildDock() {
   markDockOpen("app-drawer", drawerOpen());
   markDockOpen("files", isOpen("files"));
   markDockOpen("terminal", isOpen("terminal"));
-  markDockOpen("adlermd", isOpen("adlermd"));
+  markDockOpen("luna", isOpen("luna"));
   markDockOpen("music", isOpen("music"));
   markDockOpen("gallery", isOpen("gallery"));
   markDockOpen("documents", isOpen("documents"));
@@ -740,7 +756,7 @@ const newWindowItem = (id) => (desktopMode() && NEW_WINDOW[id] ? [{ label: "New 
 
 // What a right-click (or a long press) on `target` offers.
 // The window a dock item opens, if it's open: its id, for Close.
-const DOCK_WINDOWS = { "app-store": "store", settings: "settings", "live-usage": "usage", files: "files", terminal: "terminal", adlermd: "adlermd", music: "music", gallery: "gallery", documents: "documents", calendar: "calendar", tasks: "tasks" };
+const DOCK_WINDOWS = { "app-store": "store", settings: "settings", "live-usage": "usage", files: "files", terminal: "terminal", luna: "luna", music: "music", gallery: "gallery", documents: "documents", calendar: "calendar", tasks: "tasks" };
 function openWindowFor(item) {
   const id = item?.dataset.window || DOCK_WINDOWS[item?.dataset.dock] || (item?.dataset.app && !BUILTIN_PINS[item.dataset.app] ? `app-${item.dataset.app}` : null);
   return id && wm.windows.has(id) && isOpen(id) ? id : null;
@@ -1183,7 +1199,7 @@ const ACTIONS = [
   { id: "terminal", name: "Terminal", keywords: "terminal shell console ssh bash command line admin" },
   { id: "files", name: "My Computer", keywords: "files folders storage documents upload download trash desktop mailbox root computer finder explorer" },
   { id: "notepad", name: "Notepad", keywords: "notepad text editor edit write txt plain" },
-  { id: "adlermd", name: "adlermd", keywords: "adlermd notes markdown md obsidian vault wiki journal daily graph" },
+  { id: "luna", name: "Luna", keywords: "luna notes markdown md obsidian vault wiki journal daily graph" },
   { id: "music", name: "Music", keywords: "music songs albums artists playlists radio player play listen lyrics spotify mp3" },
   { id: "gallery", name: "Gallery", keywords: "gallery photos pictures images videos albums people faces memories camera immich" },
   { id: "documents", name: "Documents", keywords: "documents papers paperless pdf scans letters bills invoices receipts contracts tags ocr" },
@@ -1286,7 +1302,7 @@ function runResult(i) {
   else if (r.action.id === "terminal") openTerminal();
   else if (r.action.id === "files") openFiles(filesHome());
   else if (r.action.id === "notepad") openNotepad();
-  else if (r.action.id === "adlermd") openAdlermd();
+  else if (r.action.id === "luna") openLuna();
   else if (r.action.id === "music") openMusic();
   else if (r.action.id === "gallery") openGallery();
   else if (r.action.id === "documents") openDocuments();

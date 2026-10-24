@@ -2087,7 +2087,7 @@ body.wm .desk {
 .desk-icon.selected { background: rgb(10 132 255 / 0.32); box-shadow: 0 0 0 1px rgb(10 132 255 / 0.7) inset; }
 .desk-icon.selected .desk-name { background: rgb(10 132 255 / 0.85); border-radius: 4px; }
 .desk-ghost-count { position: absolute; top: 2px; right: 6px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ff3b30; font-size: 12px; font-weight: 700; line-height: 20px; }
-/* adlermd: files dragged over a note (they'll be linked in it). */
+/* Luna: files dragged over a note (they'll be linked in it). */
 .md-note.md-dropping { box-shadow: 0 0 0 3px rgb(10 132 255 / 0.85) inset; border-radius: 12px; }
 /* The box dragged across a list or the desktop, picking what it touches. */
 .drag-box { position: fixed; z-index: 300; border: 1px solid rgb(10 132 255 / 0.95); border-radius: 3px; background: rgb(10 132 255 / 0.18); pointer-events: none; }
@@ -2504,7 +2504,7 @@ body.wm .pad-bar { padding-right: 10px; min-height: 36px; }
 .picker-name { width: 100%; margin-bottom: 14px; }
 
 /* ============================================================== Markdown
-   markdown.js's elements: Notepad's preview, adlermd's reading view. */
+   markdown.js's elements: Notepad's preview, Luna's reading view. */
 .md-view { color: #e6e6e6; font-size: 15px; line-height: 1.65; overflow-wrap: break-word; }
 .md-view > :first-child { margin-top: 0; }
 .md-view p { margin: 0 0 0.9em; }
@@ -2559,8 +2559,8 @@ body.wm .pad-bar { padding-right: 10px; min-height: 36px; }
 .md-view .md-fnref a { padding: 0 2px; font-size: 0.8em; }
 .md-view .md-fn-inline { border-bottom: 1px dotted rgb(255 255 255 / 0.4); cursor: help; }
 
-/* ================================================================ adlermd
-   adlermd.js: the ribbon, the files (or search, or tags) down the side,
+/* ================================================================ Luna
+   luna.js: the ribbon, the files (or search, or tags) down the side,
    notes in tabs, links and the outline on the right. */
 .md-sheet { --md-accent: #8b7cf6; --md-font-size: 16px; display: flex; flex-direction: column; }
 .md-close { top: 6px; }
@@ -2612,7 +2612,7 @@ body:not(.wm) .md-tabs { padding-right: 56px; -webkit-mask: linear-gradient(to l
 .md-main { position: relative; flex: 1; min-height: 0; }
 .md-note { display: flex; flex-direction: column; height: 100%; }
 .md-note-head { display: flex; flex-shrink: 0; align-items: center; gap: 8px; padding: 6px 12px; }
-/* The path over a note: the vault and each folder, to click (adlermd.js's mdCrumbs). */
+/* The path over a note: the vault and each folder, to click (luna.js's mdCrumbs). */
 .md-crumbs { display: flex; flex: 1; align-items: center; gap: 1px; min-width: 0; overflow: hidden; font-size: 12px; color: rgb(255 255 255 / 0.45); white-space: nowrap; }
 .md-crumb { flex: 0 1 auto; min-width: 0; overflow: hidden; padding: 3px 6px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 button.md-crumb:hover, button.md-crumb:focus-visible { background: rgb(255 255 255 / 0.08); color: #fff; outline: none; }
@@ -3590,7 +3590,7 @@ body:not(.wm) .tk-detail { padding-top: 56px; }
   body:not(.wm) .tk-head { padding-right: 0; }
 }
 
-/* adlermd's Insert (mdinsert.js): everything Markdown does, searched. */
+/* Luna's Insert (mdinsert.js): everything Markdown does, searched. */
 .md-ins { width: min(520px, calc(100vw - 24px)); max-height: min(620px, calc(100dvh - 40px)); display: flex; flex-direction: column; gap: 8px; padding: 14px; text-align: left; }
 .md-ins-search { width: 100%; }
 .md-ins-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -6px; padding: 0 6px; }

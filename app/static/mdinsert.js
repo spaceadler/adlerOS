@@ -1,4 +1,4 @@
-// adlermd's Insert: everything Markdown does, without knowing how it's
+// Luna's Insert: everything Markdown does, without knowing how it's
 // written. A right click on a note (reading or writing it) has the usual
 // few (a new page, a file, a picture, a table, a checklist, a link to a
 // note) and Insert… for the rest, as a list you search (Ctrl+/ too):
@@ -9,7 +9,7 @@
 // inside (Academics: GJU/gju.md), linked here and opened, so pages nest.
 // Shift and a right click: the browser's own menu (spelling). Uses el, svg,
 // $, toast, openMenu, openModal, closeModal, nameDialog, filesPost, and
-// adlermd's mdTab, mdSetMode, mdLinkTo, mdPasteFiles, mdCreate, mdOpen,
+// Luna's mdTab, mdSetMode, mdLinkTo, mdPasteFiles, mdCreate, mdOpen,
 // mdFileName, mdLineEnd, mdFolderOf, mdFolderNote, mdFull, mdRefreshIndex,
 // mdLiveBoxes, mdLiveOpen, mdLiveAtEnd.
 "use strict";

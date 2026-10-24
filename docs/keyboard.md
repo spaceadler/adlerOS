@@ -33,15 +33,15 @@ room.
 
 The mouse's **side buttons** go back (the one nearer your palm) and
 forward, in the window under the pointer: My Computer's folders, Settings'
-categories, adlermd's notes and folders (each tab its own). They never take
+categories, Luna's notes and folders (each tab its own). They never take
 the browser off adlerOS; nor does its own back (Alt+Left, its button), which
 goes back in the window in front instead.
 
 ### Zoom
 
 **Ctrl and + − 0** (⌘ on a Mac), or Ctrl and the wheel (a trackpad's pinch),
-zoom the adlerOS window you're in, not the whole page: adlermd's text
-bigger, say, and the rest as it was. Each kind of window (adlermd, Music, My
+zoom the adlerOS window you're in, not the whole page: Luna's text
+bigger, say, and the rest as it was. Each kind of window (Luna, Music, My
 Computer…) keeps its own zoom on this device; its title bar shows it when
 it isn't 100% (a click there, or Ctrl+0, puts it back), and the window's
 menu has it too. Over the desktop, or an app's own window, they're the
@@ -102,7 +102,7 @@ Three of Hyprland's had two jobs there (C: clipboard and centre, J: emoji
 and down, P: wallpaper and wider); here they move windows, and the
 wallpaper is Alt+Shift+P.
 
-## In adlermd
+## In Luna
 
 | Key | Does |
 | --- | --- |
