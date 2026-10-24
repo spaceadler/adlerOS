@@ -241,18 +241,11 @@ made phone-narrow leaves it until it's wide again.
   says where you are. The desktop and its icons are the same on all of them.
 - **Moving** is on the curves of a Hyprland config: windows glide to where
   they go, pop in and fade. Every Alt key is in [keyboard](keyboard.md#alt-keys).
-- **More than one My Computer or Terminal:** right-click it (in the dock,
+- **More than one My Computer, Terminal or Notepad:** right-click it (in the dock,
   All apps, on the desktop, or its title bar) → **New window**, or Alt+E /
   Alt+Enter with one open. Each terminal has a shell of its own (three at
   most); each My Computer its own folder, and a file dragged from one onto
-  another moves into that one's folder.
-- **More than one of the rest** (Notepad, adlermd, Music, Gallery,
-  Documents, Calendar, Tasks): the same **New window** in their menus.
-  Notepad's is an empty page. The others are wholly another (Calendar 2,
-  Music 2…): adlerOS with only that app, in a window of its own, so each
-  has its own place in it (another week, another vault's note, another
-  album); a second Music plays on its own. Its own close (Escape, ✕)
-  closes that window; closed, it's gone.
+  another moves into that one's folder; each Notepad a page of its own.
 - **Keys:** Ctrl+` goes to the next window, then the desktop; Ctrl+Shift+`
   goes back. On a title bar, `m` (or the Menu key) opens its menu: left or
   right half, maximize, minimize, close, or move and resize it with the
