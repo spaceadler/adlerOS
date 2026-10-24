@@ -101,7 +101,9 @@ one, each still shows the files themselves. More in
   type, searched by what they say, each with its preview and details.
   Without a Paperless token, the files in your storage.
 - **Calendar**: your calendars from Radicale (or any CalDAV server), by day,
-  week or month, each in its color, every repeat worked out. Only read.
+  week or month, each in its color, every repeat worked out. Drag an event
+  to another time or day; edit it (repeats, travel time, its calendar); on
+  the server, so your phone has it too.
 - **Firefox** in the store: a real browser running on the machine, in your
   browser. With My Computer and the terminal, an old laptop is enough to work on
   your homelab.

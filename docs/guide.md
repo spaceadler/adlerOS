@@ -712,9 +712,9 @@ inside them and adding documents are Paperless's, so they wait for it;
 ## Calendar
 
 Your calendars as Radicale (or any CalDAV server) has them: open it from All
-apps, the dock, or Alt+Space "calendar". It only reads: events are made and
-changed where they always are (your phone's calendar, Fantastical, Super
-Productivity's CalDAV plugin), and show up here within a minute. It needs
+apps, the dock, or Alt+Space "calendar". What you change here is changed on
+the server, so your phone's calendar (and Fantastical, and the rest) has it
+too, and what they change shows up here within a minute. It needs
 your login there in the settings file, `CALDAV_USER` and `CALDAV_PASSWORD`;
 `CALDAV_URL` if it isn't Radicale at this machine's address (any CalDAV
 server's address: Calendar finds your calendars in it).
@@ -734,6 +734,35 @@ Until then it's the calendar itself, empty, with how to connect it above.
   shows it again), remembered. A month above them picks a day.
 - On a phone, the month is dots under the days, and the day you tap has
   its events under it. Swipe across for the next or the one before.
+
+**Changing them:**
+
+- **Drag** an event up or down for another time, sideways for another day
+  (15 minutes at a time); drag its foot for how long it is. All-day ones
+  (and a month's) drag to another day. With a finger: hold it a moment,
+  then drag.
+- **A new one**: drag across free hours, double-click a free hour (or a
+  month's day, for an all-day one), the **+** at the top, or N.
+- **Right-click** an event (or its details' **Edit**) for the editor: its
+  name, place, all day or not, when it starts and ends, **travel time**,
+  how it **repeats**, its calendar and notes. **Delete** there, in its
+  details, or with Delete.
+- **Travel time** (Wegzeit, on a German iPhone) is the time it takes to
+  get there: blocked out before the event, drawn as a striped band above
+  it, so nothing gets put in the way. It's written the way Apple's
+  Calendar keeps it, so your iPhone shows it too (and reminds you when to
+  leave, if you let it).
+- **Repeat**: never, every day, week, 2 weeks, month or year, or
+  **Custom**: daily, weekly (which days of the week), monthly (which days
+  of the month, or "on the second Tuesday", "the last weekday"…) or yearly
+  (which months, on the day or "on the first Sunday"), every so many days,
+  weeks, months or years; it says it back in words. **End repeat**: never,
+  on a day, or after so many times.
+- A repeating event asks what a change (or a delete) is for: **only this
+  one**, **this and the ones after**, or **all of them**. Moving all of
+  them moves the whole series (its skipped and changed ones with it).
+- A change goes to the server only if nobody changed that event meanwhile
+  (on your phone, say); if they did, it says so and shows it as it is now.
 
 ## Terminal
 

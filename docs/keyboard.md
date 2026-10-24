@@ -157,6 +157,9 @@ wallpaper is Alt+Shift+P.
 | T | Today |
 | ← → | The day, week or month before, or after |
 | D, W, M | Day, week, month |
+| N | A new event |
+| E | Edit the event whose details are open |
+| Delete | Delete the event whose details are open |
 | Escape | Puts an event's details away |
 
 ## Typing

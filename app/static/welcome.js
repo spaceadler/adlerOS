@@ -262,7 +262,7 @@ const LAYERED = [
   },
   {
     id: "calendar", name: "Calendar", over: "Radicale", apps: ["radicale"], icon: "calendar", open: () => openCalendar(),
-    adds: "your calendars in their colors, by day, week or month, every repeat worked out",
+    adds: "your calendars in their colors, by day, week or month; events dragged, made and edited there, so your phone has them too",
     alone: "is an empty calendar, with how to connect it at the top",
   },
 ];
