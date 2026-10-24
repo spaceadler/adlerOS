@@ -286,7 +286,7 @@ const PAGE_TITLE_H = 18;
 
 // The home screen's first page: adlerOS's own apps, in this order until you
 // drag them about (the Terminal only in admin mode).
-const OWN_PAGE = ["adleros:files", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:adlermd", "adleros:notepad",
+const OWN_PAGE = ["adleros:files", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:adlermd", "adleros:notepad",
   "adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:terminal"];
 
 function ownApps() {
@@ -515,6 +515,7 @@ const BUILTIN_PINS = {
   "adleros:music": { name: "Music", icon: "music", dock: "music", open: () => toggleMusic() },
   "adleros:gallery": { name: "Gallery", icon: "gallery", dock: "gallery", open: () => toggleGallery() },
   "adleros:documents": { name: "Documents", icon: "documents", dock: "documents", open: () => toggleDocuments() },
+  "adleros:calendar": { name: "Calendar", icon: "calendar", dock: "calendar", open: () => toggleCalendar() },
 };
 // A pin: an installed app, or one of those.
 const pinFor = (id) => appById(id) || (BUILTIN_PINS[id] && { id, builtin: BUILTIN_PINS[id] });
@@ -605,6 +606,7 @@ function buildDock() {
   markDockOpen("music", isOpen("music"));
   markDockOpen("gallery", isOpen("gallery"));
   markDockOpen("documents", isOpen("documents"));
+  markDockOpen("calendar", isOpen("calendar"));
   markDockOpen("notepad", [...pads.keys()].some((id) => isOpen(id)));
   winDock();
 }
@@ -736,7 +738,7 @@ const newWindowItem = (id) => (desktopMode() && NEW_WINDOW[id] ? [{ label: "New 
 
 // What a right-click (or a long press) on `target` offers.
 // The window a dock item opens, if it's open: its id, for Close.
-const DOCK_WINDOWS = { "app-store": "store", settings: "settings", "live-usage": "usage", files: "files", terminal: "terminal", adlermd: "adlermd", music: "music", gallery: "gallery", documents: "documents" };
+const DOCK_WINDOWS = { "app-store": "store", settings: "settings", "live-usage": "usage", files: "files", terminal: "terminal", adlermd: "adlermd", music: "music", gallery: "gallery", documents: "documents", calendar: "calendar" };
 function openWindowFor(item) {
   const id = item?.dataset.window || DOCK_WINDOWS[item?.dataset.dock] || (item?.dataset.app && !BUILTIN_PINS[item.dataset.app] ? `app-${item.dataset.app}` : null);
   return id && wm.windows.has(id) && isOpen(id) ? id : null;
@@ -1183,6 +1185,7 @@ const ACTIONS = [
   { id: "music", name: "Music", keywords: "music songs albums artists playlists radio player play listen lyrics spotify mp3" },
   { id: "gallery", name: "Gallery", keywords: "gallery photos pictures images videos albums people faces memories camera immich" },
   { id: "documents", name: "Documents", keywords: "documents papers paperless pdf scans letters bills invoices receipts contracts tags ocr" },
+  { id: "calendar", name: "Calendar", keywords: "calendar events schedule agenda day week month meetings appointments radicale caldav" },
   { id: "desktop-mode", name: "Desktop mode or home screen", keywords: "desktop mode windows window manager floating side by side home screen switch" },
   { id: "welcome", name: "Welcome tour", keywords: "welcome tour intro introduction start first help guide find apps compose folders" },
   { id: "logout", name: "Log out", keywords: "log out sign out lock exit" },
@@ -1284,6 +1287,7 @@ function runResult(i) {
   else if (r.action.id === "music") openMusic();
   else if (r.action.id === "gallery") openGallery();
   else if (r.action.id === "documents") openDocuments();
+  else if (r.action.id === "calendar") openCalendar();
   else if (r.action.id === "desktop-mode") setDesktopMode(!desktopMode());
   else if (r.action.id === "welcome") openWelcome();
   else if (r.action.id === "logout") confirmLogout();

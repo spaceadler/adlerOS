@@ -150,6 +150,15 @@ wallpaper is Alt+Shift+P.
 | Escape | Back from a document |
 | Mouse side buttons | Back and forward |
 
+## In Calendar
+
+| Key | Does |
+| --- | --- |
+| T | Today |
+| ← → | The day, week or month before, or after |
+| D, W, M | Day, week, month |
+| Escape | Puts an event's details away |
+
 ## Typing
 
 Text boxes keep their keys: Left and Right move the cursor, letters type.

@@ -1,7 +1,7 @@
 # Using adlerOS
 
 A tour of everything on the screen, and adlerOS's own apps: My Computer,
-Notepad, adlermd, Music, Gallery, Documents and the Terminal. Every part
+Notepad, adlermd, Music, Gallery, Documents, Calendar and the Terminal. Every part
 works with a mouse, a touch screen, or a keyboard alone
 ([docs/keyboard.md](keyboard.md)).
 
@@ -697,6 +697,32 @@ inside them and adding documents are Paperless's, so they wait for it;
 - **Add documents** (or drop files on the window): they go to Paperless,
   which reads them (and tags them by its rules); they're there in a minute
   or so. **Open Paperless** for the rest (editing, workflows).
+
+## Calendar
+
+Your calendars as Radicale (or any CalDAV server) has them: open it from All
+apps, the dock, or Alt+Space "calendar". It only reads: events are made and
+changed where they always are (your phone's calendar, Fantastical, Super
+Productivity's CalDAV plugin), and show up here within a minute. It needs
+your login there in the settings file, `CALDAV_USER` and `CALDAV_PASSWORD`;
+`CALDAV_URL` if it isn't Radicale at this machine's address (any CalDAV
+server's address: Calendar finds your calendars in it).
+
+Until then it's the calendar itself, empty, with how to connect it above.
+
+- **Day**, **Week** (a computer's first) and **Month** (a phone's): all-day
+  events and anything a day long or more as bars across their days, the
+  rest in their hours, side by side where they overlap, with a line at now.
+- Every repeat worked out, as your calendar app made it: weekly on some
+  days, the second Tuesday, the last workday of the month, yearly; with the
+  ones you skipped, moved or changed. Times are yours (your browser's time
+  zone); an event made in another zone says its time there too.
+- Click an event for its details: when, its calendar, where, its link and
+  notes.
+- Your **calendars** down the side, in their colors: a click hides one (or
+  shows it again), remembered. A month above them picks a day.
+- On a phone, the month is dots under the days, and the day you tap has
+  its events under it. Swipe across for the next or the one before.
 
 ## Terminal
 
