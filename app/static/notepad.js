@@ -103,7 +103,7 @@ function makePad({ markdown }) {
 function showPad(pad) {
   openWindow(pad.id);
   requestAnimationFrame(() => {
-    const at = pad.mode === "live" ? pad.preview.querySelector(".md-live-area") || pad.preview : pad.mode === "read" ? pad.preview : pad.area;
+    const at = pad.mode === "live" ? pad.preview.querySelector(".md-flow") || pad.preview : pad.mode === "read" ? pad.preview : pad.area;
     at.focus({ preventScroll: true });
   });
   return pad;
@@ -174,7 +174,7 @@ function setPadMode(pad, mode, keep = true) {
   pad.section.dataset.view = pad.mode; // (data-mode is the window's: max)
   pad.preview.hidden = pad.mode === "edit";
   pad.area.hidden = pad.mode === "read" || pad.mode === "live";
-  if (pad.mode !== "live") mdLiveStop(pad.preview);
+  if (pad.mode !== "live") mdFlowStop(pad.preview);
   if (pad.mode !== "edit") renderPadPreview(pad);
   if (keep && pad.markdown) winSave(PAD_MODE_KEY, pad.mode);
 }
@@ -183,8 +183,8 @@ function setPadMode(pad, mode, keep = true) {
 function renderPadPreview(pad) {
   clearTimeout(pad.renderTimer);
   if (pad.mode === "live") {
-    // Edited where you click (mdlive.js); the text area behind it holds the file.
-    const live = mdLive(pad.preview, {
+    // Written in line by line (mdflow.js); the text area behind it holds the file.
+    const live = mdFlow(pad.preview, {
       text: () => pad.area.value,
       set: (text) => { pad.area.value = text; setPadDirty(pad, true); },
       ctx: () => padMdCtx(pad),
@@ -193,7 +193,7 @@ function renderPadPreview(pad) {
         if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey && continueList(area)) { e.preventDefault(); area.dispatchEvent(new Event("input")); }
       }),
     });
-    if (!pad.area.readOnly && !mdFrontmatter(pad.area.value).body.trim()) mdLiveAtEnd(live, null, { focus: false }); // somewhere to start
+    if (!pad.area.readOnly && !mdFrontmatter(pad.area.value).body.trim()) live.atEnd({ focus: false }); // somewhere to start
     return;
   }
   pad.renderTimer = setTimeout(() => pad.preview.replaceChildren(mdRender(pad.area.value, padMdCtx(pad))), pad.preview.childElementCount ? 120 : 0);
@@ -282,7 +282,7 @@ function continueList(area) {
   const num = m[2].match(/^(\d+)([.)])$/);
   const marker = num ? `${Number(num[1]) + 1}${num[2]}` : m[2];
   const next = `\n${m[1]}${marker}${m[3]}${m[4] ? "[ ] " : ""}`;
-  document.execCommand("insertText", false, next) || area.setRangeText(next, at, at, "end");
+  if (area.mdFlow || !document.execCommand("insertText", false, next)) area.setRangeText(next, at, at, "end");
   return true;
 }
 

@@ -543,12 +543,17 @@ vault**.
   mouse's side buttons go back and forward through where the tab has been. It saves as you go. If Obsidian (or
   anything) changed the note meanwhile, you choose: keep yours, theirs, or
   both.
-- **Live** (Obsidian's Live Preview): the note as it reads, and you edit it
-  where you click. The paragraph, heading, list or table you're in shows
-  its Markdown until you leave it; a link, a task's box or a video still
-  works as itself. The arrows go on into the block above or below,
-  Backspace at a block's start (Delete at its end) joins it with the next
-  one, Escape is done. Or **Source** (all of it as Markdown), **Read**, or
+- **Live** (as Obsidian's Live Preview): the note as it reads, written in
+  line by line. What's only there to make it look so stays out of sight
+  but where the caret is: the `**` of the bold word it's in, a link's
+  `[ ](address)` when it's on that link, a heading's `#` or a list's `-`
+  on the caret's line; the rest of the line reads as it reads. Click a link
+  to write in it; **Ctrl** (⌘) and a click follows it. A task's box ticks
+  with a click. What takes several lines (a table, code, a callout, the
+  properties, a PDF or picture shown) reads as it reads until the caret
+  goes in (a click on it, or the arrows), then shows its lines to write in.
+  Typing, Enter (a list goes on), Backspace, pasting, cutting and Ctrl+Z
+  change the note's text exactly. Or **Source** (all of it as Markdown), **Read**, or
   **Both** side by side. Ctrl+E switches between reading and editing; a
   double-click in reading edits there.
 - **What it reads**: headings, emphasis, ==highlights==, lists and tasks
