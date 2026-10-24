@@ -239,9 +239,11 @@ body.phone .drawer-count { display: none; }
 body.phone .drawer-grid { grid-template-columns: repeat(4, var(--app-w, 70px)); gap: 6px var(--app-x-gap, 10px); width: auto; }
 body.phone .drawer-grid.library { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 22px; width: 100%; max-width: 380px; }
 .lib-folder { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; }
+/* Four equal tiles, whatever the icons' own sizes: tracks sized from their
+   content would grow to a big logo's pixels, and draw a percent-sized one 0 wide. */
 .lib-tiles {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template: repeat(2, minmax(0, 1fr)) / repeat(2, minmax(0, 1fr));
   gap: 12px;
   width: 100%;
   aspect-ratio: 1;
@@ -250,9 +252,14 @@ body.phone .drawer-grid.library { grid-template-columns: repeat(2, minmax(0, 1fr
   background: rgb(255 255 255 / 0.13);
 }
 .lib-icon, .lib-more { display: block; width: 100%; aspect-ratio: 1; padding: 0; border: 0; background: none; cursor: pointer; }
-.lib-icon .app-icon, .lib-more .app-icon { width: 100%; }
+/* A span: inline in a button, it took no width. body.phone: over the phone's 60px. */
+body.phone .lib-icon .app-icon, body.phone .lib-more .app-icon { display: block; width: 100%; }
+/* adlerOS's own: the picture not on a line of text (no room under it for one),
+   its negative margins kept inside (flow-root), so the tile stays square. */
+body.phone .lib-icon .builtin-icon { display: flow-root; }
+.lib-icon .builtin-icon img { display: block; }
 .lib-icon:active { transform: scale(0.92); }
-.lib-more { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; }
+.lib-more { display: grid; grid-template: repeat(2, minmax(0, 1fr)) / repeat(2, minmax(0, 1fr)); gap: 4px; padding: 3px; }
 .lib-more .plate.mono { font-size: 8px; }
 .lib-name { max-width: 100%; overflow: hidden; font-size: 12px; font-weight: 500; color: rgb(255 255 255 / 0.85); white-space: nowrap; text-overflow: ellipsis; }
 .lib-head { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-bottom: 10px; }
