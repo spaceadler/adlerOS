@@ -576,6 +576,13 @@ vault**.
   It goes where you right-clicked (picked text: bold, a link… around it);
   reading, the note opens there to be written. Shift and a right click: the
   browser's own menu (its spelling).
+- **A PDF or a picture in the note itself**: right-click a link to one →
+  **Show it in the note** (it becomes `![Name](…)`), or Insert → **Show a
+  PDF or picture…** (from this device) or **Show a file from the vault…**.
+  A PDF shows in a box you can scroll through, as tall as you drag its foot,
+  with Open (it alone) and **Make it a link** (back as it was) on its bar;
+  write under it (a checklist, the questions you're working through) and
+  scroll on down to it. A picture shown: right-click it → Make it a link.
 - **New page…** makes a page inside the one you're in: a folder beside
   the note, named as you type it (`Second Year`: `Second-Year/`), with a
   note named the same inside (`second-year.md`), its title at the top. The
