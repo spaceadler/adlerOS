@@ -697,10 +697,10 @@ function mdNoteView(tab) {
   return note;
 }
 
-// Live: the note as it reads, edited where you click (mdlive.js).
+// Live: the note as it reads, written in line by line (mdflow.js).
 function mdLiveNote(tab, title, head, read) {
   const scroll = el("div", { class: "md-scroll" }, el("div", { class: "md-page" }, title, el("div", { class: "md-note-body mode-live" }, read)));
-  const live = mdLive(read, {
+  const live = mdFlow(read, {
     text: () => tab.text,
     set: (text) => { tab.text = text; mdDirty(tab); },
     ctx: () => mdCtx(tab),
@@ -711,10 +711,10 @@ function mdLiveNote(tab, title, head, read) {
   requestAnimationFrame(() => {
     scroll.scrollTop = tab.scroll || 0;
     if (tab.gotoLine !== undefined && tab.gotoLine !== null) {
-      mdLiveGoto(live, tab.gotoLine);
+      live.gotoLine(tab.gotoLine);
       tab.gotoLine = null;
-    } else if (tab.writable && !mdFrontmatter(tab.text).body.trim()) mdLiveAtEnd(live, null, { focus: false }); // somewhere to start
-    if (document.activeElement === document.body) read.focus({ preventScroll: true }); // so its keys (Ctrl+E) still reach Luna
+    } else if (tab.writable && !mdFrontmatter(tab.text).body.trim()) live.atEnd({ focus: false }); // somewhere to start
+    if (document.activeElement === document.body) live.focus(); // so its keys (Ctrl+E) still reach Luna
   });
   const note = el("div", { class: "md-note" }, head, scroll);
   mdNoteDrops(note, tab);
@@ -731,10 +731,13 @@ function mdWireEditor(area, tab) {
   area.addEventListener("drop", (e) => {
     // Where it's dropped: the caret goes there first, and the link with it.
     if (!e.dataTransfer?.files?.length) return;
-    const at = document.caretPositionFromPoint?.(e.clientX, e.clientY)?.offset ?? document.caretRangeFromPoint?.(e.clientX, e.clientY)?.startOffset;
-    if (Number.isInteger(at)) area.setSelectionRange(at, at);
+    if (area.mdFlow) area.placeAt(e.clientX, e.clientY);
+    else {
+      const at = document.caretPositionFromPoint?.(e.clientX, e.clientY)?.offset ?? document.caretRangeFromPoint?.(e.clientX, e.clientY)?.startOffset;
+      if (Number.isInteger(at)) area.setSelectionRange(at, at);
+    }
     e.stopPropagation(); // the note's own drop (at its end) isn't for this one
-    area.closest(".md-note")?.classList.remove("md-dropping");
+    (area.mdFlow ? area.root : area).closest(".md-note")?.classList.remove("md-dropping");
     mdPasteFiles(e, e.dataTransfer.files, area, tab, { dropped: true });
   });
 }
@@ -1115,7 +1118,7 @@ function mdSourceKeys(e, area, tab) {
         area.setRangeText("\t", start, start, "preserve");
         area.setSelectionRange(caret + 1, caret + 1);
       }
-    } else if (!e.shiftKey) document.execCommand("insertText", false, "\t");
+    } else if (!e.shiftKey) { if (area.mdFlow) area.setRangeText("\t", area.selectionStart, area.selectionEnd, "end"); else document.execCommand("insertText", false, "\t"); }
     area.dispatchEvent(new Event("input"));
     return;
   }
@@ -1129,7 +1132,8 @@ function mdSourceKeys(e, area, tab) {
     const mark = e.key === "b" ? "**" : "*";
     const [a, b] = [area.selectionStart, area.selectionEnd];
     const sel = area.value.slice(a, b);
-    document.execCommand("insertText", false, `${mark}${sel}${mark}`);
+    if (area.mdFlow) area.setRangeText(`${mark}${sel}${mark}`, a, b, "end");
+    else document.execCommand("insertText", false, `${mark}${sel}${mark}`);
     if (!sel) area.setSelectionRange(a + mark.length, a + mark.length);
     area.dispatchEvent(new Event("input"));
   }
@@ -1146,10 +1150,15 @@ function mdComplete(area, tab) {
   if (!matches.length) return mdCompleteClose();
   const box = adler.complete?.box || el("div", { class: "md-complete material", role: "listbox" });
   document.body.append(box);
-  const r = area.getBoundingClientRect();
-  const lineNo = before.split("\n").length - 1;
-  const lh = (parseFloat(getComputedStyle(area).lineHeight) || 24) * drawnScale(area); // on screen, in a zoomed window
-  Object.assign(box.style, { left: `${r.left + 24}px`, top: `${Math.min(innerHeight - 260, r.top + (lineNo + 1) * lh + 18)}px` });
+  if (area.mdFlow) {
+    const c = area.caretRect();
+    Object.assign(box.style, { left: `${Math.min(innerWidth - 280, c.left)}px`, top: `${Math.min(innerHeight - 260, c.bottom + 6)}px` });
+  } else {
+    const r = area.getBoundingClientRect();
+    const lineNo = before.split("\n").length - 1;
+    const lh = (parseFloat(getComputedStyle(area).lineHeight) || 24) * drawnScale(area); // on screen, in a zoomed window
+    Object.assign(box.style, { left: `${r.left + 24}px`, top: `${Math.min(innerHeight - 260, r.top + (lineNo + 1) * lh + 18)}px` });
+  }
   adler.complete = { box, area, tab, start: area.selectionStart - m[0].length, matches, at: 0 };
   mdCompleteDraw();
 }
@@ -1226,7 +1235,7 @@ async function mdPasteFiles(e, list, area, tab, { dropped = false, show = false 
     const lead = before && !before.endsWith("\n") ? "\n" : "";
     const insert = `${lead}${links.map((l) => `${l}${end}`).join("\n")}\n`;
     // As typing would (so Ctrl+Z takes it back); else straight into its text.
-    if (!document.execCommand("insertText", false, insert)) area.setRangeText(insert, caret[0], caret[1], "end");
+    if (area.mdFlow || !document.execCommand("insertText", false, insert)) area.setRangeText(insert, caret[0], caret[1], "end");
     area.dispatchEvent(new Event("input"));
   } else {
     const nl = tab.crlf ? "\r\n" : "\n";
@@ -1558,10 +1567,11 @@ async function mdInsertTemplate(tab) {
   const r = $("md-main").getBoundingClientRect();
   openMenu(r.left + 80, r.top + 60, list.map((p) => ({ label: mdNoteName(p), run: async () => {
     const text = mdFill(await mdText(p), mdNoteName(tab.path));
-    const src = $("md-main").querySelector(".md-live-area, .md-source");
+    const src = mdFlowOf($("md-main").querySelector(".md-flow-box")) || $("md-main").querySelector(".md-source");
     if (src && tab.mode !== "read") {
       src.focus();
-      document.execCommand("insertText", false, text);
+      if (src.mdFlow) src.setRangeText(text, src.selectionStart, src.selectionEnd, "end");
+      else document.execCommand("insertText", false, text);
     } else {
       tab.text = `${tab.text}${tab.text.endsWith("\n") || !tab.text ? "" : "\n"}${text}`;
       mdDirty(tab, 300);

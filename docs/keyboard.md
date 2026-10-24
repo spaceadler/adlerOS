@@ -114,9 +114,9 @@ wallpaper is Alt+Shift+P.
 | Ctrl+B, Ctrl+I | Bold, italic |
 | Tab, Shift+Tab | A list item in, or out |
 | Enter | The next list item (in an empty one: out of the list) |
-| ↑, ↓ (Live) | Past a block's first or last line: into the one above or below |
-| Backspace, Delete (Live) | At a block's start or end: join it with the one before or after |
-| Escape (Live) | Done with the block: it reads again |
+| ↑, ↓ (Live) | Into a table, a code block, a callout above or below: its lines |
+| Ctrl+click (Live) | Follow a link (a click puts the caret in it) |
+| Ctrl+Z, Ctrl+Shift+Z (Live) | Undo, redo |
 | Ctrl+/ | Insert…: everything Markdown does (headings, tables, callouts…), searched |
 | Alt+↑ (a note), Backspace (a folder) | Up: the folder note above (Academics/academics.md from GJU/gju.md), else the folder |
 

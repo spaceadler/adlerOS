@@ -2645,30 +2645,51 @@ button.md-crumb:hover, button.md-crumb:focus-visible { background: rgb(255 255 2
 .md-title { width: 100%; margin: 6px 0 14px; padding: 0; border: 0; background: none; color: #fff; font: inherit; font-size: 2em; font-weight: 700; letter-spacing: -0.02em; outline: none; }
 .md-sheet .md-source { display: block; width: 100%; min-height: 60vh; padding: 0; overflow: hidden; background: none; font: var(--md-font-size)/1.7 ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
 .md-sheet .md-read { font-size: var(--md-font-size); outline: none; }
-/* Live (mdlive.js): the block you're in shows as its Markdown, in the
-   block's own size and letters (copied onto it), and reads again after. */
-.md-live { cursor: text; }
-.md-sheet .md-live { min-height: 50vh; }
-.md-live :is(a, input, summary, button, video, audio) { cursor: pointer; }
-.md-live-area {
-  display: block;
-  width: calc(100% + 20px);
-  margin-inline: -10px;
-  padding: 3px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 0.05);
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--md-accent, #8b7cf6) 70%, transparent);
-  color: #e8eaed;
-  caret-color: var(--md-accent, #8b7cf6);
-  font: inherit;
-  tab-size: 4;
-  white-space: pre-wrap;
-  overflow: hidden;
-  resize: none;
-  outline: none;
-}
-.md-live-area::placeholder { color: rgb(255 255 255 / 0.35); }
+/* Live (mdflow.js): the note written in as it reads, line by line. A
+   line's marks (# - > **…) out of sight but on the caret's line, and in
+   the span it's in; a block drawn as one until the caret's in it. */
+.md-flow { min-height: 50vh; outline: none; cursor: text; caret-color: var(--md-accent, #8b7cf6); white-space: pre-wrap; tab-size: 4; }
+.md-flow :is(a, input, summary, button, video, audio, .mf-check) { cursor: pointer; }
+.md-flow .mf-line { min-height: 1.65em; margin: 0; }
+.md-flow .mf-mk { display: none; }
+.md-flow .mf-line.on > .mf-lm > .mf-mk, .md-flow .mf-tok.on > .mf-mk { display: inline; color: rgb(255 255 255 / 0.38); font-weight: 400; font-style: normal; text-decoration: none; }
+/* Headings: their size, and space above as Read gives them. */
+.md-flow .mf-h1, .md-flow .mf-h2, .md-flow .mf-h3, .md-flow .mf-h4, .md-flow .mf-h5, .md-flow .mf-h6 { margin: 0.9em 0 0.25em; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; }
+.md-flow .mf-h1 { font-size: 1.9em; } .md-flow .mf-h2 { font-size: 1.5em; } .md-flow .mf-h3 { font-size: 1.25em; }
+.md-flow .mf-h4, .md-flow .mf-h5, .md-flow .mf-h6 { font-size: 1.05em; }
+.md-flow > .mf-line:first-child { margin-top: 0; }
+/* Lists: a dot (or its number), a box to tick; their indent as written. */
+.md-flow .mf-ul, .md-flow .mf-ol, .md-flow .mf-task { padding-left: 1.6em; text-indent: -1.1em; }
+.md-flow .mf-ul:not(.on) > .mf-lm::before { content: "•"; display: inline-block; width: 1.1em; color: color-mix(in srgb, var(--md-accent, #8b7cf6) 75%, #fff); text-indent: 0; }
+.md-flow .mf-num { display: inline-block; min-width: 1.1em; color: rgb(255 255 255 / 0.6); text-indent: 0; }
+.md-flow .mf-indent { display: inline-block; white-space: pre; text-indent: 0; }
+.md-flow .mf-check { display: inline-block; width: 15px; height: 15px; margin-right: 0.45em; vertical-align: -2px; border: 2px solid rgb(255 255 255 / 0.45); border-radius: 4px; text-indent: 0; }
+.md-flow .mf-check.done { border-color: #8b7cf6; background: #8b7cf6 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 5 5 9-10'/%3E%3C/svg%3E") center / 11px no-repeat; }
+.md-flow .mf-task.done:not(.on) { color: rgb(255 255 255 / 0.5); text-decoration: line-through; }
+.md-flow .mf-quote { padding-left: 14px; border-left: 3px solid rgb(255 255 255 / 0.25); color: rgb(255 255 255 / 0.75); }
+.md-flow .mf-hr:not(.on) { height: 1.65em; background: linear-gradient(rgb(255 255 255 / 0.15), rgb(255 255 255 / 0.15)) center / 100% 1px no-repeat; }
+/* In a line: as Read shows them. */
+.md-flow .mf-bold { font-weight: 700; } .md-flow .mf-italic { font-style: italic; } .md-flow .mf-strike { text-decoration: line-through; }
+.md-flow .mf-mark { padding: 0 2px; border-radius: 3px; background: rgb(255 208 0 / 0.35); }
+.md-flow .mf-code, .md-flow .mf-math { padding: 0.1em 0.35em; border-radius: 5px; background: rgb(255 255 255 / 0.1); font: 0.88em ui-monospace, "SF Mono", Menlo, monospace; }
+.md-flow .mf-link, .md-flow .mf-wikilink, .md-flow .mf-url { color: color-mix(in srgb, var(--md-accent, #8b7cf6) 70%, #fff); }
+.md-flow .mf-link:not(.on) .mf-linktext, .md-flow .mf-wikilink:not(.on), .md-flow .mf-url:not(.on) { text-decoration: underline; text-decoration-color: rgb(255 255 255 / 0.25); text-underline-offset: 3px; }
+.md-flow .mf-tag { padding: 0 0.45em; border-radius: 999px; background: rgb(139 124 246 / 0.18); color: #c7bfff; font-size: 0.9em; }
+.md-flow .mf-comment { color: rgb(255 255 255 / 0.4); font-style: italic; }
+.md-flow .mf-fnref { font-size: 0.8em; vertical-align: super; color: color-mix(in srgb, var(--md-accent, #8b7cf6) 70%, #fff); }
+.md-flow .mf-embed { color: rgb(255 255 255 / 0.5); font-size: 0.92em; }
+.md-flow .mf-escape > .mf-mk { display: none; }
+/* A block drawn as one (a table, code, a callout, the properties, a PDF
+   shown): drawn until the caret's in it, then its lines, as written. */
+.md-flow .mf-raw:not(.mf-open) { display: none; }
+.md-flow .mf-widget.mf-open { display: none; }
+.md-flow .mf-widget { margin: 0.2em 0; cursor: text; user-select: none; }
+.md-flow .mf-widget > :last-child { margin-bottom: 0.5em; }
+.md-flow .mf-raw { font: 0.92em/1.6 ui-monospace, "SF Mono", Menlo, monospace; color: #dfe1e5; }
+.md-flow .mf-raw.mf-in-code, .md-flow .mf-raw.mf-in-math { padding: 0 12px; background: rgb(0 0 0 / 0.35); }
+.md-flow .mf-raw.mf-in-front { padding: 0 12px; background: rgb(255 255 255 / 0.04); }
+.md-flow .mf-raw .mf-mk { display: inline; color: rgb(255 255 255 / 0.4); }
+.md-flow .mf-dim { color: rgb(255 255 255 / 0.4); }
 .md-sheet .md-view a { color: color-mix(in srgb, var(--md-accent) 70%, #fff); }
 .md-loading, .md-right-empty { padding: 20px; font-size: 13px; color: rgb(255 255 255 / 0.45); }
 .md-embed-note { margin: 0.4em 0 1em; padding: 4px 14px 2px; border-left: 3px solid var(--md-accent); border-radius: 4px; background: rgb(255 255 255 / 0.03); }

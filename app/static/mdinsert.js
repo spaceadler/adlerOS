@@ -11,7 +11,7 @@
 // $, toast, openMenu, openModal, closeModal, nameDialog, filesPost, and
 // Luna's mdTab, mdSetMode, mdLinkTo, mdPasteFiles, mdCreate, mdOpen,
 // mdFileName, mdLineEnd, mdFolderOf, mdFolderNote, mdFull, mdRefreshIndex,
-// mdLiveBoxes, mdLiveOpen, mdLiveAtEnd.
+// mdFlowOf (mdflow.js).
 "use strict";
 
 // ------------------------------------------------- where it goes, how
@@ -20,56 +20,36 @@
 // opened there (Live: that block, its end; reading: Live at that line).
 async function mdEditorAt(tab, target) {
   const main = $("md-main");
-  const area = target?.closest?.("textarea.md-source, textarea.md-live-area");
+  const area = target?.closest?.("textarea.md-source");
   if (area) return area;
   if (tab.mode === "edit" || tab.mode === "split") return main.querySelector("textarea.md-source");
   if (tab.mode === "live") {
-    const live = mdLiveBoxes.get(main.querySelector(".md-live"));
-    if (!live) return null;
-    if (live.edit?.area?.isConnected) return live.edit.area;
-    const block = target?.closest?.("[data-from]");
-    if (block && main.contains(block)) mdLiveOpen(live, Number(block.dataset.from), "end");
-    else mdLiveAtEnd(live, null);
-    const opened = live.edit?.area;
-    if (opened) opened.setSelectionRange(opened.value.length, opened.value.length);
-    return opened || null;
+    const flow = mdFlowOf(main.querySelector(".md-flow-box"));
+    if (!flow) return null;
+    // Where you clicked (a right click puts the caret there), else its end.
+    if (!target?.closest?.(".md-flow")) flow.atEnd();
+    else flow.focus();
+    return flow;
   }
   // Reading: written where you clicked, then it's put there.
   const line = target?.closest?.("[data-from]")?.dataset.from;
   mdSetMode(tab, tab.editMode || "live", line === undefined ? null : Number(line));
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  const now = main.querySelector("textarea.md-live-area, textarea.md-source");
+  const now = mdFlowOf(main.querySelector(".md-flow-box")) || main.querySelector("textarea.md-source");
+  if (now?.mdFlow) return now; // Live, at that line already
   if (now) { now.focus({ preventScroll: true }); now.setSelectionRange(now.value.length, now.value.length); }
   return now;
 }
 
-// The caret, held while a dialog's open: Live puts away the block you're
-// writing in when the focus goes, so it's held as a line of the note, and
-// that block's opened again for it after. Returns () => the editor, its
-// caret back (or null).
+// The caret, held while a dialog (or a menu) has the focus. Returns () =>
+// the editor, its caret back (or null).
 function mdHold(area) {
   const caret = [area.selectionStart, area.selectionEnd];
-  const live = mdLiveBoxes.get($("md-main").querySelector(".md-live"));
-  const from = live?.edit?.area === area ? live.edit.from : null;
-  const before = area.value.slice(0, caret[0]);
-  const line = (from ?? 0) + (before.match(/\n/g) || []).length;
-  const col = before.length - before.lastIndexOf("\n") - 1;
-  const span = caret[1] - caret[0];
   return () => {
-    if (area.isConnected) {
-      area.focus({ preventScroll: true });
-      area.setSelectionRange(caret[0], caret[1]);
-      return area;
-    }
-    if (from === null || !live) return $("md-main").querySelector("textarea.md-source");
-    mdLiveGoto(live, line);
-    const a = live.edit?.area;
+    const a = area.isConnected ? area : mdFlowOf($("md-main").querySelector(".md-flow-box")) || $("md-main").querySelector("textarea.md-source");
     if (!a) return null;
-    const lines = a.value.split("\n");
-    const k = Math.max(0, Math.min(lines.length - 1, line - live.edit.from));
-    const off = lines.slice(0, k).reduce((n, l) => n + l.length + 1, 0) + Math.min(col, lines[k].length);
     a.focus({ preventScroll: true });
-    a.setSelectionRange(off, Math.min(a.value.length, off + span));
+    a.setSelectionRange(Math.min(caret[0], a.value.length), Math.min(caret[1], a.value.length));
     return a;
   };
 }
@@ -91,7 +71,7 @@ function mdPut(area, text, { block = false, pick = null } = {}) {
     if (e < area.value.length && area.value[e] !== "\n") after = "\n";
   }
   const all = `${before}${text}${after}`;
-  if (!document.execCommand("insertText", false, all)) area.setRangeText(all, s, e, "end");
+  if (area.mdFlow || !document.execCommand("insertText", false, all)) area.setRangeText(all, s, e, "end");
   if (pick) area.setSelectionRange(s + before.length + pick[0], s + before.length + pick[1]);
   area.dispatchEvent(new Event("input"));
 }
@@ -203,7 +183,7 @@ function mdInsertHooks(node, tab) {
     if (e.target.closest(".md-note-head, a[href], input, .md-properties")) return;
     e.preventDefault();
     e.stopPropagation();
-    const area = e.target.closest("textarea");
+    const area = e.target.closest("textarea") || (e.target.closest(".md-flow") ? mdFlowOf(e.target.closest(".md-flow-box")) : null);
     const picked = area && area.selectionEnd > area.selectionStart ? area.value.slice(area.selectionStart, area.selectionEnd) : "";
     // The menu takes the focus (and Live puts the block away): the caret's held.
     const back = area ? mdHold(area) : null;
