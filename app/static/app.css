@@ -1052,6 +1052,7 @@ body.arranging .app:nth-child(2n) .app-icon { animation-delay: -0.12s; }
   text-align: center;
   transform: translateX(-50%);
   animation: toast-in 0.2s ease-out both;
+  pointer-events: none; /* only words: a click goes to what's under it (Music's buttons, say) */
 }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 
@@ -2782,6 +2783,19 @@ body:not(.wm) .mu-side { padding-top: 22px; }
 .mu-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .mu-art > svg { width: 40%; height: 40%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .mu-art.round { border-radius: 50%; }
+/* A station from the internet: its first letters on a color of its own (from its name), a radio's waves faint behind. */
+.mu-station-art { --hue: 210; container-type: inline-size; background: linear-gradient(135deg, hsl(var(--hue) 55% 42%), hsl(calc(var(--hue) + 40) 60% 24%)); color: #fff; }
+.mu-station-art > svg { position: absolute; right: -8%; bottom: -8%; width: 62%; height: 62%; opacity: 0.18; stroke-width: 1.4; }
+.mu-station-letters { position: relative; font-size: clamp(9px, 30cqi, 64px); font-weight: 800; letter-spacing: -0.03em; }
+.mu-net-none { margin: 0 0 8px; }
+.mu-net-sub { margin: -6px 0 14px; }
+.mu-net-dialog .button-secondary.wide { width: 100%; }
+.mu-net-picked { margin: 6px 0 10px; font-size: 12.5px; color: rgb(255 255 255 / 0.6); overflow-wrap: anywhere; }
+.mu-net-picked:empty { display: none; }
+.mu-net-dialog .field-input { margin-top: 8px; }
+/* Live: nothing to drag along. */
+.mu-bar.live .mu-seek { cursor: default; opacity: 0.35; }
+.mu-bar.live #mu-total-time { color: #ff5f57; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .mu-collage { display: grid; grid-template-columns: 1fr 1fr; }
 .mu-collage > .mu-art { border-radius: 0; }
 

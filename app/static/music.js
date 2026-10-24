@@ -46,6 +46,7 @@ const music = {
   view: { kind: "home" }, back: [], fwd: [],
   sort: {}, selected: null, vdraw: null, menuAt: { x: 200, y: 200 },
   queue: [], at: -1, addedUntil: -1, original: null, from: "", radio: null,
+  stations: [], // your stations from the internet (Klassik Radio…): in the queue as station:<id>
   shuffle: false, repeat: "off", counted: false, errors: 0,
   panel: null, lyrics: null, lyricsScrolled: 0, seeking: false,
   audio: new Audio(),
@@ -53,10 +54,12 @@ const music = {
 music.audio.preload = "auto";
 
 const muSong = (id) => music.songs.get(id) || music.extra.get(id);
+const muIsStation = (id) => typeof id === "string" && id.startsWith("station:");
 const muNorm = (t) => String(t || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
-const muArtists = (s) => (s?.artists?.length ? s.artists.join(", ") : "Unknown artist");
+const muArtists = (s) => (s?.station ? s.now || "Live radio" : s?.artists?.length ? s.artists.join(", ") : "Unknown artist");
 const muCurrent = () => (music.at >= 0 ? music.queue[music.at] : null);
-const muUrl = (id) => fileUrl(id.startsWith("/") ? id : `${music.dir}/${id}`, true);
+const muUrl = (id) => (muIsStation(id) ? `/api/music/station/${encodeURIComponent(muSong(id).station)}/stream?t=${Date.now()}`
+  : fileUrl(id.startsWith("/") ? id : `${music.dir}/${id}`, true));
 const muCover = (id) => `/api/music/cover?id=${encodeURIComponent(id)}&v=${muSong(id)?.added || 0}`;
 
 function muTime(seconds) {
@@ -104,6 +107,7 @@ async function musicLoad() {
       return;
     }
     musicIndex(body);
+    await musicLoadStations();
     const first = !music.loaded;
     music.loaded = true;
     music.sync = musicSync();
@@ -323,6 +327,7 @@ const musicAlbumKey = (s) => (s?.album ? `${muNorm(s.albumArtist || s.artists[0]
 
 function musicArt(id, { round = false } = {}) {
   const s = id ? muSong(id) : null;
+  if (s?.station) return musicStationArt(s.title);
   const box = el("span", { class: `mu-art${round ? " round" : ""}` });
   if (s?.cover) {
     const img = el("img", { src: muCover(id), alt: "", loading: "lazy", decoding: "async", draggable: "false" });
@@ -958,6 +963,7 @@ function musicHomeView() {
     musicButton("Shuffle all", "shuffle", () => musicRadio({ kind: "all", label: "Your library" }), "primary")),
   musicNavidromeNote(),
   musicShelf("Recently played", recentAlbums.map(musicAlbumCard)),
+  musicShelf("Your stations", music.stations.map(musicNetCard), () => musicShow({ kind: "radio" })),
   musicShelf("Stations for you", stations.map(musicStationCard), () => musicShow({ kind: "radio" })),
   musicShelf("Recently added", added.map(musicAlbumCard), () => { music.sort.albums = "added"; musicShow({ kind: "albums" }); }),
   musicShelf("Your playlists", lists.map(musicListCard), () => musicShow({ kind: "playlists" })));
@@ -1031,7 +1037,13 @@ function musicStationCard(st) {
 
 function musicRadioView() {
   const stations = musicStations();
-  return el("div", { class: "mu-page" }, musicHead("Radio", "Stations made from your library: songs that go together in your playlists, the same artists, genres and years. They don't run out."),
+  const add = musicButton("Add stations…", "plus", musicStationDialog);
+  return el("div", { class: "mu-page" }, musicHead("Radio", "Your stations from the internet, and ones made from your library.", add),
+    el("h2", { class: "mu-section" }, "Your stations"),
+    music.stations.length ? el("div", { class: "mu-wrap" }, ...music.stations.map(musicNetCard))
+      : el("p", { class: "mu-empty-line mu-net-none" }, "Add a station from its playlist file (.m3u, .m3u8, .pls, or Kodi's .strm) or its web address: Add stations…"),
+    el("h2", { class: "mu-section" }, "Made from your library"),
+    el("p", { class: "mu-head-sub mu-net-sub" }, "Songs that go together in your playlists, the same artists, genres and years. They don't run out."),
     el("div", { class: "mu-wrap" }, ...stations.map(musicStationCard)));
 }
 
@@ -1046,13 +1058,15 @@ function musicSearchView() {
   const artists = [...music.artists.values()].filter((a) => hit(muNorm(a.name))).sort((a, b) => (starts(b.name) - starts(a.name)) || b.ids.length - a.ids.length);
   const albums = [...music.albums.values()].filter((a) => hit(muNorm(`${a.title} ${a.artist}`))).slice(0, 24);
   const lists = music.playlists.filter((p) => hit(muNorm(p.name)));
-  if (!songs.length && !artists.length && !albums.length && !lists.length) {
+  const nets = music.stations.filter((x) => hit(muNorm(x.name)));
+  if (!songs.length && !artists.length && !albums.length && !lists.length && !nets.length) {
     return el("div", { class: "mu-page" }, musicHead(`“${query.trim()}”`, "Nothing in your library matches."));
   }
   return el("div", { class: "mu-page" }, musicHead(`“${query.trim()}”`, muCount(songs.length, "song")),
     ...(artists.length ? [musicShelf("Artists", artists.slice(0, 12).map(musicArtistCard))] : []),
     ...(albums.length ? [musicShelf("Albums", albums.map(musicAlbumCard))] : []),
     ...(lists.length ? [musicShelf("Playlists", lists.map(musicListCard))] : []),
+    ...(nets.length ? [musicShelf("Stations", nets.map(musicNetCard))] : []),
     ...(songs.length ? [el("h2", { class: "mu-section" }, "Songs"), musicTable({ ids: songs.slice(0, 200).map((s) => s.id), from: `“${query.trim()}”` })] : []));
 }
 
@@ -1165,11 +1179,13 @@ function musicStart(play = true, at = 0) {
   audio.src = muUrl(id);
   if (at > 0) audio.addEventListener("loadedmetadata", () => { audio.currentTime = Math.min(at, (audio.duration || at) - 1); }, { once: true });
   music.counted = false;
+  music.retries = 0;
   if (play) {
     audio.play().catch(() => {}); // the browser may want a click first
     // Now playing (to Navidrome, if it's set up).
-    api("/api/music/playing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }).catch(() => {});
+    if (!muIsStation(id)) api("/api/music/playing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }).catch(() => {});
   }
+  musicStationWatch();
   musicNowPlaying();
   musicRadioMore();
   musicSaveSoon();
@@ -1181,6 +1197,8 @@ function musicToggle() {
     if (music.loaded && music.all.length) musicRadio({ kind: "all", label: "Your library" });
     return;
   }
+  // A station paused a while: what's on now, not where it stopped.
+  if (audio.paused && muIsStation(muCurrent()) && Date.now() - (music.pausedAt || 0) > 10000) return musicStart(true);
   if (audio.paused) audio.play().catch(() => {}); else audio.pause();
 }
 
@@ -1264,7 +1282,7 @@ function musicNowPlaying() {
   if (music.panel === "lyrics") musicLyricsLoad(id);
   if ("mediaSession" in navigator && s) {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: s.title, artist: muArtists(s), album: s.album || "",
+      title: s.station && s.now ? s.now : s.title, artist: s.station ? (s.now ? s.title : "Live radio") : muArtists(s), album: s.album || "",
       artwork: s.cover ? [{ src: new URL(muCover(id), location.href).href, sizes: "640x640", type: "image/jpeg" }] : [],
     });
   }
@@ -1327,6 +1345,8 @@ function musicBarUpdate() {
   const s = id ? muSong(id) : null;
   const audio = music.audio;
   $("mu-bar-title").textContent = s?.title || "Not playing";
+  $("music").querySelector(".mu-bar").classList.toggle("live", Boolean(s?.station));
+  $("mu-seek").disabled = Boolean(s?.station);
   $("mu-bar-artist").textContent = s ? muArtists(s) : "";
   $("mu-bar-art").replaceChildren(musicArt(id));
   const fav = $("music").querySelector(".mu-bar-fav");
@@ -1360,7 +1380,7 @@ function musicBarTime() {
     $("mu-now-time").textContent = muTime(audio.currentTime || 0);
     $("mu-seek").value = d ? String(Math.round(((audio.currentTime || 0) / d) * 1000)) : "0";
   }
-  $("mu-total-time").textContent = muTime(d);
+  $("mu-total-time").textContent = muIsStation(muCurrent()) ? "Live" : muTime(d);
   $("mu-seek").style.setProperty("--done", `${d ? Math.min(100, ((audio.currentTime || 0) / d) * 100) : 0}%`);
 }
 
@@ -1481,6 +1501,7 @@ function musicLyricsBody() {
   if (!id) return el("div", { class: "mu-panel-body" }, el("p", { class: "mu-empty-line" }, "Nothing playing."));
   if (!l || l.id !== id || l.loading) return el("div", { class: "mu-panel-body" }, el("p", { class: "mu-empty-line" }, "…"));
   if (!l.lines.length) {
+    if (muIsStation(id)) return el("div", { class: "mu-panel-body" }, el("p", { class: "mu-empty-line" }, `${muSong(id).title}, live: no lyrics. ${muSong(id).now ? `On now: ${muSong(id).now}.` : ""}`));
     return el("div", { class: "mu-panel-body" }, el("p", { class: "mu-empty-line" }, "No lyrics for this song. An .lrc file with its name, beside it, gives it some (spotdl makes them)."));
   }
   body.classList.toggle("synced", l.synced);
@@ -1524,7 +1545,7 @@ function musicPosition() {
 }
 
 music.audio.addEventListener("play", () => { musicBarUpdate(); musicPosition(); musicMediaNext(); });
-music.audio.addEventListener("pause", () => { musicBarUpdate(); musicPosition(); musicSave(); });
+music.audio.addEventListener("pause", () => { music.pausedAt = Date.now(); musicBarUpdate(); musicPosition(); musicSave(); });
 music.audio.addEventListener("loadedmetadata", () => { musicBarTime(); musicPosition(); });
 for (const type of ["seeked", "durationchange", "ratechange"]) music.audio.addEventListener(type, musicPosition);
 music.audio.addEventListener("timeupdate", () => {
@@ -1532,7 +1553,7 @@ music.audio.addEventListener("timeupdate", () => {
   if (music.panel === "lyrics") musicLyricsFollow();
   const a = music.audio;
   // A play, once it's been listened to for a while.
-  if (!music.counted && a.currentTime >= Math.min(30, (a.duration || 60) / 2)) {
+  if (!music.counted && !muIsStation(muCurrent()) && a.currentTime >= Math.min(30, (a.duration || 60) / 2)) {
     music.counted = true;
     const id = muCurrent();
     music.errors = 0;
@@ -1544,12 +1565,15 @@ music.audio.addEventListener("timeupdate", () => {
   if (Date.now() - (music.savedAt || 0) > 5000) musicSave();
 });
 music.audio.addEventListener("ended", () => {
+  // A station that stopped sending (its connection dropped): again, a few times.
+  if (muIsStation(muCurrent())) { if (++music.retries <= 3) setTimeout(() => { const n = music.retries; musicStart(true); music.retries = n; }, 1500); return; }
   if (music.repeat === "one") { music.audio.currentTime = 0; music.audio.play().catch(() => {}); return; }
   musicNext(true);
 });
 music.audio.addEventListener("error", () => {
   const s = muSong(muCurrent());
   if (!music.audio.getAttribute("src")) return;
+  if (s?.station) return musicStationError(s);
   toast(`Can't play ${s?.title || "that song"}.`);
   // A few in a row that won't play: stop, rather than run through them all.
   if (++music.errors < 4) setTimeout(() => musicNext(true), 800); else music.errors = 0;
@@ -1583,12 +1607,200 @@ function musicMediaNext() {
   muAction("nexttrack", more ? () => musicNext() : null);
 }
 
+// ------------------------------------------------- stations from the internet
+
+// Your stations (Klassik Radio, Deutschlandfunk…), from their playlist files
+// or addresses: kept on the server (data/radio-stations.json), played through
+// it (a playlist's address followed to its stream; an http:// one plays on an
+// https:// page), in the queue like songs (station:<id>), next and previous
+// going from one to the next. What's on now comes from the stream itself.
+async function musicLoadStations() {
+  const { status, body } = await api("/api/music/stations").catch(() => ({ status: 0 }));
+  if (status === 200 && body) musicSetStations(body.stations);
+}
+
+function musicSetStations(list) {
+  music.stations = list || [];
+  for (const x of music.stations) {
+    const id = `station:${x.id}`;
+    music.extra.set(id, { ...(music.extra.get(id) || {}), id, station: x.id, title: x.name, url: x.url, artists: [], album: "", cover: false, duration: null });
+  }
+}
+
+const muStationIds = () => music.stations.map((x) => `station:${x.id}`);
+
+function musicPlayStation(x) {
+  const ids = muStationIds();
+  musicPlayList(ids, Math.max(0, ids.indexOf(`station:${x.id}`)), { from: "Your stations", shuffle: false });
+}
+
+// A station's picture: its first letters, on a color of its own.
+function musicStationArt(name) {
+  const words = String(name || "?").split(/\s+/).filter(Boolean);
+  const letters = (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || "?").slice(0, 2)).toUpperCase();
+  let h = 0;
+  for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) % 360;
+  const box = el("span", { class: "mu-art mu-station-art" }, el("span", { class: "mu-station-letters" }, letters), svg(MU_ICONS.radio));
+  box.style.setProperty("--hue", String(h));
+  return box;
+}
+
+function musicNetCard(x) {
+  const playing = muCurrent() === `station:${x.id}`;
+  return musicCard({
+    art: musicStationArt(x.name), title: x.name, sub: playing && muSong(`station:${x.id}`)?.now ? muSong(`station:${x.id}`).now : "Live radio",
+    open: () => musicPlayStation(x), play: () => musicPlayStation(x), label: `${x.name}: ${x.url}`, menu: () => musicNetMenu(x),
+  });
+}
+
+function musicNetMenu(x) {
+  return [
+    { label: "Play", run: () => musicPlayStation(x) },
+    { label: "Rename…", run: () => musicStationRename(x) },
+    { label: "Copy its address", run: () => navigator.clipboard?.writeText(x.url).then(() => toast("Copied."), () => toast(x.url)) },
+    { label: "Remove", run: () => musicStationRemove(x), destructive: true },
+  ];
+}
+
+async function musicStationsPost(body) {
+  const { status, body: got } = await api("/api/music/stations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    .catch(() => ({ status: 0 }));
+  if (status === 401) { showLock(); return null; }
+  if (status === 200 && got?.stations) { musicSetStations(got.stations); if (["radio", "home"].includes(music.view.kind)) musicRender(); }
+  return { status, body: got };
+}
+
+function musicStationRename(x) {
+  const input = el("input", { class: "field-input", type: "text", value: x.name, maxlength: "80", "aria-label": "Its name" });
+  const save = el("button", { type: "button", class: "button-primary wide" }, "Rename");
+  const cancel = el("button", { type: "button", class: "button-secondary" }, "Cancel");
+  const go = async () => {
+    const name = input.value.trim();
+    if (!name) return;
+    closeModal();
+    await musicStationsPost({ rename: x.id, name });
+    if (muCurrent() === `station:${x.id}`) musicNowPlaying();
+  };
+  save.addEventListener("click", go);
+  cancel.addEventListener("click", closeModal);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+  openModal(el("div", { class: "dialog material", role: "dialog", "aria-modal": "true" }, el("h2", {}, "Rename station"), input, el("div", { class: "dialog-actions" }, cancel, save)));
+  input.select();
+}
+
+async function musicStationRemove(x) {
+  const ok = await confirmDialog({ title: `Remove ${x.name}?`, body: "It's only taken off your stations; add it again any time.", button: "Remove", destructive: true });
+  if (!ok) return;
+  const id = `station:${x.id}`;
+  if (muCurrent() === id) { music.audio.pause(); music.audio.removeAttribute("src"); }
+  const i = music.queue.indexOf(id);
+  if (i >= 0) { music.queue.splice(i, 1); if (i <= music.at) music.at--; if (i <= music.addedUntil) music.addedUntil--; }
+  music.extra.delete(id);
+  await musicStationsPost({ remove: x.id });
+  musicNowPlaying();
+  musicSaveSoon();
+}
+
+// Add stations: their playlist files (picked here, from this device), or an address.
+function musicStationDialog() {
+  const picker = el("input", { type: "file", multiple: "", accept: ".m3u,.m3u8,.pls,.strm,.txt,audio/x-mpegurl,audio/x-scpls", hidden: "" });
+  const pick = el("button", { type: "button", class: "button-secondary wide" }, "Choose station files…");
+  const picked = el("p", { class: "mu-dim mu-net-picked" });
+  const url = el("input", { class: "field-input", type: "text", inputmode: "url", placeholder: "Or its address: https://…", spellcheck: "false", autocapitalize: "off" });
+  const name = el("input", { class: "field-input", type: "text", placeholder: "Name (for an address)", maxlength: "80" });
+  const error = el("p", { class: "error", role: "alert" });
+  const add = el("button", { type: "button", class: "button-primary wide" }, "Add");
+  const cancel = el("button", { type: "button", class: "button-secondary" }, "Cancel");
+  let files = [];
+  pick.addEventListener("click", () => picker.click());
+  picker.addEventListener("change", () => {
+    files = [...picker.files].slice(0, 200);
+    picked.textContent = files.length ? files.map((f) => f.name).join(", ") : "";
+  });
+  cancel.addEventListener("click", closeModal);
+  const go = async () => {
+    error.textContent = "";
+    const address = url.value.trim();
+    if (!files.length && !address) return (error.textContent = "Choose a station's file, or give its address.");
+    add.disabled = true;
+    const texts = await Promise.all(files.filter((f) => f.size < 256 * 1024).map(async (f) => ({ name: f.name, text: await f.text() })));
+    const body = { files: texts, ...(address ? { url: /^https?:\/\//i.test(address) ? address : `https://${address}`, name: name.value.trim() } : {}) };
+    const got = await musicStationsPost(body);
+    add.disabled = false;
+    if (!got) return;
+    if (got.status !== 200) return (error.textContent = got.body?.error || "That didn't work.");
+    closeModal();
+    const n = got.body.added.length;
+    toast(n ? `${n === 1 ? got.body.added[0].name : `${n} stations`} added${got.body.already ? ` (${got.body.already} you had already)` : ""}.`
+      : "You had those already.");
+    if (got.body.problems?.length) setTimeout(() => toast(got.body.problems[0]), 2500);
+    musicShow({ kind: "radio" });
+  };
+  add.addEventListener("click", go);
+  url.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+  openModal(el("div", { class: "dialog material mu-net-dialog", role: "dialog", "aria-modal": "true" },
+    el("h2", {}, "Add stations"),
+    el("p", {}, "A station's playlist file (.m3u, .m3u8, .pls, or Kodi's .strm: one file, one station; an .m3u can hold several), or the address of its stream."),
+    picker, pick, picked, url, name, error, el("div", { class: "dialog-actions" }, cancel, add)));
+}
+
+// A station's file from My Computer (.pls, .strm, or an .m3u of addresses):
+// added, and played. quiet: only if there are stations in it (an .m3u8 of songs that weren't found).
+async function musicStationFile(path, quiet = false) {
+  musicBuild();
+  openWindow("music");
+  if (!music.loaded) await musicLoad();
+  const got = await musicStationsPost({ path });
+  if (!got) return false;
+  if (got.status !== 200) { if (!quiet) toast(got.body?.error || "No station in that file."); return false; }
+  const first = got.body.named?.[0];
+  if (first) musicPlayStation(first);
+  if (got.body.added.length > 1) toast(`${got.body.added.length} stations added.`);
+  else if (got.body.added.length) toast(`${got.body.added[0].name} is in your stations.`);
+  return true;
+}
+
+// Playing a station: what's on now, asked every 15 seconds.
+function musicStationWatch() {
+  clearInterval(music.nowTimer);
+  const id = muCurrent();
+  if (!muIsStation(id)) return;
+  const ask = async () => {
+    if (muCurrent() !== id) return clearInterval(music.nowTimer);
+    if (music.audio.paused) return;
+    const s = muSong(id);
+    const { status, body } = await api(`/api/music/station/${encodeURIComponent(s.station)}/now`).catch(() => ({ status: 0 }));
+    if (status !== 200 || muCurrent() !== id) return;
+    const now = body.title && body.title.trim() && body.title.trim() !== "-" ? body.title.trim() : null;
+    if (now !== s.now) { s.now = now; musicNowPlaying(); }
+  };
+  setTimeout(ask, 4000);
+  music.nowTimer = setInterval(ask, 15000);
+}
+
+// One that won't play: why (an HLS stream, which this browser may play
+// itself; the station not answering), not on to the next.
+async function musicStationError(s) {
+  const id = `station:${s.station}`;
+  const { body } = await api(`/api/music/station/${encodeURIComponent(s.station)}/check`).catch(() => ({ body: null }));
+  if (muCurrent() !== id) return;
+  if (body?.hls) {
+    if (music.audio.canPlayType("application/vnd.apple.mpegurl") && music.audio.src !== body.hls) {
+      music.audio.src = body.hls;
+      return music.audio.play().catch(() => {});
+    }
+    return toast(`${s.title} is an HLS stream: this browser can't play those (Safari can).`);
+  }
+  toast(body?.ok ? `${s.title} didn't play. Try it again in a moment.` : `Can't play ${s.title}: ${body?.error || "it isn't answering"}.`);
+  musicBarUpdate();
+}
+
 // --------------------------------------------------- kept on this device
 
 function musicSave() {
   music.savedAt = Date.now();
   const extra = {};
-  for (const id of music.queue) if (id.startsWith("/") && music.extra.has(id)) extra[id] = music.extra.get(id);
+  for (const id of music.queue) if ((id.startsWith("/") || muIsStation(id)) && music.extra.has(id)) extra[id] = music.extra.get(id);
   winSave(MUSIC_KEY, {
     queue: music.queue.slice(0, 3000), at: music.at, addedUntil: music.addedUntil, time: Math.floor(music.audio.currentTime || 0),
     original: music.original?.slice(0, 3000) || null, from: music.from, radio: music.radio, shuffle: music.shuffle, repeat: music.repeat,
@@ -1605,7 +1817,7 @@ function musicSaveSoon() {
 function musicRestore() {
   const saved = winLoad(MUSIC_KEY, null);
   if (!saved || typeof saved !== "object") return;
-  for (const [id, s] of Object.entries(saved.extra || {})) if (s && id.startsWith("/")) music.extra.set(id, s);
+  for (const [id, s] of Object.entries(saved.extra || {})) if (s && (id.startsWith("/") || (muIsStation(id) && music.extra.has(id)))) music.extra.set(id, { ...s, now: null });
   const ok = (id) => typeof id === "string" && muSong(id);
   Object.assign(music, {
     shuffle: Boolean(saved.shuffle), repeat: ["off", "all", "one"].includes(saved.repeat) ? saved.repeat : "off",
@@ -1644,7 +1856,11 @@ async function musicPlayListFile(path) {
   const { status, body } = await api(`/api/music/playlist?path=${encodeURIComponent(path)}`).catch(() => ({ status: 0 }));
   if (status !== 200) return toast(body?.error || "Can't open that playlist.");
   for (const [id, s] of Object.entries(body.songs || {})) music.extra.set(id, s);
-  if (!body.items.length) return toast(`Nothing in ${body.name} plays${body.missing ? ` (${body.missing} not found)` : ""}.`);
+  if (!body.items.length) {
+    // Only web addresses in it: stations, then.
+    if (body.missing && await musicStationFile(path, true)) return;
+    return toast(`Nothing in ${body.name} plays${body.missing ? ` (${body.missing} not found)` : ""}.`);
+  }
   const own = music.playlists.find((p) => p.id === body.id);
   if (own) musicShow({ kind: "playlist", key: own.id });
   musicPlayList(body.items, 0, { from: body.name, shuffle: false });

@@ -599,11 +599,22 @@ that only what changed, so it opens straight away.
   there. Make one (New playlist), add songs (right-click, or drag a song
   onto a playlist in the side), drag them into a new order, rename it, or
   delete it (its file goes to the Trash; the songs stay).
-- **Radio**: stations made from your own library, nothing from the
-  internet. A station from a song, an artist, an album, a playlist or a
-  genre plays songs like it: the ones your playlists put together with it
-  (Spotify's mixes, from spotdl, say a lot), the same artists, genres and
-  years. They don't run out. **Your station** follows what you play most.
+- **Radio**: **your stations** from the internet first, then stations
+  made from your own library. **Add stations…** takes a station's playlist
+  file (.m3u, .m3u8, .pls, or Kodi's .strm; pick several at once) or the
+  address of its stream; opening a .pls or .strm in My Computer adds it
+  too, and plays it. They're kept on the server, for every device. A
+  station plays through adlerOS (an http:// one plays on an https:// page;
+  an address that's a playlist is followed to its stream), live: no
+  dragging along it, not counted as a play. What's on now (most stations
+  say) shows on the bar and the lock screen; next and previous go from one
+  station to the next. Right-click one to rename or remove it. An HLS
+  stream (.m3u8 of segments) plays where the browser can (Safari).
+- The library's own stations: one from a song, an artist, an album, a
+  playlist or a genre plays songs like it: the ones your playlists put
+  together with it (Spotify's mixes, from spotdl, say a lot), the same
+  artists, genres and years. They don't run out. **Your station** follows
+  what you play most.
 - **The player** along the bottom: shuffle, previous, play, next, repeat
   (all, then this song), where you are in the song, volume. **Up next**
   shows the queue: what you added (Play next goes first, Add to queue after
