@@ -2608,13 +2608,15 @@ def documents_query(query):
 # --------------------------------------------------------------- calendar
 
 # Calendar: your calendars as your CalDAV server has them (Radicale, in a
-# homelab), only read: CALDAV_USER and CALDAV_PASSWORD, at CALDAV_URL, else
+# homelab), read and written: CALDAV_USER and CALDAV_PASSWORD, at CALDAV_URL, else
 # Radicale at this machine's Tailscale address and its port. Found the way
 # CalDAV says (the address's principal, its calendar home, the calendars in
 # it); each calendar's events kept until its ctag (or sync token) changes,
 # looked at again at most every CALDAV_FRESH seconds. The page never sees
 # the password; it asks for days, in its own time zone, and gets each
-# repeat worked out (ical.py).
+# repeat worked out (ical.py). A change (calendar_write) is made to the
+# item as the server has it now, sent only if nobody changed it meanwhile
+# (If-Match), everything in it you didn't change kept as it was.
 DAV = {"d": "DAV:", "c": "urn:ietf:params:xml:ns:caldav", "cs": "http://calendarserver.org/ns/", "i": "http://apple.com/ns/ical/"}
 CALDAV_FRESH = 30
 CALDAV_MAX_DAYS = 430
@@ -2729,19 +2731,23 @@ def caldav_calendars(home, login):
 
 
 def caldav_events(cal, login):
-    """A calendar's events, read (ical.events), from one REPORT."""
+    """A calendar's items, from one REPORT: [{path, etag, events}], each
+    event read (ical.events) and knowing its item's path."""
     ask = ('<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:getetag/><c:calendar-data/>'
            '</d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"/></c:comp-filter></c:filter></c:calendar-query>')
-    _, data = dav("REPORT", cal["href"], login, ask, "1", timeout=60)
-    events = []
-    for _, found in dav_responses(data):
+    at, data = dav("REPORT", cal["href"], login, ask, "1", timeout=60)
+    items = []
+    for href, found in dav_responses(data):
         item = found.get(f"{{{DAV['c']}}}calendar-data")
         if item is None or not item.text:
             continue
+        path = urllib.parse.urlsplit(urllib.parse.urljoin(at, href)).path
+        events = []
         for vcal in ical.parse(item.text):
             if vcal["name"] == "VCALENDAR":
-                events += ical.events(vcal)
-    return events
+                events += [{**e, "href": path} for e in ical.events(vcal)]
+        items.append({"path": path, "events": events})
+    return items
 
 
 def calendar_state():
@@ -2764,6 +2770,437 @@ def calendar_state():
                 kept[cal["href"]] = old if old and old[0] == cal["tag"] and cal["tag"] else (cal["tag"], caldav_events(cal, login))
             _caldav.update(calendars=calendars, events=kept, at=time.time())
         return _caldav["calendars"], _caldav["events"]
+
+
+# Writing: one item (an .ics: an event, its moved or changed occurrences)
+# fetched as it is now, changed, and put back if it hasn't changed since.
+def dav_raw(method, url, login, body=None, headers=None, timeout=30):
+    """(status, headers, body) of one request; an HTTPError as it comes."""
+    h = {"Authorization": "Basic " + base64.b64encode(f"{login[0]}:{login[1]}".encode()).decode(), **(headers or {})}
+    request = urllib.request.Request(url, data=body.encode() if isinstance(body, str) else body, method=method, headers=h)
+    with urllib.request.urlopen(request, timeout=timeout) as r:
+        return r.status, r.headers, r.read(5 * 1024 * 1024)
+
+
+def calendar_fields(f, viewer):
+    """What the page sent (an event's name, place, times…), checked."""
+    if not isinstance(f, dict):
+        raise ValueError("event: an object")
+    out = {}
+    for key, limit in (("title", 500), ("location", 500), ("notes", 20000)):
+        if key in f:
+            if not isinstance(f[key], str) or len(f[key]) > limit:
+                raise ValueError(f"{key}: text, up to {limit}")
+            out[key] = f[key]
+    if "start" in f or "end" in f:
+        all_day = bool(f.get("allDay"))
+        try:
+            if all_day:
+                start, end = datetime.date.fromisoformat(f["start"]), datetime.date.fromisoformat(f["end"])
+            else:
+                start = datetime.datetime.fromisoformat(f["start"].replace("Z", "+00:00"))
+                end = datetime.datetime.fromisoformat(f["end"].replace("Z", "+00:00"))
+                if not start.tzinfo or not end.tzinfo:
+                    raise ValueError
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("start, end: dates (all day) or times with their zone")
+        if end < start or (all_day and end == start):
+            raise ValueError("it ends before it starts")
+        out.update(allDay=all_day, start=start, end=end)
+    if "travel" in f:
+        if not isinstance(f["travel"], int) or not 0 <= f["travel"] <= 24 * 60:
+            raise ValueError("travel: minutes, up to a day")
+        out["travel"] = f["travel"]
+    if "repeat" in f:
+        if f["repeat"] is not None and not isinstance(f["repeat"], dict):
+            raise ValueError("repeat: a rule, or none")
+        out["repeat"] = f["repeat"]
+    if "calendar" in f:
+        out["calendar"] = str(f["calendar"])
+    return out
+
+
+def cal_master(vcal):
+    events = [c for c in vcal["children"] if c["name"] == "VEVENT"]
+    master = next((c for c in events if ical.prop(c, "RECURRENCE-ID")[1] is None), None)
+    return master, events
+
+
+def cal_start(comp, tzs):
+    """A component's start, and its zone (None: floating or all day)."""
+    start = ical.value_of(*ical.prop(comp, "DTSTART"), tzs)
+    zone = start.tzinfo if isinstance(start, datetime.datetime) else None
+    return start, zone
+
+
+def cal_wall(value, zone, viewer):
+    """A time as the event's clock shows it (floating: the viewer's), or a date."""
+    if isinstance(value, datetime.datetime):
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(zone or viewer).replace(tzinfo=None)
+    return value
+
+
+def cal_aware(wall, zone, viewer):
+    return wall.replace(tzinfo=zone or viewer) if isinstance(wall, datetime.datetime) else wall
+
+
+def cal_encode(comp, name, wall, zone, all_day, floating=False):
+    """NAME (DTSTART, DTEND, RECURRENCE-ID) set from an event-clock time or a date."""
+    if all_day:
+        params, value = ical.when_text(wall if not isinstance(wall, datetime.datetime) else wall.date(), None)
+    elif floating:
+        params, value = {}, wall.strftime("%Y%m%dT%H%M%S")
+    else:
+        params, value = ical.when_text(wall.replace(tzinfo=zone), zone)
+    ical.put(comp, name, value, params)
+
+
+def cal_until_text(day, zone, all_day, floating):
+    """UNTIL for a last day: the date (all day), the end of that day."""
+    if all_day:
+        return day.strftime("%Y%m%d")
+    end = datetime.datetime.combine(day, datetime.time(23, 59, 59))
+    if floating:
+        return end.strftime("%Y%m%dT%H%M%S")
+    return end.replace(tzinfo=zone).astimezone(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def cal_rule(repeat, zone, all_day, floating):
+    if repeat is None:
+        return None
+    rule = dict(repeat)
+    if rule.get("until"):
+        try:
+            rule["untilText"] = cal_until_text(datetime.date.fromisoformat(rule["until"]), zone, all_day, floating)
+        except (TypeError, ValueError):
+            raise ValueError("repeat until: a day")
+    return ical.rrule_text(rule)
+
+
+def cal_stamp(comp, bump=True):
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    ical.put(comp, "DTSTAMP", now)
+    ical.put(comp, "LAST-MODIFIED", now)
+    if bump:
+        seq = ical.prop(comp, "SEQUENCE")[1]
+        ical.put(comp, "SEQUENCE", str(int(seq) + 1 if (seq or "").strip().isdigit() else 1))
+
+
+def cal_text(comp, f):
+    for key, name in (("title", "SUMMARY"), ("location", "LOCATION"), ("notes", "DESCRIPTION")):
+        if key in f:
+            if f[key].strip() or key == "title":
+                ical.put(comp, name, ical.escape(f[key].strip() if key != "notes" else f[key]))
+            else:
+                ical.remove(comp, name)
+    if "travel" in f:
+        if f["travel"]:
+            ical.put(comp, "X-APPLE-TRAVEL-DURATION", f"PT{f['travel']}M", {"VALUE": "DURATION"})
+        else:
+            ical.remove(comp, "X-APPLE-TRAVEL-DURATION", "X-APPLE-TRAVEL-START", "X-APPLE-TRAVEL-RETURN", "X-APPLE-TRAVEL-RETURN-DURATION")
+
+
+def cal_zones_used(vcal):
+    """Each TZID its events use has its VTIMEZONE (made from zoneinfo where it's missing)."""
+    have = {ical.prop(c, "TZID")[1] for c in vcal["children"] if c["name"] == "VTIMEZONE"}
+    used = {params.get("TZID") for c in vcal["children"] if c["name"] == "VEVENT" for _, params, _ in c["props"] if params.get("TZID")}
+    for tzid in sorted(t for t in used - have if t):
+        zone = ical.named_zone(tzid)
+        if zone:
+            vcal["children"].insert(0, ical.vtimezone(zone))
+
+
+def cal_shift(value, days, clock, all_day):
+    """A start of the series moved by days, at the series' new clock time (or a date)."""
+    day = (value.date() if isinstance(value, datetime.datetime) else value) + datetime.timedelta(days=days)
+    return day if all_day or clock is None else datetime.datetime.combine(day, clock)
+
+
+def cal_times(comp, f, zone, viewer, floating):
+    """DTSTART and DTEND from the page's start and end (DURATION gives way)."""
+    all_day = f["allDay"]
+    ical.remove(comp, "DURATION")
+    if all_day:
+        cal_encode(comp, "DTSTART", f["start"], None, True)
+        cal_encode(comp, "DTEND", f["end"], None, True)
+    else:
+        cal_encode(comp, "DTSTART", cal_wall(f["start"], zone, viewer), zone, False, floating)
+        cal_encode(comp, "DTEND", cal_wall(f["end"], zone, viewer), zone, False, floating)
+
+
+def calendar_find(path, calendars):
+    """The calendar an item's path is in (a path from this server's calendars only)."""
+    for cal in calendars:
+        root = urllib.parse.urlsplit(cal["href"]).path
+        if isinstance(path, str) and path.startswith(root) and path.endswith(".ics") and "/../" not in path and "?" not in path:
+            return cal
+    raise ValueError("not an item of your calendars")
+
+
+def calendar_write(body, viewer):
+    """A change from the page: create, update (scope all, this, future) or
+    delete (the same). The item is fetched as it is now and put back only
+    if nobody changed it meanwhile."""
+    url, login = caldav()
+    if not url or not login:
+        raise LookupError("not set up")
+    calendars, _ = calendar_state()
+    action = body.get("action")
+    f = calendar_fields(body.get("event") or {}, viewer)
+    origin = urllib.parse.urlsplit(calendars[0]["href"]) if calendars else None
+    absolute = lambda path: f"{origin.scheme}://{origin.netloc}{path}"
+    target = next((c for c in calendars if c["id"] == f.get("calendar")), None) if f.get("calendar") else None
+    if action == "create":
+        cal = target or (calendars[0] if calendars else None)
+        if not cal:
+            raise LookupError("no calendars")
+        if "start" not in f:
+            raise ValueError("start, end: when it is")
+        uid = f"{secrets.token_hex(16)}@adleros"
+        zone = None if f["allDay"] else viewer
+        vevent = {"name": "VEVENT", "props": [("UID", {}, uid)], "children": []}
+        cal_times(vevent, f, zone, viewer, False)
+        cal_text(vevent, {"title": "", **f})
+        if f.get("repeat"):
+            ical.add(vevent, "RRULE", cal_rule(f["repeat"], zone, f["allDay"], False))
+        ical.put(vevent, "CREATED", datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
+        ical.put(vevent, "SEQUENCE", "0")
+        cal_stamp(vevent, bump=False)
+        vcal = {"name": "VCALENDAR", "props": [("VERSION", {}, "2.0"), ("PRODID", {}, "-//adlerOS//Calendar//EN"), ("CALSCALE", {}, "GREGORIAN")],
+                "children": [vevent]}
+        cal_zones_used(vcal)
+        path = urllib.parse.urlsplit(cal["href"]).path.rstrip("/") + f"/{uid.split('@')[0]}.ics"
+        dav_raw("PUT", absolute(path), login, ical.serialize([vcal]), {"Content-Type": "text/calendar; charset=utf-8", "If-None-Match": "*"})
+        _caldav["at"] = 0
+        return {"ok": True, "href": path}
+
+    path = body.get("href")
+    cal = calendar_find(path, calendars)
+    scope = body.get("scope") or "all"
+    if scope not in ("all", "this", "future"):
+        raise ValueError("scope: all, this or future")
+    status, headers, data = dav_raw("GET", absolute(path), login)
+    etag = headers.get("ETag")
+    parsed = [c for c in ical.parse(data.decode("utf-8", "replace"))]
+    vcal = next((c for c in parsed if c["name"] == "VCALENDAR"), None)
+    if not vcal:
+        raise ValueError("that item isn't a calendar's")
+    tzs = ical.zones(vcal)
+    master, events = cal_master(vcal)
+    original = body.get("original")
+    try:
+        original = (datetime.datetime.fromisoformat(original.replace("Z", "+00:00")) if "T" in original
+                    else datetime.date.fromisoformat(original)) if original else None
+    except (AttributeError, ValueError):
+        raise ValueError("original: the occurrence's start")
+    repeating = master is not None and ical.prop(master, "RRULE")[1] is not None
+    if not repeating:
+        scope = "all"
+    base = master or (events[0] if events else None)
+    if base is None:
+        raise ValueError("no event in that item")
+    start0, zone = cal_start(base, tzs)
+    all_day0 = not isinstance(start0, datetime.datetime)
+    floating = isinstance(start0, datetime.datetime) and start0.tzinfo is None
+    occ_wall = cal_wall(original, zone, viewer) if original is not None else cal_wall(start0, zone, viewer)
+    if all_day0 and isinstance(occ_wall, datetime.datetime):
+        occ_wall = occ_wall.date()
+
+    def rid_of(comp):
+        rid = ical.value_of(*ical.prop(comp, "RECURRENCE-ID"), tzs)
+        if rid is None:
+            return None
+        w = cal_wall(rid, zone, viewer)
+        return w.date() if all_day0 and isinstance(w, datetime.datetime) else w
+
+    def match(comp):
+        return rid_of(comp) == occ_wall
+
+    def send(text, at=path, new=False):
+        h = {"Content-Type": "text/calendar; charset=utf-8", **({"If-None-Match": "*"} if new else {"If-Match": etag} if etag else {})}
+        dav_raw("PUT", absolute(at), login, text, h)
+
+    def first_start():
+        return cal_wall(start0, zone, viewer)
+
+    if action == "delete":
+        if scope == "all" or (scope == "future" and occ_wall == (first_start() if not all_day0 else start0)):
+            dav_raw("DELETE", absolute(path), login, None, {"If-Match": etag} if etag else {})
+        elif scope == "this":
+            vcal["children"] = [c for c in vcal["children"] if not (c["name"] == "VEVENT" and c is not master and match(c))]
+            cal_encode(master, "EXDATE__", occ_wall, zone, all_day0, floating)
+            # EXDATE adds to any there (put would replace them): moved from the placeholder.
+            i = next(i for i, (k, _, _) in enumerate(master["props"]) if k == "EXDATE__")
+            name, params, value = master["props"][i]
+            master["props"][i] = ("EXDATE", params, value)
+            cal_stamp(master)
+            send(ical.serialize(parsed))
+        else:
+            cal_split(master, vcal, occ_wall, zone, all_day0, floating, rid_of, tzs, viewer)
+            cal_stamp(master)
+            send(ical.serialize(parsed))
+        _caldav["at"] = 0
+        return {"ok": True}
+
+    if action != "update":
+        raise ValueError("action: create, update or delete")
+    moving = target is not None and target["id"] != cal["id"]
+    if moving and scope != "all":
+        raise ValueError("one occurrence can't go to another calendar alone: change them all")
+    times = "start" in f
+    if scope == "this":
+        comp = next((c for c in events if c is not master and match(c)), None)
+        if comp is None:
+            comp = {"name": "VEVENT", "props": [p for p in master["props"] if p[0] not in ("RRULE", "RDATE", "EXDATE", "RECURRENCE-ID", "DTSTAMP")],
+                    "children": [json.loads(json.dumps(ch)) for ch in master["children"]]}
+            comp["raw"] = {}
+            cal_encode(comp, "RECURRENCE-ID", occ_wall, zone, all_day0, floating)
+            vcal["children"].append(comp)
+        if times:
+            tz = zone if not f["allDay"] or all_day0 else zone
+            cal_times(comp, f, tz if not all_day0 or f["allDay"] else viewer, viewer, floating)
+        cal_text(comp, f)
+        cal_stamp(comp)
+        cal_zones_used(vcal)
+        send(ical.serialize(parsed))
+        _caldav["at"] = 0
+        return {"ok": True}
+
+    if scope == "future" and occ_wall != (first_start() if not all_day0 else start0):
+        # The series ends before this one; a new one, from here on, gets the changes.
+        new_uid = f"{secrets.token_hex(16)}@adleros"
+        tail = {"name": "VEVENT", "props": [p for p in master["props"] if p[0] not in ("UID", "EXDATE", "DTSTAMP", "CREATED")],
+                "children": [json.loads(json.dumps(ch)) for ch in master["children"]], "raw": {}}
+        ical.put(tail, "UID", new_uid)
+        moved = cal_split(master, vcal, occ_wall, zone, all_day0, floating, rid_of, tzs, viewer, tail=tail)
+        cal_stamp(master)
+        new_zone = zone if not (times and f["allDay"]) else None
+        span = cal_span(master, tzs)
+        if not times:
+            f = {**f, "allDay": all_day0, "start": cal_aware(occ_wall, zone, viewer) if not all_day0 else occ_wall,
+                 "end": (cal_aware(occ_wall, zone, viewer) + span) if not all_day0 else occ_wall + max(span, datetime.timedelta(days=1))}
+        cal_times(tail, f, zone if not f["allDay"] else None, viewer, floating)
+        cal_text(tail, f)
+        if "repeat" in f:
+            ical.remove(tail, "RRULE")
+            if f["repeat"]:
+                ical.add(tail, "RRULE", cal_rule(f["repeat"], zone or viewer, f["allDay"], floating))
+        ical.put(tail, "SEQUENCE", "0")
+        cal_stamp(tail, bump=False)
+        new = {"name": "VCALENDAR", "props": [p for p in vcal["props"]], "children": [tail, *moved], "raw": {}}
+        for m in moved:
+            ical.put(m, "UID", new_uid)
+        cal_zones_used(new)
+        dest = target or cal
+        new_path = urllib.parse.urlsplit(dest["href"]).path.rstrip("/") + f"/{new_uid.split('@')[0]}.ics"
+        send(ical.serialize(parsed))
+        send(ical.serialize([new]), new_path, new=True)
+        _caldav["at"] = 0
+        return {"ok": True}
+
+    # All of it (or the one event): the master changed; a move in time moves
+    # the whole series by as many days, at the new clock time, its skipped
+    # and changed occurrences with it.
+    comp = master or base
+    if times:
+        new_zone = zone if (not f["allDay"] and not all_day0) else (viewer if not f["allDay"] else None)
+        new_start = cal_wall(f["start"], new_zone, viewer) if not f["allDay"] else f["start"]
+        if repeating:
+            days = ((new_start.date() if isinstance(new_start, datetime.datetime) else new_start)
+                    - (occ_wall.date() if isinstance(occ_wall, datetime.datetime) else occ_wall)).days
+            clock = new_start.time() if isinstance(new_start, datetime.datetime) else None
+            first = cal_shift(cal_wall(start0, zone, viewer), days, clock, f["allDay"])
+            length = (f["end"] - f["start"])
+            f2 = {**f, "start": cal_aware(first, new_zone, viewer) if not f["allDay"] else first,
+                  "end": (cal_aware(first, new_zone, viewer) + length) if not f["allDay"] else first + length}
+            cal_times(comp, f2, new_zone, viewer, floating and not f["allDay"])
+            exdates = [x for p, v in ical.props(comp, "EXDATE") for x in ical.values_of(p, v, tzs)]
+            ical.remove(comp, "EXDATE")
+            for x in exdates:
+                cal_encode(comp, "EXDATE__", cal_shift(cal_wall(x, zone, viewer), days, clock, f["allDay"]), new_zone, f["allDay"], floating)
+                i = next(i for i, (k, _, _) in enumerate(comp["props"]) if k == "EXDATE__")
+                comp["props"][i] = ("EXDATE",) + comp["props"][i][1:]
+            for c in events:
+                if c is not comp and ical.prop(c, "RECURRENCE-ID")[1] is not None:
+                    cal_encode(c, "RECURRENCE-ID", cal_shift(rid_of(c), days, clock, f["allDay"]), new_zone, f["allDay"], floating)
+            if f["allDay"] != all_day0 and ical.prop(comp, "RRULE")[1] and "UNTIL=" in ical.prop(comp, "RRULE")[1].upper():
+                rule = ical.prop(comp, "RRULE")[1]
+                until = ical.value_of({}, re.search(r"UNTIL=([0-9TZ]+)", rule, re.I).group(1), {})
+                day = until.date() if isinstance(until, datetime.datetime) else until
+                ical.put(comp, "RRULE", re.sub(r"UNTIL=[0-9TZ]+", "UNTIL=" + cal_until_text(day, new_zone, f["allDay"], floating), rule, flags=re.I))
+        else:
+            cal_times(comp, f, new_zone, viewer, floating and not f["allDay"])
+        zone = new_zone
+    cal_text(comp, f)
+    if "repeat" in f:
+        ical.remove(comp, "RRULE")
+        if f["repeat"]:
+            is_all_day = f["allDay"] if times else all_day0
+            ical.add(comp, "RRULE", cal_rule(f["repeat"], zone or viewer, is_all_day, floating))
+    cal_stamp(comp)
+    cal_zones_used(vcal)
+    text = ical.serialize(parsed)
+    if moving:
+        new_path = urllib.parse.urlsplit(target["href"]).path.rstrip("/") + "/" + path.rsplit("/", 1)[-1]
+        dav_raw("PUT", absolute(new_path), login, text, {"Content-Type": "text/calendar; charset=utf-8", "If-None-Match": "*"})
+        dav_raw("DELETE", absolute(path), login, None, {"If-Match": etag} if etag else {})
+    else:
+        send(text)
+    _caldav["at"] = 0
+    return {"ok": True}
+
+
+def cal_span(comp, tzs):
+    start = ical.value_of(*ical.prop(comp, "DTSTART"), tzs)
+    end = ical.value_of(*ical.prop(comp, "DTEND"), tzs)
+    if end is not None and type(end) is type(start):
+        return end - start
+    return ical.duration(ical.prop(comp, "DURATION")[1] or "") or (datetime.timedelta(days=1) if not isinstance(start, datetime.datetime) else datetime.timedelta(0))
+
+
+def cal_split(master, vcal, occ_wall, zone, all_day, floating, rid_of, tzs, viewer, tail=None):
+    """The series ends just before occ_wall: UNTIL the day (or second)
+    before; a COUNT made the rest's (on tail, if there's one). Its skipped
+    and changed occurrences from then on leave it: the changed ones
+    returned (for tail's item), the skipped ones put on tail."""
+    rule = ical.prop(master, "RRULE")[1] or ""
+    count = re.search(r"COUNT=(\d+)", rule, re.I)
+    if count and tail is not None:
+        ev = ical.events({"name": "VCALENDAR", "props": [], "children": [*[c for c in vcal["children"] if c["name"] == "VTIMEZONE"], master]})[0]
+        parsed = ical.rrule(ev["rrule"])
+        before = sum(1 for w in ical.starts(ev, parsed, None, None, occ_wall if not isinstance(occ_wall, datetime.datetime) else occ_wall.date())
+                     if (w if isinstance(w, datetime.datetime) or not isinstance(occ_wall, datetime.datetime) else datetime.datetime.combine(w, datetime.time.min)) < occ_wall)
+        left = max(1, int(count.group(1)) - before)
+        ical.put(tail, "RRULE", re.sub(r"COUNT=\d+", f"COUNT={left}", rule, flags=re.I))
+    if all_day:
+        until = (occ_wall - datetime.timedelta(days=1)).strftime("%Y%m%d")
+    elif floating:
+        until = (occ_wall - datetime.timedelta(seconds=1)).strftime("%Y%m%dT%H%M%S")
+    else:
+        until = (occ_wall.replace(tzinfo=zone) - datetime.timedelta(seconds=1)).astimezone(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    rule = re.sub(r";?(COUNT|UNTIL)=[^;]*", "", rule, flags=re.I).strip(";")
+    ical.put(master, "RRULE", f"{rule};UNTIL={until}")
+    kept, later = [], []
+    for p, v in ical.props(master, "EXDATE"):
+        for x in ical.values_of(p, v, tzs):
+            w = cal_wall(x, zone, viewer)
+            (later if (w >= occ_wall if type(w) is type(occ_wall) else False) else kept).append((p, v, x))
+    ical.remove(master, "EXDATE")
+    for p, v, x in kept:
+        ical.add(master, "EXDATE", ical.when_text(x, zone)[1] if isinstance(x, datetime.datetime) and x.tzinfo else v.split(",")[0], p)
+    if tail is not None:
+        for p, v, x in later:
+            ical.add(tail, "EXDATE", v.split(",")[0], p)
+    moved = []
+    for c in list(vcal["children"]):
+        if c["name"] == "VEVENT" and c is not master:
+            rid = rid_of(c)
+            if rid is not None and type(rid) is type(occ_wall) and rid >= occ_wall:
+                vcal["children"].remove(c)
+                moved.append(c)
+    return moved
 
 
 def calendar_status():
@@ -2799,7 +3236,8 @@ def calendar_events(query):
     calendars, events = calendar_state()
     out = []
     for cal in calendars:
-        for o in ical.expand(events.get(cal["href"], (None, []))[1], first, last, viewer):
+        evs = [e for item in events.get(cal["href"], (None, []))[1] for e in item["events"]]
+        for o in ical.expand(evs, first, last, viewer):
             out.append({**o, "calendar": cal["id"]})
     return {"calendars": [{k: c[k] for k in ("id", "name", "color")} for c in calendars], "events": out}
 
@@ -3687,6 +4125,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.notes_post(path[len("/api/notes/"):], body)
         if path.startswith("/api/music/"):
             return self.music_post(path[len("/api/music/"):], body)
+        if path == "/api/calendar/event":
+            return self.calendar_post(body)
         if path == "/api/gallery/search":
             return self.gallery_search(body)
         if path == "/api/terminal":
@@ -4382,6 +4822,25 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(e.code if e.code in (400, 401, 403, 404) else 502, {"error": f"Paperless said {e.code}", "paperless": e.code})
         except OSError as e:
             return self.send_json(502, {"error": f"can't reach Paperless ({e})"})
+
+    def calendar_post(self, body):
+        if not isinstance(body, dict):
+            return self.send_json(400, {"error": "a JSON object"})
+        viewer = ical.named_zone(str(body.get("tz") or "")[:64]) or datetime.timezone.utc
+        try:
+            return self.send_json(200, calendar_write(body, viewer))
+        except LookupError as e:
+            return self.send_json(409, {"error": "Calendar isn't set up" if str(e) == "not set up" else str(e)})
+        except ValueError as e:
+            return self.send_json(400, {"error": str(e)})
+        except urllib.error.HTTPError as e:
+            if e.code == 412:
+                return self.send_json(409, {"error": "It changed somewhere else meanwhile: it's shown as it is now; make your change again.", "conflict": True})
+            if e.code in (401, 403):
+                return self.send_json(403, {"error": "The calendar server didn't let it be changed (a calendar you may only read?)."})
+            return self.send_json(502, {"error": f"the calendar server said {e.code}"})
+        except (OSError, ElementTree.ParseError) as e:
+            return self.send_json(502, {"error": f"can't reach the calendar server ({e})"})
 
     def calendar_get(self, what, query):
         try:

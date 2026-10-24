@@ -1,5 +1,6 @@
 """iCalendar (RFC 5545), for adlerOS's Calendar: a calendar's events, read,
-and their repeats worked out between two days. What calendar apps send:
+and their repeats worked out between two days; and written back (the
+components as they were, but for what was changed in them). What calendar apps send:
 time zones by name (or only by their offsets, as Outlook's are), all-day and
 floating times, RRULE (daily, weekly, monthly, yearly; BYDAY, BYMONTHDAY,
 BYMONTH, BYSETPOS, COUNT, UNTIL, INTERVAL, WKST), EXDATE, RDATE, and single
@@ -27,6 +28,8 @@ def parse(text):
         if not line.strip():
             continue
         name, params, value = parse_line(line)
+        if name not in ("BEGIN", "END"):
+            stack[-1].setdefault("raw", {})[len(stack[-1]["props"])] = line
         if name == "BEGIN":
             comp = {"name": value.upper(), "props": [], "children": []}
             stack[-1]["children"].append(comp)
@@ -203,6 +206,7 @@ def events(calendar):
             "description": text(prop(c, "DESCRIPTION")[1] or ""), "url": (prop(c, "URL")[1] or "").strip(),
             "status": (prop(c, "STATUS")[1] or "").upper(), "transparent": (prop(c, "TRANSP")[1] or "").upper() == "TRANSPARENT",
             "color": (prop(c, "COLOR")[1] or "").strip(),
+            "travel": duration(prop(c, "X-APPLE-TRAVEL-DURATION")[1] or ""),
             "rrule": prop(c, "RRULE")[1],
             "exdates": [x for p, v in props(c, "EXDATE") for x in values_of(p, v, tzs)],
             "rdates": [x for p, v in props(c, "RDATE") for x in values_of(p, v, tzs)],
@@ -419,10 +423,11 @@ def expand(evs, first_day, last_day, viewer):
                 if when in changed:
                     continue  # its changed one stands in for it, below
                 add_occurrence(out, master, when, when, span, zone, viewer, lo, hi, rule is not None or bool(extra))
+        rule_text = masters[0]["rrule"] if masters else None
         for rid, ev in changed.items():
             if ev["status"] == "CANCELLED":
                 continue
-            add_occurrence(out, ev, rid, ev["start"], ev["span"], ev["zone"], viewer, lo, hi, True)
+            add_occurrence(out, {**ev, "rrule": rule_text}, rid, ev["start"], ev["span"], ev["zone"], viewer, lo, hi, True)
     out.sort(key=lambda o: (o["sortStart"], not o["allDay"], o["title"].lower()))
     for o in out:
         o.pop("sortStart")
@@ -447,8 +452,15 @@ def add_occurrence(out, ev, original, when, span, zone, viewer, lo, hi, repeats)
         if not (s < hi and (e > lo or (e == s and s >= lo))):
             return
         start_out, end_out, all_day = iso(s), iso(e), False
+    if isinstance(original, dt.datetime):
+        first = iso(instant(original, zone, viewer))
+    else:
+        first = original.isoformat() if original is not None else None
+    travel = ev.get("travel")
     out.append({
         "uid": ev["uid"], "id": f"{ev['uid']}|{original.isoformat() if original is not None else ''}",
+        "href": ev.get("href"), "original": first, "rrule": ev.get("rrule") or None,
+        "travel": int(travel.total_seconds() // 60) if travel and travel > dt.timedelta(0) else 0,
         "title": ev["title"], "start": start_out, "end": end_out, "allDay": all_day,
         "location": ev["location"], "description": ev["description"], "url": ev["url"],
         "status": ev["status"], "transparent": ev["transparent"], "color": ev["color"], "repeats": repeats,
@@ -458,3 +470,174 @@ def add_occurrence(out, ev, original, when, span, zone, viewer, lo, hi, repeats)
 
 def iso(when):
     return when.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# ------------------------------------------------------------ writing
+
+def escape(value):
+    """A TEXT value, escaped."""
+    return value.replace("\\", "\\\\").replace(";", "\;").replace(",", "\\,").replace("\r\n", "\\n").replace("\n", "\\n")
+
+
+def fold(line):
+    """A content line folded at 75 octets (never inside a character)."""
+    data = line.encode()
+    if len(data) <= 75:
+        return line
+    out, start, limit = [], 0, 75
+    while start < len(data):
+        end = min(len(data), start + limit)
+        while end < len(data) and (data[end] & 0xC0) == 0x80:
+            end -= 1
+        out.append(data[start:end].decode())
+        start, limit = end, 74
+    return "\r\n ".join(out)
+
+
+def param_text(params):
+    parts = []
+    for k, v in params.items():
+        parts.append(f';{k}="{v}"' if re.search(r'[;:,]', v) else f";{k}={v}")
+    return "".join(parts)
+
+
+def serialize(components):
+    """Components (as parse made them, changed or not) as iCalendar text:
+    a line nobody changed exactly as it was."""
+    lines = []
+
+    def emit(comp):
+        lines.append(f"BEGIN:{comp['name']}")
+        raw = comp.get("raw", {})
+        for i, (name, params, value) in enumerate(comp["props"]):
+            if i in raw and raw[i] is not None:
+                lines.append(raw[i])
+            else:
+                lines.append(f"{name}{param_text(params)}:{value}")
+        for child in comp["children"]:
+            emit(child)
+        lines.append(f"END:{comp['name']}")
+    for comp in components:
+        emit(comp)
+    return "\r\n".join(fold(line) for line in lines) + "\r\n"
+
+
+def _reindex(comp, keep):
+    """After props were taken out: the kept raw lines, renumbered."""
+    raw = comp.get("raw", {})
+    comp["raw"] = {new: raw[old] for new, old in enumerate(keep) if old in raw}
+
+
+def remove(comp, *names):
+    keep = [i for i, (k, _, _) in enumerate(comp["props"]) if k not in names]
+    comp["props"] = [comp["props"][i] for i in keep]
+    _reindex(comp, keep)
+
+
+def put(comp, name, value, params=None):
+    """NAME set to value (its first one replaced, the others taken out)."""
+    found = [i for i, (k, _, _) in enumerate(comp["props"]) if k == name]
+    if found:
+        first = found[0]
+        comp["props"][first] = (name, params or {}, value)
+        comp.get("raw", {}).pop(first, None)
+        keep = [i for i in range(len(comp["props"])) if i not in found[1:]]
+        comp["props"] = [comp["props"][i] for i in keep]
+        _reindex(comp, keep)
+    else:
+        comp["props"].append((name, params or {}, value))
+
+
+def add(comp, name, value, params=None):
+    comp["props"].append((name, params or {}, value))
+
+
+def when_text(value, zone):
+    """A date or time as DTSTART wants it: (params, value). zone: a
+    zoneinfo zone (TZID), UTC (…Z) or None (floating)."""
+    if not isinstance(value, dt.datetime):
+        return {"VALUE": "DATE"}, value.strftime("%Y%m%d")
+    if zone is UTC or getattr(zone, "key", None) in ("UTC", "Etc/UTC"):
+        return {}, value.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ") if value.tzinfo else value.strftime("%Y%m%dT%H%M%SZ")
+    if zone is None:
+        return {}, value.replace(tzinfo=None).strftime("%Y%m%dT%H%M%S")
+    name = getattr(zone, "key", None) or str(zone)
+    wall = value.astimezone(zone).replace(tzinfo=None) if value.tzinfo else value
+    return {"TZID": name}, wall.strftime("%Y%m%dT%H%M%S")
+
+
+def offset_text(delta):
+    total = int(delta.total_seconds())
+    sign = "-" if total < 0 else "+"
+    total = abs(total)
+    return f"{sign}{total // 3600:02d}{total % 3600 // 60:02d}"
+
+
+def vtimezone(zone, year=None):
+    """A VTIMEZONE for a zoneinfo zone, worked out from it: its offset, and
+    (where clocks change) when they change, as a yearly rule."""
+    year = year or dt.date.today().year
+    name = zone.key
+    comp = {"name": "VTIMEZONE", "props": [("TZID", {}, name)], "children": []}
+    # Each hour of the year: where the offset changes.
+    at = dt.datetime(year, 1, 1, tzinfo=UTC)
+    before = at.astimezone(zone).utcoffset()
+    changes = []
+    for _ in range(366 * 24):
+        at += dt.timedelta(hours=1)
+        now = at.astimezone(zone).utcoffset()
+        if now != before:
+            changes.append((at, before, now))
+            before = now
+    if not changes:
+        off = offset_text(before)
+        comp["children"].append({"name": "STANDARD", "props": [
+            ("TZOFFSETFROM", {}, off), ("TZOFFSETTO", {}, off), ("TZNAME", {}, at.astimezone(zone).tzname() or off),
+            ("DTSTART", {}, "19700101T000000")], "children": []})
+        return comp
+    for at, old, new in changes[:2]:
+        wall = (at + old).replace(tzinfo=None)  # the clock as it was, at the change
+        day = wall.date()
+        last = month_days(day.year, day.month)[-1].day
+        n = -1 if day.day > last - 7 else (day.day - 1) // 7 + 1
+        kind = "DAYLIGHT" if at.astimezone(zone).dst() else "STANDARD"
+        comp["children"].append({"name": kind, "props": [
+            ("TZOFFSETFROM", {}, offset_text(old)), ("TZOFFSETTO", {}, offset_text(new)),
+            ("TZNAME", {}, at.astimezone(zone).tzname() or offset_text(new)),
+            ("DTSTART", {}, wall.strftime("%Y%m%dT%H%M%S")),
+            ("RRULE", {}, f"FREQ=YEARLY;BYMONTH={day.month};BYDAY={n}{list(WEEKDAYS)[day.weekday()]}")], "children": []})
+    return comp
+
+
+def rrule_text(rule):
+    """The page's repeat ({freq, interval, byday, bymonthday, bymonth,
+    bysetpos, until, count}) as RRULE's value; ValueError if it isn't one.
+    until: the last day (YYYY-MM-DD), written as the zone needs (untilText)."""
+    freq = str(rule.get("freq", "")).upper()
+    if freq not in ("DAILY", "WEEKLY", "MONTHLY", "YEARLY"):
+        raise ValueError("repeat: daily, weekly, monthly or yearly")
+    parts = [f"FREQ={freq}"]
+    interval = int(rule.get("interval") or 1)
+    if not 1 <= interval <= 999:
+        raise ValueError("repeat: every 1 to 999")
+    if interval > 1:
+        parts.append(f"INTERVAL={interval}")
+    byday = [str(d).upper() for d in rule.get("byday") or []]
+    if any(not re.fullmatch(r"([+-]?[1-5])?(MO|TU|WE|TH|FR|SA|SU)", d) for d in byday):
+        raise ValueError("repeat: days as MO, TU…, or 2TU, -1FR")
+    if byday:
+        parts.append("BYDAY=" + ",".join(byday))
+    for key, lo, hi in (("bymonthday", -31, 31), ("bymonth", 1, 12), ("bysetpos", -366, 366)):
+        vals = [int(v) for v in rule.get(key) or []]
+        if any(not lo <= v <= hi or v == 0 for v in vals):
+            raise ValueError(f"repeat: {key} out of range")
+        if vals:
+            parts.append(f"{key.upper()}=" + ",".join(str(v) for v in vals))
+    if rule.get("count"):
+        count = int(rule["count"])
+        if not 1 <= count <= 9999:
+            raise ValueError("repeat: 1 to 9999 times")
+        parts.append(f"COUNT={count}")
+    elif rule.get("untilText"):
+        parts.append(f"UNTIL={rule['untilText']}")
+    return ";".join(parts)

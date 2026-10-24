@@ -3365,6 +3365,70 @@ body:not(.wm) .cal-head { padding-top: 18px; padding-right: 60px; }
 .cal-pop-link { color: #6ab0ff; overflow-wrap: anywhere; }
 .cal-pop-notes { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid rgb(255 255 255 / 0.1); color: rgb(255 255 255 / 0.85); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
 
+/* Changing them: dragged (a little lifted, see-through), a new one drawn
+   across free hours, the way there before one (travel time). */
+.cal-block { touch-action: pan-y; }
+.cal-block:not(.short)::after { position: absolute; right: 0; bottom: 0; left: 0; height: 6px; cursor: ns-resize; content: ""; }
+.cal-block.cal-held { transform: scale(1.03); box-shadow: 0 6px 18px rgb(0 0 0 / 0.45); }
+.cal-block.cal-dragging { z-index: 5; opacity: 0.85; box-shadow: 0 10px 26px rgb(0 0 0 / 0.5); cursor: grabbing; transition: none; }
+.cal-new-box { position: absolute; right: 2px; left: 1px; z-index: 4; padding: 3px 6px; border: 1px dashed rgb(255 255 255 / 0.6); border-radius: 5px; background: color-mix(in srgb, var(--cal-accent) 28%, transparent); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; pointer-events: none; }
+.cal-travel { --c: #4c9aff; position: absolute; display: flex; align-items: flex-start; justify-content: center; overflow: hidden; border-radius: 5px 5px 0 0; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 30%, transparent) 0 4px, transparent 4px 8px); font-size: 10px; color: rgb(255 255 255 / 0.7); pointer-events: none; }
+.cal-travel span { padding-top: 1px; }
+.cal-ghost { --c: #4c9aff; position: fixed; z-index: 200; max-width: 220px; padding: 3px 9px; overflow: hidden; border-radius: 6px; background: color-mix(in srgb, var(--c) 75%, #000 10%); color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; pointer-events: none; box-shadow: 0 6px 18px rgb(0 0 0 / 0.45); }
+.cal-mday.cal-drop { background: color-mix(in srgb, var(--cal-accent) 22%, transparent); }
+.cal-pop-actions { display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgb(255 255 255 / 0.1); }
+.cal-pop-actions .chip-button { display: inline-flex; align-items: center; gap: 6px; }
+.cal-pop-actions svg { width: 14px; height: 14px; }
+.cal-pop-delete { color: #ff6b63; }
+.cal-add svg { width: 19px; height: 19px; }
+
+/* The editor: one row a thing, its label on the left (above, when narrow). */
+.cal-editor { width: min(520px, calc(100vw - 24px)); max-height: calc(100dvh - 40px); overflow-y: auto; text-align: left; }
+.cal-editor h2 { margin-bottom: 14px; }
+.cal-editor > .field-input { width: 100%; margin-bottom: 8px; }
+.cal-ed-row { display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: center; gap: 10px; margin: 8px 0; }
+.cal-ed-row[hidden] { display: none; }
+.cal-ed-label { font-size: 13px; color: rgb(255 255 255 / 0.7); }
+.cal-ed-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.cal-ed-fields .field-input { flex: 1; min-width: 0; }
+.cal-ed-fields input[type="time"] { flex: 0 0 auto; width: 118px; }
+.cal-ed-fields input[hidden], .cal-ed-count[hidden] { display: none; }
+.cal-ed-switch { cursor: pointer; }
+.cal-switch { justify-self: start; width: 40px; height: 24px; margin: 0; border-radius: 12px; background: rgb(255 255 255 / 0.2); cursor: pointer; appearance: none; transition: background 0.15s; position: relative; }
+.cal-switch::after { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 0.4); transition: transform 0.15s; content: ""; }
+.cal-switch:checked { background: #34c759; }
+.cal-switch:checked::after { transform: translateX(16px); }
+.cal-ed-row .cal-dot { width: 10px; height: 10px; }
+.cal-ed-count { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.field-input.cal-count, .field-input.cal-every { flex: 0 0 auto; width: 76px; }
+.cal-notes { width: 100%; margin-top: 8px; resize: vertical; font: inherit; }
+.cal-editor .error:not(:empty) { margin-top: 8px; }
+.cal-editor .dialog-actions { margin-top: 18px; }
+.cal-ed-delete { margin-right: auto; }
+/* Narrow: Delete, Cancel and Save share the row (Save no wider than there's room for). */
+.cal-editor .dialog-actions .button-primary.wide { min-width: 0; flex: 0 1 140px; }
+.cal-editor .dialog-actions > * { min-width: 0; }
+.cal-ed-custom { margin: 4px 0 8px; padding: 12px; border-radius: 12px; background: rgb(255 255 255 / 0.06); }
+.cal-ed-custom[hidden] { display: none; }
+.cal-ed-custom > * + * { margin-top: 10px; }
+.cal-ed-every { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.cal-seg { display: flex; padding: 2px; border-radius: 9px; background: rgb(255 255 255 / 0.09); }
+.cal-seg-b { flex: 1; padding: 6px 4px; border: 0; border-radius: 7px; background: none; color: rgb(255 255 255 / 0.75); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.cal-seg-b.on { background: rgb(255 255 255 / 0.2); color: #fff; }
+.cal-seg-small { max-width: 260px; }
+.cal-picks { display: grid; gap: 4px; }
+.cal-picks-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.cal-picks-12 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.cal-picks-31 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.cal-pick { min-width: 0; padding: 7px 0; overflow: hidden; border: 0; border-radius: 7px; background: rgb(255 255 255 / 0.08); color: rgb(255 255 255 / 0.85); font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; cursor: pointer; }
+.cal-pick.on { background: var(--cal-accent, #ff5f57); color: #fff; font-weight: 700; }
+.cal-ed-sentence { margin: 2px 0 0; font-size: 12.5px; color: rgb(255 255 255 / 0.65); }
+.cal-scope { width: min(360px, calc(100vw - 24px)); }
+.cal-scope-choices { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 6px; }
+@media (max-width: 480px) { .cal-ed-row { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+/* The editor is a dialog (outside the window): its accent here too. */
+.cal-editor, .cal-scope { --cal-accent: #ff5f57; }
+
 @container sheet (max-width: 820px) {
   .cal-shell { grid-template-columns: minmax(0, 1fr); }
   .cal-side { display: none; }

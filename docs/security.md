@@ -155,9 +155,12 @@ your browser never connects to the station itself.
 
 **Calendar** asks your CalDAV server with `CALDAV_USER` and
 `CALDAV_PASSWORD`, which stay on the server: what calendars there are, and
-their events (PROPFIND and REPORT; it never writes). It follows a redirect
-only on the same server, so the login goes nowhere else. Your browser gets
-the events of the days it shows, nothing more.
+their events (PROPFIND and REPORT), and changes to them: an item fetched
+as it is (GET), changed, and put back (PUT, or DELETE) only if it hasn't
+changed since (If-Match; a new one only where there's none: If-None-Match),
+only at the paths of your calendars there. It follows a redirect only on
+the same server, so the login goes nowhere else. Your browser gets the
+events of the days it shows, nothing more.
 
 **Connecting them** (`install.sh`, in a terminal, through
 `agent/connect.py`) makes those keys with each app's own API, at the
