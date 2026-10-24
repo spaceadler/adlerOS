@@ -321,6 +321,7 @@ function openEntry(entry, path, f = null) {
     return into ? showFolder(path, into) : openFiles(path);
   }
   if (/\.m3u8?$/i.test(entry.name)) return musicPlayListFile(path); // a playlist: in Music
+  if (/\.(pls|strm)$/i.test(entry.name)) return musicStationFile(path); // a radio station's: added to Music's, and played
   if (entry.kind === "text") return openNotepad(path);
   if (entry.kind === "audio") return playSong(entry, path); // in Music
   if (["image", "video", "pdf"].includes(entry.kind)) return viewFile(entry, path);

@@ -147,6 +147,12 @@ preview and original, and the tags, correspondents and types; files you
 add go to Paperless's own upload. The token is your Paperless user's, so it
 may do what you may there; Documents only reads, and adds what you give it.
 
+**Music's stations** are addresses you added (data/radio-stations.json).
+The server opens only those: a station's stream (or its playlist, to find
+the stream) is fetched and passed to your browser as it comes, so an
+http:// one plays on an https:// page; nothing else is asked for, and
+your browser never connects to the station itself.
+
 **Calendar** asks your CalDAV server with `CALDAV_USER` and
 `CALDAV_PASSWORD`, which stay on the server: what calendars there are, and
 their events (PROPFIND and REPORT; it never writes). It follows a redirect

@@ -1695,6 +1695,147 @@ def vault_rename(vault, old, new, links=True):
     return {"ok": True, "updated": updated, "path": new}
 
 
+# ------------------------------------------------------------ radio stations
+
+# Music's stations from the internet (Klassik Radio, a BBC one…): the ones you
+# added, from a station's playlist file (.m3u, .m3u8, .pls, Kodi's .strm) or
+# its address, in data/radio-stations.json. Played through here: a playlist
+# address is followed to its stream, an http:// one plays on an https:// page,
+# and what's on now (Icecast and Shoutcast say, in the stream) is kept, for
+# the bar and the lock screen.
+RADIO_FILE = DATA / "radio-stations.json"
+RADIO_MAX = 300
+RADIO_FILE_TYPES = (".m3u", ".m3u8", ".pls", ".strm", ".txt")
+RADIO_PLAYLIST_TYPES = ("audio/x-mpegurl", "audio/mpegurl", "application/x-mpegurl", "audio/x-scpls", "application/pls+xml", "text/plain")
+RADIO_HLS_TYPES = ("application/vnd.apple.mpegurl",)
+_radio_lock = threading.Lock()
+_radio_now = {}  # station id -> {"title", "at"}
+
+
+def radio_stations():
+    try:
+        data = json.loads(RADIO_FILE.read_text())
+    except (OSError, ValueError):
+        return []
+    items = data.get("stations") if isinstance(data, dict) else None
+    return [x for x in items or [] if isinstance(x, dict) and x.get("id") and x.get("url")]
+
+
+def radio_save(stations):
+    write_private(RADIO_FILE, json.dumps({"stations": stations[:RADIO_MAX]}, indent=1))
+
+
+def radio_url(url):
+    """An address a station can be at (http or https, a host), or None."""
+    url = (url or "").strip().split()[0] if (url or "").strip() else ""
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except ValueError:
+        return None
+    return url if parts.scheme in ("http", "https") and parts.hostname and len(url) <= 2000 else None
+
+
+def radio_parse(text, name=""):
+    """A station file's stations: [(name, url)]. An .m3u's #EXTINF titles
+    them; a .pls its TitleN; otherwise (.strm, a bare address) the file's
+    name does. An HLS stream's own playlist (#EXT-X-…) isn't a list of
+    stations: its address is the station."""
+    base = re.sub(r"[_]+", " ", Path(name).stem).strip() if name else ""
+    if "#EXT-X-TARGETDURATION" in text or "#EXT-X-STREAM-INF" in text:
+        raise ValueError("that's an HLS stream's own playlist, not a station's: add its web address instead")
+    out = []
+    if re.search(r"^\s*\[playlist\]", text, re.I | re.M) or re.search(r"^\s*File\d+\s*=", text, re.I | re.M):
+        files, titles = {}, {}
+        for line in text.splitlines():
+            m = re.match(r"\s*(File|Title)(\d+)\s*=\s*(.*)", line, re.I)
+            if m:
+                (files if m.group(1).lower() == "file" else titles)[int(m.group(2))] = m.group(3).strip()
+        for n in sorted(files):
+            url = radio_url(files[n])
+            if url:
+                out.append((titles.get(n) or base, url))
+        return out
+    title = None
+    for line in text.splitlines():
+        line = line.strip().lstrip("﻿")
+        if line.upper().startswith("#EXTINF"):
+            title = line.split(",", 1)[1].strip() if "," in line else None
+            continue
+        if not line or line.startswith("#"):
+            continue
+        url = radio_url(line)
+        if url:
+            out.append((title or base, url))
+        title = None
+    return out
+
+
+def radio_add(found):
+    """New stations (name, url) after the ones there (one address only once):
+    the ones added, and how many were there already."""
+    with _radio_lock:
+        stations = radio_stations()
+        have = {x["url"] for x in stations}
+        added = []
+        for name, url in found:
+            if url in have or len(stations) >= RADIO_MAX:
+                continue
+            host = urllib.parse.urlsplit(url).hostname or "A station"
+            st = {"id": secrets.token_hex(6), "name": (name or host).strip()[:80] or host, "url": url, "added": int(time.time())}
+            stations.append(st)
+            added.append(st)
+            have.add(url)
+        radio_save(stations)
+    return added, len(found) - len(added)
+
+
+def radio_open(url, depth=0):
+    """The station's stream, opened: (response, its address). A playlist
+    address (.m3u, .pls) is read and its first station followed, three deep
+    at most; an HLS one is said to be (the browser plays those itself)."""
+    request = urllib.request.Request(url, headers={"User-Agent": "adlerOS radio", "Icy-MetaData": "1", "Accept": "*/*"})
+    r = urllib.request.urlopen(request, timeout=20)
+    ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    path = urllib.parse.urlsplit(r.geturl()).path.lower()
+    if ctype in RADIO_HLS_TYPES or path.endswith(".m3u8") and ctype not in ("audio/mpeg", "audio/aac", "audio/aacp", "audio/ogg"):
+        head = r.read(65536).decode("utf-8", "replace")
+        if "#EXT-X-" in head or ctype in RADIO_HLS_TYPES:
+            r.close()
+            raise LookupError(r.geturl())
+        r.close()
+        return radio_follow(head, r.geturl(), depth)
+    if ctype in RADIO_PLAYLIST_TYPES or path.endswith((".m3u", ".pls")):
+        head = r.read(65536).decode("utf-8", "replace")
+        r.close()
+        return radio_follow(head, r.geturl(), depth)
+    return r, r.geturl()
+
+
+def radio_follow(text, at, depth):
+    found = []
+    try:
+        found = radio_parse(text)
+    except ValueError:
+        raise LookupError(at)
+    if not found or depth >= 3:
+        raise OSError("the station's playlist names no stream")
+    return radio_open(urllib.parse.urljoin(at, found[0][1]), depth + 1)
+
+
+def radio_title(meta):
+    """StreamTitle='Artist - Song'; from an ICY metadata block."""
+    m = re.search(rb"StreamTitle='(.*?)';", meta, re.S)
+    if not m:
+        return None
+    raw = m.group(1)
+    for enc in ("utf-8", "latin-1"):
+        try:
+            return raw.decode(enc).strip()[:200]
+        except UnicodeDecodeError:
+            continue
+    return None
+
+
 # ------------------------------------------------------------------ music
 
 # Music: MUSIC_DIR in your storage (Media/Music if it isn't set). Its songs'
@@ -3873,6 +4014,10 @@ class Handler(BaseHTTPRequestHandler):
     # Music: the library, a song's tags, cover and lyrics, an .m3u8 anywhere,
     # plays, and playlists to make, change and delete.
     def music_get(self, what, query):
+        if what == "stations":
+            return self.send_json(200, {"stations": radio_stations()})
+        if what.startswith("station/"):
+            return self.radio_get(what[len("station/"):])
         if not places_on():
             return self.send_json(404, {"error": "no storage folder is mounted"})
         item = query.get("id", [""])[0]
@@ -3918,7 +4063,149 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, music_lyrics(real) or {"text": None})
         return self.send_json(404, {"error": "not found"})
 
+    def radio_get(self, what):
+        sid, _, part = what.partition("/")
+        st = next((x for x in radio_stations() if x["id"] == sid), None)
+        if not st:
+            return self.send_json(404, {"error": "no such station"})
+        if part == "now":
+            now = _radio_now.get(sid) or {}
+            return self.send_json(200, {"title": now.get("title") if time.time() - now.get("at", 0) < 600 else None})
+        if part == "check":
+            # Why one didn't play: an HLS stream (the browser's to play), or the station's answer.
+            try:
+                r, at = radio_open(st["url"])
+                r.close()
+                return self.send_json(200, {"ok": True, "at": at})
+            except LookupError as e:
+                return self.send_json(200, {"ok": False, "hls": str(e)})
+            except urllib.error.HTTPError as e:
+                return self.send_json(200, {"ok": False, "error": f"the station said {e.code}"})
+            except (OSError, ValueError) as e:
+                return self.send_json(200, {"ok": False, "error": f"can't reach it ({e})"})
+        if part != "stream":
+            return self.send_json(404, {"error": "not found"})
+        try:
+            r, _ = radio_open(st["url"])
+        except LookupError as e:
+            # An HLS stream: the browser plays it itself, if it can.
+            return self.send_json(415, {"error": "an HLS stream", "hls": str(e)})
+        except urllib.error.HTTPError as e:
+            return self.send_json(502, {"error": f"the station said {e.code}"})
+        except (OSError, ValueError) as e:
+            return self.send_json(502, {"error": f"can't reach the station ({e})"})
+        with r:
+            ctype = (r.headers.get("Content-Type") or "audio/mpeg").split(";")[0].strip().lower()
+            if not ctype.startswith(("audio/", "application/ogg", "video/")):
+                ctype = "audio/mpeg"
+            try:
+                every = int(r.headers.get("icy-metaint") or 0)
+            except ValueError:
+                every = 0
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Security-Policy", "default-src 'none'; sandbox")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            if self.command == "HEAD":
+                return
+            # The sound to the browser; every so many bytes (icy-metaint) a
+            # block of what's on now, kept here and left out of the sound.
+            try:
+                while True:
+                    if every:
+                        audio = r.read(every)
+                        if not audio:
+                            break
+                        self.wfile.write(audio)
+                        size = r.read(1)
+                        if not size:
+                            break
+                        meta = r.read(size[0] * 16) if size[0] else b""
+                        title = radio_title(meta) if meta else None
+                        if title is not None:
+                            _radio_now[sid] = {"title": title, "at": time.time()}
+                    else:
+                        chunk = r.read(32 * 1024)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+
+    def radio_post(self, body):
+        """Stations added (from files' text, a file in your storage, an
+        address), renamed or removed."""
+        if not isinstance(body, dict):
+            return self.send_json(400, {"error": "a JSON object"})
+        if "remove" in body:
+            with _radio_lock:
+                stations = radio_stations()
+                kept = [x for x in stations if x["id"] != body["remove"]]
+                radio_save(kept)
+            return self.send_json(200 if len(kept) < len(stations) else 404, {"stations": kept})
+        if "rename" in body:
+            name = str(body.get("name") or "").strip()[:80]
+            if not name:
+                return self.send_json(400, {"error": "a name"})
+            with _radio_lock:
+                stations = radio_stations()
+                for x in stations:
+                    if x["id"] == body["rename"]:
+                        x["name"] = name
+                radio_save(stations)
+            return self.send_json(200, {"stations": stations})
+        if "order" in body and isinstance(body["order"], list):
+            with _radio_lock:
+                stations = radio_stations()
+                rank = {sid: i for i, sid in enumerate(body["order"]) if isinstance(sid, str)}
+                stations.sort(key=lambda x: rank.get(x["id"], len(rank)))
+                radio_save(stations)
+            return self.send_json(200, {"stations": stations})
+        found, problems = [], []
+        for f in body.get("files") or []:
+            if not isinstance(f, dict) or not isinstance(f.get("text"), str):
+                continue
+            name = str(f.get("name") or "")[:200]
+            try:
+                got = radio_parse(f["text"][:256 * 1024], name)
+            except ValueError as e:
+                problems.append(f"{name}: {e}")
+                continue
+            if not got:
+                problems.append(f"{name}: no station's address in it")
+            found += got
+        if isinstance(body.get("path"), str):
+            place, real = locate(body["path"])
+            if not real or not real.is_file() or real.suffix.lower() not in RADIO_FILE_TYPES:
+                return self.send_json(404, {"error": "no such station file"})
+            try:
+                if real.stat().st_size > 256 * 1024:
+                    raise ValueError("too big for a station's file")
+                got = radio_parse(real.read_text("utf-8", "replace"), real.name)
+            except (OSError, ValueError) as e:
+                return self.send_json(400, {"error": str(e)})
+            if not got:
+                return self.send_json(400, {"error": f"{real.name} has no station's address in it"})
+            found += got
+        if body.get("url") is not None:
+            url = radio_url(str(body.get("url")))
+            if not url:
+                return self.send_json(400, {"error": "an http:// or https:// address"})
+            found.append((str(body.get("name") or "").strip()[:80], url))
+        if not found:
+            return self.send_json(400, {"error": "; ".join(problems) or "no stations in that"})
+        added, already = radio_add(found)
+        # Already there: the ones a file named, for playing straight away.
+        urls = [u for _, u in found]
+        named = [x for x in radio_stations() if x["url"] in urls]
+        return self.send_json(200, {"added": added, "already": already, "stations": radio_stations(), "named": named, "problems": problems})
+
     def music_post(self, what, body):
+        if what == "stations":
+            return self.radio_post(body)
         if not places_on():
             return self.send_json(404, {"error": "no storage folder is mounted"})
         if what in ("played", "playing"):
