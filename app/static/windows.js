@@ -193,6 +193,11 @@ function openWindow(id) {
 }
 
 function closeWindow(id) {
+  // One app alone (a copy, in a window of the page around it): that window closes.
+  if (typeof ONLY_APP !== "undefined" && ONLY_APP && id === ONLY_APPS[ONLY_APP]) {
+    window.parent.postMessage({ adleros: "close" }, location.origin);
+    return true;
+  }
   const sheet = $(id);
   if (!sheet || sheet.hidden || sheet.classList.contains("closing")) return false;
   const w = wm.windows.get(id);
@@ -805,10 +810,10 @@ $("dock").addEventListener("pointerleave", () => {
   dockPeek.over = false;
   dockAwaySoon(500);
 });
-if (winLoad(DESKTOP_MODE_KEY, false) === true && computerScreen()) document.body.classList.add("wm");
+if (winLoad(DESKTOP_MODE_KEY, false) === true && computerScreen() && !ONLY_APP) document.body.classList.add("wm");
 // The screen got narrow (or wide again): off, or back on if you'd chosen it.
 NARROW_SCREEN.addEventListener("change", () => {
-  const want = computerScreen() && winLoad(DESKTOP_MODE_KEY, false) === true;
+  const want = computerScreen() && winLoad(DESKTOP_MODE_KEY, false) === true && !ONLY_APP;
   if (want !== desktopMode()) switchDesktopMode(want);
 });
 

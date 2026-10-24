@@ -18,6 +18,14 @@ let padCount = 0;
 // A file in Notepad: the window it's in already, or a new one. No path: the
 // Notepad you used last (one that's hidden behind another window, say), or
 // an empty one. markdown: adlermd's quick look at a Markdown file.
+// Another Notepad, empty, beside the ones open (New window).
+function newNotepadWindow() {
+  const pad = makePad({ markdown: false });
+  setPadFile(pad, null, "");
+  showPad(pad);
+  return pad;
+}
+
 async function openNotepad(path = null, { markdown = path ? /\.(md|markdown)$/i.test(path) : false } = {}) {
   if (path) {
     const open = [...pads.values()].find((p) => p.path === path);
