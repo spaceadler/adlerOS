@@ -117,6 +117,7 @@ wallpaper is Alt+Shift+P.
 | ↑, ↓ (Live) | Past a block's first or last line: into the one above or below |
 | Backspace, Delete (Live) | At a block's start or end: join it with the one before or after |
 | Escape (Live) | Done with the block: it reads again |
+| Ctrl+/ | Insert…: everything Markdown does (headings, tables, callouts…), searched |
 | Alt+↑ (a note), Backspace (a folder) | Up: the folder note above (Academics/academics.md from GJU/gju.md), else the folder |
 
 ## In Music
