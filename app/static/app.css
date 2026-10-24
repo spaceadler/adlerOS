@@ -3599,3 +3599,17 @@ body.only-app .sheet.closing { animation: none; }
 body.only-app .sheet-close { display: none; }
 /* A copy's window here: its page fills it. */
 .own-copy .own-frame { background: transparent; }
+
+/* adlermd's Insert (mdinsert.js): everything Markdown does, searched. */
+.md-ins { width: min(520px, calc(100vw - 24px)); max-height: min(620px, calc(100dvh - 40px)); display: flex; flex-direction: column; gap: 8px; padding: 14px; text-align: left; }
+.md-ins-search { width: 100%; }
+.md-ins-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
+.md-ins-group { margin: 10px 8px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: rgb(255 255 255 / 0.45); }
+.md-ins-item { display: flex; align-items: baseline; gap: 12px; width: 100%; padding: 7px 10px; border: 0; border-radius: 8px; background: none; color: #fff; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.md-ins-item.on { background: rgb(10 132 255 / 0.32); }
+.md-ins-label { flex-shrink: 0; font-weight: 600; }
+.md-ins-what { min-width: 0; overflow: hidden; color: rgb(255 255 255 / 0.55); font-size: 12.5px; white-space: nowrap; text-overflow: ellipsis; }
+.md-ins-none { margin: 12px 8px; color: rgb(255 255 255 / 0.55); }
+.md-table-dialog .md-table-size { display: flex; gap: 12px; margin: 6px 0 14px; }
+.md-table-dialog .md-table-size label { display: flex; flex: 1; flex-direction: column; gap: 4px; font-size: 13px; color: rgb(255 255 255 / 0.7); }
+.md-table-dialog .dialog-actions { margin-top: 12px; }

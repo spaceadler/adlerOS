@@ -572,6 +572,22 @@ vault**.
 - **Writing links**: `[[` offers the notes whose names match, and writes the
   link the way the vault says (`useMarkdownLinks`, `newLinkFormat`). A link
   to a note that isn't there yet makes it when you click it.
+- **Right-click a note** (reading or writing it) for what you'd otherwise
+  have to know how to write: **New page…**, **Attach a file…**, **Insert a
+  picture…**, **Link to a note…**, **Table…**, **Checklist**, and
+  **Insert…** (or Ctrl+/) for everything else, grouped and searched by
+  name: headings, bold, italic, strikethrough, highlight, inline code and
+  math, web links and pictures, footnotes, comments, tags, today's date and
+  the time, bulleted, numbered and checklists, quotes, dividers, code and
+  math blocks, and callouts of every kind (note, tip, warning, folding…).
+  It goes where you right-clicked (picked text: bold, a link… around it);
+  reading, the note opens there to be written. Shift and a right click: the
+  browser's own menu (its spelling).
+- **New page…** makes a page inside the one you're in: a folder beside
+  the note, named as you type it (`Second Year`: `Second-Year/`), with a
+  note named the same inside (`second-year.md`), its title at the top. The
+  page you were on links to it, and it opens, ready for pages of its own;
+  ↑ goes back.
 - **Files dropped on a note** (a PDF, a picture, anything; several at
   once): they go into the vault's attachment folder (its settings say
   where: `files/`, at the top, in a vault set up that way), named the way

@@ -295,6 +295,13 @@ function mdKeys(e) {
   if (k === "s") { e.preventDefault(); return mdSave(mdTab()); }
   if (k === "e") { e.preventDefault(); const t = mdTab(); if (t?.kind === "note") mdSetMode(t, t.mode === "read" ? t.editMode || "live" : "read"); return; }
   if (k === "g") { e.preventDefault(); return mdOpenGraph(); }
+  // Ctrl+/: Insert… (everything Markdown does), where the caret is.
+  if (e.key === "/") {
+    e.preventDefault();
+    const t = mdTab();
+    if (t?.kind === "note") mdEditorAt(t, document.activeElement).then((a) => mdInsertPalette(t, a));
+    return;
+  }
   if (k === "f" && e.shiftKey) { e.preventDefault(); mdPane("search"); return $("md-search-input")?.focus(); }
 }
 
@@ -686,6 +693,7 @@ function mdNoteView(tab) {
   source.addEventListener("input", () => mdFit(source));
   const note = el("div", { class: "md-note" }, head, scroll);
   mdNoteDrops(note, tab);
+  mdInsertHooks(note, tab);
   return note;
 }
 
@@ -710,6 +718,7 @@ function mdLiveNote(tab, title, head, read) {
   });
   const note = el("div", { class: "md-note" }, head, scroll);
   mdNoteDrops(note, tab);
+  mdInsertHooks(note, tab);
   return note;
 }
 
