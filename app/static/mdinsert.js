@@ -141,6 +141,10 @@ const MD_INSERTS = [
   ["Pages and files", "New page…", "A page inside this one: its own folder and note, linked here", "subpage folder nest child note", (a, t) => mdNewPage(a, t)],
   ["Pages and files", "Attach a file…", "A file from this device, into files/, linked here", "file pdf upload attachment embed document", (a, t) => mdPickFiles(a, t, false)],
   ["Pages and files", "Insert a picture…", "A picture from this device, shown in the note", "image photo picture embed screenshot", (a, t) => mdPickFiles(a, t, true)],
+  ["Pages and files", "Show a PDF or picture…", "One from this device, into files/, shown right in the note (scroll on past it)", "embed pdf show inline preview document picture photo view read",
+    (a, t) => mdPickFiles(a, t, false, true)],
+  ["Pages and files", "Show a file from the vault…", "A PDF, picture or video already in the vault, shown in the note", "embed pdf show vault existing attachment picture",
+    (a, t) => mdVaultFilePick(a, t)],
   ["Pages and files", "Link to a note…", "A link to another note in the vault", "link note wiki internal", (a, t) => mdNoteLink(a, t)],
   ["Pages and files", "Web link", "A link to a web page: [text](https://…)", "url link web address href", (a) => mdWrap(a, "[", "](https://)", "text")],
   ["Pages and files", "Picture from the web", "A picture from an address: ![](https://…)", "image url embed remote", (a) => mdPut(a, "![](https://)", { block: true, pick: [4, 12] })],
@@ -178,7 +182,25 @@ const MD_INSERTS = [
 // A note's right click (Shift and a right click: the browser's own).
 function mdInsertHooks(node, tab) {
   node.addEventListener("contextmenu", (e) => {
-    if (e.shiftKey || !tab.writable || e.target.closest(".md-note-head, a[href], input, .md-properties")) return;
+    if (e.shiftKey || !tab.writable) return;
+    // A link to a PDF, a picture…: shown here instead; one shown: a link again.
+    const link = e.target.closest("a.md-link[data-md]");
+    const shown = e.target.closest("[data-md]:is(img, video, audio, .md-embed-pdf-box, .md-embed-note)");
+    const fileOf = (n) => n?.title || n?.querySelector?.("iframe")?.title || "";
+    if (link && !e.target.closest(".md-embed-body") && /^(pdf|image|video|audio)$/.test(padKind(fileOf(link)))) {
+      e.preventDefault();
+      e.stopPropagation();
+      return openMenu(e.clientX, e.clientY, [
+        { label: "Open", run: () => link.click() },
+        { label: "Show it in the note", run: () => mdSwapEmbed(link, true) },
+      ]);
+    }
+    if (shown && !e.target.closest(".md-embed-body")) {
+      e.preventDefault();
+      e.stopPropagation();
+      return openMenu(e.clientX, e.clientY, [{ label: "Make it a link", run: () => mdSwapEmbed(shown, false) }]);
+    }
+    if (e.target.closest(".md-note-head, a[href], input, .md-properties")) return;
     e.preventDefault();
     e.stopPropagation();
     const area = e.target.closest("textarea");
@@ -305,11 +327,11 @@ async function mdNewPage(area, tab) {
 }
 
 // Files from this device: into the attachment folder, linked (a picture shown).
-function mdPickFiles(area, tab, picture) {
+function mdPickFiles(area, tab, picture, show = false) {
   const back = mdHold(area);
-  const picker = el("input", { type: "file", multiple: "", hidden: "", ...(picture ? { accept: "image/*" } : {}) });
+  const picker = el("input", { type: "file", multiple: "", hidden: "", ...(picture ? { accept: "image/*" } : show ? { accept: "application/pdf,image/*,video/*,audio/*" } : {}) });
   picker.addEventListener("change", () => {
-    if (picker.files.length) mdPasteFiles({ preventDefault() {} }, picker.files, back(), tab, { dropped: !picture });
+    if (picker.files.length) mdPasteFiles({ preventDefault() {} }, picker.files, back(), tab, { dropped: !picture && !show, show });
     picker.remove();
   });
   document.body.append(picker);
@@ -363,4 +385,64 @@ function mdFootnote(area, tab) {
   area.setSelectionRange(lineEnd < 0 ? v.length : lineEnd, lineEnd < 0 ? v.length : lineEnd);
   const def = `\n\n[^${n}]: `;
   mdPut(area, def, { pick: [def.length, def.length] });
+}
+
+// A link (as written: [Lab 1](files/lab-1.pdf)) shown in the note instead
+// (![Lab 1](…)), or one shown made a link again: changed in the note where
+// it's written (the lines of the block it's in), then drawn again.
+function mdSwapEmbed(node, show) {
+  const tab = mdTab();
+  const raw = node?.closest("[data-md]")?.dataset.md;
+  if (!tab?.writable || !raw || tab.text === null) return;
+  const block = node.closest("[data-from]");
+  const lines = tab.text.split("\n");
+  const from = block ? Number(block.dataset.from) : 0;
+  const to = block ? Math.max(from + 1, Number(block.dataset.to) || from + 1) : lines.length;
+  const part = lines.slice(from, to).join("\n");
+  let at = -1;
+  for (let i = part.indexOf(raw); i >= 0; i = part.indexOf(raw, i + 1)) {
+    if (show ? part[i - 1] !== "!" : true) { at = i; break; }
+  }
+  if (at < 0) return toast("Can't find it in the note to change it.");
+  const now = show ? `!${raw}` : raw.replace(/^!/, "");
+  const changed = part.slice(0, at) + now + part.slice(at + raw.length);
+  lines.splice(from, to - from, ...changed.split("\n"));
+  tab.text = lines.join("\n");
+  mdDirty(tab, 300);
+  mdRenderMain();
+}
+
+// A file in the vault (not a note) to show here: picked by name.
+function mdVaultFilePick(area, tab) {
+  const back = mdHold(area);
+  const files = [...adler.names].filter((n) => /^(pdf|image|video|audio)$/.test(padKind(n))).sort((a, b) => a.split("/").pop().localeCompare(b.split("/").pop()));
+  const search = el("input", { class: "field-input md-ins-search", type: "search", placeholder: "Which file? (a PDF, a picture…)", spellcheck: "false", autocomplete: "off" });
+  const list = el("div", { class: "md-ins-list", role: "listbox" });
+  let shown = [], at = 0;
+  const pick = (f) => {
+    closeModal();
+    const a = back();
+    if (a) mdPut(a, mdLinkTo(tab.path, f, f.split("/").pop().replace(/\.[^.]+$/, ""), true), { block: true });
+  };
+  const draw = () => {
+    const q = search.value.trim().toLowerCase();
+    shown = files.filter((n) => !q || n.toLowerCase().includes(q)).slice(0, 80);
+    at = Math.min(at, Math.max(0, shown.length - 1));
+    list.replaceChildren(...(shown.length ? shown.map((n, i) => {
+      const b = el("button", { type: "button", class: `md-ins-item${i === at ? " on" : ""}`, role: "option" },
+        el("span", { class: "md-ins-label" }, n.split("/").pop()), el("span", { class: "md-ins-what" }, mdFolderOf(n) || "the vault's top"));
+      b.addEventListener("click", () => pick(n));
+      return b;
+    }) : [el("p", { class: "md-ins-none" }, files.length ? "Nothing called that." : "No PDFs or pictures in the vault yet.")]));
+    list.querySelector(".md-ins-item.on")?.scrollIntoView({ block: "nearest" });
+  };
+  search.addEventListener("input", () => { at = 0; draw(); });
+  search.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); at = Math.min(shown.length - 1, at + 1); draw(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); at = Math.max(0, at - 1); draw(); }
+    else if (e.key === "Enter" && shown[at]) { e.preventDefault(); pick(shown[at]); }
+  });
+  openModal(el("div", { class: "dialog material md-ins", role: "dialog", "aria-modal": "true", "aria-label": "Show a file" }, search, list));
+  draw();
+  search.focus();
 }

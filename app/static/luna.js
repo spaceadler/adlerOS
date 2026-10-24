@@ -857,7 +857,18 @@ function mdVaultEmbed(tab, target, opts) {
   if (kind === "image") return el("img", { class: "md-embed-image", src: url, alt: opts.alt || "", loading: "lazy", ...(opts.width ? { width: opts.width } : {}) });
   if (kind === "video") return el("video", { class: "md-embed-media", src: url, controls: "" });
   if (kind === "audio") return el("audio", { class: "md-embed-media", src: url, controls: "" });
-  if (kind === "pdf") return el("iframe", { class: "md-embed-pdf", src: url, title: r.path });
+  if (kind === "pdf") {
+    // A PDF in the note: to read where you write (its foot drags taller or
+    // shorter); its bar opens it alone, or makes it a link again.
+    const open = el("button", { type: "button", class: "md-embed-bar-button" }, "Open");
+    open.addEventListener("click", () => mdOpen(r.path));
+    const unlink = el("button", { type: "button", class: "md-embed-bar-button" }, "Make it a link");
+    unlink.addEventListener("click", () => mdSwapEmbed(box, false));
+    const box = el("div", { class: "md-embed-pdf-box" },
+      el("div", { class: "md-embed-bar" }, el("span", { class: "md-embed-bar-name" }, r.path.split("/").pop()), open, ...(tab.writable ? [unlink] : [])),
+      el("iframe", { class: "md-embed-pdf", src: url, title: r.path }));
+    return box;
+  }
   if (/\.base$/i.test(r.path)) {
     const box = el("div", { class: "md-embed-base" }, "…");
     mdText(r.path).then((text) => box.replaceChildren(mdBase(text, mdBaseCtx(tab))));
@@ -1181,7 +1192,7 @@ function mdCompleteClose() {
 // pasted in shown in the note, a file dropped as a link with its name. In
 // the editor, where the caret is; anywhere else (reading it), at the end.
 // Each on a line of its own, ending as the note's lines do.
-async function mdPasteFiles(e, list, area, tab, { dropped = false } = {}) {
+async function mdPasteFiles(e, list, area, tab, { dropped = false, show = false } = {}) {
   if (!list?.length || !tab.writable) return;
   e.preventDefault();
   const dir = mdAttachmentDir(tab.path);
@@ -1203,7 +1214,7 @@ async function mdPasteFiles(e, list, area, tab, { dropped = false } = {}) {
     if (!reply) continue;
     const rel = `${dir ? `${dir}/` : ""}${reply.name}`;
     adler.names.add(rel);
-    const shown = !dropped && file.type.startsWith("image/");
+    const shown = show || (!dropped && file.type.startsWith("image/"));
     links.push(mdLinkTo(tab.path, rel, pasted ? reply.name : file.name.replace(/\.[^.]+$/, ""), shown));
   }
   if (!links.length) return;

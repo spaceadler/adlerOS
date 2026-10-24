@@ -285,7 +285,7 @@ function mdBlocks(lines, state, top = false) {
     const solo = joined.trim().match(/^!\[\[([^\]]+)\]\]$/);
     if (solo && state.ctx.embed) {
       const node = state.ctx.embed(solo[1], { wiki: true });
-      if (node) { out.push(node); continue; }
+      if (node) { node.dataset.md = solo[0]; out.push(node); continue; }
     }
     out.push(el("p", { "data-line": String(first) }, ...mdInline(joined, state)));
   }
@@ -379,13 +379,13 @@ const MD_INLINE = [
   ["code", /^(`+)([\s\S]*?[^`])\1(?!`)/, (m) => [el("code", { class: "md-inline-code" }, m[2].trim())]],
   ["comment", /^%%[\s\S]*?%%/, () => []],
   ["math", /^\$(?=\S)([^$\n]*?\S)\$(?!\d)/, (m) => [el("span", { class: "md-math-inline" }, m[1])]],
-  ["wikiembed", /^!\[\[([^\]\n]+)\]\]/, (m, s) => mdEmbed(m[1], { wiki: true }, s)],
+  ["wikiembed", /^!\[\[([^\]\n]+)\]\]/, (m, s) => mdEmbed(m[1], { wiki: true, raw: m[0] }, s)],
   ["wikilink", /^\[\[([^\]\n]+)\]\]/, (m, s) => {
     const [target, alias] = m[1].split("|");
-    return [mdLink(target, alias || target.replace(/#\^?/, " › "), { wiki: true }, s)];
+    return [mdLink(target, alias || target.replace(/#\^?/, " › "), { wiki: true, raw: m[0] }, s)];
   }],
-  ["image", /^!\[([^\]\n]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/, (m, s) => mdEmbed(m[2], { wiki: false, alt: m[1] }, s)],
-  ["link", /^\[((?:\[[^\]]*\]|[^\]\n])*)\]\(\s*<?([^)\s>]*)>?(?:\s+"[^"]*")?\s*\)/, (m, s) => [mdLink(m[2], m[1], { wiki: false, inner: true }, s)]],
+  ["image", /^!\[([^\]\n]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/, (m, s) => mdEmbed(m[2], { wiki: false, alt: m[1], raw: m[0] }, s)],
+  ["link", /^\[((?:\[[^\]]*\]|[^\]\n])*)\]\(\s*<?([^)\s>]*)>?(?:\s+"[^"]*")?\s*\)/, (m, s) => [mdLink(m[2], m[1], { wiki: false, inner: true, raw: m[0] }, s)]],
   ["autolink", /^<(https?:\/\/[^>\s]+)>/, (m, s) => [mdLink(m[1], m[1], { wiki: false }, s)]],
   ["url", /^https?:\/\/[^\s<>()]*[^\s<>().,;:!?'"*_~)]/, (m, s) => [mdLink(m[0], m[0], { wiki: false }, s)]],
   ["fnref", /^\[\^([^\]\s]+)\]/, (m) => [el("sup", { class: "md-fnref" }, el("a", { href: `#fn-${mdSlug(m[1])}` }, m[1]))]],
@@ -454,6 +454,7 @@ function mdLink(href, label, opts, state) {
     href: external ? href : "#", ...(external ? { target: "_blank", rel: "noopener noreferrer" } : {}),
     title: external ? href : target?.path || href,
   }, ...text);
+  if (opts.raw) a.dataset.md = opts.raw; // as written (a note can turn it into what it links to, shown)
   a.addEventListener("click", (e) => {
     if (!state.ctx.open) return;
     e.preventDefault();
@@ -474,6 +475,7 @@ function mdEmbed(target, opts, state) {
       ...(width ? { width } : {}) })];
   }
   const node = state.ctx.embed?.(name, { ...opts, width, depth: (state.depth || 0) + 1 });
+  if (node && opts.raw) node.dataset.md = opts.raw; // as written (back to a link, from it)
   return [node || mdLink(name, opts.alt || name, opts, state)];
 }
 

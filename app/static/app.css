@@ -2675,6 +2675,13 @@ button.md-crumb:hover, button.md-crumb:focus-visible { background: rgb(255 255 2
 .md-embed-title { margin: 6px 0; font-size: 0.85em; font-weight: 600; color: rgb(255 255 255 / 0.55); }
 .md-embed-missing { color: rgb(255 255 255 / 0.4); font-style: italic; }
 .md-embed-pdf { display: block; width: 100%; height: 70vh; margin: 0.5em 0 1em; border: 0; border-radius: 8px; background: #fff; }
+/* A PDF shown in a note: its bar, then it, as tall as you drag its foot. */
+.md-embed-pdf-box { display: flex; flex-direction: column; height: 80vh; min-height: 220px; margin: 0.6em 0 1.2em; overflow: hidden; resize: vertical; border-radius: 10px; background: rgb(255 255 255 / 0.06); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1) inset; }
+.md-embed-pdf-box .md-embed-pdf { flex: 1; height: auto; margin: 0; border-radius: 0 0 10px 10px; }
+.md-embed-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12.5px; }
+.md-embed-bar-name { flex: 1; min-width: 0; overflow: hidden; color: rgb(255 255 255 / 0.7); white-space: nowrap; text-overflow: ellipsis; }
+.md-embed-bar-button { padding: 3px 10px; border: 0; border-radius: 7px; background: rgb(255 255 255 / 0.1); color: #fff; font: inherit; font-size: 12px; cursor: pointer; }
+.md-embed-bar-button:hover { background: rgb(255 255 255 / 0.18); }
 .md-embed-media { display: block; max-width: 100%; margin: 0.5em 0 1em; }
 /* One cell, the whole pane: a PDF fills it; a picture sits in the middle. */
 .md-file { display: grid; flex: 1; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; min-height: 0; padding: 0 16px 16px; }
