@@ -2149,7 +2149,10 @@ body.wm.alt-held .app-sheet .app-shield { position: absolute; inset: 38px 0 0; z
 .ws-dot.current { background: rgb(255 255 255 / 0.92); color: #000; }
 body.wm .sheet:not(.active) { box-shadow: 0 10px 30px rgb(0 0 0 / 0.45); }
 body.wm .sheet.closing { animation: hl-pop-out 0.41s var(--hl-win-out) both, hl-fade-out 1s var(--hl-default) both; pointer-events: none; }
-body.wm .sheet.minimized { display: none; }
+body.wm .sheet.minimized:not(.win-genie) { display: none; }
+/* Into the dock and out of it (windows.js: winGenie): only that moves it. */
+body.wm .sheet.win-genie, body.wm .sheet.closing.win-genie { animation: none; }
+body.wm .sheet.minimized.win-genie { pointer-events: none; }
 body.wm .sheet[data-mode="max"] { border-radius: 0; }
 body.wm .sheet.win-keyed { box-shadow: 0 0 0 3px #fff, 0 22px 60px rgb(0 0 0 / 0.6); }
 

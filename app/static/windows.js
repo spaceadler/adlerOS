@@ -190,6 +190,7 @@ function openWindow(id) {
     raiseWindow(id);
   }
   winDock();
+  if (fresh) winGenie(id, false);
 }
 
 function closeWindow(id) {
@@ -197,8 +198,11 @@ function closeWindow(id) {
   if (!sheet || sheet.hidden || sheet.classList.contains("closing")) return false;
   const w = wm.windows.get(id);
   const hadFocus = sheet.contains(document.activeElement);
+  // Before winDock takes a running one away; minimized, it's in there already.
+  const icon = sheet.classList.contains("minimized") ? null : winGenieIcon(id);
   sheet.classList.add("closing");
   sheet.classList.remove("active");
+  winGenie(id, true, icon);
   if (w?.dock) markDockOpen(w.dock, false);
   if (![...wm.windows].some(([other, o]) => other !== id && !o.float && isOpen(other))) document.body.classList.remove("sheet-open");
   wm.order = wm.order.filter((o) => o !== id);
@@ -210,6 +214,7 @@ function closeWindow(id) {
     if (!sheet.classList.contains("closing")) return; // opened again meanwhile
     sheet.hidden = true;
     sheet.classList.remove("closing", "minimized");
+    winGenieStop(sheet);
     if (w?.app || w?.copy) {
       sheet.remove();
       wm.windows.delete(id);
@@ -234,7 +239,10 @@ function raiseWindow(id, focus = false) {
   if (!wsHere(id)) return switchWorkspace(wsOf(id), id); // over there: go there
   const wasMinimized = sheet.classList.contains("minimized");
   sheet.classList.remove("minimized");
-  if (wasMinimized) winLayout();
+  if (wasMinimized) {
+    winLayout();
+    winGenie(id, false);
+  }
   wm.stack = [...wm.stack.filter((o) => o !== id && wm.windows.has(o)), id];
   wm.stack.forEach((o, i) => { if ($(o)) $(o).style.zIndex = String(WIN_Z + i); });
   if (wm.active !== id) {
@@ -266,10 +274,75 @@ function minimizeWindow(id) {
   const hadFocus = sheet.contains(document.activeElement);
   sheet.classList.add("minimized");
   sheet.classList.remove("active");
+  winGenie(id, true);
   if (wm.active === id) winActivateTop();
   if (hadFocus) winFocusNext();
   winLayout();
   winDock();
+}
+
+// ------------------------------------------------------------ the genie
+
+// A window comes out of its dock icon and goes back into it, as a Mac's
+// genie: going, its foot narrows to the icon's width, then it's drawn
+// down into it; coming, the same backwards.
+const WIN_GENIE_MS = 560;
+const WIN_GENIE_ROWS = 8; // points down each side, for the curve
+
+// Its icon in the dock: its own, its pin, or the one it shows while open.
+function winGenieIcon(id) {
+  const dock = $("dock"), w = wm.windows.get(id);
+  if (!dock || dock.hidden || !w || !desktopMode() || matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
+  const icon = (w.dock && dock.querySelector(`[data-dock="${w.dock}"]:not(.dock-run)`))
+    || (w.app && dock.querySelector(`.dock-app[data-app="${CSS.escape(w.app.id)}"]`))
+    || dock.querySelector(`[data-window="${CSS.escape(id)}"]`);
+  const r = icon?.getBoundingClientRect();
+  return r?.width ? r : null;
+}
+
+function winGenieStop(sheet) {
+  for (const a of sheet.getAnimations()) if (a.id === "genie") a.cancel();
+  sheet.classList.remove("win-genie");
+}
+
+// out: into the icon (and it stays there until it's hidden); else out of it.
+function winGenie(id, out, icon = winGenieIcon(id)) {
+  const sheet = $(id);
+  winGenieStop(sheet);
+  if (!icon) return;
+  sheet.classList.add("win-genie"); // no pop or fade of its own, and measured as it is
+  const b = sheet.getBoundingClientRect();
+  const w = b.width, h = b.height;
+  // Where it narrows to: under the icon, kept within the window; the rest
+  // of the way over it slides.
+  const span = Math.min(icon.width, w);
+  const left = Math.max(0, Math.min(w - span, icon.left - b.left));
+  const dx = icon.left + (icon.width - span) / 2 - b.left - left;
+  const smooth = (t) => t * t * (3 - 2 * t);
+  // The outline: its top from tl to tr, its foot from bl to br, the sides an S.
+  const shape = (tl, tr, bl, br) => {
+    const l = [], r = [];
+    for (let i = 0; i <= WIN_GENIE_ROWS; i++) {
+      const f = i / WIN_GENIE_ROWS, e = smooth(f), y = (f * h).toFixed(1);
+      l.push(`${(tl + (bl - tl) * e).toFixed(1)}px ${y}px`);
+      r.unshift(`${(tr + (br - tr) * e).toFixed(1)}px ${y}px`);
+    }
+    return `polygon(${[...l, ...r].join(", ")})`;
+  };
+  const right = left + span;
+  const transformOrigin = `${left + span / 2}px ${icon.top + icon.height / 2 - b.top}px`;
+  const frames = [
+    { offset: 0, clipPath: shape(0, w, 0, w), transform: "translateX(0) scaleY(1)", opacity: 1 },
+    { offset: 0.4, clipPath: shape(left * 0.3, w + (right - w) * 0.3, left, right), transform: "translateX(0) scaleY(1)", opacity: 1 },
+    { offset: 0.85, opacity: 1 },
+    { offset: 1, clipPath: shape(left, right, left, right), transform: `translateX(${dx}px) scaleY(0.03)`, opacity: 0 },
+  ].map((f) => ({ ...f, transformOrigin }));
+  const a = sheet.animate(frames, { duration: WIN_GENIE_MS, easing: "ease-in", direction: out ? "normal" : "reverse", fill: out ? "forwards" : "none" });
+  a.id = "genie";
+  a.onfinish = () => {
+    // Gone into the dock (minimized): now it may go; come out: as it was.
+    if (!out || sheet.classList.contains("minimized")) winGenieStop(sheet);
+  };
 }
 
 // Keys keep working after a window goes: into the next one, else the desktop.
