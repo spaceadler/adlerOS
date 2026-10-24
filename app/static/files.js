@@ -217,19 +217,25 @@ function renderFiles(f) {
     // (a click with no mouse in it) and a tap on a touch screen open it too.
     row.addEventListener("click", (e) => {
       if (e.detail === 0 || matchMedia("(pointer: coarse)").matches) return openEntry(entry, path, f);
-      selectRow(row, f);
+      pickRow(row, f, e);
     });
     row.addEventListener("dblclick", () => openEntry(entry, path, f));
     row.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      openMenu(e.clientX, e.clientY, entryMenu(entry, path, f));
+      // One of several picked: the menu's for all of them; else just this one, picked.
+      if (!row.classList.contains("selected")) pickRow(row, f, {});
+      const many = pickedPaths(f);
+      openMenu(e.clientX, e.clientY, many.length > 1 ? manyMenu(many, f) : entryMenu(entry, path, f));
     });
     row.addEventListener("keydown", (e) => entryKeys(e, entry, path, row, f));
     return row;
   });
   const empty = f.writable ? "Empty. Drop files here, or Upload." : "Empty.";
   f.part("list").replaceChildren(...(rows.length ? rows : [el("p", { class: "no-results" }, empty)]));
+  // What was picked here stays picked (a new folder: nothing is).
+  if (f.selIn !== f.path) { f.sel = new Set(); f.selIn = f.path; f.anchor = null; }
+  setPicked(f, [...(f.sel || [])]);
 }
 
 // Sorted by name, type or size, A to Z (smallest first) unless you turn it
@@ -276,10 +282,14 @@ function renderTools(f) {
 // The keys for a file or folder in the list.
 function entryKeys(e, entry, path, row, f) {
   const mod = e.ctrlKey || e.metaKey;
-  if (e.key === "Delete") { e.preventDefault(); return deletePaths([path]); }
+  // Several picked (this one among them): Delete, copy and cut are for all of them.
+  const many = row.classList.contains("selected") ? pickedPaths(f) : [];
+  const these = many.length > 1 ? many : [path];
+  if (e.key === "Delete") { e.preventDefault(); return f.writable && deletePaths(these); }
   if (e.key === "F2") { e.preventDefault(); return renamePath(entry, path); }
-  if (mod && e.key.toLowerCase() === "c") { e.preventDefault(); return clip(entry, path, true); }
-  if (mod && e.key.toLowerCase() === "x") { e.preventDefault(); return clip(entry, path, false); }
+  if (mod && e.key.toLowerCase() === "c") { e.preventDefault(); return these.length > 1 ? clipPaths(these, true) : clip(entry, path, true); }
+  if (mod && e.key.toLowerCase() === "x") { e.preventDefault(); return these.length > 1 ? clipPaths(these, false) : clip(entry, path, false); }
+  if (mod && e.key.toLowerCase() === "a") { e.preventDefault(); return setPicked(f, pickable(f).map((r) => r.dataset.file)); }
   if (e.key === "m" || e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) {
     e.preventDefault();
     e.stopPropagation();
@@ -289,8 +299,97 @@ function entryKeys(e, entry, path, row, f) {
 }
 
 function selectRow(row, f) {
-  for (const r of f.part("list").querySelectorAll(".file-row.selected")) r.classList.remove("selected");
-  row?.classList.add("selected");
+  setPicked(f, row ? [row.dataset.file] : []);
+  f.anchor = row?.dataset.file || null;
+}
+
+// ------------------------------------------------------------- picking
+
+// Picked files: a click picks one, Ctrl (⌘) and a click adds one or takes
+// it away, Shift and a click everything from the last one you clicked to
+// it; dragging across the list's empty part picks what the box touches.
+// Places (in My Computer's top level) can't be picked with others.
+const pickable = (f) => [...f.part("list").querySelectorAll(".file-row[data-file]:not([data-place])")];
+const pickedPaths = (f) => [...f.part("list").querySelectorAll(".file-row.selected[data-file]")].map((r) => r.dataset.file);
+
+function setPicked(f, paths) {
+  f.sel = new Set(paths);
+  for (const r of f.part("list").querySelectorAll(".file-row")) r.classList.toggle("selected", f.sel.has(r.dataset.file));
+}
+
+function pickRow(row, f, e) {
+  const path = row.dataset.file;
+  if (row.dataset.place) { setPicked(f, [path]); f.anchor = null; return; }
+  const rows = pickable(f);
+  if (e.shiftKey && f.anchor && rows.some((r) => r.dataset.file === f.anchor)) {
+    const a = rows.findIndex((r) => r.dataset.file === f.anchor), b = rows.indexOf(row);
+    const span = rows.slice(Math.min(a, b), Math.max(a, b) + 1).map((r) => r.dataset.file);
+    setPicked(f, e.ctrlKey || e.metaKey ? [...new Set([...(f.sel || []), ...span])] : span);
+    return;
+  }
+  if (e.ctrlKey || e.metaKey) {
+    const now = new Set(f.sel || []);
+    if (now.has(path)) now.delete(path); else now.add(path);
+    setPicked(f, [...now]);
+  } else setPicked(f, [path]);
+  f.anchor = path;
+}
+
+// Several picked: copy, cut or delete all of them.
+function manyMenu(paths, f) {
+  const n = `${paths.length} items`;
+  return [
+    { label: `Copy ${n}`, run: () => clipPaths(paths, true) },
+    ...(f.writable ? [{ label: `Cut ${n}`, run: () => clipPaths(paths, false) },
+      { label: `Delete ${n}`, run: () => deletePaths(paths), destructive: true }] : []),
+  ];
+}
+
+// The box you drag across the empty part of a list (or the desktop): what
+// it touches is picked (with Ctrl, ⌘ or Shift held: added to what was). A
+// list scrolls along when you drag past its edge. Its click on nothing
+// picks nothing. items(): the things it can pick; set(nodes): pick them.
+function dragBox(e, area, items, set, picked) {
+  if (e.button !== 0 || e.pointerType === "touch") return;
+  const adding = e.ctrlKey || e.metaKey || e.shiftKey;
+  const before = adding ? picked() : [];
+  const x0 = e.clientX, y0 = e.clientY + area.scrollTop;
+  let box = null, last = e, raf = 0;
+  const draw = () => {
+    raf = 0;
+    const a = area.getBoundingClientRect();
+    const x1 = Math.max(a.left, Math.min(a.right, last.clientX)), y1 = Math.max(a.top, Math.min(a.bottom, last.clientY));
+    const ys = y0 - area.scrollTop;
+    const r = { left: Math.min(x0, x1), right: Math.max(x0, x1), top: Math.max(a.top, Math.min(ys, y1)), bottom: Math.min(a.bottom, Math.max(ys, y1)) };
+    Object.assign(box.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.right - r.left}px`, height: `${r.bottom - r.top}px` });
+    const top = Math.min(ys, y1), bottom = Math.max(ys, y1);
+    const hit = items().filter((n) => { const b = n.getBoundingClientRect(); return b.right > r.left && b.left < r.right && b.bottom > top && b.top < bottom; });
+    set([...new Set([...before, ...hit])]);
+    // Past the edge of a list that scrolls: it scrolls along.
+    const edge = last.clientY < a.top + 24 ? -12 : last.clientY > a.bottom - 24 ? 12 : 0;
+    if (edge && area.scrollHeight > area.clientHeight) { area.scrollTop += edge; raf = requestAnimationFrame(draw); }
+  };
+  const move = (m) => {
+    last = m;
+    if (!box) {
+      if (Math.hypot(m.clientX - x0, m.clientY - (y0 - area.scrollTop)) < 4) return;
+      box = el("div", { class: "drag-box", "aria-hidden": "true" });
+      document.body.append(box);
+      document.body.classList.add("drag-boxing");
+    }
+    if (!raf) raf = requestAnimationFrame(draw);
+  };
+  const up = () => {
+    removeEventListener("pointermove", move);
+    removeEventListener("pointerup", up);
+    removeEventListener("pointercancel", up);
+    cancelAnimationFrame(raf);
+    document.body.classList.remove("drag-boxing");
+    if (box) { box.remove(); dragBox.justDid = Date.now(); } else if (!adding) set([]);
+  };
+  addEventListener("pointermove", move);
+  addEventListener("pointerup", up);
+  addEventListener("pointercancel", up);
 }
 
 function entryMenu(entry, path, f) {
@@ -462,6 +561,13 @@ function clip(entry, path, copy) {
   for (const f of fileWins.values()) renderTools(f);
 }
 
+function clipPaths(paths, copy) {
+  if (paths.length === 1) return clip({ name: paths[0].split("/").pop() }, paths[0], copy);
+  files.clip = { paths, label: `${paths.length} items`, copy };
+  toast(`${copy ? "Copied" : "Cut"} ${paths.length} items. Go to a folder and paste them there (Ctrl+V).`);
+  for (const f of fileWins.values()) renderTools(f);
+}
+
 async function paste(into = frontFiles().path, f = frontFiles()) {
   const c = files.clip;
   if (!c) return;
@@ -617,8 +723,11 @@ function fileMove(e) {
   if (!d.active) {
     if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) return;
     d.active = true;
+    // A picked one: all that are picked go with it.
+    const many = d.row.classList.contains("selected") ? pickedPaths(d.f) : [];
+    d.paths = many.length > 1 ? many : [d.row.dataset.file];
     d.ghost = el("div", { class: "file-ghost material" }, d.row.querySelector(".file-icon").cloneNode(true),
-      el("span", {}, d.row.querySelector(".file-name").firstChild?.textContent || ""));
+      el("span", {}, d.paths.length > 1 ? `${d.paths.length} items` : d.row.querySelector(".file-name").firstChild?.textContent || ""));
     document.body.append(d.ghost);
     d.row.classList.add("drag-source");
     try { d.row.setPointerCapture(e.pointerId); } catch { /* not supported */ }
@@ -632,8 +741,8 @@ function fileMove(e) {
 }
 
 async function fileUp(e) {
-  const d = fileDrag;
-  if (!d.row || e.pointerId !== d.pointerId) return;
+  if (!fileDrag.row || e.pointerId !== fileDrag.pointerId) return;
+  const d = { ...fileDrag }; // a copy: the drag's over (fileDrag.row cleared), its row still needed here
   fileDrag.row = null;
   if (!d.active) return;
   d.ghost.remove();
@@ -644,14 +753,15 @@ async function fileUp(e) {
   setTimeout(() => { fileDrag.suppress = false; }, 0);
   const t = fileDropTarget(e);
   const path = d.row.dataset.file;
-  const name = path.split("/").pop();
-  if (t.trash) return deletePaths([path]);
-  if (!t.to || t.to === parentOf(path) || t.to === path) return;
-  if (!(await rootOk([t.to, ...(d.f.writable ? [path] : [])]))) return;
+  const paths = (d.paths || [path]).filter((p) => p !== t.to);
+  const name = paths.length > 1 ? `${paths.length} items` : path.split("/").pop();
+  if (t.trash) return deletePaths(paths);
+  if (!t.to || t.to === parentOf(path) || !paths.length) return;
+  if (!(await rootOk([t.to, ...(d.f.writable ? paths : [])]))) return;
   const copy = !d.f.writable;
-  const reply = await filesPost(copy ? "copy" : "move", { paths: [path], to: t.to });
+  const reply = await filesPost(copy ? "copy" : "move", { paths, to: t.to });
   if (!reply) return;
-  if (t.desk) rememberDeskPlace(name, deskCellAt(e.clientX, e.clientY));
+  if (t.desk && paths.length === 1) rememberDeskPlace(name, deskCellAt(e.clientX, e.clientY));
   if (reply.task) watchTask(reply.task, d.f);
   else toast(`${copy ? "Copied" : "Moved"} ${name} to ${t.desk ? "the Desktop" : fromLabel(`${t.to}/x`) || "it"}.`);
   refreshFiles();
@@ -668,6 +778,16 @@ function wireFiles(f) {
   f.part("sort").addEventListener("change", () => setFilesSort({ by: f.part("sort").value }));
   f.part("order").addEventListener("click", () => setFilesSort({ desc: !filesSort().desc }));
   f.part("list").addEventListener("pointerdown", fileDown);
+  f.part("list").addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".file-row, button, a, input") || f.view !== "folder") return;
+    dragBox(e, f.part("list"), () => pickable(f), (rows) => setPicked(f, rows.map((r) => (r.dataset ? r.dataset.file : r))), () => [...pickable(f)].filter((r) => r.classList.contains("selected")));
+  });
+  f.part("list").addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a" && f.view === "folder" && !e.target.matches("input, textarea")) {
+      e.preventDefault();
+      setPicked(f, pickable(f).map((r) => r.dataset.file));
+    }
+  });
   f.part("list").addEventListener("click", (e) => {
     if (!fileDrag.suppress) return;
     e.preventDefault();

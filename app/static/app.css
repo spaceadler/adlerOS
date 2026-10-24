@@ -2083,6 +2083,13 @@ body.wm .desk {
 .desk-icon:hover { background: rgb(255 255 255 / 0.08); }
 .desk-icon:focus { outline: none; background: rgb(255 255 255 / 0.16); }
 .desk-icon:focus-visible { box-shadow: 0 0 0 3px rgb(255 255 255 / 0.9); }
+/* Picked (a click, Ctrl or Shift and a click, the box): lit like a desktop's. */
+.desk-icon.selected { background: rgb(10 132 255 / 0.32); box-shadow: 0 0 0 1px rgb(10 132 255 / 0.7) inset; }
+.desk-icon.selected .desk-name { background: rgb(10 132 255 / 0.85); border-radius: 4px; }
+.desk-ghost-count { position: absolute; top: 2px; right: 6px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ff3b30; font-size: 12px; font-weight: 700; line-height: 20px; }
+/* The box dragged across a list or the desktop, picking what it touches. */
+.drag-box { position: fixed; z-index: 300; border: 1px solid rgb(10 132 255 / 0.95); border-radius: 3px; background: rgb(10 132 255 / 0.18); pointer-events: none; }
+body.drag-boxing, body.drag-boxing * { user-select: none; cursor: default !important; }
 .desk-icon.outside { opacity: 0.45; }
 .desk-glyph.file-icon { width: 52px; height: 52px; border-radius: 14px; background: rgb(0 0 0 / 0.35); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 .desk-glyph svg { width: 28px; height: 28px; }
@@ -2450,7 +2457,7 @@ span.w-search-input { color: rgb(255 255 255 / 0.55); }
 .desk-widget.bar .widget-panel:focus-within { box-shadow: var(--shine), 0 0 0 4px rgb(255 255 255 / 0.2), 0 10px 20px rgb(0 0 0 / 0.25); }
 .picker-option .widget-panel[data-type="search"] { height: 48px; border-radius: 999px; }
 .wallpaper-option img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.file-row.selected { background: rgb(255 255 255 / 0.12); }
+.file-row.selected { background: rgb(10 132 255 / 0.28); }
 
 /* ================================================================ Notepad
    notepad.js: a file a window, its menus at the top. A Markdown file reads

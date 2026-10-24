@@ -193,6 +193,13 @@ back: out of the Trash, then out of My Computer. The mouse's side buttons go
 back and forward through the folders you've been in. On the desktop in
 desktop mode, the same keys work on its icons.
 
+**Picking several:** a click picks one, **Ctrl** (⌘) and a click adds one
+or takes it away, **Shift** and a click picks everything from the last one
+you clicked; drag a box across the empty part of the list (or the desktop)
+to pick what it touches (with Ctrl or Shift held, added to what you'd
+picked). **Ctrl+A** picks them all. Then Delete, Ctrl+C, Ctrl+X, the
+right-click menu and dragging are for all of them.
+
 ## In desktop mode
 
 | Key | Does |
