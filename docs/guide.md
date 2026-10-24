@@ -564,8 +564,19 @@ vault**.
   styles that move things over the page) is left out.
 - **Writing links**: `[[` offers the notes whose names match, and writes the
   link the way the vault says (`useMarkdownLinks`, `newLinkFormat`). A link
-  to a note that isn't there yet makes it when you click it. A picture
-  pasted or dropped in goes to the vault's attachment folder.
+  to a note that isn't there yet makes it when you click it.
+- **Files dropped on a note** (a PDF, a picture, anything; several at
+  once): they go into the vault's attachment folder (its settings say
+  where: `files/`, at the top, in a vault set up that way), named the way
+  a link likes (`Lab Sheet 2.pdf` is `lab-sheet-2.pdf`; one that's there
+  already, `-2`), and the note gets a link to each, with its name: where
+  the caret is while you're editing, else at the end, each on its own
+  line, ending the way the note's lines do. A picture pasted in shows in
+  the note.
+- **Up** (the ↑ by the note's path, Alt+↑, or Backspace in a folder) goes
+  to the folder note above: from `GJU/gju.md` to `Academics/academics.md`,
+  from any other note in GJU to `gju.md`. A folder without a note of its
+  own (named as it is) opens as a folder, as before.
 - **Renaming or moving** a note or folder updates the links to it (and its
   own), as Obsidian's *Automatically update internal links* does; with that
   off, it asks.
