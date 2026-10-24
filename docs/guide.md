@@ -497,6 +497,13 @@ code. Ctrl+S (⌘S) saves; Tab indents. If something else changed the file
 since you opened it, it asks before saving over it. Leaving with unsaved
 changes asks first.
 
+**Several at once**: drag a box across the list's empty part to pick the
+files it touches, or Ctrl-click (⌘) to add one, Shift-click for everything
+between. Delete, copy, cut, the right-click menu (Copy, Cut, Delete N
+items) and dragging (into a folder, a place, the Trash, another window, the
+desktop) are then for all of them. The desktop's icons are picked the same
+way, and several dragged about the desktop move together.
+
 ## Notepad
 
 Text files, one a window, like Windows': **All apps → Notepad**, or open a
