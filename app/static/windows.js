@@ -497,8 +497,8 @@ function winMenu(id) {
 
 // Ctrl (⌘ on a Mac) with + − 0, or with the wheel (a trackpad's pinch), over
 // one of adlerOS's own windows zooms that window's content, not the whole
-// page: adlermd's text bigger, the rest as it was. Each kind of window
-// (adlermd, Music, My Computer…) keeps its own, on this device. An app's
+// page: Luna's text bigger, the rest as it was. Each kind of window
+// (Luna, Music, My Computer…) keeps its own, on this device. An app's
 // window (another site's page) is left to the browser.
 const WIN_ZOOM_KEY = "adleros.zoom";
 const WIN_ZOOMS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
@@ -731,7 +731,7 @@ function reloadAppWindow(id) {
 // The mouse's side buttons: back (the one nearer your palm) and forward,
 // in the window under the pointer (else the one in front) that has
 // somewhere to go back to: My Computer's folders, Settings' categories,
-// adlermd's notes and folders (registerNav). Never the page itself, which
+// Luna's notes and folders (registerNav). Never the page itself, which
 // would leave adlerOS: the browser's own back is cancelled, and for one
 // that goes anyway (or its own back: Alt+Left, its button), adlerOS keeps a
 // step of history of its own, and going back from it goes back in the

@@ -188,7 +188,7 @@ Computer can open: a list of what's in it, and for Gallery a photo's small
 EXIF thumbnail (only pictures, only inside that folder, served with
 `sandbox`). Nothing goes to Immich or Paperless until you connect them.
 
-**Notes** (adlermd, Notepad) are yours, but may come from anywhere (a vault
+**Notes** (Luna, Notepad) are yours, but may come from anywhere (a vault
 someone shared). Their HTML is rebuilt from an allowlist, never inserted as
 is: formatting tags and their plain attributes, with no scripts, forms,
 event handlers, ids or classes, and style only for how text looks (no

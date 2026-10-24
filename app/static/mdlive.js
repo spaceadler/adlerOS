@@ -1,4 +1,4 @@
-// adlermd's Live mode: the note as it reads, edited where you click, as in
+// Luna's Live mode: the note as it reads, edited where you click, as in
 // Obsidian's Live Preview. The block you're in (a paragraph, a heading, a
 // list, a table, the properties) turns back into its Markdown, and reads
 // again once you leave it. The arrows past a block's first or last line go

@@ -5,7 +5,7 @@
 // %%comments%%, $math$ (as written), the frontmatter's properties, and
 // HTML: what formats a note (tags, tables, <details>, pictures, videos'
 // iframes), never what could run or reach into adlerOS (mdHtml). ctx says
-// where a link goes and what an embed shows (adlermd.js).
+// where a link goes and what an embed shows (luna.js).
 // Also a small YAML reader, for frontmatter and Bases files.
 // Uses el, svg.
 "use strict";

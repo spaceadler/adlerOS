@@ -87,7 +87,7 @@ one, each still shows the files themselves. More in
   homelab's own folder, in a window. Upload, download, cut, copy and paste
   between them, rename, delete into a Trash you can restore from; photos,
   videos, PDFs and songs open in windows of their own.
-- **Notepad** for text files, and **adlermd** for notes: Markdown in vaults,
+- **Notepad** for text files, and **Luna** for notes: Markdown in vaults,
   Obsidian's way (an Obsidian vault works in both), with links, embeds,
   callouts, backlinks, the graph and Bases.
 - **Music**: your songs by album, artist and playlist (your `.m3u8` files,
