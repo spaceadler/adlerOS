@@ -507,7 +507,7 @@ async function newTerminalWindow() {
   section.querySelectorAll(":scope > .win-grip").forEach((g) => g.remove());
   for (const node of section.querySelectorAll("[id]")) node.removeAttribute("id");
   Object.assign(section, { id, hidden: true });
-  section.classList.remove("active", "minimized", "closing", "off-ws");
+  section.classList.remove("active", "minimized", "closing", "off-ws", "win-genie");
   section.removeAttribute("style");
   section.setAttribute("aria-label", `Terminal ${n}`);
   section.querySelector(".term-title").textContent = `Terminal ${n}`;

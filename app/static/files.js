@@ -110,7 +110,7 @@ function newFilesWindow(path) {
   section.querySelector(":scope > .win-bar")?.remove();
   section.querySelectorAll(":scope > .win-grip").forEach((g) => g.remove());
   Object.assign(section, { id, hidden: true });
-  section.classList.remove("active", "minimized", "closing", "off-ws", "dropping");
+  section.classList.remove("active", "minimized", "closing", "off-ws", "win-genie", "dropping");
   section.removeAttribute("style");
   section.setAttribute("aria-label", `My Computer ${n}`);
   document.body.insertBefore(section, $("files").nextSibling);
