@@ -611,6 +611,14 @@ deskGrid.addEventListener("keydown", (e) => {
     e.preventDefault();
     deskSetPicked(deskIcons().map(deskKey));
   }
+  // Delete, Ctrl+C, Ctrl+X with the desktop itself focused (after a box): the picked files.
+  if (e.defaultPrevented || e.target.closest(".desk-icon, input, textarea")) return;
+  const picked = deskPickedFiles();
+  if (!picked.length) return;
+  const mod = e.ctrlKey || e.metaKey;
+  if (e.key === "Delete") { e.preventDefault(); deletePaths(picked); }
+  else if (mod && e.key.toLowerCase() === "c") { e.preventDefault(); clipPaths(picked, true); }
+  else if (mod && e.key.toLowerCase() === "x") { e.preventDefault(); clipPaths(picked, false); }
 });
 desk.timer = setInterval(() => {
   if (desktopMode() && !document.hidden && !$("desktop").hidden && Date.now() - desk.at > DESK_REFRESH_MS - 500) refreshDesk();

@@ -434,7 +434,7 @@ side are three places, and the Trash:
 | --- | --- | --- |
 | **Desktop** | `DESKTOP_DIR`; in a homelab, its `mailbox/` | Yours to change. In desktop mode, it's what the desktop shows. |
 | **User** | `STORAGE_DIR`: photos, music, documents | Yours to change. |
-| **Root** | `FILES_ROOT`; in a homelab, the homelab's own folder | Read-only: look around, copy things out. See below. |
+| **Root** | `FILES_ROOT`; in a homelab, the homelab's own folder | Read-only: look around, copy things out. See below. Its own folders (backup, containers, dev, and mailbox and storage, which are the Desktop and User) are never deleted, renamed or moved, admin mode or not, and can't be picked with others. |
 
 Nothing outside them is reachable, and a link that leads out of its place is
 shown greyed out and won't open. Root's `mailbox/` and `storage/` are the

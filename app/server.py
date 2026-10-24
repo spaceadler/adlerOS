@@ -4082,6 +4082,18 @@ def is_top(place, real):
     return real == PLACES[place].resolve()
 
 
+def is_kept(place, real):
+    """A place itself, or a folder at Root's top (the homelab's backup/,
+    containers/, dev/, beside mailbox/ and storage/): opened, never deleted,
+    renamed or moved, whatever mode you're in."""
+    if is_top(place, real):
+        return True
+    try:
+        return place == "root" and real.parent == PLACES["root"].resolve() and real.is_dir() and not real.is_symlink()
+    except OSError:
+        return False
+
+
 def root_writes():
     """Whether Root may change now: admin mode, and the machine allows it."""
     return admin_on() and terminal_enabled()
@@ -4122,6 +4134,8 @@ def list_folder(place, real):
         other = inner.get(str(here / child.name) if str(here) != "." else child.name)
         if other and is_dir and not link:
             entry["place"] = other  # Root's mailbox/: opening it opens the Desktop
+        elif place == "root" and real == top and is_dir and not link:
+            entry["kept"] = True  # Root's backup/, containers/, dev/: opened, never changed
         entries.append(entry)
     entries.sort(key=lambda e: (not e["dir"], e["name"].lower()))
     return entries
@@ -5757,7 +5771,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {"ok": True, "path": place_path(place, target)})
         if what == "rename":
             place, real = locate(body.get("path"))
-            if not real or is_top(place, real) or in_trash(place, real) or not good_name(body.get("name")):
+            if not real or is_kept(place, real) or in_trash(place, real) or not good_name(body.get("name")):
                 return self.send_json(400, {"error": "a new name, without /"})
             if place == "root":
                 return self.root_change("rename", path=place_path(place, real), name=body["name"])
@@ -5772,8 +5786,8 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(paths, list) or not 0 < len(paths) <= 500:
                 return self.send_json(400, {"error": "expected paths"})
             found = [locate(p) for p in paths]
-            if any(not real or is_top(place, real) or in_trash(place, real) for place, real in found):
-                return self.send_json(400, {"error": "can't delete that (a place itself, or something already in the Trash)"})
+            if any(not real or is_kept(place, real) or in_trash(place, real) for place, real in found):
+                return self.send_json(400, {"error": "can't delete that (a place itself, a folder at Root's top, or something already in the Trash)"})
             in_root = [place_path(place, real) for place, real in found if place == "root"]
             if in_root and self.root_refused():
                 return None
@@ -5794,7 +5808,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(400, {"error": "pick a folder to put them in"})
             sources = [locate(p) for p in paths]
             for place, src in sources:
-                if not src or in_trash(place, src) or (what == "move" and is_top(place, src)):
+                if not src or in_trash(place, src) or (what == "move" and is_kept(place, src)):
                     return self.send_json(400, {"error": f"can't {what} that"})
                 if folder == src or folder.is_relative_to(src):
                     return self.send_json(400, {"error": "a folder can't go inside itself"})
