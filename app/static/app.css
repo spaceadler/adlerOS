@@ -3589,3 +3589,13 @@ body:not(.wm) .tk-detail { padding-top: 56px; }
   .tk-detail { width: 100%; }
   body:not(.wm) .tk-head { padding-right: 0; }
 }
+
+/* One app alone (/?only=calendar: a second Calendar, Music…, in a window of
+   the page around it): it fills the window, no dock, desktop or home screen;
+   that window's bar is its bar. */
+body.only-app #desktop, body.only-app #dock, body.only-app #drawer, body.only-app #notes, body.only-app #welcome { display: none !important; }
+body.only-app .sheet { inset: 0; left: 0; bottom: 0; width: 100vw; max-width: none; height: 100dvh; border-radius: 0; box-shadow: none; transform: none; animation: none; }
+body.only-app .sheet.closing { animation: none; }
+body.only-app .sheet-close { display: none; }
+/* A copy's window here: its page fills it. */
+.own-copy .own-frame { background: transparent; }
