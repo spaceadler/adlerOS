@@ -2087,6 +2087,8 @@ body.wm .desk {
 .desk-icon.selected { background: rgb(10 132 255 / 0.32); box-shadow: 0 0 0 1px rgb(10 132 255 / 0.7) inset; }
 .desk-icon.selected .desk-name { background: rgb(10 132 255 / 0.85); border-radius: 4px; }
 .desk-ghost-count { position: absolute; top: 2px; right: 6px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ff3b30; font-size: 12px; font-weight: 700; line-height: 20px; }
+/* adlermd: files dragged over a note (they'll be linked in it). */
+.md-note.md-dropping { box-shadow: 0 0 0 3px rgb(10 132 255 / 0.85) inset; border-radius: 12px; }
 /* The box dragged across a list or the desktop, picking what it touches. */
 .drag-box { position: fixed; z-index: 300; border: 1px solid rgb(10 132 255 / 0.95); border-radius: 3px; background: rgb(10 132 255 / 0.18); pointer-events: none; }
 body.drag-boxing, body.drag-boxing * { user-select: none; cursor: default !important; }

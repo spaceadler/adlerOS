@@ -283,6 +283,12 @@ async function closeAdlermd() {
 
 function mdKeys(e) {
   const mod = e.ctrlKey || e.metaKey;
+  // Alt+↑: up, as the ↑ by the note's path goes (its folder's note, the one above).
+  if (e.altKey && !mod && e.key === "ArrowUp") {
+    const up = $("adlermd").querySelector(".md-main .md-up:not([disabled])");
+    if (up) { e.preventDefault(); up.click(); }
+    return;
+  }
   if (!mod) return;
   const k = e.key.toLowerCase();
   if (k === "o") { e.preventDefault(); return mdSwitcher(); }
@@ -678,7 +684,9 @@ function mdNoteView(tab) {
     mdFit(source);
   });
   source.addEventListener("input", () => mdFit(source));
-  return el("div", { class: "md-note" }, head, scroll);
+  const note = el("div", { class: "md-note" }, head, scroll);
+  mdNoteDrops(note, tab);
+  return note;
 }
 
 // Live: the note as it reads, edited where you click (mdlive.js).
@@ -700,7 +708,9 @@ function mdLiveNote(tab, title, head, read) {
     } else if (tab.writable && !mdFrontmatter(tab.text).body.trim()) mdLiveAtEnd(live, null, { focus: false }); // somewhere to start
     if (document.activeElement === document.body) read.focus({ preventScroll: true }); // so its keys (Ctrl+E) still reach adlermd
   });
-  return el("div", { class: "md-note" }, head, scroll);
+  const note = el("div", { class: "md-note" }, head, scroll);
+  mdNoteDrops(note, tab);
+  return note;
 }
 
 // What an editor of a note does besides hold its text: [[ to link, list
@@ -709,7 +719,31 @@ function mdWireEditor(area, tab) {
   area.addEventListener("input", () => mdComplete(area, tab));
   area.addEventListener("keydown", (e) => mdSourceKeys(e, area, tab));
   area.addEventListener("paste", (e) => mdPasteFiles(e, e.clipboardData?.files, area, tab));
-  area.addEventListener("drop", (e) => mdPasteFiles(e, e.dataTransfer?.files, area, tab));
+  area.addEventListener("drop", (e) => {
+    // Where it's dropped: the caret goes there first, and the link with it.
+    if (!e.dataTransfer?.files?.length) return;
+    const at = document.caretPositionFromPoint?.(e.clientX, e.clientY)?.offset ?? document.caretRangeFromPoint?.(e.clientX, e.clientY)?.startOffset;
+    if (Number.isInteger(at)) area.setSelectionRange(at, at);
+    e.stopPropagation(); // the note's own drop (at its end) isn't for this one
+    area.closest(".md-note")?.classList.remove("md-dropping");
+    mdPasteFiles(e, e.dataTransfer.files, area, tab, { dropped: true });
+  });
+}
+
+// Files dropped on a note anywhere (reading it, or its page around the
+// editor): into the attachment folder, and linked at the end of the note.
+function mdNoteDrops(node, tab) {
+  node.addEventListener("dragover", (e) => {
+    if (!tab.writable || !e.dataTransfer?.types.includes("Files")) return;
+    e.preventDefault();
+    node.classList.add("md-dropping");
+  });
+  node.addEventListener("dragleave", (e) => { if (!node.contains(e.relatedTarget)) node.classList.remove("md-dropping"); });
+  node.addEventListener("drop", (e) => {
+    node.classList.remove("md-dropping");
+    if (!tab.writable || !e.dataTransfer?.files?.length) return;
+    mdPasteFiles(e, e.dataTransfer.files, null, tab, { dropped: true });
+  });
 }
 
 // The editor grows with its text: the page scrolls, not the box.
@@ -863,13 +897,19 @@ const mdFolderThere = (path) => path === "" || adler.index.folders.includes(path
 function mdCrumbs(tab) {
   const folder = tab.kind === "folder" ? tab.path : mdFolderOf(tab.path);
   const parts = folder ? folder.split("/") : [];
-  const above = tab.kind !== "folder" ? folder : folder ? mdFolderOf(folder) : null;
+  // A folder's own note (gju.md in GJU): up from it is the folder above, not its own.
+  const own = tab.kind === "note" && folder && mdFolderNote(folder) === tab.path;
+  const above = tab.kind !== "folder" ? (own ? mdFolderOf(folder) : folder) : folder ? mdFolderOf(folder) : null;
   // A PDF or a picture: up is the note it's from (where you opened it, else
   // the one that links to it), not the folder it's kept in.
   const home = tab.kind === "file" ? mdFileHome(tab) : null;
-  const label = home ? `Back to ${mdNoteName(home.path)}` : "Up one folder";
+  // Up, otherwise: the note of the folder above (GJU/gju.md: Academics/
+  // academics.md), else that folder.
+  const upNote = home ? null : mdUpNote(tab, folder);
+  const label = home ? `Back to ${mdNoteName(home.path)}` : upNote ? `Up to ${mdNoteName(upNote)}` : "Up one folder";
   const up = el("button", { type: "button", class: "md-icon-button md-up", title: label, "aria-label": label }, svg(["M12 19V5", "m5 12 7-7 7 7"]));
   if (home) up.addEventListener("click", (e) => (home.back && !(e.ctrlKey || e.metaKey) ? mdNav(-1) : mdOpen(home.path, { newTab: e.ctrlKey || e.metaKey })));
+  else if (upNote) up.addEventListener("click", (e) => mdOpen(upNote, { newTab: e.ctrlKey || e.metaKey }));
   else if (above === null) up.disabled = true;
   else up.addEventListener("click", (e) => mdOpenFolder(above, { newTab: e.ctrlKey || e.metaKey }));
   const crumb = (label, path, here) => {
@@ -884,6 +924,28 @@ function mdCrumbs(tab) {
   parts.forEach((name, i) => items.push(sep(), crumb(name, parts.slice(0, i + 1).join("/"), tab.kind === "folder" && i === parts.length - 1)));
   if (tab.kind === "base" || tab.kind === "file") items.push(sep(), crumb(tab.path.split("/").pop(), null, true));
   return [up, el("nav", { class: "md-crumbs", "aria-label": "Folder" }, ...items)];
+}
+
+// A folder's own note: the one in it named as it is (GJU: gju.md;
+// The-Library: the-library.md), else null.
+function mdFolderNote(folder) {
+  if (!folder) return null;
+  const key = (t) => t.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  const name = key(folder.split("/").pop());
+  return [...adler.names].find((n) => mdFolderOf(n) === folder && /\.md$/i.test(n) && key(n.split("/").pop().replace(/\.md$/i, "")) === name) || null;
+}
+
+// Where up goes from a note (or a folder): its folder's own note, if this
+// isn't it; else the folder above's own note. Null: there's no such note
+// (up is the folder, as ever).
+function mdUpNote(tab, folder) {
+  if (tab.kind === "note" || tab.kind === "base") {
+    const own = mdFolderNote(folder);
+    if (own && own !== tab.path) return own;
+    return folder ? mdFolderNote(mdFolderOf(folder)) : null;
+  }
+  if (tab.kind === "folder" && folder) return mdFolderNote(mdFolderOf(folder));
+  return null;
 }
 
 // The note a file belongs to: the one this tab came from, else the first
@@ -988,7 +1050,7 @@ function mdFolderView(tab) {
   view.addEventListener("keydown", (e) => {
     if (e.key !== "Backspace" || up === null || e.target.closest("input, textarea, [contenteditable]")) return;
     e.preventDefault();
-    mdOpenFolder(up);
+    view.querySelector(".md-up")?.click(); // as the ↑ goes: the folder note above, else the folder
   });
   requestAnimationFrame(() => {
     scroll.scrollTop = tab.scroll || 0;
@@ -1104,24 +1166,77 @@ function mdCompleteClose() {
   adler.complete = null;
 }
 
-// Pictures (or any file) pasted or dropped into a note: into the vault's
-// attachment folder, and a link to them where the caret is.
-async function mdPasteFiles(e, list, area, tab) {
+// Files pasted or dropped into a note: into the vault's attachment folder
+// (its settings say where: Notes's is files/, at its top), named the way a
+// link likes (Lab Sheet 2.pdf: lab-sheet-2.pdf), and linked: a picture
+// pasted in shown in the note, a file dropped as a link with its name. In
+// the editor, where the caret is; anywhere else (reading it), at the end.
+// Each on a line of its own, ending as the note's lines do.
+async function mdPasteFiles(e, list, area, tab, { dropped = false } = {}) {
   if (!list?.length || !tab.writable) return;
   e.preventDefault();
   const dir = mdAttachmentDir(tab.path);
-  for (const file of list) {
+  const where = mdFull(dir).replace(/\/$/, "");
+  const end = mdLineEnd(tab.text || "");
+  const caret = area ? [area.selectionStart, area.selectionEnd] : null; // where it goes: the upload takes a moment
+  const links = [];
+  for (const file of [...list]) {
     const stamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
-    const name = file.name && file.name !== "image.png" ? file.name : `Pasted image ${stamp}.${(file.type.split("/")[1] || "png").replace("jpeg", "jpg")}`;
-    const where = mdFull(dir).replace(/\/$/, "");
+    const pasted = !file.name || file.name === "image.png";
+    let name = pasted ? `Pasted image ${stamp}.${(file.type.split("/")[1] || "png").replace("jpeg", "jpg")}` : mdFileName(file.name);
+    // Taken already: -2, -3… (the vault's way), not the server's " (2)".
+    if (!pasted) {
+      const dot = name.lastIndexOf(".");
+      const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+      for (let n = 2; adler.names.has(`${dir ? `${dir}/` : ""}${name}`); n++) name = `${stem}-${n}${ext}`;
+    }
     const reply = await mdUpload(file, where, name);
     if (!reply) continue;
     const rel = `${dir ? `${dir}/` : ""}${reply.name}`;
     adler.names.add(rel);
-    document.execCommand("insertText", false, `${mdLinkTo(tab.path, rel, reply.name, true)}\n`);
+    const shown = !dropped && file.type.startsWith("image/");
+    links.push(mdLinkTo(tab.path, rel, pasted ? reply.name : file.name.replace(/\.[^.]+$/, ""), shown));
   }
-  area.dispatchEvent(new Event("input"));
+  if (!links.length) return;
+  if (area?.isConnected) {
+    // A line of its own: after what's on the caret's line, if anything.
+    area.focus({ preventScroll: true });
+    area.setSelectionRange(caret[0], caret[1]);
+    const before = area.value.slice(0, caret[0]);
+    const lead = before && !before.endsWith("\n") ? "\n" : "";
+    const insert = `${lead}${links.map((l) => `${l}${end}`).join("\n")}\n`;
+    // As typing would (so Ctrl+Z takes it back); else straight into its text.
+    if (!document.execCommand("insertText", false, insert)) area.setRangeText(insert, caret[0], caret[1], "end");
+    area.dispatchEvent(new Event("input"));
+  } else {
+    const nl = tab.crlf ? "\r\n" : "\n";
+    // After the last line (its own line end, spaces and all, kept), blank lines aside.
+    tab.text = `${(tab.text || "").replace(/(\r?\n[ \t]*)+$/, "")}${nl}${links.map((l) => `${l}${end}`).join(nl)}${nl}`;
+    mdDirty(tab, 300);
+    mdRenderMain();
+  }
+  toast(links.length === 1 ? `${list[0].name} is in ${dir || "the vault"}, linked here.` : `${links.length} files are in ${dir || "the vault"}, linked here.`);
   mdRefreshIndex();
+}
+
+// A file's name as a link likes it: lower case, a hyphen for each run of
+// spaces and the like (Lab Sheet 2.pdf: lab-sheet-2.pdf; Culture & Co..pdf:
+// culture-co.pdf). A name that's only other letters (Arabic, say) is kept.
+function mdFileName(name) {
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+  const slug = stem.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-").replace(/-{2,}/g, "-").replace(/\.{2,}/g, ".").replace(/^[-._]+|[-._]+$/g, "");
+  return slug ? `${slug}${ext ? `.${ext}` : ""}` : name;
+}
+
+// How the note's lines end: with spaces (a Markdown line break), if most do.
+function mdLineEnd(text) {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  const spaced = lines.filter((l) => / {2,}$/.test(l));
+  if (lines.length && spaced.length / lines.length > 0.4) return spaced[spaced.length - 1].match(/ +$/)[0];
+  return "";
 }
 
 function mdUpload(file, dir, name) {
