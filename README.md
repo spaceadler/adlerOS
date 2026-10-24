@@ -100,6 +100,9 @@ one, each still shows the files themselves. More in
 - **Documents**: your papers from Paperless, by tag, correspondent and
   type, searched by what they say, each with its preview and details.
   Without a Paperless token, the files in your storage.
+- **Tasks**: your to-dos from Vikunja: Today, Upcoming, your projects as
+  lists or kanban boards, due dates, priorities, labels, repeats. Without
+  Vikunja, kept in adlerOS, and moved to it once it's connected.
 - **Calendar**: your calendars from Radicale (or any CalDAV server), by day,
   week or month, each in its color, every repeat worked out. Drag an event
   to another time or day; edit it (repeats, travel time, its calendar); on

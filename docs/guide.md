@@ -1,7 +1,7 @@
 # Using adlerOS
 
 A tour of everything on the screen, and adlerOS's own apps: My Computer,
-Notepad, adlermd, Music, Gallery, Documents, Calendar and the Terminal. Every part
+Notepad, adlermd, Music, Gallery, Documents, Calendar, Tasks and the Terminal. Every part
 works with a mouse, a touch screen, or a keyboard alone
 ([docs/keyboard.md](keyboard.md)).
 
@@ -763,6 +763,39 @@ Until then it's the calendar itself, empty, with how to connect it above.
   them moves the whole series (its skipped and changed ones with it).
 - A change goes to the server only if nobody changed that event meanwhile
   (on your phone, say); if they did, it says so and shows it as it is now.
+
+## Tasks
+
+Your to-dos as Vikunja has them: open it from All apps, the dock, or
+Alt+Space "tasks". It needs a token from Vikunja (Settings → API Tokens →
+Create a token, with tasks, projects and labels) in the settings file as
+`VIKUNJA_TOKEN`, or your login as `VIKUNJA_USER` and `VIKUNJA_PASSWORD`;
+`VIKUNJA_URL` if Vikunja isn't at this machine's address. What you do here
+is done in Vikunja, so its app and the ones on your phone have it too.
+
+Until then, Tasks keeps them **in adlerOS** (`data/tasks.json`), the same
+way: an Inbox, your projects, their boards. Once Vikunja's connected they
+move there by themselves (projects and buckets by name, made where they're
+missing, labels too), and the file's put aside as `tasks-moved-…json`.
+
+- **Today**: what's due today, and what's late. **Upcoming**: the next
+  week, day by day. Then your **projects** (right-click one to rename or
+  delete it; **New project** under them).
+- A project as a **List** (L): type in **Add a task** and press Enter;
+  tick one off (it goes; **Show done** shows them); drag them into your
+  order. Or as a **Board** (B): Vikunja's kanban, its buckets side by side
+  (To-Do, Doing, Done, yours: **Add a bucket**, double-click one's name to
+  rename it); drag cards between them. A card in Done is done.
+- Click a task to open it beside the list: its name, when it's **due**
+  (a day, a time if you like), its **priority**, **labels** (+ Label makes
+  one), how it **repeats** (every day, week, month, year, or so many
+  days; from its due date or from when it's done), its **project**, and
+  notes. Every change is saved as you make it. Ticking off a repeating one
+  makes it due again next time.
+- Drag a task onto a project in the side to move it there; right-click it
+  for done, due today or tomorrow, delete.
+- On a phone, the side is a row along the top, and a task opens over the
+  list.
 
 ## Terminal
 
