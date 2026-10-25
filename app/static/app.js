@@ -402,6 +402,7 @@ function setPageCount(titles) {
 
 function goToPage(index, smooth = true) {
   const pages = $("pages");
+  if (pageGlideStop()) { pages.style.transform = ""; pages.style.scrollSnapType = ""; }
   state.page = Math.max(0, Math.min(index, state.pageCount - 1));
   pages.scrollTo({ left: state.page * pages.clientWidth, behavior: smooth ? "smooth" : "instant" });
   updatePager();
@@ -430,13 +431,71 @@ function onPagesScroll() {
 // swipe on a trackpad (its momentum doesn't turn another), or a drag across
 // them: a finger anywhere (held still, it's a right click instead: apps are
 // picked up that way), a mouse anywhere but an app (it drags apps to
-// rearrange them). The drag follows you, across as many pages as you like,
-// and nothing turns until you let go: then it settles on the page you're
-// nearer, past halfway. Before the first page or after the last it gives a
-// little, and on a phone, letting go more than halfway past the last opens
-// the App Library. adlerOS does it rather than the browser (touch-action:
-// pan-y), so an iPhone and an Android swipe alike.
-const pageTurn = { acc: 0, last: 0, held: false, drag: null, suppress: false };
+// rearrange them). The drag is an iPhone's: the pages stay under your
+// finger, stretch like rubber before the first and after the last, and when
+// you let go, the way your finger was still moving decides: on to that
+// side's page, however little you'd moved; stopped, the nearer page. A
+// spring then carries on at your finger's speed, and a touch catches it.
+// On a phone, going on past the last page opens the App Library. adlerOS
+// does it rather than the browser (touch-action: pan-y), so an iPhone and an
+// Android swipe alike.
+const pageTurn = { acc: 0, last: 0, held: false, drag: null, suppress: false, glide: 0, pos: 0 };
+// From UIScrollView (its rubber band, as measured) and Flutter's iOS paging
+// (PageScrollPhysics, BouncingScrollPhysics, VelocityTracker).
+const PAGE_RUBBER = 0.55;
+const PAGE_FLING = 0.1; // px/ms: slower than this when you let go is still
+const PAGE_STOPPED = 40; // ms without moving before letting go: still
+const PAGE_SPRING = { mass: 0.5, stiffness: 100, ratio: 1.1 };
+const PAGE_SLOP = 8;
+function pageRubber(x, d) { return (x * d * PAGE_RUBBER) / (d + PAGE_RUBBER * x); }
+function pageUnrubber(y, d) { return (y * d) / (PAGE_RUBBER * Math.max(1, d - y)); }
+// Where the pages are, in px from the first, drawn: past either end, the
+// scroll stays put and the stretch is a transform.
+function pageShow(pos) {
+  const pages = $("pages");
+  const end = pages.scrollWidth - pages.clientWidth;
+  const at = Math.min(Math.max(pos, 0), end);
+  pageTurn.pos = pos;
+  pages.scrollLeft = at;
+  pages.style.transform = Math.abs(pos - at) > 0.01 ? `translateX(${at - pos}px)` : "";
+}
+function pageGlideStop() {
+  if (!pageTurn.glide) return false;
+  cancelAnimationFrame(pageTurn.glide);
+  pageTurn.glide = 0;
+  return true;
+}
+// The spring to a page, starting at the finger's speed (px/ms, the pages').
+function pageGlide(page, speed) {
+  pageGlideStop();
+  const pages = $("pages");
+  const target = page * pages.clientWidth;
+  const { mass, stiffness, ratio } = PAGE_SPRING;
+  const damping = ratio * 2 * Math.sqrt(stiffness * mass);
+  let x = pageTurn.pos - target;
+  let v = speed * 1000; // px/s
+  let then = performance.now();
+  pages.style.scrollSnapType = "none";
+  const step = (now) => {
+    let dt = Math.min(0.05, (now - then) / 1000);
+    then = now;
+    for (; dt > 0; dt -= 0.004) {
+      const h = Math.min(0.004, dt);
+      v += ((-stiffness * x - damping * v) / mass) * h;
+      x += v * h;
+    }
+    if (Math.abs(x) < 0.5 && Math.abs(v) < 20) {
+      pageTurn.glide = 0;
+      pageShow(target);
+      pages.style.scrollSnapType = "";
+      goToPage(page, false);
+      return;
+    }
+    pageShow(target + x);
+    pageTurn.glide = requestAnimationFrame(step);
+  };
+  pageTurn.glide = requestAnimationFrame(step);
+}
 function onPagesWheel(e) {
   if (state.pageCount < 2 || e.ctrlKey || arranging()) return;
   e.preventDefault();
@@ -459,49 +518,75 @@ function onPagesDown(e) {
   if (e.button !== 0 || (state.pageCount < 2 && !phoneLayout()) || arranging()) return;
   const mouse = e.pointerType === "mouse";
   if (e.target.closest(mouse ? ".app, button, a, input, [data-widget], [data-folder]" : "button, input")) return;
-  pageTurn.drag = { x: e.clientX, y: e.clientY, left: $("pages").scrollLeft, page: state.page, id: e.pointerId, moved: false, over: 0 };
+  const pages = $("pages");
+  // Still gliding: the touch catches it where it is (and doesn't tap an app).
+  const caught = pageGlideStop();
+  const end = pages.scrollWidth - pages.clientWidth;
+  const pos = caught ? pageTurn.pos : pages.scrollLeft;
+  // Caught while stretched: from the finger's place that stretch stands for.
+  const W = pages.clientWidth;
+  const left = pos < 0 ? -pageUnrubber(-pos, W) : pos > end ? end + pageUnrubber(pos - end, W) : pos;
+  pageTurn.drag = { x: e.clientX, y: e.clientY, left, page: state.page, id: e.pointerId, moved: false, caught, over: 0,
+    trail: [[e.clientX, e.timeStamp]] };
+  if (caught) { pageShow(pos); pages.style.scrollSnapType = "none"; }
 }
 function onPagesMove(e) {
   const d = pageTurn.drag;
   if (!d || e.pointerId !== d.id) return;
-  const dx = e.clientX - d.x;
+  let dx = e.clientX - d.x;
   const dy = e.clientY - d.y;
   const pages = $("pages");
   if (!d.moved) {
-    if (Math.abs(dx) < 8) {
-      if (Math.abs(dy) > 12) pageTurn.drag = null; // up or down: not a page turn (pulled down: search)
+    if (Math.abs(dx) < PAGE_SLOP) {
+      if (Math.abs(dy) > 12 && !d.caught) pageTurn.drag = null; // up or down: not a page turn (pulled down: search)
       return;
     }
     if (pressed || drag.item) { pageTurn.drag = null; return; } // held first: a right click, or an app picked up
     d.moved = true;
+    d.x += Math.sign(dx) * PAGE_SLOP; // from here, without a jump
+    dx = e.clientX - d.x;
     clearTimeout(pressTimer);
     pages.style.scrollSnapType = "none"; // follows you; snaps when you let go
-    pages.style.transition = "";
     pages.setPointerCapture(e.pointerId);
   }
   const want = d.left - dx;
   const end = pages.scrollWidth - pages.clientWidth;
-  pages.scrollLeft = want;
-  // Past either end: how far, for the give and the App Library.
+  const W = pages.clientWidth;
   d.over = want < 0 ? want : want > end ? want - end : 0;
-  pages.style.transform = d.over ? `translateX(${-d.over / 3}px)` : "";
+  pageShow(d.over < 0 ? -pageRubber(-d.over, W) : d.over > 0 ? end + pageRubber(d.over, W) : want);
+  // When it happened (a busy phone hands them over late).
+  const now = e.timeStamp;
+  d.trail.push([e.clientX, now]);
+  while (d.trail.length > 2 && now - d.trail[0][1] > 100) d.trail.shift();
 }
 function onPagesUp(e) {
   const d = pageTurn.drag;
   if (!d || e.pointerId !== d.id) return;
   pageTurn.drag = null;
   const pages = $("pages");
-  pages.style.scrollSnapType = "";
-  if (!d.moved) return;
-  if (d.over) {
-    pages.style.transition = "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)";
-    pages.style.transform = "";
+  const W = Math.max(1, pages.clientWidth);
+  if (!d.moved) {
+    if (!d.caught) return;
+    pageGlide(Math.round(pageTurn.pos / W), 0); // caught and let go: the nearer page
+  } else if (e.type === "pointercancel") {
+    // The browser took the swipe (Safari's own back swipe, say): back to
+    // where it started. Its place (Safari's 0, 0) isn't the finger's.
+    pageGlide(d.page, 0);
+  } else {
+    // How fast the finger was going, lately (still, if it had stopped).
+    const now = e.timeStamp;
+    const [x1, t1] = d.trail[d.trail.length - 1];
+    const [x0, t0] = d.trail[0];
+    let speed = now - t1 > PAGE_STOPPED || t1 === t0 ? 0 : -(x1 - x0) / (t1 - t0); // the pages' way
+    if (Math.abs(speed) < PAGE_FLING) speed = 0;
+    // Going on past the last page (a phone): the App Library.
+    if (phoneLayout() && d.over > 0 && (speed > 0 || d.over > W / 2)) openDrawer();
+    let page = pageTurn.pos / W;
+    if (speed > 0) page += 0.5;
+    else if (speed < 0) page -= 0.5;
+    page = Math.max(0, Math.min(state.pageCount - 1, Math.round(page)));
+    pageGlide(page, d.over ? 0 : speed);
   }
-  // The browser took the swipe (Safari's own back swipe, say): back to where
-  // it started. Its place (Safari's 0, 0) isn't the finger's.
-  if (e.type === "pointercancel") return goToPage(d.page);
-  if (phoneLayout() && d.over > pages.clientWidth / 2) openDrawer(); // past the last page: the App Library
-  goToPage(Math.round(pages.scrollLeft / Math.max(1, pages.clientWidth)));
   // The click this lifting makes doesn't open the app it ended on.
   pageTurn.suppress = true;
   setTimeout(() => { pageTurn.suppress = false; }, 0);
