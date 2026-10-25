@@ -80,6 +80,7 @@ function docsBuild() {
         el("nav", { class: "doc-side-nav", id: "doc-side-nav", "aria-label": "Documents" })),
       el("main", { class: "doc-main", id: "doc-main", tabindex: "-1" })));
   document.body.insertBefore(section, $("modal"));
+  section.querySelector(".doc-shell").append(sideToggle(section, "documents"));
   registerWindow("documents", { title: "Documents", close: closeDocuments, hide: () => closeWindow("documents"), dock: "documents", size: [1180, 780] });
   // Files dropped on it: to Paperless.
   section.addEventListener("dragover", (e) => { if (e.dataTransfer?.types.includes("Files") && docs.status?.ok) { e.preventDefault(); section.classList.add("doc-dropping"); } });

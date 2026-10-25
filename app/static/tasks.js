@@ -103,6 +103,7 @@ function tkBuild() {
       el("div", { class: "tk-body" }, el("div", { class: "tk-note", id: "tk-note", hidden: "" }), el("main", { class: "tk-main", id: "tk-main", tabindex: "-1" })),
       el("aside", { class: "tk-detail", id: "tk-detail", tabindex: "-1", hidden: "" })));
   document.body.insertBefore(section, $("modal"));
+  $("tk-shell").append(sideToggle(section, "tasks"));
   registerWindow("tasks", { title: "Tasks", close: closeTasks, hide: () => closeWindow("tasks"), dock: "tasks", size: [1180, 780] });
   section.addEventListener("keydown", tkKeys);
 }

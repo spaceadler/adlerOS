@@ -201,6 +201,7 @@ function musicBuild() {
       el("aside", { class: "mu-panel", id: "mu-panel" }),
       musicBar()));
   document.body.insertBefore(section, $("modal"));
+  $("mu-shell").append(sideToggle(section, "music"));
   registerWindow("music", { title: "Music", close: closeMusic, hide: () => closeWindow("music"), dock: "music", size: [1180, 760] });
   $("mu-main").addEventListener("scroll", () => music.vdraw?.(), { passive: true });
   new ResizeObserver(() => music.vdraw?.(true)).observe($("mu-main"));
