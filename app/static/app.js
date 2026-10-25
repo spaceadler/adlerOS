@@ -428,11 +428,14 @@ function onPagesScroll() {
 
 // The pages turn one at a time: a wheel (up, down or sideways), a sideways
 // swipe on a trackpad (its momentum doesn't turn another), or a drag across
-// them: a finger anywhere (apps are picked up with a long press), a mouse
-// anywhere but an app (it drags apps to rearrange them). The drag follows
-// you and settles on the nearer page, or the next one if flicked; adlerOS
-// does it rather than the browser (touch-action: pan-y), so an iPhone and
-// an Android swipe alike.
+// them: a finger anywhere (held still, it's a right click instead: apps are
+// picked up that way), a mouse anywhere but an app (it drags apps to
+// rearrange them). The drag follows you, across as many pages as you like,
+// and nothing turns until you let go: then it settles on the page you're
+// nearer, past halfway. Before the first page or after the last it gives a
+// little, and on a phone, letting go more than halfway past the last opens
+// the App Library. adlerOS does it rather than the browser (touch-action:
+// pan-y), so an iPhone and an Android swipe alike.
 const pageTurn = { acc: 0, last: 0, held: false, drag: null, suppress: false };
 function onPagesWheel(e) {
   if (state.pageCount < 2 || e.ctrlKey || arranging()) return;
@@ -453,11 +456,10 @@ function onPagesWheel(e) {
 }
 
 function onPagesDown(e) {
-  if (e.button !== 0 || state.pageCount < 2 || arranging()) return;
+  if (e.button !== 0 || (state.pageCount < 2 && !phoneLayout()) || arranging()) return;
   const mouse = e.pointerType === "mouse";
   if (e.target.closest(mouse ? ".app, button, a, input, [data-widget], [data-folder]" : "button, input")) return;
-  pageTurn.drag = { x: e.clientX, y: e.clientY, left: $("pages").scrollLeft, page: state.page, id: e.pointerId, moved: false,
-    trail: [[e.clientX, performance.now()]] };
+  pageTurn.drag = { x: e.clientX, y: e.clientY, left: $("pages").scrollLeft, page: state.page, id: e.pointerId, moved: false, over: 0 };
 }
 function onPagesMove(e) {
   const d = pageTurn.drag;
@@ -470,15 +472,19 @@ function onPagesMove(e) {
       if (Math.abs(dy) > 12) pageTurn.drag = null; // up or down: not a page turn (pulled down: search)
       return;
     }
-    if (pressed || drag.item) { pageTurn.drag = null; return; } // held first: an app picked up
+    if (pressed || drag.item) { pageTurn.drag = null; return; } // held first: a right click, or an app picked up
     d.moved = true;
     clearTimeout(pressTimer);
     pages.style.scrollSnapType = "none"; // follows you; snaps when you let go
+    pages.style.transition = "";
     pages.setPointerCapture(e.pointerId);
   }
-  pages.scrollLeft = d.left - dx;
-  d.trail.push([e.clientX, performance.now()]);
-  if (d.trail.length > 5) d.trail.shift();
+  const want = d.left - dx;
+  const end = pages.scrollWidth - pages.clientWidth;
+  pages.scrollLeft = want;
+  // Past either end: how far, for the give and the App Library.
+  d.over = want < 0 ? want : want > end ? want - end : 0;
+  pages.style.transform = d.over ? `translateX(${-d.over / 3}px)` : "";
 }
 function onPagesUp(e) {
   const d = pageTurn.drag;
@@ -487,15 +493,15 @@ function onPagesUp(e) {
   const pages = $("pages");
   pages.style.scrollSnapType = "";
   if (!d.moved) return;
+  if (d.over) {
+    pages.style.transition = "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)";
+    pages.style.transform = "";
+  }
   // The browser took the swipe (Safari's own back swipe, say): back to where
   // it started. Its place (Safari's 0, 0) isn't the finger's.
   if (e.type === "pointercancel") return goToPage(d.page);
-  const dx = e.clientX - d.x;
-  const [x0, t0] = d.trail[0];
-  const speed = (e.clientX - x0) / Math.max(1, performance.now() - t0); // px/ms, lately
-  const flick = Math.abs(speed) > 0.35 && Math.sign(speed) === Math.sign(dx);
-  const far = Math.abs(dx) > pages.clientWidth * 0.3;
-  goToPage(far || flick ? d.page - Math.sign(dx) : d.page);
+  if (phoneLayout() && d.over > pages.clientWidth / 2) openDrawer(); // past the last page: the App Library
+  goToPage(Math.round(pages.scrollLeft / Math.max(1, pages.clientWidth)));
   // The click this lifting makes doesn't open the app it ended on.
   pageTurn.suppress = true;
   setTimeout(() => { pageTurn.suppress = false; }, 0);
