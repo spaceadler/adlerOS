@@ -146,6 +146,8 @@ STATIC_TYPES = {
     ".txt": "text/plain; charset=utf-8",
     ".webmanifest": "application/manifest+json",
     ".wasm": "application/wasm",
+    ".ttf": "font/ttf",
+    ".pfb": "application/octet-stream",  # pdf.js's standard fonts (Type 1)
 }
 IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".avif")
 # frame-src: your apps' own pages, in desktop mode's windows. Any web page,

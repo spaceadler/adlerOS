@@ -910,7 +910,9 @@ function mdPdfPages(url, title) {
     try {
       box.dataset.state = "loading";
       const { lib, worker } = await mdPdfJs();
-      task = lib.getDocument({ url, worker, wasmUrl: "/static/vendor/" });
+      // A font a PDF names but doesn't carry: pdf.js's own (the 14 every PDF
+      // reader has), not whatever the phone has by that name.
+      task = lib.getDocument({ url, worker, wasmUrl: "/static/vendor/", standardFontDataUrl: "/static/vendor/", useSystemFonts: false });
       doc = await task.promise;
       const one = (await doc.getPage(1)).getViewport({ scale: 1 });
       box.replaceChildren(...Array.from({ length: doc.numPages }, (_, n) => {
