@@ -3,7 +3,8 @@
 // is a line here, its text as written; what's only there to make it look
 // so (the ** of bold, a link's [ ](address), a heading's #) is out of sight
 // but where the caret is: in that bold word, on that link, on that heading's
-// line. Click a link to write in it; Ctrl (⌘) and a click follows it. What
+// line. A click on a link follows it (the arrows take the caret into it, to
+// write in it; there, a click is a click in its text). What
 // takes several lines to be what it is (a table, a code block, a callout,
 // the properties at the top, a PDF or a picture shown) reads as it reads
 // until the caret goes in (a click on it, the arrows), then its lines.
@@ -82,7 +83,7 @@ function mfParts(lines) {
       block("callout", i, end);
       continue;
     }
-    if (MF_EMBED_LINE.test(t)) { block("embed", i, i + 1); continue; }
+    if (MF_EMBED_LINE.test(t) || mdSoloEmbed(t)) { block("embed", i, i + 1); continue; }
     out.push({ block: false, i });
     i++;
   }
@@ -470,7 +471,8 @@ function mdFlowMake(box, opts) {
     }, 0);
   });
 
-  // Clicks: a task's box ticks it; Ctrl and a click on a link follows it;
+  // Clicks: a task's box ticks it; a click on a link follows it (but in
+  // one the caret's in, shown as written: there, Ctrl and a click);
   // a block drawn as one opens to be written in (its links still followed).
   root.addEventListener("mousedown", (e) => {
     const check = e.target.closest(".mf-check");
@@ -483,7 +485,7 @@ function mdFlowMake(box, opts) {
       return setText(ls.join("\n"), keep ? [keep.start, keep.end] : undefined);
     }
     const link = e.target.closest(".mf-link, .mf-wikilink, .mf-url");
-    if (link && (e.ctrlKey || e.metaKey)) {
+    if (link && e.button === 0 && !e.shiftKey && !e.altKey && (e.ctrlKey || e.metaKey || !link.classList.contains("on"))) {
       e.preventDefault();
       const href = link.dataset.href;
       const wiki = link.dataset.wiki === "1";

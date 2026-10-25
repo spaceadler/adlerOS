@@ -854,6 +854,7 @@ function mdScrollToHeading(heading) {
 // video or a song, a Base.
 function mdVaultEmbed(tab, target, opts) {
   const r = mdResolve(tab.path, target, opts.wiki);
+  if (!r.exists && opts.link) return null; // a link to what isn't there: a link still
   if (!r.exists) return el("span", { class: "md-embed-missing" }, `${target} isn't in the vault`);
   const url = fileUrl(mdFull(r.path), true);
   const kind = padKind(r.path);
@@ -862,14 +863,15 @@ function mdVaultEmbed(tab, target, opts) {
   if (kind === "audio") return el("audio", { class: "md-embed-media", src: url, controls: "" });
   if (kind === "pdf") {
     // A PDF in the note: to read where you write (its foot drags taller or
-    // shorter); its bar opens it alone, or makes it a link again.
+    // shorter); its bar opens it alone, or makes it a link again (shown
+    // because it's a link alone on its line: a link it stays).
     const open = el("button", { type: "button", class: "md-embed-bar-button" }, "Open");
     open.addEventListener("click", () => mdOpen(r.path));
     const unlink = el("button", { type: "button", class: "md-embed-bar-button" }, "Make it a link");
     unlink.addEventListener("click", () => mdSwapEmbed(box, false));
     const box = el("div", { class: "md-embed-pdf-box" },
-      el("div", { class: "md-embed-bar" }, el("span", { class: "md-embed-bar-name" }, r.path.split("/").pop()), open, ...(tab.writable ? [unlink] : [])),
-      el("iframe", { class: "md-embed-pdf", src: url, title: r.path }));
+      el("div", { class: "md-embed-bar" }, el("span", { class: "md-embed-bar-name" }, opts.alt || r.path.split("/").pop()), open, ...(tab.writable && !opts.link ? [unlink] : [])),
+      el("iframe", { class: "md-embed-pdf", src: url, title: r.path, loading: "lazy" }));
     return box;
   }
   if (/\.base$/i.test(r.path)) {
