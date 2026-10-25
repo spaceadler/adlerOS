@@ -267,7 +267,9 @@ function layout(force = false) {
   // page: its search is the pill over the dock).
   const searchH = Math.max(38, Math.round(g.widgetH / 4));
   const searchBlockH = phoneLayout() ? 0 : searchH + 18;
-  const showWidgets = rowsIn(stageH - pillsH - searchBlockH - widgetsH) >= Math.min(2, g.rowsMax);
+  // A phone with no widgets picked gives their place to apps ("Edit widgets"
+  // in the long-press menu brings them back).
+  const showWidgets = !(phoneLayout() && !homeWidgetsChosen()) && rowsIn(stageH - pillsH - searchBlockH - widgetsH) >= Math.min(2, g.rowsMax);
   const perCol = Math.max(1, Math.min(g.rowsMax, rowsIn(stageH - pillsH - searchBlockH - (showWidgets ? widgetsH : 0))));
   const widgetsFit = Math.max(1, Math.floor((pageW + g.appXGap) / (g.widgetW + g.appXGap)));
   const widgetCols = Math.min(widgetsFit, WIDGET_SLOTS);

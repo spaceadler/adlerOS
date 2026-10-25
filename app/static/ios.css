@@ -49,6 +49,7 @@ body.phone .stage { justify-content: flex-start; padding-top: 20px; }
 
 /* Widgets: square, two side by side, frosted like an iPhone's. */
 body.phone .widgets { margin-bottom: 16px; }
+body.phone .widgets:empty { display: none; } /* none picked: the apps have the room */
 body.phone .widget { gap: 6px; }
 body.phone .widget-panel {
   border-radius: 22px;
