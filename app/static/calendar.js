@@ -137,6 +137,7 @@ function calBuild() {
         el("div", { class: "cal-note", id: "cal-note", hidden: "" }),
         el("main", { class: "cal-main", id: "cal-main", tabindex: "-1" }))));
   document.body.insertBefore(section, $("modal"));
+  section.querySelector(".cal-shell").append(sideToggle(section, "calendar"));
   registerWindow("calendar", { title: "Calendar", close: closeCalendar, hide: () => closeWindow("calendar"), dock: "calendar", size: [1120, 780] });
   section.addEventListener("keydown", (e) => {
     if (e.target.closest("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey) return;

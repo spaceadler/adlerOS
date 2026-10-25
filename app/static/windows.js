@@ -39,6 +39,29 @@ function winSave(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private window: not kept */ }
 }
 
+// A window's sidebar (Tasks, Calendar, Music, Documents, Luna, Gallery): the
+// button at its bottom left puts it away, and brings it back. Kept per app,
+// on this device. Where the window's too narrow for a sidebar (a strip along
+// the top, or none), the button isn't shown (app.css).
+function sideToggle(section, app, cls = "side-toggle") {
+  const key = `adleros.side.${app}`;
+  const button = el("button", { type: "button", class: cls }, svg(["M3 5h18v14H3z", "M9 5v14"]));
+  const show = (hidden) => {
+    section.classList.toggle("side-collapsed", hidden);
+    const label = hidden ? "Show the sidebar" : "Hide the sidebar";
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.setAttribute("aria-expanded", String(!hidden));
+  };
+  button.addEventListener("click", () => {
+    const hidden = !section.classList.contains("side-collapsed");
+    winSave(key, hidden);
+    show(hidden);
+  });
+  show(winLoad(key, false));
+  return button;
+}
+
 // This device's: how see-through windows are, in both modes, 0 (solid) to 1
 // (just the blurred wallpaper); and on the home screen, whether an app opens
 // in a window here (a Raspberry Pi showing adlerOS full screen has nowhere

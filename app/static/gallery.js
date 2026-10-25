@@ -97,6 +97,7 @@ function galleryBuild() {
         el("nav", { class: "ga-side-nav", id: "ga-side-nav", "aria-label": "Gallery" })),
       el("main", { class: "ga-main", id: "ga-main", tabindex: "-1" })));
   document.body.insertBefore(section, $("modal"));
+  section.querySelector(".ga-shell").append(sideToggle(section, "gallery"));
   registerWindow("gallery", { title: "Gallery", close: closeGallery, hide: () => closeWindow("gallery"), dock: "gallery", size: [1200, 800] });
   section.addEventListener("keydown", gaKeys);
   let resizeTimer = null;

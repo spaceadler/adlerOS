@@ -271,6 +271,8 @@ function mdBuild() {
       el("div", { class: "md-center" }, el("div", { class: "md-tabs", id: "md-tabs", role: "tablist" }), el("div", { class: "md-main", id: "md-main" })),
       el("aside", { class: "md-right", id: "md-right" })));
   document.body.insertBefore(section, $("modal"));
+  // Its ribbon's bottom: the sidebar's button, under the right panel's.
+  section.querySelector(".md-ribbon").append(sideToggle(section, "luna", "md-ribbon-button md-side-toggle"));
   registerWindow("luna", { title: "Luna", close: closeLuna, hide: () => closeWindow("luna"), dock: "luna", size: [1180, 760] });
   section.addEventListener("keydown", mdKeys);
   section.classList.toggle("md-no-right", !adler.right);
