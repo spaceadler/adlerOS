@@ -165,7 +165,7 @@ function mdInsertHooks(node, tab) {
     if (e.shiftKey || !tab.writable) return;
     // A link to a PDF, a picture…: shown here instead; one shown: a link again.
     const link = e.target.closest("a.md-link[data-md]");
-    const shown = e.target.closest("[data-md]:is(img, video, audio, .md-embed-pdf-box, .md-embed-note)");
+    const shown = e.target.closest("[data-md]:is(img, video, audio, .md-embed-shown, .md-embed-pdf-box, .md-embed-note, .md-embed-base)");
     const fileOf = (n) => n?.title || n?.querySelector?.("iframe")?.title || "";
     if (link && !e.target.closest(".md-embed-body") && /^(pdf|image|video|audio)$/.test(padKind(fileOf(link)))) {
       e.preventDefault();

@@ -2713,6 +2713,24 @@ button.md-crumb:hover, button.md-crumb:focus-visible { background: rgb(255 255 2
 .md-embed-bar-button { padding: 3px 10px; border: 0; border-radius: 7px; background: rgb(255 255 255 / 0.1); color: #fff; font: inherit; font-size: 12px; cursor: pointer; }
 .md-embed-bar-button:hover { background: rgb(255 255 255 / 0.18); }
 .md-embed-media { display: block; max-width: 100%; margin: 0.5em 0 1em; }
+/* A picture, a video, a song shown: Open and Download over its corner (a
+   song's beside it); on a phone, always there. */
+.md-embed-shown { position: relative; width: fit-content; max-width: 100%; margin: 0.4em 0 0.9em; }
+.md-embed-shown > .md-embed-image, .md-embed-shown > .md-embed-media { margin: 0; }
+.md-embed-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; opacity: 0; transition: opacity 0.15s; }
+.md-embed-shown:hover .md-embed-tools, .md-embed-shown:focus-within .md-embed-tools { opacity: 1; }
+@media (hover: none) { .md-embed-tools { opacity: 1; } }
+.md-embed-tools .md-embed-bar-button { background: rgb(0 0 0 / 0.6); backdrop-filter: blur(8px); }
+.md-embed-tools .md-embed-bar-button:hover { background: rgb(0 0 0 / 0.75); }
+.md-embed-shown-audio { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+a.md-embed-bar-button { text-decoration: none; }
+.md-embed-title { display: flex; align-items: center; gap: 8px; }
+.md-embed-base > .md-embed-bar { padding: 0 0 6px; }
+/* A PDF drawn page by page (luna.js: mdPdfPages). */
+.md-pdf-pages { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px; padding: 8px; background: rgb(0 0 0 / 0.3); border-radius: 0 0 10px 10px; -webkit-overflow-scrolling: touch; }
+.md-pdf-page { flex-shrink: 0; width: 100%; background: #fff; border-radius: 2px; }
+.md-pdf-page canvas { display: block; width: 100%; height: 100%; border-radius: 2px; }
+.md-pdf-note { margin: auto; padding: 20px; font-size: 13px; color: rgb(255 255 255 / 0.6); text-align: center; }
 /* One cell, the whole pane: a PDF fills it; a picture sits in the middle. */
 .md-file { display: grid; flex: 1; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; min-height: 0; padding: 0 16px 16px; }
 .md-file img, .md-file video { max-width: 100%; max-height: 100%; object-fit: contain; }
