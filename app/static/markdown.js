@@ -274,23 +274,39 @@ function mdBlocks(lines, state, top = false) {
       i = next;
       continue;
     }
+    // A line that's just an embed (or a link to a PDF or a picture, shown
+    // as Anytype and Docmost show them): the embed as a block of its own.
+    const solo = state.ctx.embed && mdSoloEmbed(t);
+    if (solo) {
+      const node = state.ctx.embed(solo.target, solo.opts);
+      if (node) { node.dataset.md = solo.raw; out.push(node); i++; continue; }
+    }
     // A paragraph: up to a blank line or something else.
     const para = [t];
     const first = n;
     i++;
-    while (i < lines.length && lines[i].t.trim() !== "" && !startsBlock(lines[i].t)
+    while (i < lines.length && lines[i].t.trim() !== "" && !startsBlock(lines[i].t) && !(state.ctx.embed && mdSoloEmbed(lines[i].t))
       && !(lines[i].t.includes("|") && i + 1 < lines.length && MD_TABLE_SEP.test(lines[i + 1].t))) para.push(lines[i++].t);
     const joined = para.join("\n").replace(/\s\^[\w-]+$/, "");
-    // A line that's just an embed: the embed as a block, not in a paragraph.
-    const solo = joined.trim().match(/^!\[\[([^\]]+)\]\]$/);
-    if (solo && state.ctx.embed) {
-      const node = state.ctx.embed(solo[1], { wiki: true });
-      if (node) { node.dataset.md = solo[0]; out.push(node); continue; }
-    }
     out.push(el("p", { "data-line": String(first) }, ...mdInline(joined, state)));
   }
   mark();
   return out;
+}
+
+// A line that's only ![[…]], or a link to a PDF or a picture in the vault
+// ([Lab 1](files/lab-1.pdf), [[lab-1.pdf]]): what it shows, and as written.
+const MD_SHOWN = /\.(pdf|png|jpe?g|gif|webp|avif|svg|bmp)$/i;
+function mdShowable(href) { return !/^[a-z][a-z0-9+.-]*:/i.test(href) && MD_SHOWN.test(href.split(/[#?]/)[0]); }
+function mdSoloEmbed(t) {
+  const s = t.trim().replace(/\s\^[\w-]+$/, "");
+  let m;
+  if ((m = s.match(/^!\[\[([^\]\n]+)\]\]$/))) return { target: m[1], opts: { wiki: true }, raw: m[0] };
+  if ((m = s.match(/^\[((?:\[[^\]]*\]|[^\]\n])*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)$/)) && mdShowable(m[2])) {
+    return { target: m[2], opts: { wiki: false, alt: m[1], link: true }, raw: m[0] };
+  }
+  if ((m = s.match(/^\[\[([^\]|\n]+)(?:\|([^\]\n]*))?\]\]$/)) && mdShowable(m[1])) return { target: m[1], opts: { wiki: true, alt: m[2], link: true }, raw: m[0] };
+  return null;
 }
 
 function mdCells(row) {

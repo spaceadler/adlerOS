@@ -2568,6 +2568,12 @@ body.wm .pad-bar { padding-right: 10px; min-height: 36px; }
 .md-sheet { --md-accent: #8b7cf6; --md-font-size: 16px; display: flex; flex-direction: column; }
 .md-close { top: 6px; }
 .md-shell { position: relative; z-index: 2; display: grid; flex: 1; grid-template-columns: 44px 250px minmax(0, 1fr) 240px; min-height: 0; }
+/* Each in its own column: one hidden (narrow, or no right side), the note
+   doesn't slip into its 0px. */
+.md-shell > .md-ribbon { grid-column: 1; }
+.md-shell > .md-side { grid-column: 2; }
+.md-shell > .md-center { grid-column: 3; }
+.md-shell > .md-right { grid-column: 4; }
 .md-no-right .md-shell { grid-template-columns: 44px 250px minmax(0, 1fr) 0; }
 .md-no-right .md-right { display: none; }
 .md-ribbon { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; border-right: 1px solid rgb(255 255 255 / 0.07); background: rgb(0 0 0 / 0.2); }
