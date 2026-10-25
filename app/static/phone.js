@@ -123,12 +123,8 @@ function homeTouchMove(e) {
   const t = e.touches[0];
   const dx = t.clientX - h.x;
   const dy = t.clientY - h.y;
-  const pages = $("pages");
-  const last = pages.scrollLeft + pages.clientWidth >= pages.scrollWidth - 2;
-  if (dx < -70 && Math.abs(dx) > Math.abs(dy) * 1.5 && last) {
-    h.done = true;
-    openDrawer(); // past the last page: the App Library
-  } else if (dy > 80 && Math.abs(dy) > Math.abs(dx) * 1.5 && !document.body.classList.contains("arranging")) {
+  // (Past the last page, the App Library: app.js's onPagesUp, when you let go.)
+  if (dy > 80 && Math.abs(dy) > Math.abs(dx) * 1.5 && !document.body.classList.contains("arranging")) {
     h.done = true;
     openSearch(); // pulled down: search
   }
