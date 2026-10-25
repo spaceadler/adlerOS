@@ -49,6 +49,13 @@ the proxy isn't a way around it. `install.sh` picks `tailscale` when the
 machine is on a tailnet. In a homelab it's `tailscale`, and ufw keeps port
 8686 shut on the LAN as well.
 
+If adlerOS opens on its own address but not through your reverse proxy, and
+its log says a `172.x` address isn't on `ADLEROS_NETWORKS`, Tailscale is
+handing the proxy's container its Docker network's gateway in place of each
+visitor (its firewall rules came before Docker's at boot).
+`sudo tailscale set --snat-subnet-routes=false` stops that; the homelab's
+`install.sh` sets it unless the machine shares subnet routes.
+
 ## Admin mode
 
 Restart, shut down, deleting apps, and stopping, restarting, updating or
