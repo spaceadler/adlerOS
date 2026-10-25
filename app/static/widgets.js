@@ -1,8 +1,8 @@
 // Desktop widgets, after umbrelOS's: the kinds of widget (TYPES) are code,
 // the widgets themselves are data in widgets-catalog.json, and what they show
 // comes from GET /api/widgets every few seconds.
-// Uses $, el, svg, api, toast, openSettings, bytes and duration from the
-// other scripts.
+// Uses $, el, svg, api, toast, openSettings, bytes, duration, phoneLayout
+// and layout from the other scripts.
 "use strict";
 
 const WIDGET_REFRESH_MS = 5000;
@@ -281,6 +281,13 @@ function drawWidgets(fit) {
 function redrawWidgets() {
   drawnKey = "";
   drawWidgets(widgets.slots);
+  if (phoneLayout()) layout(); // none picked, or the first: the apps' rows change
+}
+
+// Any widget picked for the home screen (yes, until we know).
+function homeWidgetsChosen() {
+  if (!widgets.catalog || !widgets.selected) return true;
+  return widgets.selected.some((id) => { const w = widgetDef(id); return w && !w.desk; });
 }
 
 async function loadWidgetCatalog() {
