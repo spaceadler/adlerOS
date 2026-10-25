@@ -4483,7 +4483,7 @@ ALLOWED_NETWORKS = allowed_networks()
 _refused = {}
 
 
-def note_refused(address):
+def note_refused(address, via_proxy=False):
     """Logged once an hour per address, not once a request."""
     now = time.monotonic()
     if len(_refused) > 1000:
@@ -4491,6 +4491,17 @@ def note_refused(address):
     if now - _refused.get(address, -3600.0) >= 3600:
         _refused[address] = now
         print(f"{address} isn't on ADLEROS_NETWORKS: no answer", file=sys.stderr, flush=True)
+        # Your proxy says a private address visited: most likely its Docker
+        # network's gateway, which is what Tailscale makes every visitor look
+        # like when its firewall rules come before Docker's (after a reboot).
+        try:
+            private = ipaddress.ip_address(address).is_private
+        except ValueError:
+            private = False
+        if via_proxy and private:
+            print("  (through your reverse proxy: if that's its Docker network's gateway, Tailscale is"
+                  " hiding visitors' addresses; sudo tailscale set --snat-subnet-routes=false stops it)",
+                  file=sys.stderr, flush=True)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -4531,7 +4542,7 @@ class Handler(BaseHTTPRequestHandler):
             return False
         if self.allowed():
             return True
-        note_refused(self.client())
+        note_refused(self.client(), self._from_proxy())
         self.close_connection = True
         return False
 
