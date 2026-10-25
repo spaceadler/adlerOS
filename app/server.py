@@ -145,6 +145,7 @@ STATIC_TYPES = {
     ".woff2": "font/woff2",
     ".txt": "text/plain; charset=utf-8",
     ".webmanifest": "application/manifest+json",
+    ".wasm": "application/wasm",
 }
 IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".avif")
 # frame-src: your apps' own pages, in desktop mode's windows. Any web page,
@@ -153,6 +154,9 @@ IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".avif")
 # https: pictures from the internet, in a note (Luna, Notepad).
 PAGE_CSP = ("default-src 'self'; img-src 'self' data: https:; style-src 'self'; script-src 'self'; "
             "connect-src 'self'; frame-src http: https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+# pdf.js's worker (Luna's PDFs, on a phone): its image decoders are
+# WebAssembly. Only that worker may compile it; the page itself can't.
+PDF_WORKER_CSP = PAGE_CSP.replace("script-src 'self'", "script-src 'self' 'wasm-unsafe-eval'")
 # Icons come from a third party: even opened directly, an SVG can't run code.
 ICON_CSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
 
@@ -4582,7 +4586,7 @@ class Handler(BaseHTTPRequestHandler):
         if (len(parts) > 2 or any(not p or p.startswith(".") for p in parts)
                 or not path.is_file() or path.suffix not in STATIC_TYPES):
             return self.send(404, b"not found")
-        self.serve_file(path)
+        self.serve_file(path, csp=PDF_WORKER_CSP if name == "vendor/pdfjs-worker.js" else PAGE_CSP)
 
     def serve_file(self, path, cache="no-cache", csp=PAGE_CSP):
         """A file with an ETag, so revalidating unchanged files costs a 304."""

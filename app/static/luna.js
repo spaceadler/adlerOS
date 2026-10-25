@@ -843,6 +843,126 @@ async function mdFollow(link, e, tab) {
   if (t.heading) setTimeout(() => mdScrollToHeading(t.heading), 200);
 }
 
+// Open and Download, for a file shown in a note.
+function mdEmbedTools(path) {
+  const open = el("button", { type: "button", class: "md-embed-bar-button" }, "Open");
+  open.addEventListener("click", () => mdOpen(path));
+  const save = el("a", { class: "md-embed-bar-button", href: fileUrl(mdFull(path), false), download: path.split("/").pop() }, "Download");
+  return [open, save];
+}
+
+// PDFs drawn by pdf.js (vendor/: Mozilla's, Apache 2.0; its decoders for
+// scanned pages are WebAssembly, which only its worker may run) where the browser
+// shows only a PDF's first page in a note (a phone's): every page, one under
+// another, scrolled in its box. Loaded when the box comes near; pages drawn
+// as they come near, and let go of far away (a phone hasn't room for a
+// hundred pictures this size).
+let mdPdfLib = null;
+const mdPdfOpen = new Set(); // what's loaded: let go of once out of the note
+// One worker for them all, and one page drawn at a time (a phone's not fast).
+let mdPdfTurn = Promise.resolve();
+function mdPdfJs() {
+  mdPdfLib ||= import("/static/vendor/pdfjs.js").then((lib) => {
+    lib.GlobalWorkerOptions.workerSrc = "/static/vendor/pdfjs-worker.js";
+    return { lib, worker: new lib.PDFWorker({ name: "luna-pdf" }) };
+  }).catch((err) => { mdPdfLib = null; throw err; });
+  return mdPdfLib;
+}
+const mdPdfDrawn = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+  || navigator.pdfViewerEnabled === false;
+
+function mdPdfPages(url, title) {
+  // Ones out of the note a while (not the others being drawn with this one,
+  // not on the page yet).
+  for (const gone of mdPdfOpen) if (!gone.box.isConnected && performance.now() - gone.made > 1000) gone.close();
+  const box = el("div", { class: "md-pdf-pages", role: "document", "aria-label": title, "data-state": "waiting" }, el("p", { class: "md-pdf-note" }, "Loading the PDF…"));
+  let task = null, doc = null, pages = null, width = 0;
+  const near = new Set(); // its pages near where you're looking
+  const draw = (holder) => {
+    if (!doc || holder.dataset.drawn) return;
+    holder.dataset.drawn = "1";
+    mdPdfTurn = mdPdfTurn.then(() => drawNow(holder));
+  };
+  const drawNow = async (holder) => {
+    if (!doc || !holder.dataset.drawn || holder.querySelector("canvas")) return; // let go of meanwhile
+    try {
+      const page = await doc.getPage(Number(holder.dataset.page));
+      if (!holder.dataset.drawn) return;
+      const one = page.getViewport({ scale: 1 });
+      holder.style.aspectRatio = `${one.width} / ${one.height}`;
+      const scale = (holder.clientWidth / one.width) * Math.min(devicePixelRatio || 1, 2);
+      const viewport = page.getViewport({ scale });
+      const canvas = el("canvas", { width: String(Math.floor(viewport.width)), height: String(Math.floor(viewport.height)) });
+      holder.task = page.render({ canvasContext: canvas.getContext("2d"), viewport });
+      await holder.task.promise;
+      if (holder.dataset.drawn) holder.replaceChildren(canvas);
+    } catch (err) {
+      if (doc && err?.name !== "RenderingCancelledException") console.warn("Luna: a PDF's page not drawn", err); // (else: let go of)
+    }
+  };
+  const drop = (holder) => {
+    holder.task?.cancel();
+    holder.task = null;
+    delete holder.dataset.drawn;
+    holder.replaceChildren();
+  };
+  const load = async () => {
+    try {
+      box.dataset.state = "loading";
+      const { lib, worker } = await mdPdfJs();
+      task = lib.getDocument({ url, worker, wasmUrl: "/static/vendor/" });
+      doc = await task.promise;
+      const one = (await doc.getPage(1)).getViewport({ scale: 1 });
+      box.replaceChildren(...Array.from({ length: doc.numPages }, (_, n) => {
+        const holder = el("div", { class: "md-pdf-page", "data-page": String(n + 1) });
+        holder.style.aspectRatio = `${one.width} / ${one.height}`; // till it's drawn: as its first page
+        return holder;
+      }));
+      width = box.clientWidth;
+      box.dataset.state = "shown";
+      pages = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) { near.add(e.target); draw(e.target); } else { near.delete(e.target); drop(e.target); }
+        }
+      }, { root: box, rootMargin: "50% 0px" });
+      box.querySelectorAll(".md-pdf-page").forEach((p) => pages.observe(p));
+    } catch (err) {
+      if (!task) return; // let go of meanwhile
+      console.warn("Luna: a PDF not shown", err);
+      box.dataset.state = "failed";
+      box.replaceChildren(el("p", { class: "md-pdf-note" }, "This PDF can't be shown here: Open it, or Download it."));
+    }
+  };
+  // Near the screen: loaded (and drawn again); far, its pages let go of;
+  // out of the note (closed, drawn anew), it's let go of altogether.
+  const viewer = { box, made: performance.now(), close: () => {
+    mdPdfOpen.delete(viewer);
+    seen.disconnect();
+    sized.disconnect();
+    pages?.disconnect();
+    task?.destroy();
+    task = doc = null;
+  } };
+  mdPdfOpen.add(viewer);
+  const seen = new IntersectionObserver((entries) => {
+    const e = entries.at(-1); // as it is now
+    if (!box.isConnected) return task && viewer.close();
+    if (!e?.isIntersecting) return box.querySelectorAll(".md-pdf-page[data-drawn]").forEach(drop);
+    if (!task) load();
+    else near.forEach(draw); // (none till it's loaded)
+  }, { rootMargin: "100% 0px" });
+  seen.observe(box);
+  // Wider or narrower: drawn again, sharp at its new size.
+  const sized = new ResizeObserver(() => {
+    if (!doc || Math.abs(box.clientWidth - width) < 24) return;
+    width = box.clientWidth;
+    box.querySelectorAll(".md-pdf-page[data-drawn]").forEach(drop);
+    near.forEach(draw);
+  });
+  sized.observe(box);
+  return box;
+}
+
 function mdScrollToHeading(heading) {
   if (!heading) return;
   const id = `h-${mdSlug(heading.replace(/^\^/, ""))}`;
@@ -851,36 +971,40 @@ function mdScrollToHeading(heading) {
 }
 
 // ![[…]] and ![](…): a picture, another note (or its section), a PDF, a
-// video or a song, a Base.
+// video or a song, a Base. Each with Open (alone, in Luna) and Download
+// (a copy where your browser saves things).
 function mdVaultEmbed(tab, target, opts) {
   const r = mdResolve(tab.path, target, opts.wiki);
   if (!r.exists && opts.link) return null; // a link to what isn't there: a link still
   if (!r.exists) return el("span", { class: "md-embed-missing" }, `${target} isn't in the vault`);
   const url = fileUrl(mdFull(r.path), true);
   const kind = padKind(r.path);
-  if (kind === "image") return el("img", { class: "md-embed-image", src: url, alt: opts.alt || "", loading: "lazy", ...(opts.width ? { width: opts.width } : {}) });
-  if (kind === "video") return el("video", { class: "md-embed-media", src: url, controls: "" });
-  if (kind === "audio") return el("audio", { class: "md-embed-media", src: url, controls: "" });
+  const name = r.path.split("/").pop();
+  const tools = () => mdEmbedTools(r.path);
+  if (kind === "image" || kind === "video") {
+    const media = kind === "image" ? el("img", { class: "md-embed-image", src: url, alt: opts.alt || "", loading: "lazy", ...(opts.width ? { width: opts.width } : {}) })
+      : el("video", { class: "md-embed-media", src: url, controls: "", preload: "metadata" });
+    return el("div", { class: `md-embed-shown md-embed-shown-${kind}` }, media, el("div", { class: "md-embed-tools" }, ...tools()));
+  }
+  if (kind === "audio") return el("div", { class: "md-embed-shown md-embed-shown-audio" }, el("audio", { class: "md-embed-media", src: url, controls: "", preload: "metadata" }), ...tools());
   if (kind === "pdf") {
     // A PDF in the note: to read where you write (its foot drags taller or
-    // shorter); its bar opens it alone, or makes it a link again (shown
-    // because it's a link alone on its line: a link it stays).
-    const open = el("button", { type: "button", class: "md-embed-bar-button" }, "Open");
-    open.addEventListener("click", () => mdOpen(r.path));
+    // shorter); its bar opens it alone, saves it, or makes it a link again
+    // (shown because it's a link alone on its line: a link it stays).
     const unlink = el("button", { type: "button", class: "md-embed-bar-button" }, "Make it a link");
     unlink.addEventListener("click", () => mdSwapEmbed(box, false));
     const box = el("div", { class: "md-embed-pdf-box" },
-      el("div", { class: "md-embed-bar" }, el("span", { class: "md-embed-bar-name" }, opts.alt || r.path.split("/").pop()), open, ...(tab.writable && !opts.link ? [unlink] : [])),
-      el("iframe", { class: "md-embed-pdf", src: url, title: r.path, loading: "lazy" }));
+      el("div", { class: "md-embed-bar" }, el("span", { class: "md-embed-bar-name" }, opts.alt || name), ...tools(), ...(tab.writable && !opts.link ? [unlink] : [])),
+      mdPdfDrawn() ? mdPdfPages(url, r.path) : el("iframe", { class: "md-embed-pdf", src: url, title: r.path, loading: "lazy" }));
     return box;
   }
   if (/\.base$/i.test(r.path)) {
-    const box = el("div", { class: "md-embed-base" }, "…");
-    mdText(r.path).then((text) => box.replaceChildren(mdBase(text, mdBaseCtx(tab))));
-    return box;
+    const body = el("div", {}, "…");
+    mdText(r.path).then((text) => body.replaceChildren(mdBase(text, mdBaseCtx(tab))));
+    return el("div", { class: "md-embed-base" }, el("div", { class: "md-embed-bar" }, el("span", { class: "md-embed-bar-name" }, mdNoteName(r.path)), ...tools()), body);
   }
   if (!mdIsNote(r.path) || (opts.depth || 0) > 2) return null;
-  const box = el("div", { class: "md-embed-note" }, el("div", { class: "md-embed-title" }, mdNoteName(r.path)));
+  const box = el("div", { class: "md-embed-note" }, el("div", { class: "md-embed-title" }, el("span", { class: "md-embed-bar-name" }, mdNoteName(r.path)), ...mdEmbedTools(r.path)));
   box.addEventListener("dblclick", () => mdOpen(r.path));
   mdText(r.path).then((text) => {
     let part = text;
