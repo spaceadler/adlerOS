@@ -47,7 +47,29 @@ const PANO_FILL_KEY = "adleros.panoFill";
 function panoFill() { return winLoad(PANO_FILL_KEY, "screen") === "full" ? "full" : "screen"; }
 function setPanoFill(v) { winSave(PANO_FILL_KEY, v); }
 function panoGap() { return Math.max(0, Number(winLoad(PANO_GAP_KEY, 0)) || 0); }
-function setPanoGap(v) { winSave(PANO_GAP_KEY, v); }
+// A new gap: every pair of columns side by side gets it too, the edge
+// they share staying where it was (each gives or takes half).
+function setPanoGap(v) {
+  const was = panoGap();
+  winSave(PANO_GAP_KEY, v);
+  const d = (v - was) / 2;
+  if (!d) return;
+  const cols = [...wm.windows.keys()].filter((id) => isOpen(id) && wm.geometry[id]?.mode === "col").map((id) => wm.geometry[id]);
+  const pairs = [];
+  for (const a of cols) {
+    const b = cols.find((c) => c !== a && c.cx >= a.cx + a.cw - 2 && c.cx - (a.cx + a.cw) <= was + 2);
+    if (b) pairs.push([a, b]);
+  }
+  for (const [a, b] of pairs) {
+    const take = Math.min(d, a.cw - WIN_MIN[0], b.cw - WIN_MIN[0]); // never under a window's least
+    a.cw = Math.round(a.cw - take);
+    b.cx = Math.round(b.cx + take);
+    b.cw = Math.round(b.cw - take);
+  }
+  for (const id of wm.windows.keys()) if (isOpen(id)) winApply(id);
+  winRemember();
+  panoMap(false);
+}
 
 // The open windows showing (not minimized), with their place on the strip.
 function panoSpans(except = null) {
@@ -273,7 +295,8 @@ function panoEdgeTarget(id, clientX) {
       const toEdge = after ? Math.min(room.b, pano.x + W) - room.a : room.b - Math.max(room.a, pano.x);
       const want = panoFill() === "full" ? W : toEdge >= min ? toEdge : W / 2;
       const cw = Math.round(Math.min(want, room.b - room.a));
-      best = { far, cx: after ? room.a : room.b - cw, cw, side: after ? "left" : "right", line: after ? edge + gap / 2 : edge - gap / 2 };
+      // The line on the column's own edge; the gap is the new one's to keep.
+      best = { far, cx: after ? room.a : room.b - cw, cw, side: after ? "left" : "right", line: edge };
     }
   }
   return best;
