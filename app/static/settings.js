@@ -325,10 +325,20 @@ function buildRow(row) {
   } else if (c.type === "tiling") {
     // This computer's, like desktop mode.
     const select = el("select", { class: "field-input", "aria-label": row.title },
-      el("option", { value: "floating" }, "Floating"), el("option", { value: "tiling" }, "Tiling"));
-    select.value = winLoad(TILING_KEY, false) === true ? "tiling" : "floating";
-    select.addEventListener("change", () => setTiling(select.value === "tiling"));
+      el("option", { value: "floating" }, "Floating"), el("option", { value: "tiling" }, "Tiling"), el("option", { value: "panorama" }, "Panorama"));
+    select.value = windowLayout();
+    select.addEventListener("change", () => setWindowLayout(select.value));
     control.append(select);
+  } else if (c.type === "pano-speed") {
+    // This computer's, like the layout.
+    const show = (v) => `${v.toFixed(2)} screens/s`;
+    const value = el("span", { class: "glass-value" }, show(panoSpeed()));
+    const range = el("input", { type: "range", class: "glass-range", min: "0.25", max: "3", step: "0.25", value: String(panoSpeed()), "aria-label": row.title });
+    range.addEventListener("input", () => {
+      setPanoSpeed(Number(range.value));
+      value.textContent = show(Number(range.value));
+    });
+    control.append(range, value);
   } else if (c.type === "open-apps") {
     const select = el("select", { class: "field-input", "aria-label": row.title },
       el("option", { value: "here" }, "In a window here"), el("option", { value: "tab" }, "In a new tab"));

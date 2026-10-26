@@ -18,11 +18,22 @@ const WS_SLIDE = { duration: 500, easing: "cubic-bezier(0.05, 0.9, 0.1, 1.05)" }
 const tiles = { trees: {}, boxes: {}, floating: new Set(), ws: {}, current: 1, previous: 1, osdTimer: null };
 
 function tilingOn() { return desktopMode() && winLoad(TILING_KEY, false) === true; }
-function setTiling(on) {
-  winSave(TILING_KEY, on);
+// Floating, tiling, or Panorama (panorama.js): kept as false, true, "panorama".
+function windowLayout() {
+  const v = winLoad(TILING_KEY, false);
+  return v === true ? "tiling" : v === "panorama" ? "panorama" : "floating";
+}
+function setWindowLayout(mode) {
+  const was = windowLayout();
+  if (mode === was) return;
+  if (was === "panorama" && desktopMode()) panoLeave();
+  winSave(TILING_KEY, mode === "tiling" ? true : mode === "panorama" ? "panorama" : false);
   tiles.trees = {};
+  if (mode === "panorama" && desktopMode()) panoEnter();
   winLayout();
-  toast(on ? "Tiling: windows share the screen; Alt+V floats one." : "Floating windows.");
+  if (mode === "panorama") panoMap(true);
+  toast({ tiling: "Tiling: windows share the screen; Alt+V floats one.", floating: "Floating windows.",
+    panorama: "Panorama: one long desktop. Alt+S and Alt+D move along it, Alt+A to either end." }[mode]);
 }
 
 function tilesReset() {
@@ -212,7 +223,7 @@ function centerWindow(id) {
   if (!g || tileBox(id)) return;
   const area = winArea();
   g.mode = "normal";
-  g.x = Math.round((area.w - g.w) / 2);
+  g.x = Math.round((area.w - g.w) / 2) + (panoramaOn() ? pano.x : 0);
   g.y = Math.round((area.h - g.h) / 2);
   winApply(id);
   winRemember();
@@ -347,17 +358,18 @@ const ALT_WINDOW_KEYS = {
   "Shift+KeyL": () => moveToward("r"),
   "Shift+KeyK": () => moveToward("u"),
   "Shift+KeyJ": () => moveToward("d"),
-  KeyU: () => resizeActive(-30, 0),
-  KeyP: () => resizeActive(30, 0),
+  KeyU: () => !(panoramaOn() && wm.active && panoColResize(wm.active, -30)) && resizeActive(-30, 0),
+  KeyP: () => !(panoramaOn() && wm.active && panoColResize(wm.active, 30)) && resizeActive(30, 0),
   KeyI: () => resizeActive(0, -30),
   KeyO: () => resizeActive(0, 30),
-  KeyS: () => switchWorkspace(Math.min(WS_COUNT, tiles.current + 1)),
-  KeyA: () => switchWorkspace(Math.max(1, tiles.current - 1)),
-  KeyD: () => switchWorkspace(tiles.previous),
+  // In Panorama (panorama.js): S and D held move left and right, A jumps to an end.
+  KeyS: (e) => (panoramaOn() ? !e.repeat && panoHold(-1, true) : switchWorkspace(Math.min(WS_COUNT, tiles.current + 1))),
+  KeyA: (e) => (panoramaOn() ? !e.repeat && panoJump() : switchWorkspace(Math.max(1, tiles.current - 1))),
+  KeyD: (e) => (panoramaOn() ? !e.repeat && panoHold(1, true) : switchWorkspace(tiles.previous)),
 };
 for (let n = 1; n <= WS_COUNT; n++) {
-  ALT_WINDOW_KEYS[`Digit${n % 10}`] = () => switchWorkspace(n);
-  ALT_WINDOW_KEYS[`Shift+Digit${n % 10}`] = () => moveToWorkspace(n);
+  ALT_WINDOW_KEYS[`Digit${n % 10}`] = () => (panoramaOn() ? panoScreen(n) : switchWorkspace(n));
+  ALT_WINDOW_KEYS[`Shift+Digit${n % 10}`] = () => (panoramaOn() ? panoScreen(n, true) : moveToWorkspace(n));
 }
 
 document.addEventListener("keydown", (e) => {
@@ -368,7 +380,7 @@ document.addEventListener("keydown", (e) => {
   if (!run) return;
   e.preventDefault();
   e.stopImmediatePropagation();
-  run();
+  run(e);
 }, true);
 document.addEventListener("keyup", (e) => { if (e.key === "Alt") document.body.classList.remove("alt-held"); }, true);
 window.addEventListener("blur", () => document.body.classList.remove("alt-held"));
