@@ -1,8 +1,8 @@
 // Desktop mode's third layout, Panorama: floating windows on one strip that
 // goes on to the right for as long as you need (it starts at the left, as
 // a page does: there's nothing left of where you begin). The screen is a
-// view onto part of it. Alt+S and Alt+D, held, glide left and right (a tap
-// moves a little; how fast is Settings → Panorama speed), Alt+A jumps to
+// view onto part of it. Alt+A and Alt+D, held, glide left and right (a tap
+// moves a little; how fast is Settings → Panorama speed), Alt+S jumps to
 // the nearer end of your windows (the left edge of the leftmost, the right
 // edge of the rightmost), and again to the other end; Alt+1…0 go to that
 // screen's width along. A trackpad's sideways swipe, or Shift and the
@@ -12,11 +12,16 @@
 // there).
 // Windows snap as they float (the screen's left or right half, or all of
 // it), but here a snapped window is a column, and columns sit side by
-// side: snapped where one already is, it goes next to it. The edge two
-// columns share moves both: one wider, the other narrower.
+// side, Settings → Panorama gap apart: snapped where one already is, it
+// goes next to it, and into a space narrower than it would be, it takes
+// that space. Dragged up to a column's side, a window goes next to it on
+// that side (a white line shows where). The edge two columns share moves
+// both: one wider, the other narrower. Shift+→ (Alt+Shift+→ while you're
+// typing) widens the window in front to the right, up to a screen or the
+// next column; again, its left side comes in. Shift+← the other way.
 // Geometry is in the strip's px (wm.geometry: x for a floating window; cx
 // and cw for a column); winApply draws it pano.x to the left.
-// Uses $, el, wm, desktopMode, winLoad, winSave, winArea, winApply,
+// Uses $, el, wm, desktopMode, typing, winLoad, winSave, winArea, winApply,
 // winRemember, isOpen, raiseWindow, tiles, TILING_KEY, WS_COUNT, plateFor,
 // WIN_MIN, winLayout.
 "use strict";
@@ -24,6 +29,8 @@
 const PANO_X_KEY = "adleros.panoX";
 const PANO_SPEED_KEY = "adleros.panoSpeed";
 const PANO_SPEED_DEFAULT = 1; // screens a second, held
+const PANO_GAP_KEY = "adleros.panoGap";
+const PANO_EDGE_NEAR = 24; // px from a column's side: a window dropped there goes next to it
 const PANO_MAP_H = 54;
 const PANO_MAP_MAX_W = 340;
 const PANO_GLIDE_MS = 380;
@@ -33,6 +40,8 @@ const pano = { x: Math.max(0, Number(winLoad(PANO_X_KEY, 0)) || 0), dir: 0, keys
 function panoramaOn() { return desktopMode() && winLoad(TILING_KEY, false) === "panorama"; }
 function panoSpeed() { return Number(winLoad(PANO_SPEED_KEY, PANO_SPEED_DEFAULT)) || PANO_SPEED_DEFAULT; }
 function setPanoSpeed(v) { winSave(PANO_SPEED_KEY, v); }
+function panoGap() { return Math.max(0, Number(winLoad(PANO_GAP_KEY, 0)) || 0); }
+function setPanoGap(v) { winSave(PANO_GAP_KEY, v); }
 
 // The open windows showing (not minimized), with their place on the strip.
 function panoSpans(except = null) {
@@ -64,7 +73,9 @@ function panoBox(g, area) {
 // A half (or all) of a screen whose left is at `left`, as a column.
 function panoColumnOf(g, side, left, area) {
   const half = Math.round(area.w / 2);
-  Object.assign(g, { mode: "col", side, cx: side === "right" ? left + half : left, cw: side === "max" ? area.w : side === "left" ? half : area.w - half });
+  const gap = side === "max" ? 0 : Math.round(panoGap() / 2); // a half's share of the gap
+  Object.assign(g, { mode: "col", side, edged: 0, cx: side === "right" ? left + half + gap : left,
+    cw: side === "max" ? area.w : side === "left" ? half - gap : area.w - half - gap });
 }
 
 // A window opening: where you're looking, unless some of it is already.
@@ -124,7 +135,7 @@ function panoGlide(to, carry = null) {
   pano.glide = requestAnimationFrame(step);
 }
 
-// Alt+S / Alt+D held: under way at once (a tap goes a little), up to full
+// Alt+A / Alt+D held: under way at once (a tap goes a little), up to full
 // speed in a moment, and slowing to a stop when you let go.
 function panoTick(now) {
   const dt = Math.min(0.1, (now - pano.last) / 1000); // a slow frame still goes its share
@@ -147,7 +158,7 @@ function panoHold(dir, down) {
   if (!pano.dir && !pano.raf) return;
   if (down) {
     panoGlideStop();
-    pano.jump = null; // Alt+A starts from the nearer end again
+    pano.jump = null; // Alt+S starts from the nearer end again
     if (Math.sign(pano.v) !== dir) pano.v = dir * panoSpeed() * winArea().w * 0.35;
   }
   if (!pano.raf) {
@@ -156,7 +167,7 @@ function panoHold(dir, down) {
   }
 }
 
-// Alt+A: the nearer end of your windows; again (no Alt+S or D between),
+// Alt+S: the nearer end of your windows; again (no Alt+A or D between),
 // the other. Already at the nearer one: the other.
 function panoJump() {
   const spans = panoSpans();
@@ -189,30 +200,155 @@ function panoReveal(id) {
 
 // ------------------------------------------------------------- columns
 
+const panoCols = (except) => panoSpans(except).filter((s) => s.col);
+
+// The strip's free runs, between columns and the gap either side of each
+// (none at the strip's start): [{ a, b }], the last one endless.
+function panoFree(cols) {
+  const gap = panoGap();
+  const out = [];
+  let at = 0;
+  for (const c of [...cols].sort((p, q) => p.x - q.x)) {
+    const end = c.x - gap;
+    if (end > at) out.push({ a: at, b: end });
+    at = Math.max(at, c.x + c.w + gap);
+  }
+  out.push({ a: at, b: Infinity });
+  return out;
+}
+
 // Where a window snapped to a side (left, right, max) of the screen goes:
-// that part of what you see, moved along past columns already there (to the
-// right for left and all; to the left for right, unless that's off the strip).
+// that part of what you see, or past the columns there to the first room
+// it fits (to the right for left and all; to the left for right, unless
+// there's none that way), taking only what room there is between two.
 function panoTarget(id, side) {
   const W = winArea().w;
   const half = Math.round(W / 2);
-  const cw = side === "max" ? W : side === "left" ? half : W - half;
-  const cols = panoSpans(id).filter((s) => s.col);
-  const hits = (cx) => cols.filter((c) => c.x < cx + cw - 1 && c.x + c.w > cx + 1);
-  let cx = side === "right" ? pano.x + half : pano.x;
+  const want = side === "max" ? W : side === "left" ? half : W - half;
+  const min = WIN_MIN[0];
+  const free = panoFree(panoCols(id));
+  const rightward = (from) => {
+    for (const f of free) {
+      const a = Math.max(from, f.a);
+      if (f.b - a >= min) return { cx: a, cw: Math.min(want, f.b - a) };
+    }
+    return null;
+  };
   if (side === "right") {
-    for (let h = hits(cx); h.length; h = hits(cx)) cx = Math.min(...h.map((c) => c.x)) - cw;
-    if (cx >= 0) return { cx, cw };
-    cx = pano.x + half;
+    const end = pano.x + W;
+    for (const f of [...free].reverse()) {
+      const b = Math.min(end, f.b);
+      if (b - f.a >= min) return { cx: Math.max(f.a, b - want), cw: Math.min(want, b - f.a) };
+    }
+    return rightward(pano.x + half);
   }
-  for (let h = hits(cx); h.length; h = hits(cx)) cx = Math.max(...h.map((c) => c.x + c.w));
-  return { cx, cw };
+  return rightward(pano.x);
+}
+
+// Dragged near a column's side (at x on the screen): next to it, that side,
+// as wide as half a screen or the room there. With the line to show it.
+function panoEdgeTarget(id, clientX) {
+  const W = winArea().w;
+  const x = clientX + pano.x;
+  const min = WIN_MIN[0];
+  const gap = panoGap();
+  const cols = panoCols(id).filter((c) => c.x + c.w > pano.x && c.x < pano.x + W);
+  const free = panoFree(panoCols(id));
+  let best = null;
+  for (const c of cols) {
+    for (const after of [true, false]) {
+      const edge = after ? c.x + c.w : c.x;
+      const far = Math.abs(x - edge);
+      if (far > PANO_EDGE_NEAR || (best && best.far <= far)) continue;
+      const room = free.find((f) => (after ? Math.abs(f.a - (edge + gap)) <= 1 : Math.abs(f.b - (edge - gap)) <= 1));
+      if (!room || room.b - room.a < min) continue;
+      const cw = Math.round(Math.min(W / 2, room.b - room.a));
+      best = { far, cx: after ? room.a : room.b - cw, cw, side: after ? "left" : "right", line: after ? edge + gap / 2 : edge - gap / 2 };
+    }
+  }
+  return best;
+}
+
+function panoEdgeHint(t) {
+  let line = $("pano-edge");
+  if (!t) {
+    if (line) line.hidden = true;
+    return;
+  }
+  if (!line) {
+    line = el("div", { id: "pano-edge", class: "pano-edge", "aria-hidden": "true" });
+    document.body.append(line);
+  }
+  Object.assign(line.style, { left: `${Math.round(t.line - pano.x)}px`, height: `${winArea().h}px` });
+  line.hidden = false;
+}
+
+function panoEdgeSnap(id, t) {
+  Object.assign(wm.geometry[id], { mode: "col", side: t.side, edged: 0, cx: t.cx, cw: t.cw });
+  winApply(id);
+  winRemember();
+  panoReveal(id);
+  panoMap(true);
+}
+
+// Shift+→ / Shift+←: the window in front wider that way, to a screen's
+// width or the next column; then its other side comes in. A floating one
+// moves.
+function panoNudge(dir) {
+  const id = wm.active;
+  const g = id && wm.geometry[id];
+  if (!g || !isOpen(id)) return;
+  const W = winArea().w;
+  const step = Math.round(W / 10);
+  if (g.mode !== "col") {
+    g.x += dir * step;
+    winApply(id);
+    winRemember();
+    return panoReveal(id);
+  }
+  const gap = panoGap();
+  const min = WIN_MIN[0];
+  const cols = panoCols(id);
+  if (g.edged === -dir) g.edged = 0; // back the other way: that side grows again
+  if (dir > 0) {
+    const next = cols.filter((c) => c.x >= g.cx + g.cw - 1).sort((p, q) => p.x - q.x)[0];
+    const grow = g.edged === 1 ? 0 : Math.min(step, W - g.cw, (next ? next.x - gap : Infinity) - (g.cx + g.cw));
+    if (grow > 0) g.cw += grow;
+    else {
+      g.edged = 1;
+      const shrink = Math.min(step, g.cw - min);
+      if (shrink <= 0) return;
+      g.cx += shrink;
+      g.cw -= shrink;
+    }
+  } else {
+    const prev = cols.filter((c) => c.x + c.w <= g.cx + 1).sort((p, q) => q.x + q.w - (p.x + p.w))[0];
+    const grow = g.edged === -1 ? 0 : Math.min(step, W - g.cw, g.cx - (prev ? prev.x + prev.w + gap : 0));
+    if (grow > 0) {
+      g.cx -= grow;
+      g.cw += grow;
+    } else {
+      g.edged = -1;
+      const shrink = Math.min(step, g.cw - min);
+      if (shrink <= 0) return;
+      g.cw -= shrink;
+    }
+  }
+  winApply(id);
+  winRemember();
+  panoReveal(id);
+  panoMap(true);
 }
 
 function panoSnap(id, side) {
   const g = wm.geometry[id];
   if (!g) return;
   if (g.mode === "col" && g.side === side) g.mode = "normal"; // again: its own size
-  else Object.assign(g, { mode: "col", side }, panoTarget(id, side));
+  else {
+    const t = panoTarget(id, side);
+    if (!t) return;
+    Object.assign(g, { mode: "col", side, edged: 0 }, t);
+  }
   winApply(id);
   winRemember();
   panoReveal(id);
@@ -225,8 +361,9 @@ function panoColStart(d) {
   const g = wm.geometry[d.id];
   if (!g || g.mode !== "col") return;
   const cols = panoSpans(d.id).filter((s) => s.col);
-  const east = cols.find((c) => Math.abs(c.x - (g.cx + g.cw)) <= 2);
-  const west = cols.find((c) => Math.abs(c.x + c.w - g.cx) <= 2);
+  const near = panoGap() + 2; // its neighbour, the gap away
+  const east = cols.find((c) => c.x >= g.cx + g.cw - 2 && c.x - (g.cx + g.cw) <= near);
+  const west = cols.find((c) => c.x + c.w <= g.cx + 2 && g.cx - (c.x + c.w) <= near);
   d.col = { cx: g.cx, cw: g.cw, east: east && { id: east.id, cx: east.x, cw: east.w }, west: west && { id: west.id, cx: west.x, cw: west.w } };
 }
 
@@ -364,11 +501,19 @@ function panoMap(show) {
 // --------------------------------------------------------------- wiring
 
 document.addEventListener("keyup", (e) => {
-  if (e.code === "KeyS") panoHold(-1, false);
+  if (e.code === "KeyA") panoHold(-1, false);
   else if (e.code === "KeyD") panoHold(1, false);
   else if (e.key === "Alt") { pano.keys.clear(); panoHold(0, false); }
 }, true);
 window.addEventListener("blur", () => { pano.keys.clear(); panoHold(0, false); });
+// Shift+← / → (not while typing, where they pick text; Alt+Shift then).
+document.addEventListener("keydown", (e) => {
+  if (!panoramaOn() || !e.shiftKey || e.ctrlKey || e.metaKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight") || !wm.active) return;
+  if (!e.altKey && typing(document.activeElement)) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  panoNudge(e.key === "ArrowRight" ? 1 : -1);
+}, true);
 
 // Sideways (a trackpad, Shift and the wheel) over the desktop; Alt and the
 // wheel anywhere, over a window too.
