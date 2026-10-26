@@ -15,7 +15,8 @@
     "  open          a button opening one of adlerOS's windows (target: terminal)",
     "  glass         the window transparency slider (this device's)",
     "  open-apps     window or new tab for apps on the home screen (this device's)",
-    "  tiling        floating or tiling windows in desktop mode (this computer's)",
+    "  tiling        floating, tiling or Panorama windows in desktop mode (this computer's)",
+    "  panorama-speed how fast Panorama moves along (this computer's)",
     "admin: true on a row: it only works while admin mode is on.",
     "mode: \"homelab\" or \"standalone\" on a row: only shown in that kind of install.",
     "keywords: extra words the search box matches."
@@ -112,10 +113,22 @@
       "device": "computer",
       "icon": "windows",
       "title": "Window layout",
-      "description": "In desktop mode: windows float (you place them), or tile and share the screen, a new one taking half of the one in front, like Hyprland's. Alt+V floats one anyway. Just this computer.",
-      "keywords": "tiling tile floating float layout hyprland i3 sway window manager dwindle",
+      "description": "In desktop mode: windows float (you place them), tile and share the screen (a new one taking half of the one in front, like Hyprland's; Alt+V floats one anyway), or Panorama: floating windows on one desktop that goes on to the right, your screen a view onto part of it. There, Alt+S and Alt+D held move left and right, Alt+A jumps to the nearer end of your windows (again: the other end), and windows snapped to a side sit next to the ones already there. Just this computer.",
+      "keywords": "tiling tile floating float layout hyprland i3 sway window manager dwindle panorama scroll strip niri paperwm infinite canvas",
       "control": {
         "type": "tiling"
+      }
+    },
+    {
+      "id": "panorama-speed",
+      "category": "account",
+      "device": "computer",
+      "icon": "windows",
+      "title": "Panorama speed",
+      "description": "How fast Alt+S and Alt+D move along Panorama's desktop when held, in screens a second (a tap moves a little), and how far the wheel goes. Just this computer.",
+      "keywords": "panorama scroll speed pan move left right strip",
+      "control": {
+        "type": "pano-speed"
       }
     },
     {
