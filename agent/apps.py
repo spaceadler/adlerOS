@@ -1166,10 +1166,10 @@ def firefox_container(app):
 
 
 FIREFOX_PREFS = """
-// adlerOS (agent/apps.py): what it opens comes in the tab you're on, not a
-// new one; and a Firefox it closed (its window closed in adlerOS) starts
-// with just the page you open next, nothing from before.
-user_pref("browser.link.open_newwindow.override.external", 1);
+// adlerOS (agent/apps.py): what it opens comes in a new tab, the one you're
+// on left as it was; and a Firefox it closed (its window closed in adlerOS)
+// starts with just the page you open next, nothing from before.
+user_pref("browser.link.open_newwindow.override.external", 3);
 user_pref("browser.sessionstore.resume_from_crash", false);
 user_pref("browser.tabs.warnOnClose", false);
 user_pref("browser.warnOnQuit", false);
@@ -1186,6 +1186,14 @@ def firefox_prefs(config):
             text = user.read_text() if user.is_file() else ""
             if "browser.link.open_newwindow.override.external" not in text:
                 rewrite(user, text.rstrip("\n") + ("\n" if text else "") + FIREFOX_PREFS.lstrip("\n"))
+            elif FIREFOX_PREFS not in text:
+                # Written by an older adlerOS (the tab you were on): ours as it is now.
+                start = text.find("// adlerOS (agent/apps.py)")
+                end = text.find('user_pref("browser.warnOnQuit", false);', max(start, 0))
+                if start >= 0 and end >= 0:
+                    end += len('user_pref("browser.warnOnQuit", false);')
+                    rewrite(user, text[:start].rstrip("\n") + ("\n" if start else "") + FIREFOX_PREFS.lstrip("\n").rstrip("\n")
+                            + text[end:])
 
 
 def firefox_quit():
@@ -1204,7 +1212,7 @@ def firefox_quit():
 
 def firefox_url(url=None):
     """A web page (an app that won't be framed, a search) in the Firefox app
-    from the store: in the tab it's on (FIREFOX_PREFS), or, Firefox not
+    from the store: in a new tab (--new-tab, and FIREFOX_PREFS), or, Firefox not
     running (its window closed, its screen black), a Firefox started with
     just that page. One command in its container, as its user. No url: only
     that a browser's running (opening the Firefox app itself)."""
@@ -1237,7 +1245,8 @@ def firefox_url(url=None):
     env = {"HOME": "/config", "DISPLAY": ":0", "XDG_RUNTIME_DIR": "/config/.XDG"}
     env.update({k: running[k] for k in env if running.get(k)})
     started = subprocess.run(["docker", "exec", "-d", "-u", user, *[a for k, v in env.items() for a in ("-e", f"{k}={v}")],
-                              cid, "firefox", *([url] if url else [])], env=docker_env(), stdin=subprocess.DEVNULL,
+                              cid, "firefox", *(["--new-tab", url] if url and running else [url] if url else [])],
+                             env=docker_env(), stdin=subprocess.DEVNULL,
                              capture_output=True, text=True, timeout=30, check=False)
     if started.returncode:
         return {"error": f"Firefox didn't take it: {started.stderr.strip()[-200:]}"}
