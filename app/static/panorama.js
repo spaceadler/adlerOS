@@ -15,13 +15,15 @@
 // side, Settings → Panorama gap apart: snapped where one already is, it
 // goes next to it, and into a space narrower than it would be, it takes
 // that space. Dragged up to a column's side, a window goes next to it on
-// that side (a white line shows where). The edge two columns share moves
-// both: one wider, the other narrower. Shift+→ (Alt+Shift+→ while you're
-// typing) widens the window in front to the right, up to a screen or the
-// next column; again, its left side comes in. Shift+← the other way.
+// that side (a white line shows where), filling the room up to the
+// screen's edge (or, Settings → Panorama snap, a whole screen wide). The
+// edge two columns share moves both: one wider, the other narrower.
+// Alt+Shift+D widens the window in front to the right, up to the screen's
+// edge (or the next column); again, its left side comes in. Alt+Shift+A the
+// other way.
 // Geometry is in the strip's px (wm.geometry: x for a floating window; cx
 // and cw for a column); winApply draws it pano.x to the left.
-// Uses $, el, wm, desktopMode, typing, winLoad, winSave, winArea, winApply,
+// Uses $, el, wm, desktopMode, winLoad, winSave, winArea, winApply,
 // winRemember, isOpen, raiseWindow, tiles, TILING_KEY, WS_COUNT, plateFor,
 // WIN_MIN, winLayout.
 "use strict";
@@ -40,6 +42,10 @@ const pano = { x: Math.max(0, Number(winLoad(PANO_X_KEY, 0)) || 0), dir: 0, keys
 function panoramaOn() { return desktopMode() && winLoad(TILING_KEY, false) === "panorama"; }
 function panoSpeed() { return Number(winLoad(PANO_SPEED_KEY, PANO_SPEED_DEFAULT)) || PANO_SPEED_DEFAULT; }
 function setPanoSpeed(v) { winSave(PANO_SPEED_KEY, v); }
+// Snapped beside a column: to the screen's edge ("screen"), or a screen wide ("full").
+const PANO_FILL_KEY = "adleros.panoFill";
+function panoFill() { return winLoad(PANO_FILL_KEY, "screen") === "full" ? "full" : "screen"; }
+function setPanoFill(v) { winSave(PANO_FILL_KEY, v); }
 function panoGap() { return Math.max(0, Number(winLoad(PANO_GAP_KEY, 0)) || 0); }
 function setPanoGap(v) { winSave(PANO_GAP_KEY, v); }
 
@@ -246,7 +252,8 @@ function panoTarget(id, side) {
 }
 
 // Dragged near a column's side (at x on the screen): next to it, that side,
-// as wide as half a screen or the room there. With the line to show it.
+// filling the room there up to the screen's edge (Panorama snap "full": a
+// screen wide, room allowing). With the line to show it.
 function panoEdgeTarget(id, clientX) {
   const W = winArea().w;
   const x = clientX + pano.x;
@@ -262,7 +269,10 @@ function panoEdgeTarget(id, clientX) {
       if (far > PANO_EDGE_NEAR || (best && best.far <= far)) continue;
       const room = free.find((f) => (after ? Math.abs(f.a - (edge + gap)) <= 1 : Math.abs(f.b - (edge - gap)) <= 1));
       if (!room || room.b - room.a < min) continue;
-      const cw = Math.round(Math.min(W / 2, room.b - room.a));
+      // To the screen's edge; too little there for a window, half a screen.
+      const toEdge = after ? Math.min(room.b, pano.x + W) - room.a : room.b - Math.max(room.a, pano.x);
+      const want = panoFill() === "full" ? W : toEdge >= min ? toEdge : W / 2;
+      const cw = Math.round(Math.min(want, room.b - room.a));
       best = { far, cx: after ? room.a : room.b - cw, cw, side: after ? "left" : "right", line: after ? edge + gap / 2 : edge - gap / 2 };
     }
   }
@@ -291,9 +301,9 @@ function panoEdgeSnap(id, t) {
   panoMap(true);
 }
 
-// Shift+→ / Shift+←: the window in front wider that way, to a screen's
-// width or the next column; then its other side comes in. A floating one
-// moves.
+// Alt+Shift+D / A: the window in front wider that way, to the screen's edge
+// (or the next column, if that's nearer); then its other side comes in. A
+// floating one moves.
 function panoNudge(dir) {
   const id = wm.active;
   const g = id && wm.geometry[id];
@@ -312,7 +322,7 @@ function panoNudge(dir) {
   if (g.edged === -dir) g.edged = 0; // back the other way: that side grows again
   if (dir > 0) {
     const next = cols.filter((c) => c.x >= g.cx + g.cw - 1).sort((p, q) => p.x - q.x)[0];
-    const grow = g.edged === 1 ? 0 : Math.min(step, W - g.cw, (next ? next.x - gap : Infinity) - (g.cx + g.cw));
+    const grow = g.edged === 1 ? 0 : Math.min(step, Math.min(pano.x + W, next ? next.x - gap : Infinity) - (g.cx + g.cw));
     if (grow > 0) g.cw += grow;
     else {
       g.edged = 1;
@@ -323,7 +333,7 @@ function panoNudge(dir) {
     }
   } else {
     const prev = cols.filter((c) => c.x + c.w <= g.cx + 1).sort((p, q) => q.x + q.w - (p.x + p.w))[0];
-    const grow = g.edged === -1 ? 0 : Math.min(step, W - g.cw, g.cx - (prev ? prev.x + prev.w + gap : 0));
+    const grow = g.edged === -1 ? 0 : Math.min(step, g.cx - Math.max(pano.x, prev ? prev.x + prev.w + gap : 0));
     if (grow > 0) {
       g.cx -= grow;
       g.cw += grow;
@@ -506,14 +516,7 @@ document.addEventListener("keyup", (e) => {
   else if (e.key === "Alt") { pano.keys.clear(); panoHold(0, false); }
 }, true);
 window.addEventListener("blur", () => { pano.keys.clear(); panoHold(0, false); });
-// Shift+← / → (not while typing, where they pick text; Alt+Shift then).
-document.addEventListener("keydown", (e) => {
-  if (!panoramaOn() || !e.shiftKey || e.ctrlKey || e.metaKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight") || !wm.active) return;
-  if (!e.altKey && typing(document.activeElement)) return;
-  e.preventDefault();
-  e.stopImmediatePropagation();
-  panoNudge(e.key === "ArrowRight" ? 1 : -1);
-}, true);
+
 
 // Sideways (a trackpad, Shift and the wheel) over the desktop; Alt and the
 // wheel anywhere, over a window too.
