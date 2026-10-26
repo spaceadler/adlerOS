@@ -366,6 +366,9 @@ const ALT_WINDOW_KEYS = {
   KeyS: (e) => (panoramaOn() ? !e.repeat && panoJump() : switchWorkspace(Math.min(WS_COUNT, tiles.current + 1))),
   KeyA: (e) => (panoramaOn() ? !e.repeat && panoHold(-1, true) : switchWorkspace(Math.max(1, tiles.current - 1))),
   KeyD: (e) => (panoramaOn() ? !e.repeat && panoHold(1, true) : switchWorkspace(tiles.previous)),
+  // Panorama: the window in front wider that way (panoNudge).
+  "Shift+KeyA": () => panoramaOn() && panoNudge(-1),
+  "Shift+KeyD": () => panoramaOn() && panoNudge(1),
 };
 for (let n = 1; n <= WS_COUNT; n++) {
   ALT_WINDOW_KEYS[`Digit${n % 10}`] = () => (panoramaOn() ? panoScreen(n) : switchWorkspace(n));

@@ -329,6 +329,12 @@ function buildRow(row) {
     select.value = windowLayout();
     select.addEventListener("change", () => setWindowLayout(select.value));
     control.append(select);
+  } else if (c.type === "pano-fill") {
+    const select = el("select", { class: "field-input", "aria-label": row.title },
+      el("option", { value: "screen" }, "To the screen's edge"), el("option", { value: "full" }, "A whole screen wide"));
+    select.value = panoFill();
+    select.addEventListener("change", () => setPanoFill(select.value));
+    control.append(select);
   } else if (c.type === "pano-gap") {
     const value = el("span", { class: "glass-value" }, `${panoGap()} px`);
     const range = el("input", { type: "range", class: "glass-range", min: "0", max: "40", step: "2", value: String(panoGap()), "aria-label": row.title });
