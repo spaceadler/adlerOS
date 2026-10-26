@@ -939,14 +939,15 @@ def cert_trusted(url):
 
 
 def frame_allowed(headers, host):
-    """Whether these headers let a page at `host` (adlerOS) show it in a frame."""
-    xfo = headers.get("X-Frame-Options", "").strip().lower()
-    if xfo:
-        return False  # DENY, SAMEORIGIN (adlerOS is another origin), ALLOW-FROM (obsolete)
+    """Whether these headers let a page at `host` (adlerOS) show it in a frame.
+    As browsers decide it: a CSP frame-ancestors, when there is one, is what
+    counts, and X-Frame-Options beside it is ignored (Vaultwarden sends both,
+    SAMEORIGIN and the ALLOWED_IFRAME_ANCESTORS you gave it)."""
     policy = " ".join(headers.get_all("Content-Security-Policy") or [])
     match = re.search(r"frame-ancestors\s+([^;]*)", policy, re.I)
     if not match:
-        return True
+        # DENY, SAMEORIGIN (adlerOS is another origin), ALLOW-FROM (obsolete)
+        return not headers.get("X-Frame-Options", "").strip()
     name = host.split(":")[0].lower()
     for source in match[1].lower().split():
         bare = re.sub(r"^[a-z][a-z0-9+.-]*://", "", source).rstrip("/")
