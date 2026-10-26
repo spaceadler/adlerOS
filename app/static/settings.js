@@ -329,6 +329,14 @@ function buildRow(row) {
     select.value = windowLayout();
     select.addEventListener("change", () => setWindowLayout(select.value));
     control.append(select);
+  } else if (c.type === "pano-gap") {
+    const value = el("span", { class: "glass-value" }, `${panoGap()} px`);
+    const range = el("input", { type: "range", class: "glass-range", min: "0", max: "40", step: "2", value: String(panoGap()), "aria-label": row.title });
+    range.addEventListener("input", () => {
+      setPanoGap(Number(range.value));
+      value.textContent = `${range.value} px`;
+    });
+    control.append(range, value);
   } else if (c.type === "pano-speed") {
     // This computer's, like the layout.
     const show = (v) => `${v.toFixed(2)} screens/s`;

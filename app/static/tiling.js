@@ -33,7 +33,7 @@ function setWindowLayout(mode) {
   winLayout();
   if (mode === "panorama") panoMap(true);
   toast({ tiling: "Tiling: windows share the screen; Alt+V floats one.", floating: "Floating windows.",
-    panorama: "Panorama: one long desktop. Alt+S and Alt+D move along it, Alt+A to either end." }[mode]);
+    panorama: "Panorama: one long desktop. Alt+A and Alt+D move along it, Alt+S to either end." }[mode]);
 }
 
 function tilesReset() {
@@ -362,9 +362,9 @@ const ALT_WINDOW_KEYS = {
   KeyP: () => !(panoramaOn() && wm.active && panoColResize(wm.active, 30)) && resizeActive(30, 0),
   KeyI: () => resizeActive(0, -30),
   KeyO: () => resizeActive(0, 30),
-  // In Panorama (panorama.js): S and D held move left and right, A jumps to an end.
-  KeyS: (e) => (panoramaOn() ? !e.repeat && panoHold(-1, true) : switchWorkspace(Math.min(WS_COUNT, tiles.current + 1))),
-  KeyA: (e) => (panoramaOn() ? !e.repeat && panoJump() : switchWorkspace(Math.max(1, tiles.current - 1))),
+  // In Panorama (panorama.js): A and D held move left and right, S jumps to an end (again: the other).
+  KeyS: (e) => (panoramaOn() ? !e.repeat && panoJump() : switchWorkspace(Math.min(WS_COUNT, tiles.current + 1))),
+  KeyA: (e) => (panoramaOn() ? !e.repeat && panoHold(-1, true) : switchWorkspace(Math.max(1, tiles.current - 1))),
   KeyD: (e) => (panoramaOn() ? !e.repeat && panoHold(1, true) : switchWorkspace(tiles.previous)),
 };
 for (let n = 1; n <= WS_COUNT; n++) {

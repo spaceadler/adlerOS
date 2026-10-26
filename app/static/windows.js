@@ -225,6 +225,7 @@ function closeWindow(id) {
   const icon = sheet.classList.contains("minimized") ? null : winGenieIcon(id);
   sheet.classList.add("closing");
   sheet.classList.remove("active");
+  if (desktopMode()) winOnTop(sheet);
   winGenie(id, true, icon);
   if (w?.dock) markDockOpen(w.dock, false);
   if (![...wm.windows].some(([other, o]) => other !== id && !o.float && isOpen(other))) document.body.classList.remove("sheet-open");
@@ -267,7 +268,8 @@ function raiseWindow(id, focus = false) {
     winGenie(id, false);
   }
   wm.stack = [...wm.stack.filter((o) => o !== id && wm.windows.has(o)), id];
-  wm.stack.forEach((o, i) => { if ($(o)) $(o).style.zIndex = String(WIN_Z + i); });
+  // (One going into the dock stays over the rest till it's gone: winOnTop.)
+  wm.stack.forEach((o, i) => { if ($(o) && !$(o).classList.contains("closing") && !$(o).classList.contains("minimized")) $(o).style.zIndex = String(WIN_Z + i); });
   if (wm.active !== id) {
     for (const o of wm.windows.keys()) $(o)?.classList.remove("active");
     sheet.classList.add("active");
@@ -292,12 +294,20 @@ function deactivateWindows() {
   winDock();
 }
 
+// Closing or minimizing: in front of the others while it goes into the
+// dock, so you see it go. Only its own z-index: the order the rest are in
+// (wm.stack) stays, and it gets its place back when it's raised again.
+function winOnTop(sheet) {
+  sheet.style.zIndex = String(Math.min(WIN_Z + wm.stack.length + 1, 49)); // still under the dock
+}
+
 function minimizeWindow(id) {
   if (!desktopMode()) return wm.windows.get(id)?.close();
   const sheet = $(id);
   const hadFocus = sheet.contains(document.activeElement);
   sheet.classList.add("minimized");
   sheet.classList.remove("active");
+  winOnTop(sheet);
   winGenie(id, true);
   if (wm.active === id) winActivateTop();
   if (hadFocus) winFocusNext();
@@ -508,6 +518,8 @@ function winPointerMove(e) {
     g.y = Math.round(d.box.y + (e.clientY - d.sy));
     d.snap = e.clientX <= 4 ? "left" : e.clientX >= innerWidth - 5 ? "right" : e.clientY <= 4 ? "max" : null;
     winSnapHint(d.snap);
+    // Panorama: up to a column's side, next to it.
+    if (panoramaOn()) panoEdgeHint(d.edge = d.snap ? null : panoEdgeTarget(d.id, e.clientX));
   } else if (d.col) {
     return panoColDrag(d, dx);
   } else {
@@ -527,11 +539,13 @@ function winPointerUp() {
   wm.drag = null;
   document.body.classList.remove("win-moving");
   winSnapHint(null);
+  if (panoramaOn()) panoEdgeHint(null);
   if (d.tiled) {
     if (d.moved && d.at) tileDrop(d.id, d.at[0], d.at[1]);
     return winLayout();
   }
-  if (d.snap && panoramaOn()) panoSnap(d.id, d.snap);
+  if (d.edge && panoramaOn()) panoEdgeSnap(d.id, d.edge);
+  else if (d.snap && panoramaOn()) panoSnap(d.id, d.snap);
   else if (d.snap) {
     wm.geometry[d.id].mode = d.snap;
     winApply(d.id);
@@ -551,6 +565,7 @@ function winSnapHint(mode) {
   if (panoramaOn() && wm.drag) {
     // Where it will go: past the columns already there.
     const t = panoTarget(wm.drag.id, mode);
+    if (!t) { hint.hidden = true; return; }
     box = [t.cx - pano.x, 0, t.cw, area.h];
   }
   Object.assign(hint.style, { left: `${box[0]}px`, top: `${box[1]}px`, width: `${box[2]}px`, height: `${box[3]}px` });
