@@ -124,10 +124,9 @@ function setPadFile(pad, file, text) {
 
 function setPadDirty(pad, dirty) {
   pad.dirty = dirty;
-  const where = pad.path ? parentOf(pad.path).replace(/^\/(user|desktop|root)/, (_, p) => ({ user: "User", desktop: "Desktop", root: "Root" })[p]) : "";
   pad.title.textContent = `${dirty ? "● " : ""}${pad.name}`;
   pad.title.title = pad.path || "Not saved anywhere yet";
-  titleWindow(pad.id, `${pad.name}${where ? ` — ${where}` : ""}`);
+  titleWindow(pad.id, pad.name);
   padStatus(pad);
 }
 
