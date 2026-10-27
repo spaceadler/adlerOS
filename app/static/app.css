@@ -3744,6 +3744,14 @@ body.wm .desk { top: 46px; }
 .mb-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .mb-clock { position: relative; font-variant-numeric: tabular-nums; white-space: pre; }
 .mb-dot { position: absolute; top: 3px; right: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent, #0a84ff); box-shadow: 0 0 0 1.5px rgb(10 12 16 / 0.6); }
+/* The song's line of the moment, in the middle of the bar (menubar.js);
+   not where the bar's too narrow for it. */
+.mb-lyrics { position: absolute; left: 50%; transform: translateX(-50%); max-width: min(38vw, 560px); height: 22px; padding: 0 10px; border: 0; border-radius: 6px;
+  background: none; color: rgb(255 255 255 / 0.92); font: inherit; font-weight: 500; cursor: default; overflow: hidden; }
+.mb-lyrics:hover { background: rgb(255 255 255 / 0.12); }
+.mb-lyrics span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 22px; }
+.mb-lyrics[hidden] { display: none; }
+@media (max-width: 899px) { .mb-lyrics { display: none; } }
 
 /* Control Center: under its icon, a grid of tiles. */
 body.wm .cc:not([hidden]) { position: fixed; top: 34px; right: 8px; z-index: 56; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 330px; padding: 12px; border-radius: 22px;

@@ -79,6 +79,41 @@ function setGlass(v, keep = true) {
 }
 function appsInTabs() { return winLoad(OPEN_APPS_KEY, "here") === "tab"; }
 
+// This device's: how much liquid glass the see-through surfaces get
+// (glass.css), 1 (all of it) down to 0 (none: no blur, for a slow machine).
+// Near the top, Chromium also bends the light through it (an SVG filter).
+const LIQUID_KEY = "adleros.liquid";
+function liquidLevel() {
+  const v = Number(winLoad(LIQUID_KEY, 1));
+  return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
+}
+function setLiquid(v, keep = true) {
+  const root = document.documentElement;
+  root.classList.toggle("glass-off", v <= 0);
+  root.style.setProperty("--lg-k", String(v));
+  root.style.setProperty("--lg-backdrop", `blur(${Math.round(6 + 14 * v)}px) saturate(${Math.round(110 + 80 * v)}%) brightness(${(1 - 0.08 * v).toFixed(2)})`);
+  root.style.setProperty("--lg-veil", `blur(${Math.round(8 + 24 * v)}px) saturate(${Math.round(110 + 50 * v)}%)`);
+  const bend = v >= 0.9 && Boolean(navigator.userAgentData?.brands?.some((b) => b.brand === "Chromium"));
+  if (bend && !$("lg-filters")) document.body.append(liquidFilter());
+  root.classList.toggle("lg-refract", bend);
+  if (keep) winSave(LIQUID_KEY, v);
+}
+// The bend: a soft noise moves what's behind the glass a few pixels.
+function liquidFilter() {
+  const NS = "http://www.w3.org/2000/svg";
+  const node = (name, attrs, ...kids) => {
+    const n = document.createElementNS(NS, name);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    n.append(...kids);
+    return n;
+  };
+  return node("svg", { id: "lg-filters", width: "0", height: "0", "aria-hidden": "true" },
+    node("filter", { id: "lg-refract", x: "0", y: "0", width: "100%", height: "100%", "color-interpolation-filters": "sRGB" },
+      node("feTurbulence", { type: "fractalNoise", baseFrequency: "0.008 0.012", numOctaves: "2", seed: "7", result: "noise" }),
+      node("feGaussianBlur", { in: "noise", stdDeviation: "3", result: "soft" }),
+      node("feDisplacementMap", { in: "SourceGraphic", in2: "soft", scale: "16", xChannelSelector: "R", yChannelSelector: "G" })));
+}
+
 // -------------------------------------------------------- the two modes
 
 function setDesktopMode(on) {
@@ -894,6 +929,7 @@ window.addEventListener("popstate", () => {
 
 wm.geometry = winLoad(WIN_GEOMETRY_KEY, {}) || {};
 setGlass(glassLevel(), false);
+setLiquid(liquidLevel(), false);
 
 // Over a window on the home screen the dock is away (app.css): down at the
 // bottom edge it comes back, and goes again a moment after the pointer isn't
