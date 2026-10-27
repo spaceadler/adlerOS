@@ -598,8 +598,7 @@ function mdRenderTabs() {
     tab.addEventListener("auxclick", (e) => { if (e.button === 1) mdCloseTab(i); });
     return tab;
   }));
-  const now = mdTab();
-  titleWindow("luna", now && now.kind !== "graph" ? `${mdTabName(now)} — Luna` : "Luna");
+  titleWindow("luna", "Luna");
 }
 
 function mdTabName(t) {
