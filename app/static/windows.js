@@ -90,7 +90,6 @@ function liquidLevel() {
 function setLiquid(v, keep = true) {
   const root = document.documentElement;
   root.classList.toggle("glass-off", v <= 0);
-  root.style.setProperty("--lg-k", String(v));
   root.style.setProperty("--lg-backdrop", `blur(${Math.round(6 + 14 * v)}px) saturate(${Math.round(110 + 80 * v)}%) brightness(${(1 - 0.08 * v).toFixed(2)})`);
   root.style.setProperty("--lg-veil", `blur(${Math.round(8 + 24 * v)}px) saturate(${Math.round(110 + 50 * v)}%)`);
   const bend = v >= 0.9 && Boolean(navigator.userAgentData?.brands?.some((b) => b.brand === "Chromium"));

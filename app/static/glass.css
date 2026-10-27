@@ -3,27 +3,22 @@
    the home screen, in desktop mode and on a phone, one material.
 
    How much of it, this device chooses (Settings: Glass; windows.js,
-   setLiquid): --lg-k from 1 (all of it) down towards 0, the blur and the
-   shine with it; at 0 (html.glass-off) no blur at all, for a slow machine
-   (a Raspberry Pi), the surfaces solid instead. In Chromium, near the top,
+   setLiquid): from 1 (all of it) down towards 0, less blur; at 0
+   (html.glass-off) no blur at all, for a slow machine (a Raspberry Pi), the
+   surfaces solid instead. In Chromium, near the top,
    the glass also bends what's behind it (html.lg-refract, the SVG filter
    windows.js adds); Firefox and Safari have the rest.
+
+   Each surface keeps its own edge and shadow (--shine in app.css): no
+   extra rim here, it showed as a white outline on dark wallpapers.
 
    A new see-through surface: add its selector to the list below (a veil,
    the dimmed screen behind something, to the second one). This file comes
    last, so these win over each surface's own rules. */
 
 :root {
-  --lg-k: 1;
   --lg-backdrop: blur(20px) saturate(190%) brightness(0.92);
   --lg-veil: blur(32px) saturate(160%);
-  /* The rim and the light on the glass: a hairline all round, a bright top
-     edge, a glow inside along the top, a faint lit bottom edge. */
-  --shine:
-    0 0 0 0.5px rgb(255 255 255 / calc(0.08 + 0.1 * var(--lg-k))) inset,
-    0 1px 0 rgb(255 255 255 / calc(0.16 + 0.22 * var(--lg-k))) inset,
-    0 -1px 0 rgb(255 255 255 / calc(0.05 * var(--lg-k))) inset,
-    0 12px 18px -14px rgb(255 255 255 / calc(0.24 * var(--lg-k))) inset;
 }
 
 /* The surfaces. */
@@ -41,14 +36,6 @@
   -webkit-backdrop-filter: var(--lg-veil);
   backdrop-filter: var(--lg-veil);
 }
-
-/* Surfaces whose own shadow had no shine: the glass's light on them too. */
-body.wm .menubar { box-shadow: var(--shine), 0 0.5px 0 rgb(255 255 255 / 0.08); }
-.nc-card { box-shadow: var(--shine), 0 6px 18px rgb(0 0 0 / 0.25); }
-body.phone .widget-panel { box-shadow: var(--shine), 0 8px 24px rgb(0 0 0 / 0.18); }
-body.phone .dock { box-shadow: var(--shine), 0 10px 30px rgb(0 0 0 / 0.2); }
-body.phone .search-pill { box-shadow: var(--shine); }
-body.phone .menu, body.phone .dialog { box-shadow: var(--shine), 0 12px 40px rgb(0 0 0 / 0.35); }
 
 /* Bent light (Chromium only). */
 html.lg-refract :is(.material, .web-search, .widget-panel, .search-pill, .dock, .bell, .desk-widget.bar .widget-panel,
