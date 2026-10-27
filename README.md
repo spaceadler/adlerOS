@@ -232,5 +232,10 @@ any).
   from the app's own page (its apple-touch-icon or favicon). Each icon
   belongs to its app's project.
 
-There is no licence file yet, so for now all rights are reserved by the author;
-one will be added before others are invited to reuse it.
+## Licence
+
+adlerOS is under the [BSD 3-Clause License](LICENSE), copyright spaceadler:
+use it, change it and share it, keeping the copyright notice; don't use the
+name to promote what you make from it without asking. Fonts, pdf.js and the
+other files in `app/static/vendor/` and `app/static/fonts/` keep their own
+licences, next to them.
