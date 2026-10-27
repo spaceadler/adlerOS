@@ -275,7 +275,6 @@ function raiseWindow(id, focus = false) {
     sheet.classList.add("active");
     wm.active = id;
   }
-  if (focus && panoramaOn()) panoReveal(id); // along the strip, if it's out of view
   if (focus && !sheet.contains(document.activeElement)) requestAnimationFrame(() => focusStart(sheet));
   winDock();
 }
@@ -405,8 +404,7 @@ function winPlace(id) {
       mode: "normal", w: width, h: height,
       x: Math.max(0, Math.round((area.w - width) / 2) - 60 + step * 32), y: Math.max(0, Math.round((area.h - height) / 2) - 40 + step * 28),
     };
-    if (panoramaOn()) wm.geometry[id].x += pano.x; // where you're looking
-  } else if (panoramaOn()) panoIntoView(saved, area);
+  }
   winApply(id);
 }
 
@@ -419,8 +417,7 @@ function winApply(id) {
   sheet.dataset.tiled = tile ? "1" : "";
   let box;
   if (tile) box = tile;
-  else if (panoramaOn()) box = panoBox(g, area);
-  else if (g.mode === "col") { g.mode = g.side || "normal"; return winApply(id); } // a Panorama column, floating again
+  else if (g.mode === "col") { g.mode = g.side || "normal"; return winApply(id); } // kept from the old Panorama layout
   else if (g.mode === "max") box = { x: 0, y: 0, w: area.w, h: area.h };
   else if (g.mode === "left") box = { x: 0, y: 0, w: Math.round(area.w / 2), h: area.h };
   else if (g.mode === "right") box = { x: Math.round(area.w / 2), y: 0, w: area.w - Math.round(area.w / 2), h: area.h };
@@ -451,7 +448,6 @@ function winRemember() {
 function winSnap(id, mode) {
   const g = wm.geometry[id];
   if (!g) return;
-  if (panoramaOn()) return panoSnap(id, mode);
   g.mode = g.mode === mode ? "normal" : mode;
   winApply(id);
   winRemember();
@@ -471,11 +467,9 @@ function winPointerDown(e, id, kind) {
 function winDragStart(e, id, kind, holder) {
   raiseWindow(id);
   const r = $(id).getBoundingClientRect();
-  const off = panoramaOn() ? pano.x : 0; // the strip's px, in Panorama
   // A tiled one is lifted out of its place, and dropped on another to swap.
-  wm.drag = { id, kind, sx: e.clientX, sy: e.clientY, box: { x: r.left + off, y: r.top, w: r.width, h: r.height }, moved: false, snap: null,
+  wm.drag = { id, kind, sx: e.clientX, sy: e.clientY, box: { x: r.left, y: r.top, w: r.width, h: r.height }, moved: false, snap: null,
     tiled: Boolean(tileBox(id)) };
-  if (panoramaOn() && kind !== "move") panoColStart(wm.drag); // a column's side: its neighbour's too
   holder.setPointerCapture(e.pointerId);
   e.preventDefault();
 }
@@ -507,10 +501,9 @@ function winPointerMove(e) {
     if (g.mode !== "normal") {
       // Dragging a maximized or half-screen window off: its own size again,
       // under the pointer where you grabbed it.
-      const off = panoramaOn() ? pano.x : 0;
-      const along = (d.sx + off - d.box.x) / d.box.w;
+      const along = (d.sx - d.box.x) / d.box.w;
       g.mode = "normal";
-      d.box = { x: e.clientX + off - along * g.w, y: d.box.y, w: g.w, h: g.h };
+      d.box = { x: e.clientX - along * g.w, y: d.box.y, w: g.w, h: g.h };
       d.sx = e.clientX;
       d.sy = e.clientY;
     }
@@ -518,10 +511,6 @@ function winPointerMove(e) {
     g.y = Math.round(d.box.y + (e.clientY - d.sy));
     d.snap = e.clientX <= 4 ? "left" : e.clientX >= innerWidth - 5 ? "right" : e.clientY <= 4 ? "max" : null;
     winSnapHint(d.snap);
-    // Panorama: up to a column's side, next to it.
-    if (panoramaOn()) panoEdgeHint(d.edge = d.snap ? null : panoEdgeTarget(d.id, e.clientX));
-  } else if (d.col) {
-    return panoColDrag(d, dx);
   } else {
     let { x, y, w, h } = d.box;
     if (d.kind.includes("e")) w = Math.max(WIN_MIN[0], w + dx);
@@ -539,14 +528,11 @@ function winPointerUp() {
   wm.drag = null;
   document.body.classList.remove("win-moving");
   winSnapHint(null);
-  if (panoramaOn()) panoEdgeHint(null);
   if (d.tiled) {
     if (d.moved && d.at) tileDrop(d.id, d.at[0], d.at[1]);
     return winLayout();
   }
-  if (d.edge && panoramaOn()) panoEdgeSnap(d.id, d.edge);
-  else if (d.snap && panoramaOn()) panoSnap(d.id, d.snap);
-  else if (d.snap) {
+  if (d.snap) {
     wm.geometry[d.id].mode = d.snap;
     winApply(d.id);
   }
@@ -561,13 +547,7 @@ function winSnapHint(mode) {
   }
   const area = winArea();
   const half = Math.round(area.w / 2);
-  let box = mode === "left" ? [0, 0, half, area.h] : mode === "right" ? [half, 0, area.w - half, area.h] : [0, 0, area.w, area.h];
-  if (panoramaOn() && wm.drag) {
-    // Where it will go: past the columns already there.
-    const t = panoTarget(wm.drag.id, mode);
-    if (!t) { hint.hidden = true; return; }
-    box = [t.cx - pano.x, 0, t.cw, area.h];
-  }
+  const box = mode === "left" ? [0, 0, half, area.h] : mode === "right" ? [half, 0, area.w - half, area.h] : [0, 0, area.w, area.h];
   Object.assign(hint.style, { left: `${box[0]}px`, top: `${box[1]}px`, width: `${box[2]}px`, height: `${box[3]}px` });
   hint.hidden = false;
 }
@@ -595,8 +575,7 @@ function winKeysDone() {
 // ---------------------------------------------------------------- menu
 
 function winMenu(id) {
-  const g0 = wm.geometry[id] || {};
-  const g = g0.mode === "col" ? { ...g0, mode: g0.side } : g0; // a Panorama column: the half it was snapped to
+  const g = wm.geometry[id] || {};
   const w = wm.windows.get(id);
   const items = [];
   if (w?.app) {

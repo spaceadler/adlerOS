@@ -3,7 +3,7 @@
 // does there. Tiling is dwindle's: a new window takes half of the one in
 // front, split along its longer side. The animations are in app.css, on
 // the same curves.
-// Uses $, el, wm, desktopMode, winLoad, winSave, winArea, winApply,
+// Uses $, el, wm, desktopMode, plateFor, winLoad, winSave, winArea, winApply,
 // winRemember, winSnap, winCycle, isOpen, raiseWindow, minimizeWindow,
 // toggleMaximize, winActivateTop, toast, openMenu, toggleDrawer,
 // openTerminal, toggleFiles, openSettings, confirmLogout, loadCatalog,
@@ -15,25 +15,18 @@ const TILE_GAP_OUT = 10;
 const TILE_GAP_IN = 5;
 const WS_COUNT = 10;
 const WS_SLIDE = { duration: 500, easing: "cubic-bezier(0.05, 0.9, 0.1, 1.05)" }; // workspaces, 1, 5, wind
-const tiles = { trees: {}, boxes: {}, floating: new Set(), ws: {}, current: 1, previous: 1, osdTimer: null };
+const tiles = { trees: {}, boxes: {}, floating: new Set(), ws: {}, current: 1, previous: 1, osdTimer: null, mapOver: false };
 
 function tilingOn() { return desktopMode() && winLoad(TILING_KEY, false) === true; }
-// Floating, tiling, or Panorama (panorama.js): kept as false, true, "panorama".
-function windowLayout() {
-  const v = winLoad(TILING_KEY, false);
-  return v === true ? "tiling" : v === "panorama" ? "panorama" : "floating";
-}
+// Floating or tiling (kept as false or true; "panorama", from a layout
+// adlerOS had for a while, is floating).
+function windowLayout() { return winLoad(TILING_KEY, false) === true ? "tiling" : "floating"; }
 function setWindowLayout(mode) {
-  const was = windowLayout();
-  if (mode === was) return;
-  if (was === "panorama" && desktopMode()) panoLeave();
-  winSave(TILING_KEY, mode === "tiling" ? true : mode === "panorama" ? "panorama" : false);
+  if (mode === windowLayout()) return;
+  winSave(TILING_KEY, mode === "tiling");
   tiles.trees = {};
-  if (mode === "panorama" && desktopMode()) panoEnter();
   winLayout();
-  if (mode === "panorama") panoMap(true);
-  toast({ tiling: "Tiling: windows share the screen; Alt+V floats one.", floating: "Floating windows.",
-    panorama: "Panorama: one long desktop. Alt+A and Alt+D move along it, Alt+S to either end." }[mode]);
+  toast(mode === "tiling" ? "Tiling: windows share the screen; Alt+V floats one." : "Floating windows.");
 }
 
 function tilesReset() {
@@ -86,22 +79,61 @@ function moveToWorkspace(n) {
   switchWorkspace(n, id);
 }
 
-// A moment's note of where you are: the ten, yours lit, the ones with
-// windows marked.
+// A moment's look at all ten, in the bottom right as you change workspace:
+// each a small screen with its windows on it (a box, its app's icon in the
+// middle), yours outlined in white. Click one to go there; the pointer on
+// it keeps it up.
+const WS_MAP_W = 420;
+const WS_MAP_GAP = 4;
+function wsBox(id, area) {
+  const g = wm.geometry[id];
+  const tiled = tilingOn() && !tiles.floating.has(id) && !wm.windows.get(id)?.floats && tiles.boxes[id];
+  if (tiled) return tiles.boxes[id];
+  if (!g) return null;
+  const half = Math.round(area.w / 2);
+  if (g.mode === "max") return { x: 0, y: 0, w: area.w, h: area.h };
+  if (g.mode === "left") return { x: 0, y: 0, w: half, h: area.h };
+  if (g.mode === "right") return { x: half, y: 0, w: area.w - half, h: area.h };
+  return g;
+}
+
 function wsOsd() {
-  let osd = $("ws-osd");
-  if (!osd) {
-    osd = el("div", { id: "ws-osd", class: "ws-osd material", "aria-live": "polite" });
-    document.body.append(osd);
+  let map = $("ws-map");
+  if (!map) {
+    map = el("div", { id: "ws-map", class: "ws-map material", role: "group", "aria-label": "Workspaces" });
+    map.addEventListener("pointerenter", () => { tiles.mapOver = true; clearTimeout(tiles.osdTimer); });
+    map.addEventListener("pointerleave", () => { tiles.mapOver = false; wsMapAway(); });
+    document.body.append(map);
   }
-  osd.replaceChildren(...Array.from({ length: WS_COUNT }, (_, i) => {
+  const area = winArea();
+  const cellW = (WS_MAP_W - WS_MAP_GAP * (WS_COUNT - 1)) / WS_COUNT;
+  const scale = cellW / area.w;
+  const px = (v) => `${Math.round(v * scale)}px`;
+  const order = [...wm.stack, ...wm.windows.keys()];
+  map.replaceChildren(...Array.from({ length: WS_COUNT }, (_, i) => {
     const n = i + 1;
-    return el("span", { class: `ws-dot${n === tiles.current ? " current" : ""}${wsWindows(n).length ? " used" : ""}` }, String(n % 10));
+    const cell = el("button", { type: "button", class: `ws-cell${n === tiles.current ? " current" : ""}`, "aria-label": `Workspace ${n}`,
+      style: `width: ${Math.round(cellW)}px; height: ${Math.round(area.h * scale)}px` }, el("span", { class: "ws-num" }, String(n % 10)));
+    cell.addEventListener("click", () => switchWorkspace(n));
+    const here = wsWindows(n).filter((id) => !$(id).classList.contains("minimized") && !$(id).classList.contains("closing"))
+      .sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    for (const id of here) {
+      const b = wsBox(id, area);
+      if (!b) continue;
+      const w = wm.windows.get(id);
+      const icon = w?.app ? plateFor(w.app) : el("img", { src: `/static/dock/${w?.icon || w?.dock || id}.svg`, alt: "", draggable: "false" });
+      cell.append(el("span", { class: `ws-win${wm.active === id ? " active" : ""}`,
+        style: `left: ${px(b.x)}; top: ${px(b.y)}; width: ${px(b.w)}; height: ${px(b.h)}` }, icon));
+    }
+    return cell;
   }));
-  osd.setAttribute("aria-label", `Workspace ${tiles.current}`);
-  osd.classList.add("shown");
+  map.classList.add("shown");
+  wsMapAway();
+}
+
+function wsMapAway() {
   clearTimeout(tiles.osdTimer);
-  tiles.osdTimer = setTimeout(() => osd.classList.remove("shown"), 1200);
+  tiles.osdTimer = setTimeout(() => { if (!tiles.mapOver) $("ws-map")?.classList.remove("shown"); }, 1200);
 }
 
 // --------------------------------------------------------------- tiling
@@ -223,7 +255,7 @@ function centerWindow(id) {
   if (!g || tileBox(id)) return;
   const area = winArea();
   g.mode = "normal";
-  g.x = Math.round((area.w - g.w) / 2) + (panoramaOn() ? pano.x : 0);
+  g.x = Math.round((area.w - g.w) / 2);
   g.y = Math.round((area.h - g.h) / 2);
   winApply(id);
   winRemember();
@@ -358,21 +390,17 @@ const ALT_WINDOW_KEYS = {
   "Shift+KeyL": () => moveToward("r"),
   "Shift+KeyK": () => moveToward("u"),
   "Shift+KeyJ": () => moveToward("d"),
-  KeyU: () => !(panoramaOn() && wm.active && panoColResize(wm.active, -30)) && resizeActive(-30, 0),
-  KeyP: () => !(panoramaOn() && wm.active && panoColResize(wm.active, 30)) && resizeActive(30, 0),
+  KeyU: () => resizeActive(-30, 0),
+  KeyP: () => resizeActive(30, 0),
   KeyI: () => resizeActive(0, -30),
   KeyO: () => resizeActive(0, 30),
-  // In Panorama (panorama.js): A and D held move left and right, S jumps to an end (again: the other).
-  KeyS: (e) => (panoramaOn() ? !e.repeat && panoJump() : switchWorkspace(Math.min(WS_COUNT, tiles.current + 1))),
-  KeyA: (e) => (panoramaOn() ? !e.repeat && panoHold(-1, true) : switchWorkspace(Math.max(1, tiles.current - 1))),
-  KeyD: (e) => (panoramaOn() ? !e.repeat && panoHold(1, true) : switchWorkspace(tiles.previous)),
-  // Panorama: the window in front wider that way (panoNudge).
-  "Shift+KeyA": () => panoramaOn() && panoNudge(-1),
-  "Shift+KeyD": () => panoramaOn() && panoNudge(1),
+  KeyS: () => switchWorkspace(Math.min(WS_COUNT, tiles.current + 1)),
+  KeyA: () => switchWorkspace(Math.max(1, tiles.current - 1)),
+  KeyD: () => switchWorkspace(tiles.previous),
 };
 for (let n = 1; n <= WS_COUNT; n++) {
-  ALT_WINDOW_KEYS[`Digit${n % 10}`] = () => (panoramaOn() ? panoScreen(n) : switchWorkspace(n));
-  ALT_WINDOW_KEYS[`Shift+Digit${n % 10}`] = () => (panoramaOn() ? panoScreen(n, true) : moveToWorkspace(n));
+  ALT_WINDOW_KEYS[`Digit${n % 10}`] = () => switchWorkspace(n);
+  ALT_WINDOW_KEYS[`Shift+Digit${n % 10}`] = () => moveToWorkspace(n);
 }
 
 document.addEventListener("keydown", (e) => {
@@ -383,7 +411,7 @@ document.addEventListener("keydown", (e) => {
   if (!run) return;
   e.preventDefault();
   e.stopImmediatePropagation();
-  run(e);
+  run();
 }, true);
 document.addEventListener("keyup", (e) => { if (e.key === "Alt") document.body.classList.remove("alt-held"); }, true);
 window.addEventListener("blur", () => document.body.classList.remove("alt-held"));

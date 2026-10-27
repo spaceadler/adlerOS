@@ -15,10 +15,7 @@
     "  open          a button opening one of adlerOS's windows (target: terminal)",
     "  glass         the window transparency slider (this device's)",
     "  open-apps     window or new tab for apps on the home screen (this device's)",
-    "  tiling        floating, tiling or Panorama windows in desktop mode (this computer's)",
-    "  panorama-speed how fast Panorama moves along (this computer's)",
-    "  panorama-gap  room between snapped windows in Panorama (this computer's)",
-    "  panorama-fill a window snapped beside another: to the screen's edge or a screen wide",
+    "  tiling        floating or tiling windows in desktop mode (this computer's)",
     "admin: true on a row: it only works while admin mode is on.",
     "mode: \"homelab\" or \"standalone\" on a row: only shown in that kind of install.",
     "keywords: extra words the search box matches."
@@ -115,46 +112,10 @@
       "device": "computer",
       "icon": "windows",
       "title": "Window layout",
-      "description": "In desktop mode: windows float (you place them), tile and share the screen (a new one taking half of the one in front, like Hyprland's; Alt+V floats one anyway), or Panorama: floating windows on one desktop that goes on to the right, your screen a view onto part of it. There, Alt+A and Alt+D held move left and right, Alt+S jumps to the nearer end of your windows (again: the other end), windows snapped to a side (or dragged up to a snapped one's side) sit next to the ones already there, and Alt+Shift+D / A widen the window in front to the screen's edge, then bring its other side in. Just this computer.",
-      "keywords": "tiling tile floating float layout hyprland i3 sway window manager dwindle panorama scroll strip niri paperwm infinite canvas",
+      "description": "In desktop mode: windows float (you place them), or tile and share the screen, a new one taking half of the one in front, like Hyprland's. Alt+V floats one anyway. Just this computer.",
+      "keywords": "tiling tile floating float layout hyprland i3 sway window manager dwindle",
       "control": {
         "type": "tiling"
-      }
-    },
-    {
-      "id": "panorama-fill",
-      "category": "account",
-      "device": "computer",
-      "icon": "windows",
-      "title": "Panorama snap",
-      "description": "A window dragged up to a snapped one's side in Panorama: it fills the room up to your screen's edge, or it's a whole screen wide (as much as there's room for). Just this computer.",
-      "keywords": "panorama snap fill full width screen edge column size",
-      "control": {
-        "type": "pano-fill"
-      }
-    },
-    {
-      "id": "panorama-gap",
-      "category": "account",
-      "device": "computer",
-      "icon": "windows",
-      "title": "Panorama gap",
-      "description": "Room between windows snapped side by side in Panorama, in px (0: edge to edge). For the ones you snap from now on. Just this computer.",
-      "keywords": "panorama gap gaps space spacing breathing room border between snapped windows columns",
-      "control": {
-        "type": "pano-gap"
-      }
-    },
-    {
-      "id": "panorama-speed",
-      "category": "account",
-      "device": "computer",
-      "icon": "windows",
-      "title": "Panorama speed",
-      "description": "How fast Alt+A and Alt+D move along Panorama's desktop when held, in screens a second (a tap moves a little), and how far the wheel goes. Just this computer.",
-      "keywords": "panorama scroll speed pan move left right strip",
-      "control": {
-        "type": "pano-speed"
       }
     },
     {
