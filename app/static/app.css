@@ -109,7 +109,7 @@ button { font: inherit; color: inherit; }
   padding: 24px 16px;
   animation: fade-in 0.3s both;
 }
-.lock-mark { width: 96px; margin-bottom: 16px; }
+.lock-mark { width: 120px; margin-bottom: 16px; }
 .lock-heading { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .title {
   margin: 0;
@@ -3739,7 +3739,7 @@ body.wm .desk { top: 46px; }
 .mb-item { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; font-weight: 500; white-space: nowrap; cursor: default; }
 .mb-item:hover, .mb-item.open { background: rgb(255 255 255 / 0.18); }
 .mb-item:focus-visible { outline: 2px solid var(--accent, #0a84ff); outline-offset: -2px; }
-.mb-logo img { width: 15px; height: 15px; }
+.mb-logo img { width: 18px; height: 18px; }
 .mb-app { font-weight: 700; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
 .mb-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .mb-clock { position: relative; font-variant-numeric: tabular-nums; white-space: pre; }

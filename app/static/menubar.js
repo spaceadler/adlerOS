@@ -58,7 +58,7 @@ function mbBuild() {
   if ($("menubar")) return;
   const bar = el("nav", { id: "menubar", class: "menubar", "aria-label": "Menu bar" },
     el("div", { class: "mb-left" },
-      mbButton("mb-logo", "adlerOS", [el("img", { src: "/static/mark.svg", alt: "" })], (b) => mbMenu(b, mbLogoItems())),
+      mbButton("mb-logo", "adlerOS", [el("img", { src: "/static/mark.png", alt: "" })], (b) => mbMenu(b, mbLogoItems())),
       mbButton("mb-app", "The window in front", [el("span", { id: "mb-app-name" }, "adlerOS")], (b) => mbMenu(b, mbAppItems())),
       mbButton("mb-text", "Window", ["Window"], (b) => mbMenu(b, mbWindowItems())),
       mbButton("mb-text", "Go", ["Go"], (b) => mbMenu(b, mbGoItems()))),
