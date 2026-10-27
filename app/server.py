@@ -24,7 +24,7 @@ folder mounted read-only.
     PUT  /api/files/upload?dir=&name=  a file, streamed in
     GET  /api/frame/<app>?secure=  whether the app can open in a window (desktop mode)
     GET  /api/notifications           what happened: apps offline, jobs, warnings
-    POST /api/notifications           {"read": "all"} or {"clear": true}
+    POST /api/notifications           {"read": "all"}, {"clear": true} or {"clear": [ids]}
     GET  /api/settings     everything the Settings page shows
     POST /api/settings     any of {"name", "wallpaper", "searchUrl", "dock",
                            "widgets", "order"} (order: {collection: [app ids]})
@@ -4335,11 +4335,12 @@ def notify(kind, title, body="", open_target=""):
         write_private(NOTIFICATIONS_FILE, json.dumps({"items": items[-KEEP_NOTIFICATIONS:]}))
 
 
-def update_notifications(change):
+def update_notifications(change, ids=None):
+    """"read" (all of them), "clear" (all, or just these ids: one, or a stack)."""
     with _notes_lock:
         items = load_notifications()
         if change == "clear":
-            items = []
+            items = [n for n in items if ids is not None and n.get("id") not in ids]
         else:
             for n in items:
                 n["read"] = True
@@ -4817,8 +4818,10 @@ class Handler(BaseHTTPRequestHandler):
                 update_notifications("read")
             elif body.get("clear") is True:
                 update_notifications("clear")
+            elif isinstance(body.get("clear"), list) and all(isinstance(i, str) for i in body["clear"]):
+                update_notifications("clear", set(body["clear"]))
             else:
-                return self.send_json(400, {"error": "expected {\"read\": \"all\"} or {\"clear\": true}"})
+                return self.send_json(400, {"error": "expected {\"read\": \"all\"}, {\"clear\": true} or {\"clear\": [ids]}"})
             return self.send_json(200, {"ok": True})
         if path == "/api/actions":
             actions = load_actions()

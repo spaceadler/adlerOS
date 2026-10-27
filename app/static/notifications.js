@@ -2,7 +2,8 @@
 // writes them (an app went offline or came back, a backup or update
 // finished or failed, the disk is filling up, it's running hot, Cup found
 // updates); this shows them, and pops new ones up as a toast.
-// Uses $, el, svg, api, toast, showLock, openStore, openSettings, openUsage.
+// Uses $, el, svg, api, toast, showLock, openStore, openSettings, openUsage,
+// desktopMode, and from menubar.js dndOn, mbUpdate, ncOpen, ncRender.
 "use strict";
 
 const NOTES_POLL_MS = 30000;
@@ -38,12 +39,17 @@ async function loadNotes() {
   notes.seen = new Set(body.items.map((n) => n.id));
   notes.items = body.items;
   // New since the last look: say so, once (the newest one, plus a count).
-  if (fresh.length && !$("desktop").hidden) toast(fresh.length > 1 ? `${fresh[0].title} (+${fresh.length - 1} more)` : fresh[0].title);
+  // (Do Not Disturb, in desktop mode's Control Center: no pop-up.)
+  if (fresh.length && !$("desktop").hidden && !(desktopMode() && typeof dndOn === "function" && dndOn())) toast(fresh.length > 1 ? `${fresh[0].title} (+${fresh.length - 1} more)` : fresh[0].title);
   const badge = $("bell-count");
   badge.textContent = body.unread > 9 ? "9+" : String(body.unread);
   badge.hidden = !body.unread;
   $("bell").setAttribute("aria-label", body.unread ? `Notifications, ${body.unread} new` : "Notifications");
   if (notesOpen()) renderNotes();
+  if (typeof mbUpdate === "function") {
+    mbUpdate();
+    if (ncOpen()) ncRender();
+  }
 }
 
 function startNotes() {

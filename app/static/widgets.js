@@ -315,6 +315,7 @@ async function refreshWidgets() {
   }
   widgets.live.forEach((update) => update(widgets.data));
   updateDeskWidgets(widgets.data);
+  if (typeof mbWidgetsUpdate === "function") mbWidgetsUpdate(widgets.data);
 }
 
 function startWidgets() {

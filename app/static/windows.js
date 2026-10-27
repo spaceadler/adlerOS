@@ -385,11 +385,14 @@ function winFocusNext() {
 
 // -------------------------------------------------------------- geometry
 
-// Where windows may go: the whole screen above the dock.
+// Where windows may go: the whole screen under the menu bar (menubar.js)
+// and above the dock. Their places count from under the bar: winTop.
+const MENUBAR_H = 28;
+function winTop() { return desktopMode() ? MENUBAR_H : 0; }
 function winArea() {
   const dock = $("dock");
   const bottom = dock && !dock.hidden ? dock.getBoundingClientRect().top - 8 : innerHeight;
-  return { w: innerWidth, h: Math.max(240, bottom) };
+  return { w: innerWidth, h: Math.max(240, bottom - winTop()) };
 }
 
 function winPlace(id) {
@@ -429,11 +432,12 @@ function winApply(id) {
     g.y = Math.min(Math.max(g.y, 0), area.h - 40);
     box = g;
   }
-  Object.assign(sheet.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` });
+  const top = box.y + winTop();
+  Object.assign(sheet.style, { left: `${box.x}px`, top: `${top}px`, width: `${box.w}px`, height: `${box.h}px` });
   // Its blurred wallpaper lines up with the real one: a window shows the
   // desktop behind it, never the windows in between.
   sheet.style.setProperty("--win-x", `${box.x}px`);
-  sheet.style.setProperty("--win-y", `${box.y}px`);
+  sheet.style.setProperty("--win-y", `${top}px`);
   sheet.dataset.mode = g.mode;
   const max = sheet.querySelector(":scope > .win-bar .win-button.max");
   if (max) max.setAttribute("aria-label", g.mode === "max" ? "Restore" : "Maximize");
@@ -468,7 +472,7 @@ function winDragStart(e, id, kind, holder) {
   raiseWindow(id);
   const r = $(id).getBoundingClientRect();
   // A tiled one is lifted out of its place, and dropped on another to swap.
-  wm.drag = { id, kind, sx: e.clientX, sy: e.clientY, box: { x: r.left, y: r.top, w: r.width, h: r.height }, moved: false, snap: null,
+  wm.drag = { id, kind, sx: e.clientX, sy: e.clientY, box: { x: r.left, y: r.top - winTop(), w: r.width, h: r.height }, moved: false, snap: null,
     tiled: Boolean(tileBox(id)) };
   holder.setPointerCapture(e.pointerId);
   e.preventDefault();
@@ -489,7 +493,7 @@ function winPointerMove(e) {
     if (d.kind !== "move") return;
     const sheet = $(d.id);
     const x = Math.round(d.box.x + dx);
-    const y = Math.round(d.box.y + dy);
+    const y = Math.round(d.box.y + dy) + winTop();
     Object.assign(sheet.style, { left: `${x}px`, top: `${y}px` });
     // Its blurred wallpaper comes along: what's behind it now, not where it was.
     sheet.style.setProperty("--win-x", `${x}px`);
@@ -509,7 +513,7 @@ function winPointerMove(e) {
     }
     g.x = Math.round(d.box.x + (e.clientX - d.sx));
     g.y = Math.round(d.box.y + (e.clientY - d.sy));
-    d.snap = e.clientX <= 4 ? "left" : e.clientX >= innerWidth - 5 ? "right" : e.clientY <= 4 ? "max" : null;
+    d.snap = e.clientX <= 4 ? "left" : e.clientX >= innerWidth - 5 ? "right" : e.clientY <= winTop() + 4 ? "max" : null;
     winSnapHint(d.snap);
   } else {
     let { x, y, w, h } = d.box;
@@ -529,7 +533,7 @@ function winPointerUp() {
   document.body.classList.remove("win-moving");
   winSnapHint(null);
   if (d.tiled) {
-    if (d.moved && d.at) tileDrop(d.id, d.at[0], d.at[1]);
+    if (d.moved && d.at) tileDrop(d.id, d.at[0], d.at[1] - winTop());
     return winLayout();
   }
   if (d.snap) {
@@ -548,7 +552,7 @@ function winSnapHint(mode) {
   const area = winArea();
   const half = Math.round(area.w / 2);
   const box = mode === "left" ? [0, 0, half, area.h] : mode === "right" ? [half, 0, area.w - half, area.h] : [0, 0, area.w, area.h];
-  Object.assign(hint.style, { left: `${box[0]}px`, top: `${box[1]}px`, width: `${box[2]}px`, height: `${box[3]}px` });
+  Object.assign(hint.style, { left: `${box[0]}px`, top: `${box[1] + winTop()}px`, width: `${box[2]}px`, height: `${box[3]}px` });
   hint.hidden = false;
 }
 
@@ -558,7 +562,7 @@ function winKeys(id, kind) {
   const g = wm.geometry[id];
   if (g.mode !== "normal") {
     const r = $(id).getBoundingClientRect();
-    Object.assign(g, { mode: "normal", x: r.left, y: r.top, w: r.width, h: r.height });
+    Object.assign(g, { mode: "normal", x: r.left, y: r.top - winTop(), w: r.width, h: r.height });
   }
   wm.keys = { id, kind };
   $(id).classList.add("win-keyed");
@@ -702,6 +706,7 @@ function winCycle(back) {
 function winDock() {
   const dock = $("dock");
   if (!dock) return;
+  if (typeof mbUpdate === "function") mbUpdate(); // the menu bar's name for the window in front
   dock.querySelectorAll(".dock-run").forEach((n) => n.remove());
   dock.querySelectorAll(".dock-app:not(.dock-builtin).open").forEach((n) => n.classList.remove("open")); // adlerOS's own: markDockOpen
   if (!desktopMode()) return sizeDock();
