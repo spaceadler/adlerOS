@@ -1,0 +1,77 @@
+/* Liquid glass: every see-through surface of adlerOS (the dock, the menu
+   bar, dialogs and menus, widgets, the search bar, Notification Center…), on
+   the home screen, in desktop mode and on a phone, one material.
+
+   How much of it, this device chooses (Settings: Glass; windows.js,
+   setLiquid): --lg-k from 1 (all of it) down towards 0, the blur and the
+   shine with it; at 0 (html.glass-off) no blur at all, for a slow machine
+   (a Raspberry Pi), the surfaces solid instead. In Chromium, near the top,
+   the glass also bends what's behind it (html.lg-refract, the SVG filter
+   windows.js adds); Firefox and Safari have the rest.
+
+   A new see-through surface: add its selector to the list below (a veil,
+   the dimmed screen behind something, to the second one). This file comes
+   last, so these win over each surface's own rules. */
+
+:root {
+  --lg-k: 1;
+  --lg-backdrop: blur(20px) saturate(190%) brightness(0.92);
+  --lg-veil: blur(32px) saturate(160%);
+  /* The rim and the light on the glass: a hairline all round, a bright top
+     edge, a glow inside along the top, a faint lit bottom edge. */
+  --shine:
+    0 0 0 0.5px rgb(255 255 255 / calc(0.08 + 0.1 * var(--lg-k))) inset,
+    0 1px 0 rgb(255 255 255 / calc(0.16 + 0.22 * var(--lg-k))) inset,
+    0 -1px 0 rgb(255 255 255 / calc(0.05 * var(--lg-k))) inset,
+    0 12px 18px -14px rgb(255 255 255 / calc(0.24 * var(--lg-k))) inset;
+}
+
+/* The surfaces. */
+:is(.material, .input, .button-secondary, .arrow, .web-search, .widget-panel, .search-pill, .dock, .bell,
+    .folder-icon, .desk-glyph.file-icon, .desk-widget.bar .widget-panel, .side-toggle,
+    body.wm .menubar, .nc-card, .nc-pill, .nc-empty,
+    body.phone .widget-panel, body.phone .search-pill, body.phone .pills, body.phone .dock,
+    body.phone .menu, body.phone .dialog):not(body.phone .search-panel) {
+  -webkit-backdrop-filter: var(--lg-backdrop);
+  backdrop-filter: var(--lg-backdrop);
+}
+
+/* The veils. */
+:is(.drawer, .folder-view, .menu-veil, body.phone .drawer, body.phone .search) {
+  -webkit-backdrop-filter: var(--lg-veil);
+  backdrop-filter: var(--lg-veil);
+}
+
+/* Surfaces whose own shadow had no shine: the glass's light on them too. */
+body.wm .menubar { box-shadow: var(--shine), 0 0.5px 0 rgb(255 255 255 / 0.08); }
+.nc-card { box-shadow: var(--shine), 0 6px 18px rgb(0 0 0 / 0.25); }
+body.phone .widget-panel { box-shadow: var(--shine), 0 8px 24px rgb(0 0 0 / 0.18); }
+body.phone .dock { box-shadow: var(--shine), 0 10px 30px rgb(0 0 0 / 0.2); }
+body.phone .search-pill { box-shadow: var(--shine); }
+body.phone .menu, body.phone .dialog { box-shadow: var(--shine), 0 12px 40px rgb(0 0 0 / 0.35); }
+
+/* Bent light (Chromium only). */
+html.lg-refract :is(.material, .web-search, .widget-panel, .search-pill, .dock, .bell, .desk-widget.bar .widget-panel,
+    body.wm .menubar, .nc-card, body.phone .widget-panel, body.phone .dock, body.phone .menu, body.phone .dialog):not(body.phone .search-panel) {
+  -webkit-backdrop-filter: url(#lg-refract) var(--lg-backdrop);
+  backdrop-filter: url(#lg-refract) var(--lg-backdrop);
+}
+
+/* Off: no blur anywhere (the costly part), the surfaces nearly solid so
+   their words stay readable, and the veils darker. */
+html.glass-off *, html.glass-off *::before, html.glass-off *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html.glass-off :is(.material, .web-search, .widget-panel, .search-pill, .dock, .bell, .desk-widget.bar .widget-panel,
+    body.wm .menubar, .nc-card, .nc-pill, .nc-empty, .folder-icon, .desk-glyph.file-icon,
+    body.phone .widget-panel, body.phone .search-pill, body.phone .pills, body.phone .dock,
+    body.phone .menu, body.phone .dialog):not(body.phone .search-panel) {
+  background-color: rgb(28 30 36 / 0.94);
+}
+html.glass-off :is(.drawer, .folder-view, .menu-veil, body.phone .drawer, body.phone .search) {
+  background-color: rgb(0 0 0 / 0.78);
+}
+
+/* The bend's SVG filter (windows.js): there, but taking no room. */
+#lg-filters { position: absolute; width: 0; height: 0; overflow: hidden; }

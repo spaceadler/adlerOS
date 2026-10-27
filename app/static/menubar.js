@@ -13,16 +13,17 @@
 // Uses $, el, svg, api, wm, tiles, desktopMode, setDesktopMode, openMenu,
 // closeMenu, winMenu, minimizeWindow, toggleMaximize, winSnap, centerWindow,
 // toggleFloating, tilingOn, windowLayout, setWindowLayout, switchWorkspace,
-// WS_COUNT, glassLevel, setGlass, toggleSearch, openSettings, openStore,
+// WS_COUNT, glassLevel, setGlass, liquidLevel, setLiquid, toggleSearch, openSettings, openStore,
 // openUsage, confirmLogout, powerMenu, settings, state, adminDialog,
 // setAdmin, loadSettings, notes, loadNotes, openTarget, NOTE_ICONS, ago,
 // widgets, widgetDef, widgetNode, editWidgets, music, muCurrent, muSong,
-// muArtists, musicArt, musicToggle, musicNext, musicPrev, musicSaveSoon,
-// toggleMusic, isOpen, winLoad, winSave.
+// muArtists, muIsStation, musicArt, musicParseLyrics, musicToggle,
+// musicNext, musicPrev, musicSaveSoon, toggleMusic, isOpen, winLoad, winSave.
 "use strict";
 
 const DND_KEY = "adleros.dnd";
-const mb = { open: null, nc: { live: [], expanded: new Set() }, clock: null };
+const MB_LYRICS_KEY = "adleros.menuLyrics";
+const mb = { open: null, nc: { live: [], expanded: new Set() }, clock: null, lyrics: null };
 function dndOn() { return winLoad(DND_KEY, false) === true; }
 
 const MB_ICONS = {
@@ -62,6 +63,7 @@ function mbBuild() {
       mbButton("mb-app", "The window in front", [el("span", { id: "mb-app-name" }, "adlerOS")], (b) => mbMenu(b, mbAppItems())),
       mbButton("mb-text", "Window", ["Window"], (b) => mbMenu(b, mbWindowItems())),
       mbButton("mb-text", "Go", ["Go"], (b) => mbMenu(b, mbGoItems()))),
+    mbLyricsBox(),
     el("div", { class: "mb-right" },
       mbButton("mb-icon", "Search (Alt+Space)", [svg(MB_ICONS.search)], () => { mbCloseAll(); toggleSearch(); }),
       mbButton("mb-icon mb-cc-button", "Control Center", [svg(MB_ICONS.control)], () => ccToggle()),
@@ -71,6 +73,7 @@ function mbBuild() {
   mbTick();
   mb.clock = setInterval(mbTick, 15000);
   mbUpdate();
+  mbLyricsShow();
 }
 
 function mbTick() {
@@ -91,6 +94,65 @@ function mbUpdate() {
   const unread = notes.items.some((n) => !n.read);
   $("mb-dot").hidden = !unread || ncOpen();
 }
+
+// ------------------------------------------------- lyrics in the bar
+
+// The song's line of the moment, while it plays: only timed lyrics (an
+// .lrc beside it), nothing for a song without them, a station, or a pause.
+// Clicking it opens Music. Each device chooses (on unless turned off).
+function mbLyricsOn() { return winLoad(MB_LYRICS_KEY, true) !== false; }
+
+function mbLyricsBox() {
+  const box = el("button", { type: "button", class: "mb-lyrics", id: "mb-lyrics", "aria-label": "Lyrics: open Music", hidden: "" }, el("span"));
+  box.addEventListener("click", () => { mbCloseAll(); toggleMusic(); });
+  return box;
+}
+
+// The song's lyrics, once: Music's own if it has them already.
+async function mbLyricsLoad(id) {
+  mb.lyrics = { id, lines: [] };
+  if (music.lyrics?.id === id && !music.lyrics.loading) {
+    mb.lyrics = music.lyrics;
+    return mbLyricsShow();
+  }
+  if (!muSong(id)) mb.lyrics = null;  // Music hasn't the library yet: ask again later
+  if (!muSong(id)?.lyrics) return;
+  const { status, body } = await api(`/api/music/lyrics?id=${encodeURIComponent(id)}`).catch(() => ({ status: 0 }));
+  if (mb.lyrics?.id !== id || status !== 200 || !body?.text) return;
+  mb.lyrics = { id, ...musicParseLyrics(body.text) };
+  mbLyricsShow();
+}
+
+// The line sung now, or nothing; called as the song plays (music.audio's events).
+function mbLyricsShow() {
+  const box = $("mb-lyrics");
+  if (!box) return;
+  const id = muCurrent();
+  const playing = mbLyricsOn() && id && !muIsStation(id) && !music.audio.paused;
+  if (playing && mb.lyrics?.id !== id) mbLyricsLoad(id);
+  let text = "";
+  if (playing && mb.lyrics?.id === id && mb.lyrics.synced) {
+    const t = music.audio.currentTime + 0.2;
+    for (const line of mb.lyrics.lines) {
+      if (line.t > t) break;
+      text = line.text;
+    }
+  }
+  const span = box.firstChild;
+  if (span.textContent === text) return;
+  span.textContent = text;
+  box.hidden = !text;
+  if (text && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    span.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "ease-out" });
+  }
+}
+
+function setMenuLyrics(on) {
+  winSave(MB_LYRICS_KEY, on);
+  mbLyricsShow();
+}
+
+for (const type of ["timeupdate", "play", "pause", "ended", "emptied"]) music.audio.addEventListener(type, mbLyricsShow);
 
 // A bar item's menu, under it (and the item lit while it's open).
 function mbMenu(button, items) {
@@ -223,6 +285,7 @@ function ccRender() {
   const audio = music.audio;
   const parts = [big, el("div", { class: "cc-side" }, dnd, el("div", { class: "cc-pair" }, ...small)),
     ccSlider("Windows", MB_ICONS.glass, 1 - glassLevel(), (v) => setGlass(Math.round((1 - v) * 100) / 100)),
+    ccSlider("Glass", MB_ICONS.glass, liquidLevel(), (v) => setLiquid(Math.round(v * 20) / 20)),
     ccSlider("Sound", MB_ICONS.sound, audio.muted ? 0 : audio.volume, (v) => { audio.volume = v; audio.muted = false; musicSaveSoon(); }),
     ccNowPlaying(), ccSystem()];
   cc.replaceChildren(...parts);

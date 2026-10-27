@@ -14,8 +14,10 @@
     "  admin         the admin mode switch (asks for the password to turn on)",
     "  open          a button opening one of adlerOS's windows (target: terminal)",
     "  glass         the window transparency slider (this device's)",
+    "  liquid        how much liquid glass, Max to Off (this device's)",
     "  open-apps     window or new tab for apps on the home screen (this device's)",
     "  tiling        floating or tiling windows in desktop mode (this computer's)",
+    "  device-switch an on/off kept in this browser (key; off: true for off at first)",
     "admin: true on a row: it only works while admin mode is on.",
     "mode: \"homelab\" or \"standalone\" on a row: only shown in that kind of install.",
     "keywords: extra words the search box matches."
@@ -84,6 +86,17 @@
       }
     },
     {
+      "id": "liquid",
+      "category": "account",
+      "icon": "image",
+      "title": "Glass",
+      "description": "How much liquid glass the dock, the menu bar, menus, dialogs and widgets get: Max for all of it, lower for less blur and shine, Off for none (solid, and much lighter work for a slow machine like a Raspberry Pi). In Chrome and other Chromium browsers, near Max, the glass also bends what's behind it. Just this device.",
+      "keywords": "liquid glass blur frosted performance slow raspberry pi effects shine refraction",
+      "control": {
+        "type": "liquid"
+      }
+    },
+    {
       "id": "open-apps",
       "category": "account",
       "icon": "windows",
@@ -116,6 +129,19 @@
       "keywords": "tiling tile floating float layout hyprland i3 sway window manager dwindle",
       "control": {
         "type": "tiling"
+      }
+    },
+    {
+      "id": "menu-lyrics",
+      "category": "account",
+      "device": "computer",
+      "icon": "music",
+      "title": "Lyrics in the menu bar",
+      "description": "In desktop mode, while a song plays, its line of the moment in the middle of the menu bar (songs with timed lyrics: an .lrc file beside them). Just this computer.",
+      "keywords": "lyrics music song karaoke menu bar top lrc",
+      "control": {
+        "type": "device-switch",
+        "key": "adleros.menuLyrics"
       }
     },
     {

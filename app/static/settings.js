@@ -7,6 +7,7 @@
 
 // Line icons for rows, by the names settings-catalog.json uses.
 const ICONS = {
+  music: ["M9 18V5l12-2v13", "M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M18 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
   user: ["M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2", "M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"],
   key: ["M2.6 18.4 9 12", "M7.5 21.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z", "m21 2-9.6 9.6", "m15.5 7.5 3 3L22 7l-3-3"],
   image: ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "m21 15-5-5L5 21", "M9 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"],
@@ -28,6 +29,8 @@ const ICONS = {
 };
 
 // What an "open" row opens.
+// What turning a device-switch row on or off does, beyond keeping it.
+const SWITCHES = { "adleros.menuLyrics": (on) => setMenuLyrics(on) };
 const OPENERS = { terminal: () => openTerminal(), welcome: () => { closeSettings(); openWelcome(); } };
 
 // Named read-only values for "info" rows.
@@ -320,6 +323,25 @@ function buildRow(row) {
     range.addEventListener("input", () => {
       setGlass(Number(range.value));
       value.textContent = Number(range.value).toFixed(2);
+    });
+    control.append(range, value);
+  } else if (c.type === "device-switch") {
+    // A switch kept in this browser (c.key), on unless c.off; SWITCHES says what changing it does.
+    const on = () => winLoad(c.key, !c.off) !== false;
+    const sw = el("button", { type: "button", class: "switch", role: "switch", "aria-checked": String(on()), "aria-label": row.title }, el("span"));
+    sw.addEventListener("click", () => {
+      (SWITCHES[c.key] || ((v) => winSave(c.key, v)))(!on());
+      sw.setAttribute("aria-checked", String(on()));
+    });
+    control.append(sw);
+  } else if (c.type === "liquid") {
+    // This device's, like the transparency: Off, or how much glass.
+    const say = (v) => (v <= 0 ? "Off" : v >= 1 ? "Max" : `${Math.round(v * 100)}%`);
+    const value = el("span", { class: "glass-value" }, say(liquidLevel()));
+    const range = el("input", { type: "range", class: "glass-range", min: "0", max: "1", step: "0.05", value: String(liquidLevel()), "aria-label": row.title });
+    range.addEventListener("input", () => {
+      setLiquid(Number(range.value));
+      value.textContent = say(Number(range.value));
     });
     control.append(range, value);
   } else if (c.type === "tiling") {
