@@ -281,7 +281,7 @@ function resizeActive(dw, dh) {
   const g = wm.geometry[id];
   if (g.mode !== "normal") {
     const r = $(id).getBoundingClientRect();
-    Object.assign(g, { mode: "normal", x: r.left, y: r.top, w: r.width, h: r.height });
+    Object.assign(g, { mode: "normal", x: r.left, y: r.top - winTop(), w: r.width, h: r.height });
   }
   g.w += dw;
   g.h += dh;
@@ -390,6 +390,7 @@ const ALT_WINDOW_KEYS = {
   "Shift+KeyL": () => moveToward("r"),
   "Shift+KeyK": () => moveToward("u"),
   "Shift+KeyJ": () => moveToward("d"),
+  KeyN: () => ncToggle(), // the Notification Center (menubar.js)
   KeyU: () => resizeActive(-30, 0),
   KeyP: () => resizeActive(30, 0),
   KeyI: () => resizeActive(0, -30),
