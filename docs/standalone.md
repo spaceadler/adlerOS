@@ -173,11 +173,31 @@ lets Firefox from the store open in a window, and what a phone wants for
    scheme `http`, this machine's address, port `8686`, *Websockets Support*
    on, and on the SSL tab your certificate with *Force SSL*.
 3. **Tell adlerOS to believe the proxy** about who's visiting and over what:
-   `ADLEROS_TRUSTED_PROXIES` in `.env`, its address or network (for Nginx
-   Proxy Manager, its Docker network, e.g. `172.16.7.0/24`: `docker network
-   inspect` on it shows the subnet), then `docker compose up -d`. Without it
-   every visitor looks like the proxy (one wrong password locks everyone out)
-   and the login cookie isn't marked secure.
+   `ADLEROS_TRUSTED_PROXIES` in `.env`, its address or network, then
+   `docker compose up -d`. Without it every visitor looks like the proxy (one
+   wrong password locks everyone out) and the login cookie isn't marked
+   secure.
+
+   For Nginx Proxy Manager that's its Docker network, so **pin that network's
+   range first**. Docker hands out a new one every time the network is
+   recreated (a `docker compose down`, say), and from then on adlerOS doesn't
+   recognise the proxy and answers no one through it. Add this to Nginx Proxy
+   Manager's `docker-compose.yml`, with a range outside Docker's own pool
+   (`default-address-pools` in `/etc/docker/daemon.json`, or `172.16.0.0/12`)
+   that nothing else on your network uses:
+
+   ```yaml
+   networks:
+     default:
+       ipam:
+         config:
+           - subnet: 10.88.0.0/24
+   ```
+
+   then `docker compose down && docker compose up -d` there, and set
+   `ADLEROS_TRUSTED_PROXIES=10.88.0.0/24`. Trust that one range, never all of
+   Docker's: every container on the machine comes from inside that pool, and
+   any of them could then claim to be a visitor from your tailnet.
 
 **Your apps' addresses.** A page on HTTPS can't show a plain-HTTP one, so on
 HTTPS adlerOS opens an app at `http://<this machine>:<port>` in a tab, not a
