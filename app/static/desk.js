@@ -344,7 +344,8 @@ function deskPick(icon, e) {
 
 function deskDown(e) {
   if (e.target === $("desk") && desktopMode() && e.pointerType === "mouse") {
-    return dragBox(e, $("desk"), deskIcons, (icons) => deskSetPicked(icons.map(deskKey)), () => deskIcons().filter((i) => i.classList.contains("selected")));
+    return dragBox(e, $("desk"), deskIcons, (icons) => deskSetPicked(icons.map(deskKey)), () => deskIcons().filter((i) => i.classList.contains("selected")),
+      { under: true }); // on the desktop, under the windows
   }
   const icon = e.target.closest(".desk-icon, .desk-widget");
   // Pressing in the search bar's box is for typing; its edge moves it.
@@ -363,7 +364,10 @@ function deskTarget(e, d = desk.drag) {
   const w = under?.closest(".files-list") && fileWinOf(under);
   if (w && w.view === "folder" && w.writable && w.path !== "/desktop" && w.path !== "/") return { files: w };
   if (under?.closest("#desk")) return { cell: true };
-  return {};
+  // A window that takes files (Documents, Luna).
+  const files = d?.group?.length ? [d.icon, ...d.group] : d ? [d.icon] : [];
+  const app = appDropTarget(e, files.map((i) => i.dataset.file).filter(Boolean));
+  return app ? { node: app.node, app: app.app } : {};
 }
 
 function deskMove(e) {
@@ -391,7 +395,7 @@ function deskMove(e) {
   const t = deskTarget(e);
   d.over?.classList.remove("drop-target");
   for (const w of fileWins.values()) w.part("list").classList.remove("drop-here");
-  d.over = t.folder || null;
+  d.over = t.folder || t.node || null; // a folder, or a window that takes files
   d.over?.classList.add("drop-target");
   if (t.files) t.files.part("list").classList.add("drop-here");
 }
@@ -414,6 +418,7 @@ function deskUp(e) {
   if (d.icon.dataset.deskApp) return deskPlace(d.icon, `app:${d.icon.dataset.deskApp}`, e);
   const name = d.icon.dataset.file.slice("/desktop/".length);
   const t = deskTarget(e, d);
+  if (t.app) return t.app.drop([d.icon.dataset.file], e);
   if (t.folder) return deskMoveTo(name, t.folder.dataset.file);
   if (t.files) return deskMoveTo(name, t.files.path);
   if (t.cell) deskPlace(d.icon, name, e);
@@ -425,6 +430,7 @@ async function deskGroupUp(d, e) {
   const all = [d.icon, ...d.group];
   const t = deskTarget(e, d);
   const fileIcons = all.filter((i) => i.dataset.file && i.dataset.file !== t.folder?.dataset.file);
+  if (t.app) return t.app.drop(fileIcons.map((i) => i.dataset.file), e);
   if (t.folder || t.files) {
     const to = t.folder ? t.folder.dataset.file : t.files.path;
     const paths = fileIcons.map((i) => i.dataset.file);
@@ -540,7 +546,8 @@ function deskMenu(target) {
   if (icon && !icon.classList.contains("selected")) deskSetPicked([deskKey(icon)]);
   const many = icon ? deskPickedFiles() : [];
   if (icon && many.length > 1) {
-    return [{ label: `Copy ${many.length} items`, run: () => clipPaths(many, true) },
+    return [...(docSendable(many) ? [{ label: `Upload ${many.length} items to Documents`, run: () => docUploadPaths(many) }] : []),
+      { label: `Copy ${many.length} items`, run: () => clipPaths(many, true) },
       { label: `Cut ${many.length} items`, run: () => clipPaths(many, false) },
       { label: `Delete ${many.length} items`, run: () => deletePaths(many), destructive: true }];
   }
@@ -551,6 +558,7 @@ function deskMenu(target) {
     const items = [{ label: "Open", run: () => openEntry(entry, path) }];
     if (entry.kind === "text" || (!entry.dir && entry.size < 2 * 1024 * 1024 && entry.kind === "file")) items.push({ label: "Edit as text", run: () => editFile(path) });
     if (!entry.dir) items.push({ label: "Download", run: () => downloadFile(path) });
+    if (!entry.dir && docSendable([path])) items.push({ label: "Upload to Documents", run: () => docUploadPaths([path]) });
     items.push({ label: "Copy", run: () => clip(entry, path, true) },
       { label: "Cut", run: () => clip(entry, path, false) },
       { label: "Rename…", run: () => renamePath(entry, path) },

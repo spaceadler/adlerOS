@@ -343,6 +343,7 @@ function manyMenu(paths, f) {
   const n = `${paths.length} items`;
   return [
     { label: `Copy ${n}`, run: () => clipPaths(paths, true) },
+    ...(docSendable(paths) ? [{ label: `Upload ${n} to Documents`, run: () => docUploadPaths(paths) }] : []),
     ...(f.writable ? [{ label: `Cut ${n}`, run: () => clipPaths(paths, false) },
       { label: `Delete ${n}`, run: () => deletePaths(paths), destructive: true }] : []),
   ];
@@ -352,12 +353,14 @@ function manyMenu(paths, f) {
 // it touches is picked (with Ctrl, ⌘ or Shift held: added to what was). A
 // list scrolls along when you drag past its edge. Its click on nothing
 // picks nothing. items(): the things it can pick; set(nodes): pick them.
-function dragBox(e, area, items, set, picked) {
+// under: the desktop's box, drawn on the desktop under the windows, and
+// what a window covers isn't picked.
+function dragBox(e, area, items, set, picked, { under = false } = {}) {
   if (e.button !== 0 || e.pointerType === "touch") return;
   const adding = e.ctrlKey || e.metaKey || e.shiftKey;
   const before = adding ? picked() : [];
   const x0 = e.clientX, y0 = e.clientY + area.scrollTop;
-  let box = null, last = e, raf = 0;
+  let box = null, last = e, raf = 0, covered = new Set();
   const draw = () => {
     raf = 0;
     const a = area.getBoundingClientRect();
@@ -366,7 +369,7 @@ function dragBox(e, area, items, set, picked) {
     const r = { left: Math.min(x0, x1), right: Math.max(x0, x1), top: Math.max(a.top, Math.min(ys, y1)), bottom: Math.min(a.bottom, Math.max(ys, y1)) };
     Object.assign(box.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.right - r.left}px`, height: `${r.bottom - r.top}px` });
     const top = Math.min(ys, y1), bottom = Math.max(ys, y1);
-    const hit = items().filter((n) => { const b = n.getBoundingClientRect(); return b.right > r.left && b.left < r.right && b.bottom > top && b.top < bottom; });
+    const hit = items().filter((n) => { const b = n.getBoundingClientRect(); return !covered.has(n) && b.right > r.left && b.left < r.right && b.bottom > top && b.top < bottom; });
     set([...new Set([...before, ...hit])]);
     // Past the edge of a list that scrolls: it scrolls along.
     const edge = last.clientY < a.top + 24 ? -12 : last.clientY > a.bottom - 24 ? 12 : 0;
@@ -376,8 +379,15 @@ function dragBox(e, area, items, set, picked) {
     last = m;
     if (!box) {
       if (Math.hypot(m.clientX - x0, m.clientY - (y0 - area.scrollTop)) < 4) return;
-      box = el("div", { class: "drag-box", "aria-hidden": "true" });
-      document.body.append(box);
+      box = el("div", { class: `drag-box${under ? " under" : ""}`, "aria-hidden": "true" });
+      if (under) {
+        // What's behind a window (its middle, at least) stays as it was.
+        covered = new Set(items().filter((n) => {
+          const b = n.getBoundingClientRect();
+          return document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest(".sheet, #dock, #menubar");
+        }));
+      }
+      (under ? area : document.body).append(box);
       document.body.classList.add("drag-boxing");
     }
     if (!raf) raf = requestAnimationFrame(draw);
@@ -407,6 +417,7 @@ function entryMenu(entry, path, f) {
     items.push({ label: "Open in Notepad", run: () => editFile(path) });
   }
   if (!entry.dir) items.push({ label: "Download", run: () => downloadFile(path) });
+  if (!entry.dir && docSendable([path])) items.push({ label: "Upload to Documents", run: () => docUploadPaths([path]) });
   items.push({ label: "Copy", run: () => clip(entry, path, true) });
   if (f.writable) {
     items.push({ label: "Cut", run: () => clip(entry, path, false) });
@@ -705,6 +716,20 @@ function fileDown(e) {
   Object.assign(fileDrag, { row, f, pointerId: e.pointerId, x: e.clientX, y: e.clientY, active: false, over: null });
 }
 
+// Windows that take files dragged in from My Computer or the desktop
+// (Documents, Luna): { node(): its element (or null, closed), accepts(paths),
+// drop(paths, e) }. The node gets .drop-target while they're over it.
+const fileDropApps = [];
+function registerFileDrop(target) { fileDropApps.push(target); }
+function appDropTarget(e, paths) {
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  for (const app of fileDropApps) {
+    const node = app.node();
+    if (node && under && node.contains(under) && (!paths || app.accepts(paths))) return { node, app };
+  }
+  return null;
+}
+
 function fileDropTarget(e) {
   const under = document.elementFromPoint(e.clientX, e.clientY);
   const w = fileWinOf(under);
@@ -720,7 +745,7 @@ function fileDropTarget(e) {
   const entry = icon && desk.entries.find((x) => `/desktop/${x.name}` === icon.dataset.file);
   if (entry?.dir) return { node: icon, to: icon.dataset.file };
   if (under?.closest("#desk") && desktopMode()) return { desk: true, to: "/desktop" };
-  return {};
+  return appDropTarget(e, fileDrag.paths) || {};
 }
 
 function fileMove(e) {
@@ -761,6 +786,7 @@ async function fileUp(e) {
   const path = d.row.dataset.file;
   const paths = (d.paths || [path]).filter((p) => p !== t.to);
   const name = paths.length > 1 ? `${paths.length} items` : path.split("/").pop();
+  if (t.app) return t.app.drop(paths, e);
   if (t.trash) return deletePaths(paths);
   if (!t.to || t.to === parentOf(path) || !paths.length) return;
   if (!(await rootOk([t.to, ...(d.f.writable ? paths : [])]))) return;

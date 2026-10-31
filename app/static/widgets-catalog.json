@@ -10,7 +10,7 @@
     "desk: true: only on the desktop in desktop mode (not in Edit widgets).",
     "size: [columns, half rows] it takes there; three by three if not given."
   ],
-  "max": 3,
+  "max": 4,
   "default": [
     "system",
     "storage",

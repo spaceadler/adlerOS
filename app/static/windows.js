@@ -43,18 +43,20 @@ function winSave(key, value) {
 // button at its bottom left puts it away, and brings it back. Kept per app,
 // on this device. Where the window's too narrow for a sidebar (a strip along
 // the top, or none), the button isn't shown (app.css).
-function sideToggle(section, app, cls = "side-toggle") {
+// Also for another panel: flag (the class it puts on the section), what
+// it's called and its icon (Documents' info column, on the right).
+function sideToggle(section, app, cls = "side-toggle", { flag = "side-collapsed", what = "the sidebar", icon = ["M3 5h18v14H3z", "M9 5v14"] } = {}) {
   const key = `adleros.side.${app}`;
-  const button = el("button", { type: "button", class: cls }, svg(["M3 5h18v14H3z", "M9 5v14"]));
+  const button = el("button", { type: "button", class: cls }, svg(icon));
   const show = (hidden) => {
-    section.classList.toggle("side-collapsed", hidden);
-    const label = hidden ? "Show the sidebar" : "Hide the sidebar";
+    section.classList.toggle(flag, hidden);
+    const label = hidden ? `Show ${what}` : `Hide ${what}`;
     button.title = label;
     button.setAttribute("aria-label", label);
     button.setAttribute("aria-expanded", String(!hidden));
   };
   button.addEventListener("click", () => {
-    const hidden = !section.classList.contains("side-collapsed");
+    const hidden = !section.classList.contains(flag);
     winSave(key, hidden);
     show(hidden);
   });

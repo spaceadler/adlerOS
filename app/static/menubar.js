@@ -428,8 +428,13 @@ function ncWidgets() {
     mb.nc.live.push(made.update);
     nodes.push(made.node);
   }
-  const edit = el("button", { type: "button", class: "nc-pill nc-edit" }, "Edit Widgets");
-  edit.addEventListener("click", () => { ncClose(); editWidgets(); });
+  // Fewer than four: a widget-sized tile in the next place. Four (all there
+  // can be): a short strip under them, as wide as the two columns.
+  const full = nodes.length >= (widgets.catalog.max || 4);
+  const button = el("button", { type: "button", class: full ? "nc-pill nc-edit" : "widget-panel nc-edit-tile" },
+    full ? "Edit Widgets" : el("span", { class: "widget-empty" }, svg(["M12 5v14", "M5 12h14"]), "Edit Widgets"));
+  button.addEventListener("click", () => { ncClose(); editWidgets(); });
+  const edit = full ? button : el("div", { class: "widget" }, button, el("span", { class: "widget-label" }, "Widgets"));
   box.replaceChildren(...nodes, edit);
   if (widgets.data) mb.nc.live.forEach((update) => update(widgets.data));
 }
