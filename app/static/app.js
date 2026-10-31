@@ -1324,7 +1324,7 @@ function searchFilesSoon(q) {
   fileSearch.timer = setTimeout(async () => {
     const { status, body } = await api(`/api/files/search?q=${encodeURIComponent(q)}`).catch(() => ({ status: 0 }));
     if (status !== 200 || $("search-input").value.trim().toLowerCase() !== q) return;
-    Object.assign(fileSearch, { q, items: body.items || [] });
+    Object.assign(fileSearch, { q, items: body.items || [], ready: body.ready !== false });
     renderResults(true);
   }, 180);
 }
@@ -1339,6 +1339,8 @@ function renderResults(keepSelection = false) {
   results = [...apps.map((app) => ({ type: "app", app })), ...settingsSearchResults(q),
     ...actions.map((action) => ({ type: "action", action })),
     ...found.map((file) => ({ type: "file", file })),
+    // Just after adlerOS starts, its list of your files isn't made yet: say so.
+    ...(q.length >= 2 && fileSearch.q === q && !fileSearch.ready ? [{ type: "note", text: "Still looking through your files, a minute or two" }] : []),
     // Last: the web, for anything else (a phone has no search bar of its own).
     ...(q ? [{ type: "web", query: $("search-input").value.trim() }] : [])];
   const before = selected;
@@ -1352,7 +1354,7 @@ function renderResults(keepSelection = false) {
       ? el("span", { class: "result-icon" }, plateFor(r.app))
       : r.type === "file"
         ? el("span", { class: `result-icon action file-icon ${r.file.kind}` }, svg(FILE_ICONS[r.file.kind] || FILE_ICONS.file))
-      : r.type === "web"
+      : r.type === "web" || r.type === "note"
         ? el("span", { class: "result-icon action web" }, svg(["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"]))
       : glyph
         ? el("span", { class: "result-icon dock-glyph" }, el("img", { src: `/api/dock-icon/${glyph}`, alt: "" }))
@@ -1360,11 +1362,11 @@ function renderResults(keepSelection = false) {
           : r.action?.id === "files" ? ["M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"]
           : ["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "m16 17 5-5-5-5", "M21 12H9"]));
     const name = r.type === "app" ? r.app.name : r.type === "setting" ? r.row.title : r.type === "file" ? r.file.name
-      : r.type === "web" ? `Search the web for “${r.query}”` : r.action.name;
+      : r.type === "web" ? `Search the web for “${r.query}”` : r.type === "note" ? r.text : r.action.name;
     // A file: where it is (its folder, from its place's name).
     const hint = r.type === "app" ? (r.app.up ? "Open" : "Offline") : r.type === "setting" ? "Settings"
       : r.type === "file" ? fromLabel(r.file.path) || "My Computer"
-      : r.type === "web" ? "Web" : "Action";
+      : r.type === "web" ? "Web" : r.type === "note" ? "Files" : "Action";
     const li = el("li", { role: "option", id: `result-${i}` }, icon, el("span", {}, name), el("span", { class: "hint" }, hint));
     li.addEventListener("pointermove", () => select(i));
     li.addEventListener("click", () => runResult(i));
@@ -1382,7 +1384,7 @@ function select(i) {
 
 function runResult(i) {
   const r = results[i];
-  if (!r) return;
+  if (!r || r.type === "note") return;
   closeSearch();
   if (r.type === "app") openApp(r.app);
   else if (r.type === "setting") openSettings(r.row.id);
@@ -1590,7 +1592,9 @@ for (const area of [$("desktop"), $("dock"), $("drawer"), $("folder")]) {
   area.addEventListener("click", onPressClick, true);
 }
 $("search").addEventListener("pointerdown", (e) => { if (e.target === $("search")) closeSearch(); });
-$("search-input").addEventListener("input", renderResults);
+// (Not renderResults itself: it would take the event for keepSelection,
+// and typing would never look for files.)
+$("search-input").addEventListener("input", () => renderResults());
 $("search-open").addEventListener("click", openSearch);
 $("confirm-cancel").addEventListener("click", () => { $("confirm").hidden = true; });
 $("confirm-ok").addEventListener("click", logout);

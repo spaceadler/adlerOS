@@ -504,8 +504,8 @@ def widget_catalog():
     try:
         catalog = json.loads(WIDGET_CATALOG.read_text())
     except (OSError, ValueError):
-        return {"max": 3, "default": [], "ids": set()}
-    return {"max": int(catalog.get("max", 3)), "default": catalog.get("default", []),
+        return {"max": 4, "default": [], "ids": set()}
+    return {"max": int(catalog.get("max", 4)), "default": catalog.get("default", []),
             "ids": {w["id"] for w in catalog.get("widgets", []) if isinstance(w, dict) and "id" in w}}
 
 
@@ -2549,6 +2549,25 @@ def paperless_open(path, query=None, data=None, method="GET", headers=None, time
     if not _paperless["version"] and (r.headers.get("X-Api-Version") or "").isdigit():
         _paperless["version"] = r.headers["X-Api-Version"]
     return r
+
+
+def paperless_post_file(name, data):
+    """A file for Paperless to read: (status, reply), the reply with its task's id."""
+    boundary = secrets.token_hex(16)
+    quoted = name.replace('"', "_").replace("\r", "_").replace("\n", "_")
+    body = (f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{quoted}"\r\n'
+            f"Content-Type: application/octet-stream\r\n\r\n").encode() + data + f"\r\n--{boundary}--\r\n".encode()
+    try:
+        with paperless_open("documents/post_document/", data=body, method="POST", timeout=120,
+                            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"}) as r:
+            task = json.loads(r.read() or b'""')
+    except LookupError:
+        return 409, {"error": "Documents isn't set up"}
+    except urllib.error.HTTPError as e:
+        return (e.code if e.code in (400, 401, 403, 413) else 502), {"error": f"Paperless said {e.code}"}
+    except OSError as e:
+        return 502, {"error": f"can't reach Paperless ({e})"}
+    return 200, {"ok": True, "task": task}
 
 
 def paperless_json(path, query=None, body=None, method="GET"):
@@ -4803,6 +4822,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.notes_post(path[len("/api/notes/"):], body)
         if path.startswith("/api/music/"):
             return self.music_post(path[len("/api/music/"):], body)
+        if path.startswith("/api/paperless/"):
+            return self.documents_post(path[len("/api/paperless/"):], body)
         if path == "/api/calendar/event":
             return self.calendar_post(body)
         if path == "/api/tasks/change":
@@ -5619,21 +5640,46 @@ class Handler(BaseHTTPRequestHandler):
         data = self.rfile.read(length)
         if len(data) != length:
             return self.send_json(400, {"error": "the upload stopped part-way"})
-        boundary = secrets.token_hex(16)
-        quoted = name.replace('"', "_").replace("\r", "_").replace("\n", "_")
-        body = (f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{quoted}"\r\n'
-                f"Content-Type: application/octet-stream\r\n\r\n").encode() + data + f"\r\n--{boundary}--\r\n".encode()
-        try:
-            with paperless_open("documents/post_document/", data=body, method="POST", timeout=120,
-                                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"}) as r:
-                task = json.loads(r.read() or b'""')
-        except LookupError:
-            return self.send_json(409, {"error": "Documents isn't set up"})
-        except urllib.error.HTTPError as e:
-            return self.send_json(e.code if e.code in (400, 401, 403, 413) else 502, {"error": f"Paperless said {e.code}"})
-        except OSError as e:
-            return self.send_json(502, {"error": f"can't reach Paperless ({e})"})
-        return self.send_json(200, {"ok": True, "task": task})
+        return self.send_json(*paperless_post_file(name, data))
+
+    def documents_post(self, what, body):
+        """upload-path {path}: a file already in adlerOS, for Paperless to read.
+        save {id, to}: a document's original, into a folder of yours (to: the
+        file's path there; its name taken already, 'name (2)')."""
+        if what == "upload-path":
+            place, real = locate(body.get("path"))
+            if not real or not real.is_file():
+                return self.send_json(404, {"error": "no such file"})
+            if real.stat().st_size > UPLOAD_PAPERLESS_LIMIT:
+                return self.send_json(413, {"error": "too big (200 MB at most)"})
+            return self.send_json(*paperless_post_file(real.name, real.read_bytes()))
+        if what == "save":
+            doc, to = body.get("id"), body.get("to")
+            if not isinstance(doc, int) or doc < 1 or not isinstance(to, str) or "/" not in to.strip("/"):
+                return self.send_json(400, {"error": "expected {id, to}"})
+            folder, name = to.rstrip("/").rsplit("/", 1)
+            place, real = locate(folder)
+            if not real or not real.is_dir() or not good_name(name):
+                return self.send_json(400, {"error": "a folder and a file name"})
+            if place not in WRITABLE:
+                return self.send_json(403, {"error": "pick a folder in Desktop or User"})
+            dest = unique_name(real, name)
+            part = dest.with_name(f".{dest.name}.partial")
+            try:
+                with paperless_open(f"documents/{doc}/download/", {"original": "true"}, timeout=120) as r, open(part, "wb") as out:
+                    shutil.copyfileobj(r, out, 256 * 1024)
+                os.replace(part, dest)
+            except LookupError:
+                return self.send_json(409, {"error": "Documents isn't set up"})
+            except urllib.error.HTTPError as e:
+                part.unlink(missing_ok=True)
+                return self.send_json(404 if e.code == 404 else 502, {"error": f"Paperless said {e.code}"})
+            except OSError as e:
+                part.unlink(missing_ok=True)
+                return self.send_json(502, {"error": f"couldn't save it ({e})"})
+            _search_wake.set()
+            return self.send_json(200, {"ok": True, "path": place_path(place, dest)})
+        return self.send_json(404, {"error": "unknown"})
 
     def gallery_local_reply(self):
         body = json.dumps(gallery_local(), separators=(",", ":")).encode()

@@ -849,7 +849,54 @@ function mdEmbedTools(path) {
   const open = el("button", { type: "button", class: "md-embed-bar-button" }, "Open");
   open.addEventListener("click", () => mdOpen(path));
   const save = el("a", { class: "md-embed-bar-button", href: fileUrl(mdFull(path), false), download: path.split("/").pop() }, "Download");
-  return [open, save];
+  if (!mdTab()?.writable) return [open, save];
+  // Remove: out of this note, or the file too (to the Trash).
+  const remove = el("button", { type: "button", class: "md-embed-bar-button md-embed-remove" }, "Remove");
+  remove.addEventListener("click", async (e) => {
+    const node = e.currentTarget;
+    const name = path.split("/").pop();
+    const how = await choiceDialog({
+      title: `Remove ${name}?`,
+      body: "Take it out of this note (the file stays), or delete the file as well (it goes to the Trash, where you can restore it).",
+      choices: [{ label: "Cancel", value: null }, { label: "Delete the file", value: "delete", kind: "destructive" },
+        { label: "Remove from this note", value: "remove", kind: "primary" }],
+    });
+    if (!how || !mdUnembed(node)) return;
+    if (how === "delete" && await filesPost("delete", { paths: [mdFull(path)] })) {
+      toast(`${name} moved to the Trash.`);
+      mdRefreshIndex();
+    }
+  });
+  return [remove, open, save];
+}
+
+// The embed this node is part of, out of the note's text (and its line,
+// if that's all the line was). As mdSwapEmbed finds it.
+function mdUnembed(node) {
+  const tab = mdTab();
+  const raw = node?.closest("[data-md]")?.dataset.md;
+  if (!tab?.writable || !raw || tab.text === null) return false;
+  const block = node.closest("[data-from]");
+  const lines = tab.text.split("\n");
+  const from = block ? Number(block.dataset.from) : 0;
+  const to = block ? Math.max(from + 1, Number(block.dataset.to) || from + 1) : lines.length;
+  for (let i = from; i < Math.min(to, lines.length); i++) {
+    const at = lines[i].indexOf(raw);
+    if (at < 0) continue;
+    const bang = raw.startsWith("!") || lines[i][at - 1] !== "!" ? 0 : 1; // its ! too
+    const rest = lines[i].slice(0, at - bang) + lines[i].slice(at + raw.length);
+    if (rest.trim()) lines[i] = rest;
+    else {
+      lines.splice(i, 1);
+      if (i > 0 && !lines[i - 1].trim() && i < lines.length && !lines[i].trim()) lines.splice(i, 1); // one blank line, not two
+    }
+    tab.text = lines.join("\n");
+    mdDirty(tab, 300);
+    mdRenderMain();
+    return true;
+  }
+  toast("Can't find it in the note to take it out.");
+  return false;
 }
 
 // PDFs drawn by pdf.js (vendor/: Mozilla's, Apache 2.0; its decoders for

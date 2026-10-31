@@ -361,7 +361,7 @@ async function editWidgets() {
   await loadWidgetCatalog();
   if (!widgets.data) await refreshWidgets();
   widgets.selected ||= [];
-  const max = widgets.catalog.max || 3;
+  const max = widgets.catalog.max || 4;
   const count = el("span", { class: "picker-count" });
   const grid = el("div", { class: "picker-grid" });
   const draw = () => {

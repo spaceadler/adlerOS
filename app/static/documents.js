@@ -83,13 +83,22 @@ function docsBuild() {
   section.querySelector(".doc-shell").append(sideToggle(section, "documents"));
   registerWindow("documents", { title: "Documents", close: closeDocuments, hide: () => closeWindow("documents"), dock: "documents", size: [1180, 780] });
   // Files dropped on it: to Paperless.
-  section.addEventListener("dragover", (e) => { if (e.dataTransfer?.types.includes("Files") && docs.status?.ok) { e.preventDefault(); section.classList.add("doc-dropping"); } });
+  // From My Computer or the desktop (pointer drags): Paperless reads them; not
+  // connected, they're copied into your Documents folder.
+  registerFileDrop({
+    node: () => (isOpen("documents") ? section : null),
+    accepts: (paths) => (docs.status?.ok ? docSendable(paths) : Boolean(docs.local?.found)),
+    drop: (paths) => (docs.status?.ok ? docUploadPaths(paths) : docCopyLocal(paths)),
+  });
+  section.addEventListener("dragover", (e) => { if (e.dataTransfer?.types.includes("Files") && (docs.status?.ok || docs.local?.found)) { e.preventDefault(); section.classList.add("doc-dropping"); } });
   section.addEventListener("dragleave", (e) => { if (!section.contains(e.relatedTarget)) section.classList.remove("doc-dropping"); });
   section.addEventListener("drop", (e) => {
     section.classList.remove("doc-dropping");
-    if (!e.dataTransfer?.files.length || !docs.status?.ok) return;
+    if (!e.dataTransfer?.files.length || !(docs.status?.ok || docs.local?.found)) return;
     e.preventDefault();
-    docUpload([...e.dataTransfer.files]);
+    if (docs.status?.ok) return docUpload([...e.dataTransfer.files]);
+    uploadFiles([...e.dataTransfer.files], docs.local.dir, mainFiles()); // into your Documents folder
+    setTimeout(docReloadLocal, 3000);
   });
   section.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") { e.preventDefault(); search.focus(); }
@@ -354,6 +363,61 @@ function docRow(d) {
 
 // ------------------------------------------------------------ a document
 
+// Files already in adlerOS (a right click in My Computer or on the
+// desktop, a drop on Documents): to Paperless, which reads them. PDFs and
+// pictures, the kinds it takes.
+const DOC_SENDABLE = /\.(pdf|png|jpe?g|tiff?|webp|gif)$/i;
+function docSendable(paths) { return paths.length > 0 && paths.every((p) => DOC_SENDABLE.test(p)); }
+async function docUploadPaths(paths) {
+  let sent = 0;
+  for (const [i, path] of paths.entries()) {
+    if (paths.length > 1) toast(`Sending to Documents: ${i + 1} of ${paths.length}…`);
+    const { status, body } = await api("/api/paperless/upload-path", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) }).catch(() => ({ status: 0 }));
+    if (status === 200) sent++;
+    else { toast(`${path.split("/").pop()}: ${body?.error || "couldn't send it"}.`); break; }
+  }
+  if (!sent) return;
+  toast(sent === 1 ? "Sent to Documents. Paperless is reading it; it shows up in a minute." : `${sent} sent to Documents. Paperless is reading them.`);
+  // As after an upload: look again once Paperless has had time.
+  docsRefreshSoon();
+}
+
+// Not connected to Paperless: files dropped on Documents go into your
+// Documents folder, and it looks again.
+async function docCopyLocal(paths) {
+  const reply = await filesPost("copy", { paths, to: docs.local.dir });
+  if (!reply) return;
+  if (reply.task) watchTask(reply.task);
+  toast(paths.length === 1 ? `Copied ${paths[0].split("/").pop()} to Documents.` : `Copied ${paths.length} files to Documents.`);
+  setTimeout(docReloadLocal, reply.task ? 4000 : 500);
+}
+async function docReloadLocal() {
+  if (!isOpen("documents") || docs.status?.ok) return;
+  docs.local = await docGet("local").catch(() => docs.local);
+  docRenderSide();
+  if (docs.view.kind === "list") docRender($("doc-main").scrollTop);
+}
+
+// Download: to the device you're on, or into adlerOS (a folder you pick).
+async function docDownloadTo(name, toDevice, toAdleros) {
+  const where = await choiceDialog({
+    title: `Download ${name}`,
+    body: "To the device you're on, or into a folder in adlerOS?",
+    choices: [{ label: "Cancel", value: null }, { label: "This device", value: "device" }, { label: "adlerOS…", value: "adleros", kind: "primary" }],
+  });
+  if (where === "device") return toDevice();
+  if (where !== "adleros") return;
+  const to = await filePicker({ title: "Save in adlerOS", save: true, start: "/user", name });
+  if (to) toAdleros(to);
+}
+
+// The info column (From, Dated, Added… What it says) hides, its button at
+// its bottom right, as a sidebar's does at the left. Kept on this device.
+function docInfoToggle() {
+  return sideToggle($("documents"), "documents-info", "side-toggle doc-info-toggle",
+    { flag: "doc-no-info", what: "the details", icon: ["M3 5h18v14H3z", "M15 5v14"] });
+}
+
 async function docDocView(page, id) {
   const [d, meta] = await Promise.all([docGet(`doc/${id}`), docGet(`metadata/${id}`).catch(() => null)]);
   const m = docs.meta;
@@ -361,12 +425,16 @@ async function docDocView(page, id) {
   const back = el("button", { type: "button", class: "doc-icon", title: "Back", "aria-label": "Back" }, svg(DOC_ICONS.back));
   back.addEventListener("click", () => (docs.back.length ? docNav(-1) : docShow({ kind: "list", filter: {} })));
   const download = el("button", { type: "button", class: "button-secondary doc-button" }, svg(DOC_ICONS.download), "Download");
-  download.addEventListener("click", () => {
+  download.addEventListener("click", () => docDownloadTo(d.original_file_name || `${d.title || "document"}.pdf`, () => {
     const a = el("a", { href: `/api/paperless/download/${id}`, download: d.original_file_name || "" });
     document.body.append(a);
     a.click();
     a.remove();
-  });
+  }, async (to) => {
+    const { status, body } = await api("/api/paperless/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: Number(id), to }) }).catch(() => ({ status: 0 }));
+    if (status === 200) toast(`Saved in ${fromLabel(body.path) || "adlerOS"}.`);
+    else toast(body?.error ? `Couldn't save it: ${body.error}.` : "Couldn't save it.");
+  }));
   const isPdf = /pdf/.test(d.mime_type || "") || meta?.has_archive_version;
   const preview = isPdf
     ? el("iframe", { class: "doc-preview", src: `/api/paperless/preview/${id}`, title: d.title || "The document" })
@@ -393,7 +461,7 @@ async function docDocView(page, id) {
     : "";
   page.append(el("header", { class: "doc-head doc-head-doc" }, back, el("div", { class: "doc-head-title" }, el("h1", {}, d.title || `Document ${id}`),
     el("p", { class: "doc-dim" }, [who?.name, docDate(d.created)].filter(Boolean).join(" · "))), download),
-  el("div", { class: "doc-split" }, el("div", { class: "doc-preview-box" }, preview),
+  el("div", { class: "doc-split" }, el("div", { class: "doc-preview-box" }, preview), docInfoToggle(),
     el("aside", { class: "doc-info" },
       row("From", who ? link(who.name, { correspondent: who.id }) : ""),
       row("Type", type ? link(type.name, { type: type.id }) : ""),
@@ -431,6 +499,11 @@ async function docUpload(files) {
   if (!sent) return;
   toast(sent === 1 ? `Sent to Paperless: ${files[0].name}. It's reading it; it'll be here in a minute or so.`
     : `Sent ${sent} files to Paperless. It's reading them; they'll be here in a minute or so.`);
+  docsRefreshSoon();
+}
+
+// Paperless takes a while over what it's sent: look again, twice.
+function docsRefreshSoon() {
   for (const wait of [25000, 70000]) {
     setTimeout(async () => {
       if (!isOpen("documents")) return;
@@ -498,7 +571,10 @@ function docLocalDoc(page, path) {
   const back = el("button", { type: "button", class: "doc-icon", title: "Back", "aria-label": "Back" }, svg(DOC_ICONS.back));
   back.addEventListener("click", () => (docs.back.length ? docNav(-1) : docShow({ kind: "list", filter: {} })));
   const download = el("button", { type: "button", class: "button-secondary doc-button" }, svg(DOC_ICONS.download), "Download");
-  download.addEventListener("click", () => downloadFile(x.path));
+  download.addEventListener("click", () => docDownloadTo(x.name, () => downloadFile(x.path), async (to) => {
+    const folder = to.split("/").slice(0, -1).join("/");
+    if (await filesPost("copy", { paths: [x.path], to: folder })) toast(`Copied to ${fromLabel(`${folder}/x`) || folder}.`);
+  }));
   const shown = x.archive || x.path;
   const pdf = /\.pdf$/i.test(shown);
   const picture = /^(png|jpe?g|webp|gif)$/.test(x.suffix);
@@ -510,7 +586,7 @@ function docLocalDoc(page, path) {
   where.addEventListener("click", () => openFiles(x.path.split("/").slice(0, -1).join("/")));
   page.append(docLocalNote(), el("header", { class: "doc-head doc-head-doc" }, back, el("div", { class: "doc-head-title" }, el("h1", {}, docLocalName(x)),
     el("p", { class: "doc-dim" }, x.name)), download),
-  el("div", { class: "doc-split" }, el("div", { class: "doc-preview-box" }, preview),
+  el("div", { class: "doc-split" }, el("div", { class: "doc-preview-box" }, preview), docInfoToggle(),
     el("aside", { class: "doc-info" }, row("File", x.name), row("Size", bytes(x.size)),
       row(x.number ? "Added" : "Changed", new Date(x.mtime * 1000).toLocaleDateString([], { day: "numeric", month: "long", year: "numeric" })),
       ...(x.archive ? [row("Shown", "Paperless's searchable PDF of it")] : []),
