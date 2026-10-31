@@ -1404,7 +1404,9 @@ def search_key(name):
     return re.sub(r"[-_.]+", " ", name.lower())
 
 
-def index_places():
+def index_places(each=None):
+    """Every place's files and folders; each(paths, keys) after each place,
+    so the first look round after a start can be searched as it goes."""
     paths, keys = [], []
     for place in places_on():
         skip = {tuple(p) for _, p in nested(place)}
@@ -1430,6 +1432,8 @@ def index_places():
                 keys.append(search_key(entry.name))
                 if is_dir:
                     stack.append((entry.path, sub))
+        if each:
+            each(list(paths), list(keys))
     return paths, keys
 
 
@@ -1438,9 +1442,14 @@ def search_indexer():
         os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 15)
     except (OSError, AttributeError):
         pass
+    def partly(paths, keys):  # before the first whole look: what's found so far
+        with _search_lock:
+            if not _search["at"]:
+                _search.update(paths=paths, keys=keys)
+
     while True:
         try:
-            paths, keys = index_places()
+            paths, keys = index_places(partly)
             with _search_lock:
                 _search.update(paths=paths, keys=keys, at=time.time(), full=len(paths) >= SEARCH_MAX)
         except Exception as e:  # a bad folder never stops the server

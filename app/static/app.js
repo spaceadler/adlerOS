@@ -1340,7 +1340,7 @@ function renderResults(keepSelection = false) {
     ...actions.map((action) => ({ type: "action", action })),
     ...found.map((file) => ({ type: "file", file })),
     // Just after adlerOS starts, its list of your files isn't made yet: say so.
-    ...(q.length >= 2 && fileSearch.q === q && !fileSearch.ready ? [{ type: "note", text: "Still looking through your files, a minute or two" }] : []),
+    ...(q.length >= 2 && fileSearch.q === q && !fileSearch.ready ? [{ type: "note", text: "Still looking through your files (a few minutes after adlerOS starts)" }] : []),
     // Last: the web, for anything else (a phone has no search bar of its own).
     ...(q ? [{ type: "web", query: $("search-input").value.trim() }] : [])];
   const before = selected;
