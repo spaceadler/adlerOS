@@ -35,6 +35,10 @@
     {
       "id": "system",
       "label": "System"
+    },
+    {
+      "id": "maintenance",
+      "label": "Maintenance"
     }
   ],
   "rows": [
@@ -413,6 +417,99 @@
         }
       },
       "admin": true
+    },
+    {
+      "id": "maintenance",
+      "category": "maintenance",
+      "icon": "archive",
+      "title": "Maintenance scripts",
+      "description": "Your homelab's own scripts (dev/scripts: aa-all_in_one.sh and the rest), run from here as root: backups, updates and cleanups, each with its logs. They need admin mode, and a one-time setup on the machine.",
+      "keywords": "maintenance scripts backup update upgrade cleanup clean prune apt docker logs aa zz zx yy zy xz",
+      "control": {
+        "type": "maint-setup"
+      }
+    },
+    {
+      "id": "maint-all",
+      "category": "maintenance",
+      "icon": "archive",
+      "title": "Everything",
+      "description": "Back up, update the system, clean it up, update the containers, clean them up (aa-all_in_one.sh). adlerOS is offline while your containers are stopped for the backup.",
+      "keywords": "all in one maintenance everything",
+      "admin": true,
+      "control": {
+        "type": "maint",
+        "task": "all",
+        "volumes": true,
+        "down": true
+      }
+    },
+    {
+      "id": "maint-backup",
+      "category": "maintenance",
+      "icon": "archive",
+      "title": "Back up",
+      "description": "Stops your containers, archives containers/ into backup/containers/ (the last 7 kept), and starts them again (zz-script_backup.sh). adlerOS is offline meanwhile.",
+      "keywords": "backup archive zstd",
+      "admin": true,
+      "control": {
+        "type": "maint",
+        "task": "backup",
+        "down": true
+      }
+    },
+    {
+      "id": "maint-system-update",
+      "category": "maintenance",
+      "icon": "download",
+      "title": "Update the system",
+      "description": "apt full-upgrade, then autoremove and clean (zx-system_updater.sh). A Docker update restarts every container; a new kernel needs a restart.",
+      "keywords": "apt upgrade update packages system",
+      "admin": true,
+      "control": {
+        "type": "maint",
+        "task": "system-update"
+      }
+    },
+    {
+      "id": "maint-system-cleanup",
+      "category": "maintenance",
+      "icon": "archive",
+      "title": "Clean up the system",
+      "description": "Packages nothing needs, leftover configs, apt's cache and an old journal go (yy-system_cleanup.sh).",
+      "keywords": "apt autoremove clean journal",
+      "admin": true,
+      "control": {
+        "type": "maint",
+        "task": "system-cleanup"
+      }
+    },
+    {
+      "id": "maint-container-update",
+      "category": "maintenance",
+      "icon": "download",
+      "title": "Update the containers",
+      "description": "New images for the stacks that are on, and the changed ones recreated (zy-script_updater.sh). adlerOS may restart with them.",
+      "keywords": "docker pull update images containers",
+      "admin": true,
+      "control": {
+        "type": "maint",
+        "task": "container-update"
+      }
+    },
+    {
+      "id": "maint-container-cleanup",
+      "category": "maintenance",
+      "icon": "archive",
+      "title": "Clean up the containers",
+      "description": "Stacks put as homelab-stacks.conf has them, and unused images, networks and build cache pruned (xz-script_cleanup.sh).",
+      "keywords": "docker prune cleanup images volumes",
+      "admin": true,
+      "control": {
+        "type": "maint",
+        "task": "container-cleanup",
+        "volumes": true
+      }
     }
   ]
 }

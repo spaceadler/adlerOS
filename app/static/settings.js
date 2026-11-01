@@ -366,6 +366,10 @@ function buildRow(row) {
       textBlock.append(el("div", { class: "row-detail locked" }, "Turn on admin mode (above) to use this."));
     }
     control.append(b);
+  } else if (c.type === "maint-setup") {
+    maintSetupRow(textBlock, control);
+  } else if (c.type === "maint") {
+    maintTaskRow(row, c, textBlock, control);
   } else if (c.type === "action") {
     const b = el("button", { type: "button", class: `chip-button${c.destructive ? " destructive" : ""}` }, c.label || row.title);
     b.addEventListener("click", () => runAction(row));
@@ -497,6 +501,111 @@ async function applyPending() {
 }
 
 // --------------------------------------------------------------- actions
+
+// ------------------------------------------------------------ maintenance
+
+// Your maintenance scripts (Settings → Maintenance): run by the helper as root
+// through install-maint.sh's launcher. GET /api/maintenance: how each last
+// went (from its logs) and your copies' checksums; the quiet maint-check
+// action: what's installed (or the command that installs it).
+// Each on its own (the check goes through the helper, which takes longer).
+const maint = { status: null, check: null, statusP: null, checkP: null };
+function maintLoad(again = false) {
+  if (!maint.statusP || again) {
+    maint.statusP = api("/api/maintenance").then((r) => (maint.status = r.status === 200 ? r.body : null)).catch(() => null);
+  }
+  if (!maint.checkP || again) {
+    maint.checkP = postAction("maint-check").then((job) => (job ? waitForJob(job) : null))
+      .then((job) => (maint.check = job?.result || null)).catch(() => null);
+  }
+  return maint.statusP;
+}
+const MAINT_RESULT = { ok: "Done", warnings: "Done, with warnings", failed: "Failed", unfinished: "Didn't finish (or is running)", unknown: "Unknown" };
+function maintWhen(t) {
+  return new Date(t * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function maintSetupRow(textBlock, control) {
+  const detail = el("div", { class: "row-detail" }, "Checking…");
+  textBlock.append(detail);
+  maintLoad();
+  Promise.all([maint.statusP, maint.checkP]).then(([status, check]) => {
+    if (!check?.ok) {
+      const command = check?.installer || "sudo <adlerOS folder>/agent/install-maint.sh";
+      const copy = el("button", { type: "button", class: "chip-button" }, "Copy command");
+      copy.addEventListener("click", () => navigator.clipboard?.writeText(command).then(() => toast("Copied."), () => toast(command)));
+      detail.replaceChildren("Not set up yet. Run this once on the machine (over SSH, or adlerOS's terminal), then come back: ",
+        el("code", { class: "maint-command" }, command));
+      control.append(copy);
+      return;
+    }
+    // Installed: are those your scripts as they are now?
+    const changed = Object.entries(status?.scripts || {}).filter(([name, sum]) => check.scripts?.[name] && check.scripts[name] !== sum).map(([n]) => n);
+    detail.textContent = changed.length
+      ? `Set up, but you've changed ${changed.join(", ")} since: run install-maint.sh again (with sudo) for adlerOS to run the new ${changed.length === 1 ? "version" : "versions"}.`
+      : "Set up: the scripts adlerOS runs are your current ones.";
+  });
+}
+
+function maintTaskRow(row, c, textBlock, control) {
+  const detail = el("div", { class: "row-detail" }, "…");
+  textBlock.append(detail);
+  const logs = el("button", { type: "button", class: "chip-button secondary" }, "Logs");
+  const start = el("button", { type: "button", class: "chip-button" }, "Start");
+  logs.addEventListener("click", () => maintLogs(row.title, c.task));
+  start.addEventListener("click", () => maintRun(row, c));
+  if (!settings.data.admin) {
+    start.disabled = true;
+    textBlock.append(el("div", { class: "row-detail locked" }, "Turn on admin mode (Settings → System) to run it."));
+  }
+  control.append(logs, start);
+  maintLoad().then((status) => {
+    const t = status?.tasks.find((x) => x.task === c.task);
+    const last = t?.last;
+    detail.textContent = last ? `Last run ${maintWhen(last.time)}: ${MAINT_RESULT[last.result]}${last.line && last.result !== "ok" ? ` (${last.line})` : ""}` : "Not run yet.";
+    detail.classList.toggle("maint-bad", last?.result === "failed");
+    logs.disabled = !t?.logs.length;
+  });
+  maint.checkP.then((check) => {
+    if (!check?.ok) { start.disabled = true; start.title = "Set it up first (Maintenance scripts, above)"; }
+  });
+}
+
+async function maintRun(row, c) {
+  if (!settings.data.admin) return toast("Turn on admin mode in Settings → System first.");
+  const body = `${row.description}${c.down ? " The page reconnects when adlerOS is back; the job carries on meanwhile." : ""}`;
+  const choices = [{ label: "Cancel", value: null }];
+  if (c.volumes) choices.push({ label: "Also delete unused volumes", value: "volumes", kind: "destructive" });
+  choices.push({ label: "Start", value: "run", kind: "primary" });
+  const how = await choiceDialog({ title: `${row.title}?`, body, choices });
+  if (!how) return;
+  if (how === "volumes" && !(await confirmDialog({ title: "Delete unused volumes too?", body: "Volumes no compose file declares are deleted for good: there's no Trash for them.", button: "Delete them", destructive: true }))) return;
+  startAction(`maint-${c.task}${how === "volumes" ? "-volumes" : ""}`, {}, { onDone: () => { maintLoad(true).then(() => renderRows()); } });
+}
+
+async function maintLogs(title, task) {
+  await maintLoad();
+  const pre = el("pre", { class: "job-log maint-log" }, "Loading…");
+  const pick = el("select", { class: "field-input", "aria-label": "Which run" });
+  const state2 = maint.status?.tasks.find((x) => x.task === task);
+  for (const name of state2?.logs || []) {
+    const m = name.match(/(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})/);
+    pick.append(el("option", { value: name }, m ? `${m[1]} ${m[2]}:${m[3]}` : name));
+  }
+  const show = async () => {
+    const { status, body } = await api(`/api/maintenance/log?task=${encodeURIComponent(task)}&file=${encodeURIComponent(pick.value)}`).catch(() => ({ status: 0 }));
+    pre.textContent = status === 200 ? `${body.cut ? "(only its last part)\n" : ""}${body.text}` : body?.error || "Can't read it.";
+    pre.scrollTop = pre.scrollHeight;
+  };
+  pick.addEventListener("change", show);
+  const refresh = el("button", { type: "button", class: "button-secondary" }, "Refresh");
+  refresh.addEventListener("click", show);
+  const close = el("button", { type: "button", class: "button-primary" }, "Close");
+  close.addEventListener("click", closeModal);
+  openModal(el("div", { class: "dialog material maint-logs", role: "dialog", "aria-modal": "true", "aria-label": `${title}: logs` },
+    el("h2", {}, `${title}: logs`), pick, pre, el("div", { class: "dialog-actions" }, refresh, close)));
+  show();
+}
 
 async function runAction(row) {
   const c = row.control;
