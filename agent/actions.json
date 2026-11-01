@@ -498,5 +498,149 @@
         ]
       }
     ]
+  },
+  "maint-check": {
+    "label": "Checking maintenance",
+    "description": "Whether the maintenance launcher is installed (install-maint.sh), and its scripts' checksums.",
+    "quiet": true,
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/maintcheck.py",
+          "{adleros}"
+        ],
+        "result": true
+      }
+    ]
+  },
+  "maint-all": {
+    "label": "Running all maintenance",
+    "admin": true,
+    "description": "Every step: back up, update the system, clean it, update the containers, clean them up (aa-all_in_one.sh -y).",
+    "steps": [
+      {
+        "run": [
+          "sudo",
+          "-n",
+          "/usr/local/libexec/adleros/maint",
+          "all"
+        ],
+        "timeout": 14400
+      }
+    ]
+  },
+  "maint-all-volumes": {
+    "label": "Running all maintenance",
+    "admin": true,
+    "description": "As all, and unused volumes go too (aa-all_in_one.sh -y --volumes).",
+    "steps": [
+      {
+        "run": [
+          "sudo",
+          "-n",
+          "/usr/local/libexec/adleros/maint",
+          "all-volumes"
+        ],
+        "timeout": 14400
+      }
+    ]
+  },
+  "maint-backup": {
+    "label": "Backing up",
+    "admin": true,
+    "description": "Stops the containers, archives containers/ into backup/containers/, starts them again (zz-script_backup.sh).",
+    "steps": [
+      {
+        "run": [
+          "sudo",
+          "-n",
+          "/usr/local/libexec/adleros/maint",
+          "backup"
+        ],
+        "timeout": 14400
+      }
+    ]
+  },
+  "maint-system-update": {
+    "label": "Updating the system",
+    "admin": true,
+    "description": "apt full-upgrade, autoremove, clean (zx-system_updater.sh -y).",
+    "steps": [
+      {
+        "run": [
+          "sudo",
+          "-n",
+          "/usr/local/libexec/adleros/maint",
+          "system-update"
+        ],
+        "timeout": 7200
+      }
+    ]
+  },
+  "maint-system-cleanup": {
+    "label": "Cleaning up the system",
+    "admin": true,
+    "description": "Unneeded packages, leftover configs, apt's cache, the journal (yy-system_cleanup.sh -y).",
+    "steps": [
+      {
+        "run": [
+          "sudo",
+          "-n",
+          "/usr/local/libexec/adleros/maint",
+          "system-cleanup"
+        ],
+        "timeout": 3600
+      }
+    ]
+  },
+  "maint-container-update": {
+    "label": "Updating containers",
+    "admin": true,
+    "description": "Pulls new images for the stacks that are on and recreates what changed (zy-script_updater.sh).",
+    "steps": [
+      {
+        "run": [
+          "sudo",
+          "-n",
+          "/usr/local/libexec/adleros/maint",
+          "container-update"
+        ],
+        "timeout": 7200
+      }
+    ]
+  },
+  "maint-container-cleanup": {
+    "label": "Cleaning up containers",
+    "admin": true,
+    "description": "Stacks to the state homelab-stacks.conf asks for, unused images, networks and build cache pruned (xz-script_cleanup.sh).",
+    "steps": [
+      {
+        "run": [
+          "sudo",
+          "-n",
+          "/usr/local/libexec/adleros/maint",
+          "container-cleanup"
+        ],
+        "timeout": 3600
+      }
+    ]
+  },
+  "maint-container-cleanup-volumes": {
+    "label": "Cleaning up containers",
+    "admin": true,
+    "description": "As container cleanup, and unused volumes go too (xz-script_cleanup.sh --volumes).",
+    "steps": [
+      {
+        "run": [
+          "sudo",
+          "-n",
+          "/usr/local/libexec/adleros/maint",
+          "container-cleanup-volumes"
+        ],
+        "timeout": 3600
+      }
+    ]
   }
 }

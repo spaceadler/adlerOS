@@ -1,0 +1,40 @@
+#!/bin/bash
+# adlerOS's maintenance launcher, installed root-owned by install-maint.sh:
+# runs one of your homelab scripts as root, by name only, from the
+# root-owned copies installed beside it (never from a folder you can
+# write to, so nothing that can write there as you gets root by it).
+# Exit 2 from a script (finished with warnings) counts as done.
+set -uo pipefail
+dir=/usr/local/libexec/adleros/scripts
+run() {
+    "$@"
+    local rc=$?
+    if [ "$rc" -eq 2 ]; then
+        echo "adlerOS: finished with warnings (exit 2): see the log above"
+        exit 0
+    fi
+    exit "$rc"
+}
+case "${1:-}" in
+    check)
+        # What's installed, for adlerOS to compare with your own copies.
+        printf '{"ok": true, "scripts": {'
+        first=1
+        for f in "$dir"/*; do
+            [ -f "$f" ] || continue
+            [ "$first" = 1 ] || printf ', '
+            first=0
+            printf '"%s": "%s"' "$(basename "$f")" "$(sha256sum "$f" | cut -d' ' -f1)"
+        done
+        printf '}}\n'
+        ;;
+    all) run "$dir/aa-all_in_one.sh" -y ;;
+    all-volumes) run "$dir/aa-all_in_one.sh" -y --volumes ;;
+    backup) run "$dir/zz-script_backup.sh" ;;
+    system-update) run "$dir/zx-system_updater.sh" -y ;;
+    system-cleanup) run "$dir/yy-system_cleanup.sh" -y ;;
+    container-update) run "$dir/zy-script_updater.sh" ;;
+    container-cleanup) run "$dir/xz-script_cleanup.sh" ;;
+    container-cleanup-volumes) run "$dir/xz-script_cleanup.sh" --volumes ;;
+    *) echo "maint: unknown task '${1:-}'" >&2; exit 64 ;;
+esac

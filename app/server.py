@@ -681,13 +681,89 @@ def device_info():
 
 
 def backups_info():
-    if not BACKUPS.exists():
+    """The backups in backup/containers: a homelab's (mounted), else through
+    Root. A dated folder (2026-10-28/) or archive (2026-10-29.tar.zst) each."""
+    where = BACKUPS if BACKUPS.exists() else PLACES["root"] / "backup" / "containers"
+    if not where.exists():
         return {"readable": True, "last": None, "count": 0}
     try:
-        dates = sorted(p.name for p in BACKUPS.iterdir() if re.fullmatch(r"\d{4}-\d{2}-\d{2}", p.name))
+        dates = sorted({m[1] for p in where.iterdir() if (m := re.fullmatch(r"(\d{4}-\d{2}-\d{2})(?:\.tar\.zst)?", p.name))})
     except OSError:
         return {"readable": False, "last": None, "count": 0}
     return {"readable": True, "last": dates[-1] if dates else None, "count": len(dates)}
+
+
+# -------------------------------------------------------------- maintenance
+
+# Your homelab's maintenance scripts (dev/scripts: aa-all_in_one.sh and the
+# rest), run as root by the helper through install-maint.sh's launcher.
+# Their logs (backup/logs/<prefix>-YYYY-MM-DD_HHMMSS.log, read through Root)
+# say how each last went: its last INFO/WARN/FATAL line.
+MAINT_TASKS = {  # task: (its logs' prefix, its script)
+    "all": ("all-in-one", "aa-all_in_one.sh"), "backup": ("backup", "zz-script_backup.sh"),
+    "system-update": ("system-update", "zx-system_updater.sh"), "system-cleanup": ("system-cleanup", "yy-system_cleanup.sh"),
+    "container-update": ("container-update", "zy-script_updater.sh"), "container-cleanup": ("container-cleanup", "xz-script_cleanup.sh"),
+}
+def maint_logs_dir():
+    return PLACES["root"] / "backup" / "logs"
+
+
+def maint_scripts_dir():
+    return PLACES["root"] / "dev" / "scripts"
+
+
+MAINT_LOG_LIMIT = 512 * 1024
+
+
+def maint_logs(prefix):
+    """That task's logs, newest first (by the date in the name: the
+    *-latest.log links don't survive every copy)."""
+    try:
+        return sorted((p for p in maint_logs_dir().iterdir() if re.fullmatch(rf"{re.escape(prefix)}-\d{{4}}-\d{{2}}-\d{{2}}_\d{{6}}\.log", p.name)),
+                      key=lambda p: p.name, reverse=True)
+    except OSError:
+        return []
+
+
+def maint_result(path):
+    """ok, warnings or failed (from its last INFO/WARN/FATAL line), or
+    unfinished (still running, or stopped)."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(max(0, os.path.getsize(path) - 16384))
+            tail = f.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return {"result": "unknown", "line": ""}
+    last = next((l for l in reversed(tail) if re.search(r"\[(INFO|WARN|FATAL)\]", l)), "")
+    text = re.sub(r"^\S+ \S+ \[\w+\]\s*", "", last)
+    if "[FATAL]" in last:
+        result = "failed"
+    elif "WITH WARNINGS" in last.upper():
+        result = "warnings"
+    elif re.search(r"\bOK\b|finished", last):
+        result = "ok"
+    else:
+        result = "unfinished"
+    return {"result": result, "line": text[:200]}
+
+
+def maint_status():
+    tasks = []
+    for task, (prefix, script) in MAINT_TASKS.items():
+        logs = maint_logs(prefix)
+        last = None
+        if logs:
+            st = logs[0].stat()
+            last = {"file": logs[0].name, "time": int(st.st_mtime), **maint_result(logs[0])}
+        tasks.append({"task": task, "script": script, "last": last, "logs": [p.name for p in logs[:20]]})
+    # Your own copies' checksums: the page compares them with what's installed.
+    sums = {}
+    for name in [s for _, s in MAINT_TASKS.values()] + ["homelab-stacks.conf"]:
+        try:
+            sums[name] = hashlib.sha256((maint_scripts_dir() / name).read_bytes()).hexdigest()
+        except OSError:
+            pass
+    return {"tasks": tasks, "scripts": sums, "logsFound": maint_logs_dir().is_dir()}
 
 
 # ------------------------------------------------------------------- actions
@@ -4342,7 +4418,11 @@ WATCH_SECONDS = 60
 _notes_lock = threading.Lock()
 # Jobs worth telling you about when they finish (all of them when they fail).
 NOTIFY_DONE = {"backup": "Backup finished", "update": "Homelab updated", "apply-config": "Settings applied",
-               "app-install": "Installed", "app-update": "Updated"}
+               "app-install": "Installed", "app-update": "Updated",
+               "maint-all": "Maintenance finished", "maint-all-volumes": "Maintenance finished", "maint-backup": "Backup finished",
+               "maint-system-update": "System updated", "maint-system-cleanup": "System cleaned up",
+               "maint-container-update": "Containers updated", "maint-container-cleanup": "Containers cleaned up",
+               "maint-container-cleanup-volumes": "Containers cleaned up"}
 
 
 def load_notifications():
@@ -4430,7 +4510,8 @@ class Watcher:
                 why = next((l for l in reversed(job.get("log") or []) if l.strip() and not l.startswith("$ ")), "") or job.get("error") or ""
                 notify("job-failed", f"{label}{f': {what}' if what else ''} didn't work", why[:200], "settings" if not app else "app-store")
             elif name in NOTIFY_DONE:
-                notify("job-done", f"{NOTIFY_DONE[name]}{f': {what}' if what else ''}", "", "settings:backup" if name == "backup" else "app-store" if app else "settings")
+                notify("job-done", f"{NOTIFY_DONE[name]}{f': {what}' if what else ''}", "",
+                       "settings:backup" if name == "backup" else "settings:maintenance" if name.startswith("maint-") else "app-store" if app else "settings")
 
     def machine(self):
         info = device_info()
@@ -4660,7 +4741,7 @@ class Handler(BaseHTTPRequestHandler):
             "config": config,
             "appCount": len(installed_apps()),
             "device": device_info(),
-            "backups": backups_info() if HOMELAB_MODE else None,
+            "backups": backups_info(),  # a homelab's, or through Root (standalone)
             "actions": action_summary(load_actions()),
             "jobs": recent_jobs(),
             "passwordChanged": bool(load_settings().get("passwordHash")),
@@ -4755,6 +4836,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.gallery_get(path[len("/api/gallery/"):], query)
         if path.startswith("/api/paperless/"):
             return self.documents_get(path[len("/api/paperless/"):], query)
+        if path == "/api/maintenance":
+            return self.send_json(200, maint_status())
+        if path == "/api/maintenance/log":
+            # One of a task's own logs, by its name: nothing else in that folder.
+            task = MAINT_TASKS.get(query.get("task", [""])[0])
+            name = query.get("file", [""])[0]
+            logs = maint_logs(task[0]) if task else []
+            log = next((p for p in logs if p.name == name), logs[0] if logs and not name else None)
+            if not log:
+                return self.send_json(404, {"error": "no such log"})
+            size = log.stat().st_size
+            with open(log, "rb") as f:
+                f.seek(max(0, size - MAINT_LOG_LIMIT))
+                text = f.read().decode("utf-8", "replace")
+            return self.send_json(200, {"file": log.name, "text": text, "cut": size > MAINT_LOG_LIMIT, **maint_result(log)})
         if path.startswith("/api/calendar/"):
             return self.calendar_get(path[len("/api/calendar/"):], query)
         if path.startswith("/api/tasks/"):

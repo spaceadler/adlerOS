@@ -3857,3 +3857,10 @@ body.wm .nc.shown { pointer-events: auto; transform: none; }
   .side-toggle.doc-info-toggle { display: none; }
   .doc-no-info .doc-info { display: block; }
 }
+/* Settings → Maintenance (settings.js). */
+.maint-command { display: block; margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: rgb(0 0 0 / 0.3); font: 12px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace; user-select: all; overflow-wrap: anywhere; }
+.row-detail.maint-bad { color: #ff6b63; }
+.maint-logs { width: min(900px, calc(100vw - 32px)); }
+.maint-logs select { margin-bottom: 10px; }
+.maint-log { max-height: 60vh; white-space: pre-wrap; }
+.chip-button.secondary { background: rgb(255 255 255 / 0.08); }

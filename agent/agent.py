@@ -187,13 +187,14 @@ def expand(argv, params):
     return out
 
 
-def run(argv, job, logfile):
-    """Run a command, streaming its output into the job as it goes."""
+def run(argv, job, logfile, timeout=STEP_TIMEOUT):
+    """Run a command, streaming its output into the job as it goes (a step
+    may give its own "timeout", in seconds: a long maintenance run)."""
     env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "HOMELAB_DIR")}
     env.setdefault("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
     proc = subprocess.Popen(argv, cwd=WORKDIR, env=env, stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
-    deadline = time.monotonic() + STEP_TIMEOUT
+    deadline = time.monotonic() + timeout
     last_save = 0.0
     for line in proc.stdout:
         line = line.rstrip("\n")
@@ -206,7 +207,7 @@ def run(argv, job, logfile):
             last_save = time.monotonic()
         if time.monotonic() > deadline:
             proc.kill()
-            job["log"].append(f"(stopped after {STEP_TIMEOUT}s)")
+            job["log"].append(f"(stopped after {timeout}s)")
             break
     return proc.wait()
 
@@ -281,7 +282,7 @@ def process(path, actions):
                     code = run_for_result(argv, job, logfile)
                 else:
                     job["log"].append(f"$ {' '.join(argv)}")
-                    code = run(argv, job, logfile)
+                    code = run(argv, job, logfile, min(int(step.get("timeout", STEP_TIMEOUT)), 4 * 3600))
             except (OSError, KeyError, ValueError, subprocess.TimeoutExpired) as e:
                 job.update(status="failed", error=str(e), finished=stamp())
                 save_job(job)
