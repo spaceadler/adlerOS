@@ -3864,3 +3864,5 @@ body.wm .nc.shown { pointer-events: auto; transform: none; }
 .maint-logs select { margin-bottom: 10px; }
 .maint-log { max-height: 60vh; white-space: pre-wrap; }
 .chip-button.secondary { background: rgb(255 255 255 / 0.08); }
+/* Greyed (can't be done yet; a click says how): a menu item, a place. */
+.menu button.muted, .files-place.muted { opacity: 0.45; }

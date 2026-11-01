@@ -642,5 +642,69 @@
         "timeout": 3600
       }
     ]
+  },
+  "tailscale-status": {
+    "label": "Checking Tailscale",
+    "description": "Whether Taildrop works here (your user is Tailscale's operator), and the devices files can be sent to.",
+    "quiet": true,
+    "admin": true,
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/tailscale.py",
+          "{adleros}",
+          "status"
+        ],
+        "result": true
+      }
+    ]
+  },
+  "tailscale-get": {
+    "label": "Receiving from Tailscale",
+    "description": "Files sent to this machine with Taildrop, into Tailscale/ in your storage folder.",
+    "quiet": true,
+    "admin": true,
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/tailscale.py",
+          "{adleros}",
+          "get"
+        ],
+        "result": true
+      }
+    ]
+  },
+  "tailscale-send": {
+    "label": "Sending with Tailscale",
+    "description": "Files to one of your other devices, with Taildrop.",
+    "admin": true,
+    "params": {
+      "device": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9.:-]{0,99}$"
+      },
+      "paths": {
+        "pattern": "^(/(user|desktop|root)/[^\\n\\x00]{1,1000}\\n?){1,10}$",
+        "maxLength": 8192
+      }
+    },
+    "steps": [
+      {
+        "run": [
+          "python3",
+          "-I",
+          "{adleros}/agent/tailscale.py",
+          "{adleros}",
+          "send",
+          "{param:device}",
+          "{param:paths}"
+        ],
+        "result": true
+      }
+    ]
   }
 }

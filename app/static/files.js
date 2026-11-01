@@ -69,6 +69,7 @@ const PLACE_ICONS = {
   user: ["M3 10.5 12 3l9 7.5", "M5 9v11h14V9", "M10 20v-6h4v6"],
   root: ["M4 4h16v6H4z", "M4 14h16v6H4z", "M8 7h.01", "M8 17h.01"],
   trash: ["M3 6h18", "M8 6V4h8v2", "M19 6l-1 14H6L5 6", "M10 11v6", "M14 11v6"],
+  tailscale: ["M12 5h.01", "M6 5h.01", "M18 5h.01", "M12 12h.01", "M6 12h.01", "M18 12h.01", "M12 19h.01"],
 };
 const PLACE_NAMES = { desktop: "Desktop", user: "User", root: "Root" };
 
@@ -175,9 +176,90 @@ function renderPlaces(f) {
     b.addEventListener("click", run);
     return b;
   };
+  // Admin mode: Tailscale, above the Trash (greyed until Tailscale lets
+  // adlerOS use it; then a click says how).
+  const ts = [];
+  if (state.admin) {
+    const b = item("tailscale", "Tailscale", f.view === "folder" && f.path === "/user/Tailscale", () => tsOpen(f));
+    b.removeAttribute("data-path"); // not a drop target: its folder (User/Tailscale) is
+    b.classList.toggle("muted", tailscale.status?.ok === false);
+    ts.push(b);
+    if (!tailscale.status || Date.now() - tailscale.at > 60000) tsStatus().then(() => { if (isOpen(f.id)) renderPlaces(f); });
+  }
   f.part("side").replaceChildren(
     ...f.places.map((p) => item(p.place, p.name, f.view === "folder" && f.place === p.place, () => showFolder(`/${p.place}`, f))),
-    item("trash", "Trash", f.view === "trash", () => showTrash(f)));
+    ...ts, item("trash", "Trash", f.view === "trash", () => showTrash(f)));
+}
+
+// ------------------------------------------------------------ Tailscale
+
+// Taildrop, in admin mode (agent/tailscale.py, as your user: Tailscale's
+// operator, so no sudo): files sent to this machine land in User/Tailscale
+// (pulled when you open it, or Receive); files you pick go to one of your
+// devices. Until Tailscale lets your user do that, the entries are greyed
+// and say how.
+const tailscale = { status: null, at: 0, loading: null };
+function tsStatus(force = false) {
+  if (!state.admin) return Promise.resolve(null);
+  if (tailscale.loading && !force) return tailscale.loading;
+  tailscale.loading = postAction("tailscale-status").then((job) => (job ? waitForJob(job) : null)).then((job) => {
+    tailscale.status = job?.result || { ok: false, why: job?.error || "the helper didn't answer" };
+    tailscale.at = Date.now();
+    tailscale.loading = null;
+    return tailscale.status;
+  }).catch(() => { tailscale.loading = null; return null; });
+  return tailscale.loading;
+}
+function tsExplain(st = tailscale.status) {
+  const fix = st?.fix || "sudo tailscale set --operator=$USER";
+  const body = el("div", {},
+    el("p", {}, `Tailscale can't be used from adlerOS yet: ${st?.why || "it isn't set up"}. Run this once in a terminal on the machine (over SSH, or adlerOS's terminal):`),
+    el("code", { class: "maint-command" }, fix),
+    el("p", {}, "It lets your user send and receive Tailscale files without sudo. Then try again."));
+  const copy = el("button", { type: "button", class: "button-secondary" }, "Copy command");
+  copy.addEventListener("click", () => navigator.clipboard?.writeText(fix).then(() => toast("Copied."), () => toast(fix)));
+  const ok = el("button", { type: "button", class: "button-primary" }, "OK");
+  ok.addEventListener("click", closeModal);
+  openModal(el("div", { class: "dialog material", role: "dialog", "aria-modal": "true" }, el("h2", {}, "Tailscale needs one setting"), body,
+    el("div", { class: "dialog-actions" }, copy, ok)));
+}
+// Pull what's waiting into User/Tailscale; resolves with the names.
+async function tsReceive({ quiet = false } = {}) {
+  const st = await tsStatus();
+  if (!st?.ok) { tsExplain(st); return null; }
+  if (!quiet) toast("Looking for Tailscale files…");
+  const job = await postAction("tailscale-get").then((j) => (j ? waitForJob(j) : null)).catch(() => null);
+  const r = job?.result;
+  if (!r?.ok) { toast(`Tailscale: ${r?.why || job?.error || "couldn't receive"}.`); return null; }
+  if (r.got.length || !quiet) toast(r.got.length ? `Received ${r.got.length === 1 ? r.got[0] : `${r.got.length} files`} in User/Tailscale.` : "No Tailscale files waiting.");
+  if (r.got.length) refreshFiles();
+  return r.got;
+}
+async function tsOpen(f) {
+  const st = await tsStatus();
+  if (!st?.ok) return tsExplain(st);
+  await tsReceive({ quiet: true });
+  showFolder("/user/Tailscale", f);
+}
+const tsItem = () => (!state.admin ? [] : [{ label: "Receive Tailscale files", muted: tailscale.status?.ok === false, run: () => tsReceive() }]);
+// Files you can send: files (no folders), ten at most.
+function tsSendable(entries) { return state.admin && entries.length > 0 && entries.length <= 10 && entries.every((e) => !e.dir); }
+const tsSendItem = (paths) => [{ label: paths.length > 1 ? `Send ${paths.length} files to a device…` : "Send to a device…", muted: tailscale.status?.ok === false, run: () => tsSend(paths) }];
+async function tsSend(paths) {
+  const st = await tsStatus();
+  if (!st?.ok) return tsExplain(st);
+  if (!st.targets?.length) return toast("Tailscale has no other device of yours to send to.");
+  const targets = [...st.targets].sort((a, b) => Number(b.online) - Number(a.online));
+  const to = await choiceDialog({
+    title: paths.length > 1 ? `Send ${paths.length} files to…` : `Send ${paths[0].split("/").pop()} to…`,
+    body: "One of your devices on Tailscale. It gets them in its Taildrop inbox (an offline one, when it's back).",
+    choices: [{ label: "Cancel", value: null }, ...targets.map((t) => ({ label: t.online ? t.name : `${t.name} (offline)`, value: t.name, kind: t.online ? "primary" : undefined }))],
+  });
+  if (!to) return;
+  toast(`Sending to ${to}…`);
+  const job = await postAction("tailscale-send", { device: to, paths: paths.join("\n") }).then((j) => (j ? waitForJob(j) : null)).catch(() => null);
+  const r = job?.result;
+  toast(r?.ok ? `Sent ${r.sent === 1 ? paths[0].split("/").pop() : `${r.sent} files`} to ${to}.` : `Tailscale: ${r?.why || job?.error || "couldn't send"}.`);
 }
 
 // What Root says about itself: look, don't touch (and how to, if you must).
@@ -341,7 +423,9 @@ function pickRow(row, f, e) {
 // Several picked: copy, cut or delete all of them.
 function manyMenu(paths, f) {
   const n = `${paths.length} items`;
+  const entries = paths.map((p) => ({ dir: Boolean(f.part("list").querySelector(`.file-row[data-file="${CSS.escape(p)}"][data-dir]`)) }));
   return [
+    ...(tsSendable(entries) ? tsSendItem(paths) : []),
     { label: `Copy ${n}`, run: () => clipPaths(paths, true) },
     ...(docSendable(paths) ? [{ label: `Upload ${n} to Documents`, run: () => docUploadPaths(paths) }] : []),
     ...(f.writable ? [{ label: `Cut ${n}`, run: () => clipPaths(paths, false) },
@@ -418,6 +502,7 @@ function entryMenu(entry, path, f) {
   }
   if (!entry.dir) items.push({ label: "Download", run: () => downloadFile(path) });
   if (!entry.dir && docSendable([path])) items.push({ label: "Upload to Documents", run: () => docUploadPaths([path]) });
+  if (tsSendable([entry])) items.push(...tsSendItem([path]));
   items.push({ label: "Copy", run: () => clip(entry, path, true) });
   if (f.writable) {
     items.push({ label: "Cut", run: () => clip(entry, path, false) });
@@ -834,6 +919,16 @@ function wireFiles(f) {
   f.part("sort").addEventListener("change", () => setFilesSort({ by: f.part("sort").value }));
   f.part("order").addEventListener("click", () => setFilesSort({ desc: !filesSort().desc }));
   f.part("list").addEventListener("pointerdown", fileDown);
+  // The empty part of a folder: what can go in it (and Tailscale's files).
+  f.part("list").addEventListener("contextmenu", (e) => {
+    if (e.target.closest(".file-row, input") || f.view !== "folder" || f.path === "/") return;
+    e.preventDefault();
+    const items = f.writable ? [{ label: "New folder", run: () => newFolder(f.path) }, { label: "New text file", run: () => newTextFile(f.path) },
+      ...(files.clip ? [{ label: `Paste ${files.clip.label}`, run: () => paste(f.path) }] : []),
+      { label: "Upload…", run: () => uploadFrom(() => { files.uploadTo = f.path; f.part("picker").click(); }, (paths) => copyInto(paths, f.path, f)) }] : [];
+    items.push(...tsItem());
+    if (items.length) openMenu(e.clientX, e.clientY, items);
+  });
   f.part("list").addEventListener("pointerdown", (e) => {
     if (e.target.closest(".file-row, button, a, input") || f.view !== "folder") return;
     dragBox(e, f.part("list"), () => pickable(f), (rows) => setPicked(f, rows.map((r) => (r.dataset ? r.dataset.file : r))), () => [...pickable(f)].filter((r) => r.classList.contains("selected")));
