@@ -163,17 +163,9 @@ function separateWidgets() {
   });
 }
 
+// (Icons a widget now covers: deskLayout moves each to the nearest free cell.)
 function clearUnderWidgets() {
   separateWidgets();
-  const places = deskPlaces();
-  let changed = false;
-  for (const [name, cell] of Object.entries(places)) {
-    if (iconUnderWidget(cell)) {
-      delete places[name];
-      changed = true;
-    }
-  }
-  if (changed) saveDeskPlaces(places);
 }
 
 function addDeskWidget(id, cell) {
@@ -262,6 +254,109 @@ function deskNode(name) {
 }
 const iconsOverlap = (a, b) => a[0] === b[0] && Math.abs(a[1] - b[1]) < ICON_ROWS;
 
+// Every icon has a cell of its own, as on Windows: where you put it, or, new,
+// the first free one (down the first column, then the next): your folder
+// first, then the files, then the apps. Nothing moves because something
+// else did: a drop on a taken cell puts what you dropped in the nearest
+// free one. Rows go by an icon's height (two half rows), so icons never
+// half-overlap; widgets take what they cover.
+const placeKey = (icon) => (icon.dataset.file ? icon.dataset.file.slice("/desktop/".length) : `app:${icon.dataset.deskApp}`);
+const slotRow = (r) => Math.max(1, r % 2 ? r : r - 1);
+function deskOrder() {
+  const icons = deskIcons();
+  return [...icons.filter((i) => i.dataset.deskApp === DESK_HOME), ...icons.filter((i) => i.dataset.file),
+    ...icons.filter((i) => i.dataset.deskApp && i.dataset.deskApp !== DESK_HOME)];
+}
+// What's taken (half-row cells, "col,row"): the widgets, and the icons kept
+// in `places` (but those in `except`).
+function deskTaken(places, except = new Set()) {
+  const taken = new Set();
+  for (const w of deskWidgetList()) {
+    const z = widgetSize(w.id);
+    for (let c = 0; c < z.cols; c++) for (let r = 0; r < z.rows; r++) taken.add(`${w.cell[0] + c},${w.cell[1] + r}`);
+  }
+  for (const icon of deskIcons()) {
+    const key = placeKey(icon);
+    const at = places[key];
+    if (at && !except.has(key)) for (let r = 0; r < ICON_ROWS; r++) taken.add(`${at[0]},${at[1] + r}`);
+  }
+  return taken;
+}
+function cellFree(taken, at) {
+  if (at[0] < 1 || at[1] < 1 || at[1] + ICON_ROWS - 1 > deskRows()) return false;
+  for (let r = 0; r < ICON_ROWS; r++) if (taken.has(`${at[0]},${at[1] + r}`)) return false;
+  return true;
+}
+// The free cell nearest `want`: up and down its column before the next one.
+function nearestFree(taken, want) {
+  const rows = deskRows();
+  let best = null;
+  for (let c = 1; c <= deskCols() + 30; c++) {
+    if (best && (c - want[0]) * 4 > best.cost) break;
+    for (let r = 1; r + ICON_ROWS - 1 <= rows; r += ICON_ROWS) {
+      const cost = Math.abs(c - want[0]) * 4 + Math.abs(r - want[1]);
+      if ((!best || cost < best.cost) && cellFree(taken, [c, r])) best = { at: [c, r], cost };
+    }
+  }
+  return best ? best.at : want;
+}
+// The first free cell: down the first column, then the next.
+function firstFree(taken) {
+  for (let c = 1; c <= deskCols() + 30; c++) {
+    for (let r = 1; r + ICON_ROWS - 1 <= deskRows(); r += ICON_ROWS) if (cellFree(taken, [c, r])) return [c, r];
+  }
+  return [1, 1];
+}
+// Each icon to its cell, and every cell kept (a new icon's too, so it
+// stays). First every icon whose cell is its own (in order: your folder,
+// files, apps), then the rest (new ones, two kept on one cell, one under a
+// widget) each to a free one.
+function deskLayout() {
+  // Not on screen yet (no size to go by): nothing placed, nothing kept.
+  if (!desktopMode() || !$("desk").clientHeight) return;
+  const places = deskPlaces();
+  const taken = deskTaken({});
+  let save = false;
+  const mark = (at) => { for (let r = 0; r < ICON_ROWS; r++) taken.add(`${at[0]},${at[1] + r}`); };
+  const later = [];
+  for (const icon of deskOrder()) {
+    const key = placeKey(icon);
+    const at = places[key] && [places[key][0], slotRow(places[key][1])];
+    if (at && at[1] + ICON_ROWS - 1 > deskRows()) { later.push([icon, key, at, true]); continue; } // below the bottom
+    if (!at || !cellFree(taken, at)) { later.push([icon, key, at, false]); continue; }
+    if (at[1] !== places[key][1]) save = true;
+    places[key] = at;
+    mark(at);
+    placeIcon(icon, at);
+  }
+  for (const [icon, key, at, below] of later) {
+    if (below) {
+      // The window's shorter now: shown nearby, its own cell kept for later.
+      const shown = nearestFree(taken, [at[0], Math.max(1, deskRows() - ICON_ROWS + 1)]);
+      mark(shown);
+      placeIcon(icon, shown);
+      continue;
+    }
+    places[key] = at ? nearestFree(taken, at) : firstFree(taken);
+    save = true;
+    mark(places[key]);
+    placeIcon(icon, places[key]);
+  }
+  if (desk.on) {
+    // Only what's on the desktop now is remembered.
+    const names = new Set(deskIcons().map(placeKey));
+    for (const k of Object.keys(places)) if (!names.has(k)) { delete places[k]; save = true; }
+  }
+  if (save) saveDeskPlaces(places);
+}
+// key to the free cell nearest `want`; nothing else moves.
+function deskPut(key, want, places = deskPlaces(), except = new Set([key])) {
+  const at = [Math.max(1, want[0]), slotRow(Math.max(1, want[1]))];
+  const taken = deskTaken(places, except);
+  places[key] = cellFree(taken, at) ? at : nearestFree(taken, at);
+  return places;
+}
+
 async function refreshDesk() {
   if (!desktopMode()) return;
   const { status, body } = await api("/api/files?path=/desktop").catch(() => ({ status: 0 }));
@@ -279,6 +374,7 @@ function renderDesk() {
     // No files to show, but the apps you put here (and your folder, the widgets) still.
     grid.replaceChildren(el("p", { class: "desk-empty" }, "No Desktop folder yet: set DESKTOP_DIR (in adlerOS's .env) and run ./install.sh again."),
       ...deskAppNodes(), ...deskWidgetNodes());
+    deskLayout();
     return;
   }
   const had = document.activeElement?.closest?.("#desk") ? document.activeElement.dataset.file : null;
@@ -303,6 +399,7 @@ function renderDesk() {
     return icon;
   }));
   grid.append(...deskAppNodes(), ...deskWidgetNodes());
+  deskLayout();
   for (const icon of deskIcons()) {
     icon.addEventListener("click", (e) => { if (!matchMedia("(pointer: coarse)").matches && e.detail !== 0) deskPick(icon, e); });
     icon.classList.toggle("selected", desk.sel.has(deskKey(icon)));
@@ -415,13 +512,13 @@ function deskUp(e) {
   if (d.widget) return moveDeskWidget(d, e);
   if (d.group?.length) return deskGroupUp(d, e);
   // An app on the desktop only moves about on it.
-  if (d.icon.dataset.deskApp) return deskPlace(d.icon, `app:${d.icon.dataset.deskApp}`, e);
+  if (d.icon.dataset.deskApp) return deskPlace(d.icon, `app:${d.icon.dataset.deskApp}`, e, d);
   const name = d.icon.dataset.file.slice("/desktop/".length);
   const t = deskTarget(e, d);
   if (t.app) return t.app.drop([d.icon.dataset.file], e);
   if (t.folder) return deskMoveTo(name, t.folder.dataset.file);
   if (t.files) return deskMoveTo(name, t.files.path);
-  if (t.cell) deskPlace(d.icon, name, e);
+  if (t.cell) deskPlace(d.icon, name, e, d);
 }
 
 // Several dropped: files into a folder (or a My Computer window's), or all
@@ -448,14 +545,19 @@ async function deskGroupUp(d, e) {
   const from = cellOf(d.icon), to = iconCell(deskCellAt(e.clientX - d.offX + 4, e.clientY - d.offY + 4));
   const dc = to[0] - from[0], dr = to[1] - from[1];
   if (!dc && !dr) return;
+  // Each as far as the one you held went; one landing on a taken cell (an
+  // icon that stayed, a widget, one of these placed already) takes the
+  // nearest free one. Nothing else moves.
   const places = deskPlaces();
-  const moved = all.map((i) => { const c = cellOf(i); return [i.dataset.file ? i.dataset.file.slice("/desktop/".length) : `app:${i.dataset.deskApp}`, iconCell([Math.max(1, c[0] + dc), Math.max(1, c[1] + dr)])]; });
-  const names = new Set(moved.map(([n]) => n));
-  // Whatever was where they land flows back in with the rest.
-  for (const n of Object.keys(places)) if (!names.has(n) && moved.some(([, at]) => iconsOverlap(places[n], at))) delete places[n];
-  for (const [n, at] of moved) places[n] = at;
+  const keys = all.map(placeKey);
+  const waiting = new Set(keys);
+  all.forEach((i, n) => {
+    const c = cellOf(i);
+    deskPut(keys[n], iconCell([Math.max(1, c[0] + dc), Math.max(1, c[1] + dr)]), places, new Set(waiting));
+    waiting.delete(keys[n]);
+  });
   saveDeskPlaces(places);
-  renderDesk();
+  deskLayout();
 }
 
 // A widget dropped: its top left corner where the part you held lands.
@@ -494,35 +596,18 @@ function deskCellAt(x, y) {
 // Where an icon whose top you'd put at that cell fits (it's two half rows tall).
 const iconCell = (cell) => [cell[0], Math.min(cell[1], deskRows() - ICON_ROWS + 1)];
 
-// A file arriving on the desktop (dragged from Files): there, from now on.
-// Whatever had that spot flows back in with the rest.
+// A file arriving on the desktop (dragged from Files): the free cell
+// nearest where it was dropped, from now on. Nothing else moves.
 function rememberDeskPlace(name, cell) {
-  const at = iconCell(cell);
-  const places = deskPlaces();
-  for (const n of Object.keys(places)) if (iconsOverlap(places[n], at)) delete places[n];
-  places[name] = at;
-  saveDeskPlaces(places);
+  saveDeskPlaces(deskPut(name, iconCell(cell)));
 }
 
-// Somewhere else on the desktop: there, and an icon that was there takes
-// this one's old place (or flows back in with the rest).
-function deskPlace(icon, name, e) {
-  const [col, row] = iconCell(deskCellAt(e.clientX, e.clientY));
-  if (iconUnderWidget([col, row])) return; // a widget's there: it stays where it was
-  const places = deskPlaces();
-  const before = places[name];
-  const there = Object.keys(places).filter((n) => n !== name && iconsOverlap(places[n], [col, row]));
-  there.forEach((n, i) => {
-    if (i === 0 && before) places[n] = before;
-    else delete places[n];
-    const other = deskNode(n);
-    if (other) placeIcon(other, places[n]);
-  });
-  places[name] = [col, row];
-  // Only what's on the desktop now is remembered.
-  const names = new Set([...desk.entries.map((x) => x.name), ...deskApps().map((id) => `app:${id}`)]);
-  saveDeskPlaces(Object.fromEntries(Object.entries(places).filter(([n]) => names.has(n))));
-  placeIcon(icon, [col, row]);
+// Somewhere else on the desktop: the free cell nearest where its top left
+// landed (taken: the nearest free one). Nothing else moves.
+function deskPlace(icon, name, e, d = null) {
+  const want = iconCell(d ? deskCellAt(e.clientX - d.offX + 4, e.clientY - d.offY + 4) : deskCellAt(e.clientX, e.clientY));
+  saveDeskPlaces(deskPut(name, want));
+  deskLayout();
 }
 
 // The right-click menu on the desktop, in desktop mode.
@@ -594,6 +679,8 @@ deskGrid.addEventListener("click", (e) => {
   e.stopPropagation();
 }, true);
 window.addEventListener("resize", () => { if (desktopMode() && desk.on) renderDesk(); });
+// Its size known (first shown, or changed): every icon to its cell.
+new ResizeObserver(() => deskLayout()).observe($("desk"));
 document.addEventListener("pointermove", deskMove);
 document.addEventListener("pointerup", deskUp);
 document.addEventListener("pointercancel", deskUp);
