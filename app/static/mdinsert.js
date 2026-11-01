@@ -315,7 +315,11 @@ function mdPickFiles(area, tab, picture, show = false) {
     picker.remove();
   });
   document.body.append(picker);
-  picker.click();
+  // From this device (its picker), or files already in adlerOS (copied in, as uploads are).
+  uploadFrom(() => picker.click(), async (paths) => {
+    picker.remove();
+    mdPasteFiles({ preventDefault() {} }, await mdFilesFrom(paths), back(), tab, { dropped: !picture && !show, show });
+  }, picture ? "Insert a picture" : "Attach a file");
 }
 
 // A link to a note: the notes, searched by name.
@@ -374,7 +378,7 @@ function mdSwapEmbed(node, show) {
   const tab = mdTab();
   const raw = node?.closest("[data-md]")?.dataset.md;
   if (!tab?.writable || !raw || tab.text === null) return;
-  const block = node.closest("[data-from]");
+  const block = mdEmbedBlock(node);
   const lines = tab.text.split("\n");
   const from = block ? Number(block.dataset.from) : 0;
   const to = block ? Math.max(from + 1, Number(block.dataset.to) || from + 1) : lines.length;
