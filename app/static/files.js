@@ -627,6 +627,30 @@ async function pollTasks() {
 
 // --------------------------------------------------------------- upload
 
+// Every Upload asks: from the device you're on (its own file picker), or
+// files already in adlerOS (picked here). onDevice(): open the picker
+// (still the click that asked); onAdleros(paths): what to do with them.
+async function uploadFrom(onDevice, onAdleros, title = "Upload") {
+  const from = await choiceDialog({
+    title,
+    body: "From the device you're on, or files that are already in adlerOS?",
+    choices: [{ label: "Cancel", value: null }, { label: "This device", value: "device" }, { label: "adlerOS…", value: "adleros", kind: "primary" }],
+  });
+  if (from === "device") return onDevice();
+  if (from !== "adleros") return;
+  const paths = await filePicker({ title: "Choose files in adlerOS", many: true, start: "/user" });
+  if (paths?.length) onAdleros(paths);
+}
+
+// Copies of files in adlerOS into a folder (an Upload from adlerOS).
+async function copyInto(paths, to, f = frontFiles()) {
+  const reply = await filesPost("copy", { paths, to });
+  if (!reply) return;
+  if (reply.task) watchTask(reply.task, f);
+  else toast(paths.length === 1 ? `Copied ${paths[0].split("/").pop()} here.` : `Copied ${paths.length} files here.`);
+  refreshFiles();
+}
+
 function uploadFiles(list, dir = frontFiles().path, f = frontFiles()) {
   if (placeOf(dir) === "root") return toast("Root takes no uploads: upload to the Desktop or User, then move it.");
   for (const file of list) {
@@ -839,7 +863,7 @@ function wireFiles(f) {
   });
   f.part("upload").addEventListener("click", () => {
     files.uploadTo = null;
-    f.part("picker").click();
+    uploadFrom(() => f.part("picker").click(), (paths) => copyInto(paths, f.path, f));
   });
   // The first window's picker is the desktop's too: its Upload… sets where.
   f.part("picker").addEventListener("change", (e) => {

@@ -390,15 +390,18 @@ function choiceDialog({ title, body, choices }) {
 // Open… and Save as…: your places and their folders. Resolves with the
 // chosen path, or null. save: a name to type, and folders only to pick.
 // folder: a folder itself is what's picked (Luna's Open folder as vault).
-function filePicker({ title, save = false, folder = false, start = "/user", name = "" }) {
+// many: any number of files, clicked one by one (resolves with a list).
+function filePicker({ title, save = false, folder = false, many = false, start = "/user", name = "" }) {
   return new Promise((resolve) => {
     let answered = false;
     let here = start;
     let chosen = null;
+    const picked = new Set(); // many: every file clicked, in any folder
     const list = el("div", { class: "picker-list", role: "listbox" });
     const crumbs = el("div", { class: "picker-crumbs" });
     const nameInput = save ? el("input", { class: "field-input picker-name", type: "text", value: name, spellcheck: "false", "aria-label": "Name" }) : null;
-    const ok = el("button", { type: "button", class: "button-primary" }, save ? "Save" : folder ? "Use this folder" : "Open");
+    const ok = el("button", { type: "button", class: "button-primary" }, save ? "Save" : folder ? "Use this folder" : many ? "Choose" : "Open");
+    const count = () => { if (many) ok.textContent = picked.size ? `Choose ${picked.size}` : "Choose"; };
     const cancel = el("button", { type: "button", class: "button-secondary" }, "Cancel");
     const finish = (value) => { answered = true; closeModal(); resolve(value); };
     async function go(path) {
@@ -419,13 +422,19 @@ function filePicker({ title, save = false, folder = false, start = "/user", name
         const to = e.place && here === "/" ? `/${e.place}` : join(here, e.name);
         const row = el("button", { type: "button", class: "picker-row", role: "option" },
           el("span", { class: `file-icon ${e.kind}` }, svg(FILE_ICONS[e.kind] || FILE_ICONS.file)), el("span", {}, e.name));
+        if (many && picked.has(to)) row.classList.add("selected");
         row.addEventListener("click", () => {
           if (e.dir) return go(to);
+          if (many) {
+            if (picked.has(to)) picked.delete(to); else picked.add(to);
+            row.classList.toggle("selected", picked.has(to));
+            return count();
+          }
           for (const r of list.children) r.classList.remove("selected");
           row.classList.add("selected");
           chosen = to;
         });
-        row.addEventListener("dblclick", () => { if (!e.dir) finish(to); });
+        row.addEventListener("dblclick", () => { if (!e.dir) finish(many ? [...new Set([...picked, to])] : to); });
         return row;
       }), ...(entries.length ? [] : [el("p", { class: "no-results" }, save || folder ? "No folders here." : "Nothing here.")]));
       ok.disabled = !save && !folder ? false : here === "/";
@@ -438,6 +447,7 @@ function filePicker({ title, save = false, folder = false, start = "/user", name
         return finish(join(here, n));
       }
       if (folder) return here === "/" ? toast("Pick a folder.") : finish(here);
+      if (many) return picked.size ? finish([...picked]) : toast("Click the files you want first.");
       if (!chosen) return toast("Pick a file first.");
       finish(chosen);
     });

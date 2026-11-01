@@ -273,6 +273,16 @@ function mdBuild() {
   document.body.insertBefore(section, $("modal"));
   // Its ribbon's bottom: the sidebar's button, under the right panel's.
   section.querySelector(".md-ribbon").append(sideToggle(section, "luna", "md-ribbon-button md-side-toggle"));
+  // Dragged in from My Computer or the desktop: into the note in front, as
+  // its attachments (shown when they can be), at its end.
+  registerFileDrop({
+    node: () => (isOpen("luna") && mdTab()?.kind === "note" && mdTab().writable ? $("md-main") : null),
+    accepts: () => true,
+    drop: async (paths) => {
+      const tab = mdTab();
+      if (tab) mdPasteFiles({ preventDefault() {} }, await mdFilesFrom(paths), null, tab, { auto: true });
+    },
+  });
   registerWindow("luna", { title: "Luna", close: closeLuna, hide: () => closeWindow("luna"), dock: "luna", size: [1180, 760] });
   section.addEventListener("keydown", mdKeys);
   section.classList.toggle("md-no-right", !adler.right);
@@ -870,13 +880,24 @@ function mdEmbedTools(path) {
   return [remove, open, save];
 }
 
+// The lines of the note an embed is on: the outermost element that says
+// (in Live, each line is drawn on its own, so the embed's own numbers count
+// from that line, and the widget round it has the note's).
+function mdEmbedBlock(node) {
+  let found = null;
+  for (let n = node; n && !n.classList?.contains("md-flow") && !n.classList?.contains("md-read"); n = n.parentElement) {
+    if (n.dataset?.from !== undefined) found = n;
+  }
+  return found;
+}
+
 // The embed this node is part of, out of the note's text (and its line,
 // if that's all the line was). As mdSwapEmbed finds it.
 function mdUnembed(node) {
   const tab = mdTab();
   const raw = node?.closest("[data-md]")?.dataset.md;
   if (!tab?.writable || !raw || tab.text === null) return false;
-  const block = node.closest("[data-from]");
+  const block = mdEmbedBlock(node);
   const lines = tab.text.split("\n");
   const from = block ? Number(block.dataset.from) : 0;
   const to = block ? Math.max(from + 1, Number(block.dataset.to) || from + 1) : lines.length;
@@ -1377,7 +1398,23 @@ function mdCompleteClose() {
 // pasted in shown in the note, a file dropped as a link with its name. In
 // the editor, where the caret is; anywhere else (reading it), at the end.
 // Each on a line of its own, ending as the note's lines do.
-async function mdPasteFiles(e, list, area, tab, { dropped = false, show = false } = {}) {
+// Files already in adlerOS, as File objects: so attaching one goes the way
+// an upload does (the vault's name for it, its attachment folder, a link).
+async function mdFilesFrom(paths) {
+  const out = [];
+  for (const path of paths) {
+    const r = await fetch(fileUrl(path, false), { credentials: "same-origin" }).catch(() => null);
+    if (!r?.ok) { toast(`Can't read ${path.split("/").pop()}.`); continue; }
+    const blob = await r.blob();
+    out.push(new File([blob], path.split("/").pop(), { type: blob.type }));
+  }
+  return out;
+}
+
+// What a note can show of a file (an embed rather than a link).
+const MD_EMBEDDABLE = /\.(pdf|png|jpe?g|gif|webp|avif|svg|bmp|mp4|webm|mov|m4v|mp3|ogg|opus|wav|m4a|flac|md)$/i;
+
+async function mdPasteFiles(e, list, area, tab, { dropped = false, show = false, auto = false } = {}) {
   if (!list?.length || !tab.writable) return;
   e.preventDefault();
   const dir = mdAttachmentDir(tab.path);
@@ -1399,7 +1436,8 @@ async function mdPasteFiles(e, list, area, tab, { dropped = false, show = false 
     if (!reply) continue;
     const rel = `${dir ? `${dir}/` : ""}${reply.name}`;
     adler.names.add(rel);
-    const shown = show || (!dropped && file.type.startsWith("image/"));
+    // auto (dragged in from My Computer or the desktop): shown when it can be.
+    const shown = show || (auto ? MD_EMBEDDABLE.test(file.name) : !dropped && file.type.startsWith("image/"));
     links.push(mdLinkTo(tab.path, rel, pasted ? reply.name : file.name.replace(/\.[^.]+$/, ""), shown));
   }
   if (!links.length) return;

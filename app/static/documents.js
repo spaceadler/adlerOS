@@ -163,7 +163,8 @@ function docRenderSide() {
   group("Correspondents", m?.correspondents.filter((c) => c.document_count), (c) => item(c.name, "all", { correspondent: c.id }, c.document_count), 8, "allPeople");
   group("Types", m?.types.filter((t) => t.document_count), (t) => item(t.name, "all", { type: t.id }, t.document_count), 8, "allTypes");
   const add = el("button", { type: "button", class: "doc-nav doc-nav-add" }, svg(DOC_ICONS.add), el("span", {}, "Add documents"));
-  add.addEventListener("click", () => $("doc-picker").click());
+  add.addEventListener("click", () => uploadFrom(() => $("doc-picker").click(),
+    (paths) => (docs.status?.ok ? docUploadPaths(paths) : docCopyLocal(paths)), "Add documents"));
   const app = typeof appById === "function" ? appById("paperless-ngx") || appById("paperless") : null;
   const out = app ? el("button", { type: "button", class: "doc-nav doc-nav-out" }, svg(DOC_ICONS.open), el("span", {}, "Open Paperless")) : null;
   out?.addEventListener("click", () => openApp(app));
