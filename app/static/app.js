@@ -802,7 +802,8 @@ function openMenu(x, y, items) {
   const menu = $("menu");
   if (menu.hidden) menuOpener = document.activeElement !== document.body ? document.activeElement : null;
   menu.replaceChildren(...items.map((item) => {
-    const button = el("button", { type: "button", role: "menuitem", class: item.destructive ? "destructive" : "" }, item.label);
+    // muted: greyed (it can't be done yet), but a click still says why.
+    const button = el("button", { type: "button", role: "menuitem", class: `${item.destructive ? "destructive" : ""}${item.muted ? " muted" : ""}` }, item.label);
     button.addEventListener("click", () => { closeMenu(); item.run(); });
     return button;
   }));

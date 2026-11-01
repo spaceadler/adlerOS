@@ -631,7 +631,9 @@ function deskMenu(target) {
   if (icon && !icon.classList.contains("selected")) deskSetPicked([deskKey(icon)]);
   const many = icon ? deskPickedFiles() : [];
   if (icon && many.length > 1) {
+    const entries = many.map((p) => desk.entries.find((x) => `/desktop/${x.name}` === p) || { dir: true });
     return [...(docSendable(many) ? [{ label: `Upload ${many.length} items to Documents`, run: () => docUploadPaths(many) }] : []),
+      ...(tsSendable(entries) ? tsSendItem(many) : []),
       { label: `Copy ${many.length} items`, run: () => clipPaths(many, true) },
       { label: `Cut ${many.length} items`, run: () => clipPaths(many, false) },
       { label: `Delete ${many.length} items`, run: () => deletePaths(many), destructive: true }];
@@ -644,6 +646,7 @@ function deskMenu(target) {
     if (entry.kind === "text" || (!entry.dir && entry.size < 2 * 1024 * 1024 && entry.kind === "file")) items.push({ label: "Edit as text", run: () => editFile(path) });
     if (!entry.dir) items.push({ label: "Download", run: () => downloadFile(path) });
     if (!entry.dir && docSendable([path])) items.push({ label: "Upload to Documents", run: () => docUploadPaths([path]) });
+    if (tsSendable([entry])) items.push(...tsSendItem([path]));
     items.push({ label: "Copy", run: () => clip(entry, path, true) },
       { label: "Cut", run: () => clip(entry, path, false) },
       { label: "Rename…", run: () => renamePath(entry, path) },
@@ -656,7 +659,7 @@ function deskMenu(target) {
       { label: "New text file", run: () => newTextFile("/desktop") });
     if (files.clip) items.push({ label: `Paste ${files.clip.label}`, run: () => paste("/desktop") });
     items.push({ label: "Upload…", run: () => uploadFrom(() => { files.uploadTo = "/desktop"; mainFiles().part("picker").click(); }, (paths) => copyInto(paths, "/desktop")) },
-      { label: "Open in My Computer", run: () => openFiles("/desktop") });
+      ...tsItem(), { label: "Open in My Computer", run: () => openFiles("/desktop") });
   }
   const cell = desk.menuAt && deskCellAt(desk.menuAt[0], desk.menuAt[1]);
   items.push({ label: "Add widget…", run: () => deskWidgetPicker(cell) },
