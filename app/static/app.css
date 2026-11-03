@@ -2851,6 +2851,12 @@ body:not(.wm) .mu-side { padding-top: 22px; }
 .mu-station-art { --hue: 210; container-type: inline-size; background: linear-gradient(135deg, hsl(var(--hue) 55% 42%), hsl(calc(var(--hue) + 40) 60% 24%)); color: #fff; }
 .mu-station-art > svg { position: absolute; right: -8%; bottom: -8%; width: 62%; height: 62%; opacity: 0.18; stroke-width: 1.4; }
 .mu-station-letters { position: relative; font-size: clamp(9px, 30cqi, 64px); font-weight: 800; letter-spacing: -0.03em; }
+/* Its logo, once loaded: a mark (often a see-through PNG) on white with room round it; a whole square picture fills the box. */
+.mu-art.mu-station-art > img { inset: 12%; width: 76%; height: 76%; object-fit: contain; opacity: 0; }
+.mu-station-art.logo { background: #fff; }
+.mu-station-art.logo > img { opacity: 1; }
+.mu-station-art.logo > :not(img) { visibility: hidden; }
+.mu-art.mu-station-art.full > img { inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .mu-net-none { margin: 0 0 8px; }
 .mu-net-sub { margin: -6px 0 14px; }
 .mu-net-dialog .button-secondary.wide { width: 100%; }
