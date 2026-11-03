@@ -65,6 +65,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 import xml.etree.ElementTree as ElementTree
 from concurrent.futures import ThreadPoolExecutor
 from http.cookies import CookieError, SimpleCookie
@@ -105,7 +106,7 @@ JOBS = DATA / "agent" / "jobs"
 ICON_OVERRIDES = Path(os.environ.get("OS_ICON_DIR", "/icons"))
 # adlerOS's own dock icons (./icons can replace each): All apps, and the ones
 # you pin like any app.
-DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "luna", "music", "podcasts", "gallery", "documents", "calendar", "tasks")
+DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "luna", "music", "podcasts", "books", "gallery", "documents", "calendar", "tasks")
 DOCK_MAX_PINS = 16
 # The widgets you can put on the desktop, with the defaults and the limit.
 WIDGET_CATALOG = STATIC / "widgets-catalog.json"
@@ -458,7 +459,7 @@ def search_url():
 # from the start, in this order, until you take them out.
 BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal",
                 "adleros:notepad", "adleros:luna", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:tasks",
-                "adleros:podcasts")
+                "adleros:podcasts", "adleros:books")
 DOCK_FIRST = BUILTIN_PINS[:5]  # a new dock's (Notepad, Luna and Music: in All apps, for you to pin)
 DOCK_SEED = 2  # 1: My Computer and the Terminal pinned; 2: the App Store, Settings and Live Usage too
 
@@ -2597,6 +2598,339 @@ def gallery_asset_lite(a):
             "isFavorite": bool(a.get("isFavorite")), "fileCreatedAt": a.get("fileCreatedAt"),
             "localDateTime": a.get("localDateTime"), "duration": a.get("duration"),
             "livePhotoVideoId": a.get("livePhotoVideoId")}
+
+
+# ----------------------------------------------------------------- books
+
+# Books: the PDFs and EPUBs in Media/Books (BOOKS_DIR), read in a window:
+# a PDF's own pages (drawn by pdf.js in the page), an EPUB's chapters
+# (taken out of the book here and cleaned: only the tags a book's text
+# needs, nothing that runs). A PDF's words, for reading it as text, are
+# taken out by the page the first time and kept here, for every device;
+# its first page as its cover too. Where you are in each book:
+# data/books.json.
+BOOK_SUFFIXES = (".pdf", ".epub")
+BOOKS_STATE = DATA / "books.json"
+BOOKS_CACHE = DATA / "books"
+BOOK_TEXT_LIMIT = 24 * 1024 * 1024  # a PDF's words, as the page sends them
+BOOK_COVER_LIMIT = 600 * 1024
+_books_lock = threading.Lock()
+_epubs = {}  # path -> (mtime, parsed)
+# An EPUB's tags kept as they are (class, style and scripts gone); the rest
+# lose their tag and keep their words, or go entirely.
+EPUB_KEEP = {"p", "div", "span", "h1", "h2", "h3", "h4", "h5", "h6", "em", "strong", "i", "b", "u", "s", "sup", "sub", "small",
+             "br", "hr", "blockquote", "ul", "ol", "li", "a", "img", "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption",
+             "figure", "figcaption", "section", "article", "aside", "header", "footer", "pre", "code", "dl", "dt", "dd", "cite", "q",
+             "abbr", "nav", "main", "center", "big", "tt", "var", "kbd", "mark", "del", "ins"}
+EPUB_DROP = {"script", "style", "head", "title", "link", "meta", "iframe", "object", "embed", "svg", "math", "form", "input",
+             "button", "select", "textarea", "audio", "video", "canvas", "noscript", "template"}
+EPUB_VOID = {"br", "hr", "img"}
+
+
+def books_dir():
+    rel = install_setting("BOOKS_DIR", "Media/Books").strip("/")
+    if not places_on():
+        return f"/user/{rel}", None
+    _, real = locate(f"/user/{rel}")
+    return f"/user/{rel}", real if real and real.is_dir() else None
+
+
+def book_path(book_id):
+    """The real file of a book by its id (its path in the Books folder), or None."""
+    _, root = books_dir()
+    if not root or not isinstance(book_id, str) or not book_id or len(book_id) > 600:
+        return None
+    parts = [p for p in book_id.split("/") if p not in ("", ".")]
+    if not parts or ".." in parts or any(p.startswith(".") for p in parts):
+        return None
+    real = root.joinpath(*parts).resolve()
+    if not real.is_relative_to(root.resolve()) or real.suffix.lower() not in BOOK_SUFFIXES or not real.is_file():
+        return None
+    return real
+
+
+def book_key(real):
+    """A name for what's kept about this file (its words, its cover)."""
+    st = real.stat()
+    return hashlib.sha1(f"{real}|{st.st_size}|{int(st.st_mtime)}".encode()).hexdigest()[:20]
+
+
+def book_names(stem):
+    """(title, author) from a file's name: "Title - Author", "Author - Title",
+    calibre's "Author - Title-Publisher (2004)", "Last, First - Title"; a
+    colon written "  " or "_ "; "Title - Arabic Translation" kept whole."""
+    s = stem.replace("_ ", ": ").replace("_", " ")
+    s = re.sub(r"(?<=\w)\s{2,}(?=\w)", ": ", s)
+    s = re.sub(r"-[^-]{3,80}\(\d{4}[^)]*\)\s*$", "", s)
+    s = re.sub(r"\s*\(\d{4}[^)]*\)\s*$", "", s)
+    s = re.sub(r"^\([^)]{1,30}\)\s*", "", s).strip()  # a series in front: (Think Now)
+    parts = [p.strip() for p in re.split(r"\s+-\s+", s) if p.strip()]
+    if len(parts) < 2:
+        return s, ""
+    first, rest = parts[0], " - ".join(parts[1:])
+    if re.search(r"(?i)\b(translation|edition|version|abridged)\b", rest):
+        return f"{first} ({rest})", ""
+    last_first = re.fullmatch(r"([^\W\d_][\w'’-]+),\s*([^\W\d_][\w.'’ ]{0,30})", first)
+    if last_first:
+        return rest, f"{last_first[2].strip()} {last_first[1]}"
+
+    def person(x):
+        words = x.split()
+        if not 2 <= len(words) <= 5 or len(x) > 40 or re.search(r"\d", x):
+            return False
+        if re.search(r"(?i)\b(the|of|and|to|a|an|in|for|how|why|what|history|guide|manual|government|economics)\b", x):
+            return False
+        return all(w[0].isupper() or w.lower() in ("von", "van", "de", "der", "al", "el", "bin", "ibn", "la", "le", "du") for w in words)
+
+    if person(first) and not person(rest):
+        return rest, first
+    return first, rest if person(rest) else ""
+
+
+def books_state():
+    try:
+        data = json.loads(BOOKS_STATE.read_text())
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def books_list():
+    _, root = books_dir()
+    if not root:
+        return []
+    state = books_state()
+    BOOKS_CACHE.mkdir(parents=True, exist_ok=True)
+    out = []
+    for p in sorted(root.rglob("*")):
+        rel = p.relative_to(root)
+        if p.suffix.lower() not in BOOK_SUFFIXES or any(x.startswith(".") for x in rel.parts) or not p.is_file():
+            continue
+        st = p.stat()
+        book_id = str(rel)
+        title, author = book_names(p.stem)
+        kind = p.suffix.lower()[1:]
+        if kind == "epub":
+            meta = epub_book(p)
+            if meta:
+                title, author = meta.get("title") or title, meta.get("author") or author
+        key = book_key(p)
+        seen = state.get(book_id) or {}
+        out.append({"id": book_id, "title": title, "author": author, "kind": kind, "size": st.st_size, "added": st.st_mtime,
+                    "cover": (BOOKS_CACHE / f"{key}.jpg").is_file() or (kind == "epub" and bool((epub_book(p) or {}).get("cover"))),
+                    "text": (BOOKS_CACHE / f"{key}.json").is_file(), "pct": seen.get("pct") or 0, "at": seen.get("at") or 0})
+    return out
+
+
+def books_save_state(book_id, change):
+    with _books_lock:
+        data = books_state()
+        data[book_id] = {**data.get(book_id, {}), **change, "at": time.time()}
+        write_private(BOOKS_STATE, json.dumps(data, separators=(",", ":")))
+
+
+# ---------------------------------------------------------------- EPUBs
+
+def epub_book(real):
+    """An EPUB's title, author, cover, sections (its spine) and contents, or None."""
+    try:
+        mtime = real.stat().st_mtime
+    except OSError:
+        return None
+    got = _epubs.get(str(real))
+    if got and got[0] == mtime:
+        return got[1]
+    try:
+        parsed = epub_parse(real)
+    except (OSError, zipfile.BadZipFile, ElementTree.ParseError, KeyError, ValueError):
+        parsed = None
+    _epubs[str(real)] = (mtime, parsed)
+    return parsed
+
+
+def epub_xml(z, name):
+    data = z.read(name)
+    if len(data) > 8 * 1024 * 1024:
+        raise ValueError("too big")
+    return ElementTree.fromstring(data)
+
+
+def epub_local(tag):
+    return tag.rsplit("}", 1)[-1]
+
+
+def epub_parse(real):
+    with zipfile.ZipFile(real) as z:
+        names = set(z.namelist())
+        container = epub_xml(z, "META-INF/container.xml")
+        rootfile = next(e.get("full-path") for e in container.iter() if epub_local(e.tag) == "rootfile")
+        opf = epub_xml(z, rootfile)
+        base = posixpath.dirname(rootfile)
+        join = lambda href: posixpath.normpath(posixpath.join(base, urllib.parse.unquote(href.split("#")[0])))
+        meta = {"title": "", "author": "", "cover": None}
+        manifest, spine, cover_id, nav, ncx = {}, [], None, None, None
+        for e in opf.iter():
+            tag = epub_local(e.tag)
+            if tag == "title" and not meta["title"]:
+                meta["title"] = (e.text or "").strip()
+            elif tag == "creator" and not meta["author"]:
+                meta["author"] = (e.text or "").strip()
+            elif tag == "meta" and e.get("name") == "cover":
+                cover_id = e.get("content")
+            elif tag == "item":
+                manifest[e.get("id")] = {"href": join(e.get("href") or ""), "type": e.get("media-type") or "", "props": e.get("properties") or ""}
+            elif tag == "itemref" and e.get("linear") != "no":
+                spine.append(e.get("idref"))
+            elif tag == "spine" and e.get("toc"):
+                ncx = e.get("toc")
+        for item_id, item in manifest.items():
+            if "cover-image" in item["props"].split():
+                cover_id = item_id
+            if "nav" in item["props"].split():
+                nav = item["href"]
+        if cover_id in manifest and manifest[cover_id]["type"].startswith("image/") and manifest[cover_id]["href"] in names:
+            meta["cover"] = manifest[cover_id]["href"]
+        sections = []
+        for idref in spine:
+            item = manifest.get(idref)
+            if item and item["href"] in names and "html" in item["type"]:
+                text = re.sub(r"<[^>]+>", " ", z.read(item["href"]).decode("utf-8", "replace"))
+                sections.append({"href": item["href"], "chars": len(re.sub(r"\s+", " ", html_unescape(text)).strip())})
+        index = {s["href"]: i for i, s in enumerate(sections)}
+        toc = []
+
+        def add(title, href):
+            target = join(href)
+            if target in index and title:
+                anchor = urllib.parse.unquote(href.split("#", 1)[1]) if "#" in href else ""
+                toc.append({"title": re.sub(r"\s+", " ", title).strip()[:200], "section": index[target], "anchor": anchor})
+
+        if nav and nav in names:
+            nav_base = posixpath.dirname(nav)
+            doc = z.read(nav).decode("utf-8", "replace")
+            part = re.search(r'(?is)<nav[^>]*type="toc"[^>]*>(.*?)</nav>', doc) or re.search(r"(?is)<nav[^>]*>(.*?)</nav>", doc)
+            for href, title in re.findall(r'(?is)<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>', part.group(1) if part else ""):
+                full = posixpath.normpath(posixpath.join(nav_base, href.split("#")[0])) + ("#" + href.split("#", 1)[1] if "#" in href else "")
+                add(html_unescape(re.sub(r"<[^>]+>", "", title)), posixpath.relpath(full, base) if base else full)
+        if not toc and ncx in manifest and manifest[ncx]["href"] in names:
+            ncx_base = posixpath.dirname(manifest[ncx]["href"])
+            for point in epub_xml(z, manifest[ncx]["href"]).iter():
+                if epub_local(point.tag) != "navPoint":
+                    continue
+                label = next((t.text for t in point.iter() if epub_local(t.tag) == "text"), "")
+                src = next((c.get("src") for c in point if epub_local(c.tag) == "content"), "")
+                if src:
+                    full = posixpath.normpath(posixpath.join(ncx_base, src.split("#")[0])) + ("#" + src.split("#", 1)[1] if "#" in src else "")
+                    add(label or "", posixpath.relpath(full, base) if base else full)
+        return {**meta, "sections": sections, "toc": toc}
+
+
+class EpubClean(HTMLParser):
+    """A chapter's body as the reader shows it: kept tags, plain words,
+    pictures from the book itself, links within the book as anchors."""
+
+    def __init__(self, book_id, section_path, anchors):
+        super().__init__(convert_charrefs=True)
+        self.out, self.skip, self.body, self.stack = [], 0, False, []
+        self.book_id, self.dir, self.anchors = book_id, posixpath.dirname(section_path), anchors
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "body":
+            self.body = True
+            return
+        if tag in EPUB_DROP:
+            if tag not in EPUB_VOID:
+                self.skip += 1
+            return
+        if self.skip or tag not in EPUB_KEEP:
+            return
+        a = dict(attrs)
+        keep = []
+        if a.get("id"):
+            keep.append(f'data-anchor="{html_escape(a["id"])}"')
+        if tag == "img":
+            src = a.get("src") or a.get("xlink:href") or ""
+            if not src or re.match(r"(?i)^[a-z]+:", src):
+                return
+            path = posixpath.normpath(posixpath.join(self.dir, urllib.parse.unquote(src)))
+            keep.append(f'src="/api/books/res?id={urllib.parse.quote(self.book_id, safe="")}&amp;p={urllib.parse.quote(path, safe="")}"')
+            keep.append(f'alt="{html_escape(a.get("alt") or "")}" loading="lazy"')
+        if tag == "a":
+            href = a.get("href") or ""
+            if href and not re.match(r"(?i)^[a-z]+:", href):
+                target = posixpath.normpath(posixpath.join(self.dir, urllib.parse.unquote(href.split("#")[0]))) if href.split("#")[0] else None
+                keep.append(f'data-go="{html_escape((target or "") + ("#" + href.split("#", 1)[1] if "#" in href else ""))}"')
+            elif re.match(r"(?i)^https?://", href):
+                keep.append(f'data-web="{html_escape(href)}"')
+        for name in ("colspan", "rowspan"):
+            if a.get(name, "").isdigit():
+                keep.append(f'{name}="{a[name]}"')
+        if a.get("dir") in ("rtl", "ltr"):
+            keep.append(f'dir="{a["dir"]}"')
+        self.out.append(f"<{tag}{''.join(' ' + k for k in keep)}>")
+        if tag not in EPUB_VOID:
+            self.stack.append(tag)
+
+    def handle_startendtag(self, tag, attrs):
+        if tag in EPUB_DROP:
+            return  # <title/>: nothing in it to leave out
+        self.handle_starttag(tag, attrs)
+        if tag not in EPUB_VOID and tag in EPUB_KEEP and not self.skip and self.stack and self.stack[-1] == tag:
+            self.stack.pop()
+            self.out.append(f"</{tag}>")
+
+    def handle_endtag(self, tag):
+        if tag in EPUB_DROP and tag not in EPUB_VOID:
+            self.skip = max(0, self.skip - 1)
+            return
+        if self.skip or tag not in EPUB_KEEP or tag in EPUB_VOID or tag not in self.stack:
+            return
+        while self.stack:
+            t = self.stack.pop()
+            self.out.append(f"</{t}>")
+            if t == tag:
+                break
+
+    def handle_data(self, data):
+        if not self.skip:
+            self.out.append(html_escape(data))
+
+    def result(self):
+        return "".join(self.out) + "".join(f"</{t}>" for t in reversed(self.stack))
+
+
+def html_escape(text):
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def epub_section(book_id, real, n):
+    book = epub_book(real)
+    if not book or not 0 <= n < len(book["sections"]):
+        return None
+    path = book["sections"][n]["href"]
+    with zipfile.ZipFile(real) as z:
+        raw = z.read(path)
+    if len(raw) > 16 * 1024 * 1024:
+        return None
+    clean = EpubClean(book_id, path, {})
+    clean.feed(raw.decode("utf-8", "replace"))
+    clean.close()
+    return clean.result()
+
+
+def epub_resource(real, path):
+    """A picture in the book: (mime, bytes), or None."""
+    mime = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".webp": "image/webp"}.get(posixpath.splitext(path)[1].lower())
+    if not mime:
+        return None
+    try:
+        with zipfile.ZipFile(real) as z:
+            info = z.getinfo(path)
+            if info.file_size > 20 * 1024 * 1024:
+                return None
+            return mime, z.read(info)
+    except (KeyError, OSError, zipfile.BadZipFile):
+        return None
 
 
 # -------------------------------------------------------------- podcasts
@@ -5373,6 +5707,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.gallery_get(path[len("/api/gallery/"):], query)
         if path.startswith("/api/podcasts/"):
             return self.podcasts_get(path[len("/api/podcasts/"):], query)
+        if path.startswith("/api/books/"):
+            return self.books_get(path[len("/api/books/"):], query)
         if path.startswith("/api/paperless/"):
             return self.documents_get(path[len("/api/paperless/"):], query)
         if path == "/api/maintenance":
@@ -5450,7 +5786,9 @@ class Handler(BaseHTTPRequestHandler):
         body = self.read_json(TEXT_LIMIT * 2 + 4096 if path == "/api/files/text"
                               else 256 * 1024 if path.startswith("/api/files/")
                               else 2 * 1024 * 1024 if path.startswith("/api/music/")
-                              else 64 * 1024 if path.startswith("/api/podcasts/") else 4096)
+                              else 64 * 1024 if path.startswith("/api/podcasts/")
+                              else BOOK_TEXT_LIMIT if path == "/api/books/text"
+                              else BOOK_COVER_LIMIT * 2 if path == "/api/books/cover" else 4096)
         if body is None:
             return self.send_json(400, {"error": "expected a JSON object"})
         if path == "/api/settings":
@@ -5469,6 +5807,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.music_post(path[len("/api/music/"):], body)
         if path.startswith("/api/podcasts/"):
             return self.podcasts_post(path[len("/api/podcasts/"):], body)
+        if path.startswith("/api/books/"):
+            return self.books_post(path[len("/api/books/"):], body)
         if path.startswith("/api/paperless/"):
             return self.documents_post(path[len("/api/paperless/"):], body)
         if path == "/api/calendar/event":
@@ -6056,6 +6396,95 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_json(200, found)
 
     # Gallery: what it asks Immich, passed on (the key stays here).
+    # ------------------------------------------------------------- books
+
+    def books_get(self, what, query):
+        q = lambda k: query.get(k, [""])[0]
+        if what == "list":
+            where, root = books_dir()
+            return self.send_json(200, {"dir": where, "found": bool(root), "books": books_list()})
+        real = book_path(q("id"))
+        if not real:
+            return self.send_json(404, {"error": "no such book"})
+        if what == "file":
+            return self.send_file_stream(real, inline=True)
+        if what == "info":
+            seen = books_state().get(q("id")) or {}
+            out = {"id": q("id"), "kind": real.suffix.lower()[1:], "pos": seen.get("pos"), "pct": seen.get("pct") or 0, "view": seen.get("view")}
+            if out["kind"] == "epub":
+                book = epub_book(real)
+                if not book:
+                    return self.send_json(422, {"error": "This EPUB can't be opened (it's damaged, or not an EPUB)."})
+                out.update(title=book["title"], author=book["author"], sections=[s["chars"] for s in book["sections"]],
+                           hrefs=[s["href"] for s in book["sections"]], toc=book["toc"])
+            return self.send_json(200, out)
+        if what == "section":
+            try:
+                n = int(q("n"))
+            except ValueError:
+                return self.send_json(400, {"error": "n: a number"})
+            html = epub_section(q("id"), real, n) if real.suffix.lower() == ".epub" else None
+            if html is None:
+                return self.send_json(404, {"error": "no such chapter"})
+            return self.send_json(200, {"html": html}, [("Cache-Control", "private, max-age=3600")])
+        if what == "res":
+            found = epub_resource(real, q("p")) if real.suffix.lower() == ".epub" else None
+            if not found:
+                return self.send(404, b"no such picture")
+            return self.send(200, found[1], found[0], [("Cache-Control", "private, max-age=86400")], csp=ICON_CSP)
+        if what == "cover":
+            cached = BOOKS_CACHE / f"{book_key(real)}.jpg"
+            if cached.is_file():
+                return self.send(200, cached.read_bytes(), "image/jpeg", [("Cache-Control", "private, max-age=86400")], csp=ICON_CSP)
+            book = epub_book(real) if real.suffix.lower() == ".epub" else None
+            found = epub_resource(real, book["cover"]) if book and book.get("cover") else None
+            if not found:
+                return self.send(404, b"no cover yet")
+            return self.send(200, found[1], found[0], [("Cache-Control", "private, max-age=86400")], csp=ICON_CSP)
+        if what == "text":
+            cached = BOOKS_CACHE / f"{book_key(real)}.json"
+            if not cached.is_file():
+                return self.send_json(404, {"error": "not taken out yet"})
+            body = cached.read_bytes()
+            headers = [("Cache-Control", "no-store"), ("Vary", "Accept-Encoding")]
+            if "gzip" in self.headers.get("Accept-Encoding", ""):
+                body = gzip.compress(body, 5)
+                headers.append(("Content-Encoding", "gzip"))
+            return self.send(200, body, "application/json", headers)
+        return self.send(404, b"not found")
+
+    def books_post(self, what, body):
+        book_id = body.get("id")
+        real = book_path(book_id)
+        if not real:
+            return self.send_json(404, {"error": "no such book"})
+        if what == "progress":
+            pos = body.get("pos")
+            pct = body.get("pct")
+            if not isinstance(pos, dict) or len(json.dumps(pos)) > 400 or not isinstance(pct, (int, float)):
+                return self.send_json(400, {"error": "pos and pct"})
+            view = body.get("view") if body.get("view") in ("book", "text") else None
+            books_save_state(book_id, {"pos": pos, "pct": max(0, min(1, float(pct))), **({"view": view} if view else {})})
+            return self.send_json(200, {"ok": True})
+        BOOKS_CACHE.mkdir(parents=True, exist_ok=True)
+        if what == "cover":
+            try:
+                data = base64.b64decode(str(body.get("jpeg") or ""), validate=True)
+            except ValueError:
+                return self.send_json(400, {"error": "jpeg: base64"})
+            if not data.startswith(b"\xff\xd8") or len(data) > BOOK_COVER_LIMIT:
+                return self.send_json(400, {"error": "jpeg: a JPEG, under 600 KB"})
+            write_private(BOOKS_CACHE / f"{book_key(real)}.jpg", "")  # made private, then filled
+            (BOOKS_CACHE / f"{book_key(real)}.jpg").write_bytes(data)
+            return self.send_json(200, {"ok": True})
+        if what == "text":
+            pages = body.get("pages")
+            if not isinstance(pages, list) or not all(isinstance(x, str) for x in pages) or len(pages) > 20000:
+                return self.send_json(400, {"error": "pages: each page's words"})
+            write_private(BOOKS_CACHE / f"{book_key(real)}.json", json.dumps({"pages": pages}, ensure_ascii=False, separators=(",", ":")))
+            return self.send_json(200, {"ok": True})
+        return self.send(404, b"not found")
+
     # ---------------------------------------------------------- podcasts
 
     def podcasts_get(self, what, query):
