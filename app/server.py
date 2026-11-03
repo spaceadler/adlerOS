@@ -68,6 +68,7 @@ import urllib.request
 import xml.etree.ElementTree as ElementTree
 from concurrent.futures import ThreadPoolExecutor
 from http.cookies import CookieError, SimpleCookie
+from html import unescape as html_unescape
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -104,7 +105,7 @@ JOBS = DATA / "agent" / "jobs"
 ICON_OVERRIDES = Path(os.environ.get("OS_ICON_DIR", "/icons"))
 # adlerOS's own dock icons (./icons can replace each): All apps, and the ones
 # you pin like any app.
-DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "luna", "music", "gallery", "documents", "calendar", "tasks")
+DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "luna", "music", "podcasts", "gallery", "documents", "calendar", "tasks")
 DOCK_MAX_PINS = 16
 # The widgets you can put on the desktop, with the defaults and the limit.
 WIDGET_CATALOG = STATIC / "widgets-catalog.json"
@@ -456,7 +457,8 @@ def search_url():
 # adlerOS's own, pinned (and unpinned, moved about) like any app; in the dock
 # from the start, in this order, until you take them out.
 BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal",
-                "adleros:notepad", "adleros:luna", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:tasks")
+                "adleros:notepad", "adleros:luna", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:tasks",
+                "adleros:podcasts")
 DOCK_FIRST = BUILTIN_PINS[:5]  # a new dock's (Notepad, Luna and Music: in All apps, for you to pin)
 DOCK_SEED = 2  # 1: My Computer and the Terminal pinned; 2: the App Store, Settings and Live Usage too
 
@@ -2595,6 +2597,541 @@ def gallery_asset_lite(a):
             "isFavorite": bool(a.get("isFavorite")), "fileCreatedAt": a.get("fileCreatedAt"),
             "localDateTime": a.get("localDateTime"), "duration": a.get("duration"),
             "livePhotoVideoId": a.get("livePhotoVideoId")}
+
+
+# -------------------------------------------------------------- podcasts
+
+# Podcasts: your audiobooks and podcasts as Audiobookshelf has them (where
+# you got to in each, subscriptions that fetch new episodes), through its
+# API with an API key (Audiobookshelf: Settings, API Keys), pasted into
+# Podcasts once and kept here (data/podcasts-abs.json, only adlerOS reads
+# it), or ABS_TOKEN in the settings file. The page never sees the key, nor
+# Audiobookshelf's address: adlerOS asks, and passes on what it says, the
+# sound too. Audiobookshelf is at ABS_URL, else this machine's Tailscale
+# address and its port. Without it (or while it doesn't answer): the folders
+# themselves, Media/Audiobooks (AUDIOBOOKS_DIR) a book a folder, its files
+# the chapters, and Media/Podcasts (PODCASTS_DIR) a podcast a folder, its
+# files the episodes (a folder of episodes tagged Podcast is one wherever
+# it is); where you got to kept here (data/podcasts-progress.json).
+PODS_KEY_FILE = DATA / "podcasts-abs.json"
+PODS_PROGRESS = DATA / "podcasts-progress.json"
+PODS_SUFFIXES = {".mp3", ".m4a", ".m4b", ".ogg", ".oga", ".opus", ".flac", ".wav"}
+PODS_FRESH = 60  # seconds a look round the folders is good for
+PODS_MIME = ["audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/aac", "audio/ogg", "audio/opus", "audio/flac", "audio/wav", "audio/webm"]
+# The only Audiobookshelf addresses the page's player may have adlerOS fetch.
+ABS_FILE_RE = re.compile(r"^/(?:api/items/[0-9a-f-]{36}/file/\d+|s/item/[0-9a-f-]{36}/[^?#\\]{1,600})$")
+ABS_ID_RE = re.compile(r"^[0-9a-f-]{36}$")
+ABS_EP_RE = re.compile(r"^[0-9a-zA-Z_-]{1,64}$")
+_pods = {"items": None, "files": {}, "at": 0, "tags": {}}
+_pods_lock = threading.Lock()
+_pods_progress_lock = threading.Lock()
+
+
+def abs_conn():
+    """(url, key), or (url or None, None) when there's no key."""
+    try:
+        saved = json.loads(PODS_KEY_FILE.read_text())
+    except (OSError, ValueError):
+        saved = {}
+    url = install_setting("ABS_URL").rstrip("/")
+    if not url:
+        host = install_setting("TS_IP") if HOMELAB_MODE else install_setting("ADLEROS_HOST")
+        app = next((a for a in installed_apps() if a["id"] == "audiobookshelf" or a.get("known") == "audiobookshelf"), None)
+        url = f"http://{host}:{app['port']}" if host and app and app.get("port") else None
+    return url, (saved.get("token") if isinstance(saved, dict) else None) or install_setting("ABS_TOKEN") or None
+
+
+def abs_open(path, query=None, body=None, method="GET", headers=None, timeout=20, token=None):
+    url, key = abs_conn()
+    key = token or key
+    if not url or not key:
+        raise LookupError("not set up")
+    full = f"{url}{path if path.startswith('/') else '/api/' + path}" + (f"?{urllib.parse.urlencode(query)}" if query else "")
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(full, data=data, method=method, headers={
+        "Authorization": f"Bearer {key}", "Accept": "application/json", **({"Content-Type": "application/json"} if data else {}), **(headers or {})})
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
+def abs_json(path, query=None, body=None, method="GET", timeout=20, token=None):
+    with abs_open(path, query, body, method, timeout=timeout, token=token) as r:
+        raw = r.read()
+    try:
+        return json.loads(raw) if raw else {}
+    except ValueError:
+        return {"text": raw.decode("utf-8", "replace")[:300]}
+
+
+def abs_error(e):
+    """What Audiobookshelf said, for the page (never its address)."""
+    if isinstance(e, urllib.error.HTTPError):
+        try:
+            text = e.read().decode("utf-8", "replace").strip()[:200]
+        except OSError:
+            text = ""
+        if e.code in (401, 403):
+            return "Audiobookshelf refused: the key can't do that" + (f" ({text})" if text and text not in ("Unauthorized", "Forbidden") else "")
+        return f"Audiobookshelf said {e.code}" + (f": {text}" if text else "")
+    if isinstance(e, LookupError):
+        return "Audiobookshelf isn't connected"
+    return "Audiobookshelf didn't answer"
+
+
+def pods_status():
+    """Where Podcasts gets your books from (abs or local), and if it isn't
+    Audiobookshelf, why."""
+    url, key = abs_conn()
+    roots = pods_roots()
+    out = {"configured": bool(url and key), "local": [{"kind": k, "path": f"/user/{rel}"} for k, rel, _ in roots],
+           "keyHere": PODS_KEY_FILE.is_file()}
+    if not url:
+        return {**out, "source": "local", "error": "noabs"}
+    out["url"] = url
+    if not key:
+        return {**out, "source": "local", "error": "nokey"}
+    try:
+        me = abs_json("me", timeout=8)
+        out.update(ok=True, source="abs", user=me.get("username") or "", admin=me.get("type") in ("admin", "root"),
+                   canDownload=bool((me.get("permissions") or {}).get("download", True)))
+    except urllib.error.HTTPError as e:
+        out.update(source="local", error="refused" if e.code in (401, 403) else f"abs {e.code}")
+    except (OSError, ValueError) as e:
+        out.update(source="local", error="unreachable", why=str(e)[:160])
+    return out
+
+
+def pods_connect(token):
+    """Tries the key; kept if Audiobookshelf takes it. An empty one: forget it."""
+    if not token:
+        try:
+            PODS_KEY_FILE.unlink()
+        except FileNotFoundError:
+            pass
+        return {"ok": True, "forgot": True}
+    url, _ = abs_conn()
+    if not url:
+        return {"ok": False, "error": "Audiobookshelf isn't among your apps here: install it, or set ABS_URL in the settings file."}
+    try:
+        me = abs_json("me", timeout=10, token=token)
+    except urllib.error.HTTPError as e:
+        return {"ok": False, "error": "Audiobookshelf didn't take that key." if e.code in (401, 403) else f"Audiobookshelf said {e.code}."}
+    except (OSError, ValueError):
+        return {"ok": False, "error": "Audiobookshelf didn't answer. Is it running?"}
+    write_private(PODS_KEY_FILE, json.dumps({"token": token}))
+    return {"ok": True, "user": me.get("username") or ""}
+
+
+def pods_text(html):
+    """An HTML description (a feed's, Audiobookshelf's) as plain text, its
+    paragraphs kept."""
+    if not html:
+        return ""
+    text = re.sub(r"(?i)<\s*(br|/p|/div|/li|/h\d)\s*/?>", "\n", str(html))
+    text = re.sub(r"(?i)<\s*li[^>]*>", "• ", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = html_unescape(text)
+    return re.sub(r"\n{3,}", "\n\n", re.sub(r"[ \t]+", " ", text)).strip()[:6000]
+
+
+# ------------------------------------------------ Audiobookshelf's side
+
+def abs_progress_map(me):
+    out = {}
+    for p in me.get("mediaProgress") or []:
+        key = f"{p.get('libraryItemId')}|{p.get('episodeId') or ''}"
+        out[key] = {"t": p.get("currentTime") or 0, "d": p.get("duration") or 0, "done": bool(p.get("isFinished")),
+                    "at": (p.get("lastUpdate") or 0) / 1000, "hide": bool(p.get("hideFromContinueListening")), "pid": p.get("id")}
+    return out
+
+
+def abs_episode(e, item_id=None, show=None):
+    audio = e.get("audioFile") or {}
+    published = e.get("publishedAt") or 0
+    return {"id": item_id or e.get("libraryItemId"), "ep": e.get("id"), "title": e.get("title") or "",
+            "date": published / 1000 if published else None, "duration": e.get("duration") or audio.get("duration") or 0,
+            "show": show or ((e.get("podcast") or {}).get("metadata") or {}).get("title") or "",
+            "season": e.get("season") or "", "number": e.get("episode") or ""}
+
+
+def abs_library():
+    libs = abs_json("libraries").get("libraries") or []
+    items, episodes, libraries = [], [], []
+    for lib in libs:
+        kind = "podcast" if lib.get("mediaType") == "podcast" else "book"
+        libraries.append({"id": lib["id"], "name": lib.get("name") or "", "kind": kind})
+        got = abs_json(f"libraries/{lib['id']}/items", {"limit": 0, "minified": 1, "sort": "addedAt", "desc": 1}, timeout=40)
+        for it in got.get("results") or []:
+            media = it.get("media") or {}
+            md = media.get("metadata") or {}
+            items.append({"id": it["id"], "kind": kind, "title": md.get("title") or "", "author": md.get("authorName") or md.get("author") or "",
+                          "duration": media.get("duration") or 0, "cover": bool(media.get("coverPath")), "added": (it.get("addedAt") or 0) / 1000,
+                          "count": media.get("numEpisodes") or media.get("numChapters") or media.get("numTracks") or 0, "library": lib["id"]})
+        if kind == "podcast":
+            try:
+                recent = abs_json(f"libraries/{lib['id']}/recent-episodes", {"limit": 40, "page": 0})
+                episodes += [abs_episode(e) for e in recent.get("episodes") or []]
+            except (urllib.error.HTTPError, OSError, ValueError):
+                pass
+    me = abs_json("me")
+    return {"items": items, "episodes": episodes, "progress": abs_progress_map(me), "libraries": libraries}
+
+
+def abs_item(item_id):
+    it = abs_json(f"items/{item_id}", {"expanded": 1, "include": "progress"})
+    media = it.get("media") or {}
+    md = media.get("metadata") or {}
+    kind = "podcast" if it.get("mediaType") == "podcast" else "book"
+    out = {"id": it["id"], "kind": kind, "title": md.get("title") or "", "cover": bool(media.get("coverPath")),
+           "author": md.get("authorName") or ", ".join(a.get("name", "") for a in md.get("authors") or []) or md.get("author") or "",
+           "narrator": md.get("narratorName") or ", ".join(md.get("narrators") or []), "description": pods_text(md.get("description")),
+           "duration": media.get("duration") or 0, "year": md.get("publishedYear") or (md.get("releaseDate") or "")[:4],
+           "genres": md.get("genres") or [], "added": (it.get("addedAt") or 0) / 1000}
+    if kind == "book":
+        chapters = media.get("chapters") or []
+        if chapters:
+            out["chapters"] = [{"title": c.get("title") or f"Chapter {i + 1}", "start": c.get("start") or 0, "end": c.get("end") or 0} for i, c in enumerate(chapters)]
+        else:
+            out["chapters"] = [{"title": t.get("title") or (t.get("metadata") or {}).get("filename") or f"Part {i + 1}", "start": t.get("startOffset") or 0,
+                                "end": (t.get("startOffset") or 0) + (t.get("duration") or 0)} for i, t in enumerate(media.get("tracks") or [])]
+    else:
+        out["feed"] = bool(md.get("feedUrl"))
+        out["autoDownload"] = bool(media.get("autoDownloadEpisodes"))
+        eps = []
+        for e in media.get("episodes") or []:
+            x = abs_episode(e, it["id"], md.get("title"))
+            x["description"] = pods_text(e.get("description"))[:1500]
+            eps.append(x)
+        out["episodes"] = sorted(eps, key=lambda e: e["date"] or 0, reverse=True)
+    return out
+
+
+def abs_play(item_id, ep):
+    body = {"deviceInfo": {"clientName": "adlerOS", "clientVersion": "1", "deviceId": "adleros-" + hashlib.sha1(SESSION_SECRET).hexdigest()[:12]},
+            "forceDirectPlay": True, "forceTranscode": False, "supportedMimeTypes": PODS_MIME, "mediaPlayer": "html5"}
+    s = abs_json(f"items/{item_id}/play" + (f"/{ep}" if ep else ""), body=body, method="POST", timeout=30)
+    tracks = []
+    for t in sorted(s.get("audioTracks") or [], key=lambda t: t.get("index") or 0):
+        url = urllib.parse.urlsplit(t.get("contentUrl") or "").path
+        if not ABS_FILE_RE.match(url):
+            raise ValueError("Audiobookshelf wants this one converted first (it can't be played as it is)")
+        tracks.append({"url": "/api/podcasts/abs?path=" + urllib.parse.quote(url, safe=""), "start": t.get("startOffset") or 0,
+                       "duration": t.get("duration") or 0, "title": t.get("title") or ""})
+    chapters = [{"title": c.get("title") or f"Chapter {i + 1}", "start": c.get("start") or 0, "end": c.get("end") or 0} for i, c in enumerate(s.get("chapters") or [])]
+    return {"session": s.get("id"), "tracks": tracks, "chapters": chapters, "duration": s.get("duration") or sum(t["duration"] for t in tracks),
+            "current": s.get("currentTime") or 0}
+
+
+def abs_sync(item_id, ep, session, t, d, listened, close=False):
+    body = {"currentTime": t, "timeListened": max(0, min(listened, 3600)), "duration": d}
+    if session and re.fullmatch(r"[0-9a-f-]{36}", session):
+        try:
+            abs_json(f"session/{session}/{'close' if close else 'sync'}", body=body, method="POST")
+            return
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
+    # The session's gone (Audiobookshelf restarted): where you are, straight in.
+    abs_json(f"me/progress/{item_id}" + (f"/{ep}" if ep else ""), body={"currentTime": t, "duration": d, "progress": (t / d) if d else 0}, method="PATCH")
+
+
+def abs_podcast_library(want=None):
+    libs = [x for x in abs_json("libraries").get("libraries") or [] if x.get("mediaType") == "podcast"]
+    lib = next((x for x in libs if x["id"] == want), libs[0] if libs else None)
+    if not lib or not lib.get("folders"):
+        raise ValueError("Audiobookshelf has no podcast library yet: make one (Settings, Libraries, a Podcast library on /podcasts), then subscribe.")
+    return lib
+
+
+def abs_subscribe(feed_url, library=None):
+    lib = abs_podcast_library(library)
+    feed = abs_json("podcasts/feed", body={"rssFeed": feed_url}, method="POST", timeout=40).get("podcast") or {}
+    md = feed.get("metadata") or {}
+    title = (md.get("title") or "").strip()
+    if not title:
+        raise ValueError("That feed has no title: is it a podcast's?")
+    folder = lib["folders"][0]
+    name = re.sub(r"\s+", " ", re.sub(r'[\\/:*?"<>|\x00-\x1f]', " ", title)).strip(" .") or "Podcast"
+    # As Audiobookshelf's own page makes it from the feed.
+    meta = {"title": title, "author": md.get("author") or "", "description": md.get("description") or "", "releaseDate": md.get("pubDate") or "",
+            "genres": [g for g in md.get("categories") or [] if isinstance(g, str) and g], "feedUrl": feed_url, "imageUrl": md.get("image") or "",
+            "itunesPageUrl": md.get("link") or "", "language": md.get("language") or "", "type": md.get("type") or "episodic",
+            "explicit": str(md.get("explicit") or "").lower() in ("yes", "true", "explicit")}
+    payload = {"path": f"{folder['fullPath'].rstrip('/')}/{name}", "folderId": folder["id"], "libraryId": lib["id"],
+               "media": {"metadata": {k: v for k, v in meta.items() if v not in (None, "")}, "autoDownloadEpisodes": True}}
+    made = abs_json("podcasts", body=payload, method="POST", timeout=60)
+    # The newest, to listen to now; the rest as they come out.
+    newest = (feed.get("episodes") or [])[:1]
+    if newest and made.get("id"):
+        try:
+            abs_json(f"podcasts/{made['id']}/download-episodes", body=newest, method="POST", timeout=60)
+        except (urllib.error.HTTPError, OSError, ValueError):
+            pass
+    return {"id": made.get("id"), "title": title}
+
+
+def abs_feed_episodes(item_id):
+    """The podcast's feed, with which of its episodes are here already."""
+    it = abs_json(f"items/{item_id}", {"expanded": 1})
+    media = it.get("media") or {}
+    feed_url = (media.get("metadata") or {}).get("feedUrl")
+    if not feed_url:
+        raise ValueError("This podcast has no feed to look in")
+    feed = abs_json("podcasts/feed", body={"rssFeed": feed_url}, method="POST", timeout=40).get("podcast") or {}
+    have = {((e.get("enclosure") or {}).get("url") or "") for e in media.get("episodes") or []}
+    have |= {e.get("guid") for e in media.get("episodes") or [] if e.get("guid")}
+    out = []
+    for e in feed.get("episodes") or []:
+        url = (e.get("enclosure") or {}).get("url") or ""
+        published = e.get("publishedAt") or 0
+        out.append({"url": url, "title": e.get("title") or "", "date": published / 1000 if published else None,
+                    "duration": e.get("durationSeconds") or 0, "have": url in have or (e.get("guid") in have if e.get("guid") else False)})
+    return feed, out
+
+
+def abs_download(item_id, urls):
+    feed, _ = abs_feed_episodes(item_id)
+    wanted = set(urls)
+    eps = [e for e in feed.get("episodes") or [] if (e.get("enclosure") or {}).get("url") in wanted]
+    if not eps:
+        raise ValueError("None of those are in the feed now")
+    abs_json(f"podcasts/{item_id}/download-episodes", body=eps, method="POST", timeout=60)
+    return len(eps)
+
+
+# ------------------------------------------------ the folders themselves
+
+def pods_roots():
+    """(kind, folder as adlerOS writes it under /user, its real folder)."""
+    out = []
+    for kind, key, default in (("book", "AUDIOBOOKS_DIR", "Media/Audiobooks"), ("podcast", "PODCASTS_DIR", "Media/Podcasts")):
+        rel = install_setting(key, default).strip("/")
+        if not places_on():
+            continue
+        _, real = locate(f"/user/{rel}")
+        if real and real.is_dir():
+            out.append((kind, rel, real))
+    return out
+
+
+def pods_natural(name):
+    return [int(p) if p.isdigit() else p.casefold() for p in re.split(r"(\d+)", name)]
+
+
+def pods_tags(path, st):
+    key = str(path)
+    got = _pods["tags"].get(key)
+    if got and got[0] == st.st_size and got[1] == st.st_mtime:
+        return got[2]
+    tags = musictags.read_tags(path)
+    _pods["tags"][key] = (st.st_size, st.st_mtime, tags)
+    return tags
+
+
+def pods_clean_title(stem):
+    """A file's name as a chapter's: without its number in front."""
+    return re.sub(r"^\s*\d{1,4}\s*[-._)]\s*", "", stem).strip() or stem
+
+
+def pods_scan():
+    """Every book and podcast in the folders: (items, {id: (folder, files)})."""
+    items, files = [], {}
+    seen = set()
+    for kind, rel, root in pods_roots():
+        try:
+            entries = sorted(root.iterdir(), key=lambda p: pods_natural(p.name))
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.name.startswith("."):
+                continue
+            if entry.is_dir():
+                found = [p for p in entry.rglob("*") if p.suffix.lower() in PODS_SUFFIXES and not any(x.startswith(".") for x in p.relative_to(entry).parts)]
+            elif entry.suffix.lower() in PODS_SUFFIXES:
+                found = [entry]
+            else:
+                continue
+            if not found:
+                continue
+            listed = []
+            for p in found:
+                try:
+                    st = p.stat()
+                except OSError:
+                    continue
+                listed.append((p, st, pods_tags(p, st)))
+            if not listed:
+                continue
+            item_id = f"{rel}/{entry.name}"
+            if item_id in seen:
+                continue
+            seen.add(item_id)
+            genres = [str(t.get("genre") or "").lower() for _, _, t in listed]
+            is_pod = kind == "podcast" or sum(g == "podcast" for g in genres) * 2 > len(genres)
+            first = listed[0][2]
+            albums = {t.get("album") for _, _, t in listed if t.get("album")}
+            artists = [t.get("albumArtist") or (t.get("artists") or [None])[0] for _, _, t in listed]
+            author = max(set(a for a in artists if a), key=artists.count, default="")
+            title = entry.name if entry.is_dir() else (first.get("title") or entry.stem)
+            if entry.is_dir() and len(albums) == 1 and not is_pod:
+                title = albums.pop() or title
+            if is_pod:
+                listed.sort(key=lambda x: pods_episode_date(x[0], x[2], x[1]), reverse=True)
+            else:
+                listed.sort(key=lambda x: (x[2].get("disc") or 1, x[2].get("track") or 99999, pods_natural(str(x[0].relative_to(entry if entry.is_dir() else entry.parent)))))
+            cover = any(t.get("cover") for _, _, t in listed) or (entry.is_dir() and any(
+                c.stem.lower() in musictags.COVER_NAMES and c.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp") for c in entry.iterdir()))
+            items.append({"id": item_id, "kind": "podcast" if is_pod else "book", "title": title, "author": author,
+                          "duration": round(sum(t.get("duration") or 0 for _, _, t in listed), 1), "cover": bool(cover),
+                          "added": max(st.st_mtime for _, st, _ in listed), "count": len(listed)})
+            files[item_id] = (entry, listed)
+    return items, files
+
+
+def pods_episode_date(path, tags, st):
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", path.name)
+    if m:
+        try:
+            return calendar.timegm((int(m[1]), int(m[2]), int(m[3]), 12, 0, 0))
+        except (ValueError, OverflowError):
+            pass
+    return st.st_mtime
+
+
+def pods_local():
+    with _pods_lock:
+        if _pods["items"] is None or time.time() - _pods["at"] > PODS_FRESH:
+            _pods["items"], _pods["files"] = pods_scan()
+            _pods["at"] = time.time()
+        return _pods["items"], _pods["files"]
+
+
+def pods_rel(entry, path):
+    return str(path.relative_to(entry)) if entry.is_dir() else path.name
+
+
+def pods_local_episode(item_id, entry, p, st, t):
+    return {"id": item_id, "ep": pods_rel(entry, p), "title": t.get("title") or pods_clean_title(p.stem),
+            "date": pods_episode_date(p, t, st), "duration": t.get("duration") or 0}
+
+
+def pods_local_library():
+    items, files = pods_local()
+    episodes = []
+    by_id = {i["id"]: i for i in items}
+    for item_id, (entry, listed) in files.items():
+        if by_id[item_id]["kind"] != "podcast":
+            continue
+        for p, st, t in listed[:10]:
+            episodes.append({**pods_local_episode(item_id, entry, p, st, t), "show": by_id[item_id]["title"]})
+    episodes.sort(key=lambda e: e["date"] or 0, reverse=True)
+    return {"items": items, "episodes": episodes[:40], "progress": pods_progress(), "libraries": []}
+
+
+def pods_local_item(item_id):
+    items, files = pods_local()
+    item = next((i for i in items if i["id"] == item_id), None)
+    if not item:
+        return None
+    entry, listed = files[item_id]
+    out = {**item, "description": "", "narrator": "", "year": ""}
+    first = listed[0][2]
+    out["year"] = str(first.get("year") or "")[:4]
+    if item["kind"] == "book":
+        at, chapters = 0.0, []
+        for p, _, t in listed:
+            d = t.get("duration") or 0
+            chapters.append({"title": t.get("title") or pods_clean_title(p.stem), "start": round(at, 2), "end": round(at + d, 2)})
+            at += d
+        out["chapters"] = chapters
+        out["description"] = pods_text(musictags.read_comment(listed[0][0]) or "")
+    else:
+        eps = []
+        for p, st, t in listed:
+            e = pods_local_episode(item_id, entry, p, st, t)
+            e["description"] = pods_text(musictags.read_comment(p) or "")[:1500] if len(eps) < 150 else ""
+            eps.append(e)
+        out["episodes"] = eps
+    return out
+
+
+def pods_local_file(item_id, name):
+    """The real file of a book's chapter or a podcast's episode, or None."""
+    _, files = pods_local()
+    if item_id not in files:
+        return None
+    entry, listed = files[item_id]
+    return next((p for p, _, _ in listed if pods_rel(entry, p) == name), None)
+
+
+def pods_local_play(item_id, ep):
+    _, files = pods_local()
+    if item_id not in files:
+        raise LookupError("no such book")
+    entry, listed = files[item_id]
+    q = urllib.parse.quote
+    track = lambda p, t, start: {"url": f"/api/podcasts/file?id={q(item_id, safe='')}&f={q(pods_rel(entry, p), safe='')}",
+                                 "start": round(start, 2), "duration": t.get("duration") or 0, "title": t.get("title") or pods_clean_title(p.stem)}
+    if ep:
+        found = next(((p, t) for p, _, t in listed if pods_rel(entry, p) == ep), None)
+        if not found:
+            raise LookupError("no such episode")
+        tracks = [track(found[0], found[1], 0)]
+        chapters = []
+    else:
+        tracks, at = [], 0.0
+        for p, _, t in listed:
+            tracks.append(track(p, t, at))
+            at += t.get("duration") or 0
+        chapters = [{"title": x["title"], "start": x["start"], "end": round(x["start"] + x["duration"], 2)} for x in tracks]
+    progress = pods_progress().get(f"{item_id}|{ep}", {})
+    duration = round(sum(x["duration"] for x in tracks), 2)
+    current = 0 if progress.get("done") else progress.get("t") or 0
+    return {"session": None, "tracks": tracks, "chapters": chapters, "duration": duration, "current": current}
+
+
+def pods_progress():
+    try:
+        data = json.loads(PODS_PROGRESS.read_text())
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def pods_progress_set(key, **change):
+    with _pods_progress_lock:
+        data = pods_progress()
+        now = {**data.get(key, {}), **change, "at": time.time()}
+        data[key] = now
+        write_private(PODS_PROGRESS, json.dumps(data, separators=(",", ":")))
+        return now
+
+
+def pods_cover(item_id, width):
+    """(mime, bytes) of a book's or a podcast's picture, or None."""
+    if ABS_ID_RE.match(item_id):
+        try:
+            with abs_open(f"items/{item_id}/cover", {"width": width, "format": "webp"}, timeout=20) as r:
+                ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+                return (ctype, r.read(8 * 1024 * 1024)) if ctype.startswith("image/") else None
+        except (urllib.error.HTTPError, OSError, LookupError):
+            return None
+    _, files = pods_local()
+    if item_id not in files:
+        return None
+    entry, listed = files[item_id]
+    if entry.is_dir():
+        try:
+            for child in sorted(entry.iterdir()):
+                if child.stem.lower() in musictags.COVER_NAMES and child.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+                    return INLINE_TYPES[child.suffix.lower()], child.read_bytes()
+        except OSError:
+            pass
+    for p, _, t in listed:
+        if t.get("cover"):
+            found = musictags.read_cover(p)
+            if found:
+                return found
+    return None
 
 
 # -------------------------------------------------------------- documents
@@ -4834,6 +5371,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.music_get(path[len("/api/music/"):], query)
         if path.startswith("/api/gallery/"):
             return self.gallery_get(path[len("/api/gallery/"):], query)
+        if path.startswith("/api/podcasts/"):
+            return self.podcasts_get(path[len("/api/podcasts/"):], query)
         if path.startswith("/api/paperless/"):
             return self.documents_get(path[len("/api/paperless/"):], query)
         if path == "/api/maintenance":
@@ -4910,7 +5449,8 @@ class Handler(BaseHTTPRequestHandler):
         # Saving a file from the editor is the one big body.
         body = self.read_json(TEXT_LIMIT * 2 + 4096 if path == "/api/files/text"
                               else 256 * 1024 if path.startswith("/api/files/")
-                              else 2 * 1024 * 1024 if path.startswith("/api/music/") else 4096)
+                              else 2 * 1024 * 1024 if path.startswith("/api/music/")
+                              else 64 * 1024 if path.startswith("/api/podcasts/") else 4096)
         if body is None:
             return self.send_json(400, {"error": "expected a JSON object"})
         if path == "/api/settings":
@@ -4927,6 +5467,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.notes_post(path[len("/api/notes/"):], body)
         if path.startswith("/api/music/"):
             return self.music_post(path[len("/api/music/"):], body)
+        if path.startswith("/api/podcasts/"):
+            return self.podcasts_post(path[len("/api/podcasts/"):], body)
         if path.startswith("/api/paperless/"):
             return self.documents_post(path[len("/api/paperless/"):], body)
         if path == "/api/calendar/event":
@@ -5514,6 +6056,175 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_json(200, found)
 
     # Gallery: what it asks Immich, passed on (the key stays here).
+    # ---------------------------------------------------------- podcasts
+
+    def podcasts_get(self, what, query):
+        q = lambda k: query.get(k, [""])[0]
+        if what == "status":
+            return self.send_json(200, pods_status())
+        if what == "library":
+            if q("source") != "local" and pods_status().get("ok"):
+                try:
+                    return self.send_json(200, {"source": "abs", **abs_library()})
+                except (urllib.error.HTTPError, OSError, ValueError, LookupError) as e:
+                    return self.send_json(502, {"error": abs_error(e)})
+            return self.send_json(200, {"source": "local", **pods_local_library()})
+        if what == "item":
+            item_id = q("id")
+            if ABS_ID_RE.match(item_id):
+                try:
+                    return self.send_json(200, abs_item(item_id))
+                except (urllib.error.HTTPError, OSError, ValueError, LookupError) as e:
+                    return self.send_json(404 if isinstance(e, urllib.error.HTTPError) and e.code == 404 else 502, {"error": abs_error(e)})
+            item = pods_local_item(item_id)
+            return self.send_json(200, item) if item else self.send_json(404, {"error": "no such book or podcast"})
+        if what == "cover":
+            try:
+                width = max(64, min(1200, int(q("w") or 400)))
+            except ValueError:
+                width = 400
+            found = pods_cover(q("id"), width)
+            if not found:
+                return self.send(404, b"no picture")
+            return self.send(200, found[1], found[0], [("Cache-Control", "private, max-age=86400")], csp=ICON_CSP)
+        if what == "file":
+            real = pods_local_file(q("id"), q("f"))
+            if not real:
+                return self.send(404, b"no such file")
+            return self.send_file_stream(real, inline=True)
+        if what == "abs":
+            path = q("path")
+            if not ABS_FILE_RE.match(path):
+                return self.send(400, b"not a book's file")
+            return self.podcasts_stream(path)
+        if what == "search":
+            term = q("q").strip()[:200]
+            if not term:
+                return self.send_json(200, {"results": []})
+            try:
+                found = abs_json("search/podcast", {"term": term}, timeout=30)
+            except (urllib.error.HTTPError, OSError, ValueError, LookupError) as e:
+                return self.send_json(502, {"error": abs_error(e)})
+            rows = found if isinstance(found, list) else found.get("results") or []
+            return self.send_json(200, {"results": [{"title": r.get("title") or "", "author": r.get("artistName") or "", "feedUrl": r.get("feedUrl") or "",
+                                                     "cover": r.get("cover") or "", "genres": r.get("genres") or [], "count": r.get("trackCount") or 0,
+                                                     "description": pods_text(r.get("descriptionPlain") or r.get("description"))[:600]}
+                                                    for r in rows if r.get("feedUrl")]})
+        if what == "feed":
+            item_id = q("id")
+            if not ABS_ID_RE.match(item_id):
+                return self.send_json(404, {"error": "only Audiobookshelf's podcasts have feeds here"})
+            try:
+                _, eps = abs_feed_episodes(item_id)
+            except (urllib.error.HTTPError, OSError, ValueError, LookupError) as e:
+                return self.send_json(502, {"error": str(e) if isinstance(e, ValueError) else abs_error(e)})
+            return self.send_json(200, {"episodes": eps})
+        return self.send(404, b"not found")
+
+    def podcasts_stream(self, path):
+        """A book's or an episode's sound from Audiobookshelf, as it sends it (Range too: seeking)."""
+        try:
+            r = abs_open(path, headers={"Range": self.headers["Range"]} if self.headers.get("Range") else None, timeout=60)
+        except LookupError:
+            return self.send(409, b"Audiobookshelf isn't connected")
+        except urllib.error.HTTPError as e:
+            return self.send(e.code if e.code in (404, 416) else 502, b"")
+        except OSError:
+            return self.send(502, b"can't reach Audiobookshelf")
+        with r:
+            ctype = (r.headers.get("Content-Type") or "audio/mpeg").split(";")[0].strip().lower()
+            if not ctype.startswith(("audio/", "video/")):
+                ctype = "application/octet-stream"
+            self.send_response(r.status)
+            self.send_header("Content-Type", ctype)
+            for name in ("Content-Length", "Content-Range", "Accept-Ranges"):
+                if r.headers.get(name):
+                    self.send_header(name, r.headers[name])
+            self.send_header("Content-Disposition", "inline")
+            self.send_header("Content-Security-Policy", "default-src 'none'; sandbox")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cache-Control", "private, no-cache")
+            self.end_headers()
+            if self.command == "HEAD":
+                return
+            try:
+                while chunk := r.read(256 * 1024):
+                    self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    def podcasts_post(self, what, body):
+        item_id = str(body.get("id") or "")
+        ep = str(body.get("ep") or "")
+        on_abs = bool(ABS_ID_RE.match(item_id))
+        if on_abs and ep and not ABS_EP_RE.match(ep):
+            return self.send_json(400, {"error": "ep: not an episode"})
+        num = lambda k: float(body.get(k) or 0) if isinstance(body.get(k), (int, float)) else 0.0
+        try:
+            if what == "connect":
+                token = str(body.get("token") or "").strip()
+                if len(token) > 4096 or re.search(r"\s", token):
+                    return self.send_json(400, {"error": "That doesn't look like a key"})
+                return self.send_json(200, pods_connect(token))
+            if what == "play":
+                return self.send_json(200, abs_play(item_id, ep) if on_abs else pods_local_play(item_id, ep))
+            if what in ("sync", "close"):
+                t, d = max(0.0, num("t")), max(0.0, num("d"))
+                if on_abs:
+                    abs_sync(item_id, ep, str(body.get("session") or ""), t, d, num("listened"), close=what == "close")
+                elif item_id in pods_local()[1] and (not ep or pods_local_file(item_id, ep)):
+                    pods_progress_set(f"{item_id}|{ep}", t=round(t, 1), d=round(d, 1), done=bool(d and t >= d - 2), hide=False)
+                else:
+                    return self.send_json(404, {"error": "no such book"})
+                return self.send_json(200, {"ok": True})
+            if what == "played":
+                done = bool(body.get("done"))
+                if on_abs:
+                    change = {"isFinished": True} if done else {"isFinished": False, "currentTime": 0, "progress": 0}
+                    abs_json(f"me/progress/{item_id}" + (f"/{ep}" if ep else ""), body=change, method="PATCH")
+                elif item_id in pods_local()[1]:
+                    pods_progress_set(f"{item_id}|{ep}", done=done, hide=False, **({} if done else {"t": 0}))
+                else:
+                    return self.send_json(404, {"error": "no such book"})
+                return self.send_json(200, {"ok": True})
+            if what == "hide":
+                # Out of Continue: Audiobookshelf by its progress's id.
+                if on_abs:
+                    pid = str(body.get("pid") or "")
+                    if not re.fullmatch(r"[0-9a-f-]{36}", pid):
+                        return self.send_json(400, {"error": "pid: not an id"})
+                    abs_json(f"me/progress/{pid}/remove-from-continue-listening")
+                elif item_id in pods_local()[1]:
+                    pods_progress_set(f"{item_id}|{ep}", hide=True)
+                return self.send_json(200, {"ok": True})
+            if what == "subscribe":
+                url = str(body.get("feedUrl") or "").strip()
+                if not re.fullmatch(r"https?://[^\s\"'<>]{4,2000}", url):
+                    return self.send_json(400, {"error": "feedUrl: a feed's address"})
+                lib = str(body.get("library") or "") or None
+                if lib and not ABS_ID_RE.match(lib):
+                    return self.send_json(400, {"error": "library: not an id"})
+                return self.send_json(200, abs_subscribe(url, lib))
+            if what == "checknew":
+                if not on_abs:
+                    return self.send_json(400, {"error": "Only Audiobookshelf looks for new episodes"})
+                got = abs_json(f"podcasts/{item_id}/checknew", {"limit": 5}, timeout=90)
+                return self.send_json(200, {"found": len(got.get("episodes") or [])})
+            if what == "download":
+                urls = body.get("urls")
+                if not on_abs or not isinstance(urls, list) or not 0 < len(urls) <= 100 or not all(isinstance(u, str) and len(u) < 2100 for u in urls):
+                    return self.send_json(400, {"error": "urls: the episodes' addresses"})
+                return self.send_json(200, {"queued": abs_download(item_id, urls)})
+        except LookupError as e:
+            return self.send_json(404, {"error": str(e).strip("'") if not on_abs else abs_error(e)})
+        except urllib.error.HTTPError as e:
+            return self.send_json(502, {"error": abs_error(e)})
+        except ValueError as e:
+            return self.send_json(400, {"error": str(e)})
+        except OSError as e:
+            return self.send_json(502, {"error": abs_error(e)})
+        return self.send(404, b"not found")
+
     def gallery_get(self, what, query):
         try:
             if what == "status":

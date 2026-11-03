@@ -292,6 +292,8 @@ function ccRender() {
 }
 
 function ccNowPlaying() {
+  // Podcasts, when it's the one playing (or last played): back 15 s, on 30 s.
+  if (typeof pcOwnsMedia === "function" && pcOwnsMedia()) return ccPodcastPlaying();
   const id = muCurrent();
   const s = id ? muSong(id) : null;
   const audio = music.audio;
@@ -307,6 +309,22 @@ function ccNowPlaying() {
     el("span", { class: "cc-media-row" }, button("Previous", MB_ICONS.prev, musicPrev), button(audio.paused ? "Play" : "Pause", audio.paused ? MB_ICONS.play : MB_ICONS.pause, musicToggle),
       button("Next", MB_ICONS.next, () => musicNext())));
   for (const n of [art, text]) n.addEventListener("click", () => { ccClose(); toggleMusic(); });
+  return block;
+}
+
+function ccPodcastPlaying() {
+  const now = pcNow();
+  const button = (label, icon, run) => {
+    const b = el("button", { type: "button", class: "cc-media", "aria-label": label }, svg(icon));
+    b.addEventListener("click", (e) => { e.stopPropagation(); run(); setTimeout(ccRender, 150); });
+    return b;
+  };
+  const art = el("span", { class: "cc-art" }, pcArt(now.item, 200));
+  const text = el("span", { class: "cc-row-text" }, el("span", { class: "cc-name" }, now.title), el("span", { class: "cc-sub" }, now.sub || "Podcasts"));
+  const block = el("div", { class: "cc-block cc-now" }, art, text,
+    el("span", { class: "cc-media-row" }, button("Back 15 seconds", PC_ICONS.back, () => pcSkip(-15)),
+      button(now.paused ? "Play" : "Pause", now.paused ? MB_ICONS.play : MB_ICONS.pause, pcToggle), button("Forward 30 seconds", PC_ICONS.ahead, () => pcSkip(30))));
+  for (const n of [art, text]) n.addEventListener("click", () => { ccClose(); openPodcasts(); });
   return block;
 }
 
