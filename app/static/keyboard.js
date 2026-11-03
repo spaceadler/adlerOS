@@ -206,6 +206,28 @@ function typing(node) {
     (node.matches("input") && !["checkbox", "radio", "button", "submit", "range"].includes(node.type)));
 }
 
+// The caret before the first character of a text box or an editor, with
+// nothing selected.
+function caretAtStart(node) {
+  if (node.matches("textarea")) return node.selectionStart === 0 && node.selectionEnd === 0;
+  const s = getSelection();
+  if (!s.rangeCount || !s.isCollapsed || !node.contains(s.anchorNode)) return false;
+  const before = document.createRange();
+  before.selectNodeContents(node);
+  before.setEnd(s.anchorNode, s.anchorOffset);
+  if (before.toString() !== "") return false;
+  if (s.anchorNode === node) return s.anchorOffset === 0;
+  // No text before it, and on the first line: no line before its own (an
+  // empty one counts), only what can't be written in.
+  let line = s.anchorNode;
+  while (line.parentNode !== node) line = line.parentNode;
+  for (let p = line.previousSibling; p; p = p.previousSibling) {
+    if (p.nodeType === 1 && p.getAttribute("contenteditable") !== "false") return false;
+    if (p.nodeType === 3 && p.textContent) return false;
+  }
+  return true;
+}
+
 document.addEventListener("keydown", (e) => {
   if (e.defaultPrevented || e.isComposing) return;
   const node = document.activeElement;
@@ -218,7 +240,11 @@ document.addEventListener("keydown", (e) => {
   if (DIRS[e.key] && !e.altKey && !e.ctrlKey && !e.metaKey) {
     // The search box (Alt+Space) runs its own list; text fields keep Left and Right.
     if (layer?.id === "search") return;
-    if (typing(node) && (node.matches("textarea, select") || e.key === "ArrowLeft" || e.key === "ArrowRight")) return;
+    // A text box (or an editor: Luna's) keeps all four, for its caret; the
+    // way out to the rest of the window is Left or Up from its very start.
+    if (node?.matches("textarea, [contenteditable]:not([contenteditable=false])")) {
+      if (!((e.key === "ArrowLeft" || e.key === "ArrowUp") && !e.shiftKey && caretAtStart(node))) return;
+    } else if (typing(node) && (node.matches("select") || e.key === "ArrowLeft" || e.key === "ArrowRight")) return;
     if (arranging() && !layer && moveArranged(e.key)) return e.preventDefault();
     e.preventDefault();
     return moveFocus(e.key);
