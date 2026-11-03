@@ -47,6 +47,7 @@ const music = {
   sort: {}, selected: null, vdraw: null, menuAt: { x: 200, y: 200 },
   queue: [], at: -1, addedUntil: -1, original: null, from: "", radio: null,
   stations: [], // your stations from the internet (Klassik Radio…): in the queue as station:<id>
+  logoTimer: null,
   shuffle: false, repeat: "off", counted: false, errors: 0,
   panel: null, lyrics: null, lyricsScrolled: 0, seeking: false,
   audio: new Audio(),
@@ -328,7 +329,7 @@ const musicAlbumKey = (s) => (s?.album ? `${muNorm(s.albumArtist || s.artists[0]
 
 function musicArt(id, { round = false } = {}) {
   const s = id ? muSong(id) : null;
-  if (s?.station) return musicStationArt(s.title);
+  if (s?.station) return musicStationArt(s.title, s.logo);
   const box = el("span", { class: `mu-art${round ? " round" : ""}` });
   if (s?.cover) {
     const img = el("img", { src: muCover(id), alt: "", loading: "lazy", decoding: "async", draggable: "false" });
@@ -1284,7 +1285,8 @@ function musicNowPlaying() {
   if ("mediaSession" in navigator && s) {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: s.station && s.now ? s.now : s.title, artist: s.station ? (s.now ? s.title : "Live radio") : muArtists(s), album: s.album || "",
-      artwork: s.cover ? [{ src: new URL(muCover(id), location.href).href, sizes: "640x640", type: "image/jpeg" }] : [],
+      artwork: s.cover ? [{ src: new URL(muCover(id), location.href).href, sizes: "640x640", type: "image/jpeg" }]
+        : s.logo ? [{ src: new URL(s.logo, location.href).href }] : [],
     });
   }
 }
@@ -1617,15 +1619,35 @@ function musicMediaNext() {
 // going from one to the next. What's on now comes from the stream itself.
 async function musicLoadStations() {
   const { status, body } = await api("/api/music/stations").catch(() => ({ status: 0 }));
-  if (status === 200 && body) musicSetStations(body.stations);
+  if (status === 200 && body) { musicSetStations(body.stations); musicLogosWatch(body.looking); }
 }
 
 function musicSetStations(list) {
   music.stations = list || [];
   for (const x of music.stations) {
     const id = `station:${x.id}`;
-    music.extra.set(id, { ...(music.extra.get(id) || {}), id, station: x.id, title: x.name, url: x.url, artists: [], album: "", cover: false, duration: null });
+    const logo = x.logo ? `/api/music/station/${encodeURIComponent(x.id)}/logo?v=${x.logo}` : null;
+    music.extra.set(id, { ...(music.extra.get(id) || {}), id, station: x.id, title: x.name, url: x.url, logo, artists: [], album: "", cover: false, duration: null });
   }
+}
+
+// The server looks for stations' logos in the background (a station just
+// added, or Music's first look): asked again every few seconds while it
+// does, and shown as they turn up.
+function musicLogosWatch(looking) {
+  clearTimeout(music.logoTimer);
+  if (!looking) return;
+  music.logoTimer = setTimeout(async () => {
+    const { status, body } = await api("/api/music/stations").catch(() => ({ status: 0 }));
+    if (status !== 200 || !body) return;
+    const had = music.stations.map((x) => x.logo || 0).join();
+    musicSetStations(body.stations);
+    if (music.stations.map((x) => x.logo || 0).join() !== had) {
+      if (["radio", "home"].includes(music.view.kind)) musicRender();
+      if (muIsStation(muCurrent())) musicNowPlaying();
+    }
+    musicLogosWatch(body.looking);
+  }, 5000);
 }
 
 const muStationIds = () => music.stations.map((x) => `station:${x.id}`);
@@ -1635,21 +1657,50 @@ function musicPlayStation(x) {
   musicPlayList(ids, Math.max(0, ids.indexOf(`station:${x.id}`)), { from: "Your stations", shuffle: false });
 }
 
-// A station's picture: its first letters, on a color of its own.
-function musicStationArt(name) {
+// A station's picture: its logo, kept by adlerOS; or (until that's loaded,
+// if there's none, or if it won't load) its first letters, on a color of its own.
+function musicStationArt(name, logo) {
   const words = String(name || "?").split(/\s+/).filter(Boolean);
   const letters = (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || "?").slice(0, 2)).toUpperCase();
   let h = 0;
   for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) % 360;
   const box = el("span", { class: "mu-art mu-station-art" }, el("span", { class: "mu-station-letters" }, letters), svg(MU_ICONS.radio));
   box.style.setProperty("--hue", String(h));
+  if (logo) {
+    const img = el("img", { src: logo, alt: "", decoding: "async", draggable: "false" });
+    img.addEventListener("load", () => box.classList.add("logo", ...(musicLogoFull(img) ? ["full"] : [])));
+    img.addEventListener("error", () => img.remove());
+    box.append(img);
+  }
   return box;
+}
+
+// Whether a logo is a whole square picture (an app icon's kind: its corners
+// painted), to fill the box; or a mark on nothing (corners clear or white),
+// to sit on white with room round it. Worked out once a logo.
+const muLogoFull = new Map();
+function musicLogoFull(img) {
+  if (muLogoFull.has(img.src)) return muLogoFull.get(img.src);
+  let full = false;
+  try {
+    const c = document.createElement("canvas");
+    c.width = c.height = 16;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(img, 0, 0, 16, 16);
+    const px = g.getImageData(0, 0, 16, 16).data;
+    full = [0, 15, 240, 255].every((i) => {
+      const [r, gr, b, a] = px.slice(i * 4, i * 4 + 4);
+      return a > 240 && Math.min(r, gr, b) < 235;
+    });
+  } catch { /* can't tell: on white, then */ }
+  muLogoFull.set(img.src, full);
+  return full;
 }
 
 function musicNetCard(x) {
   const playing = muCurrent() === `station:${x.id}`;
   return musicCard({
-    art: musicStationArt(x.name), title: x.name, sub: playing && muSong(`station:${x.id}`)?.now ? muSong(`station:${x.id}`).now : "Live radio",
+    art: musicStationArt(x.name, muSong(`station:${x.id}`)?.logo), title: x.name, sub: playing && muSong(`station:${x.id}`)?.now ? muSong(`station:${x.id}`).now : "Live radio",
     open: () => musicPlayStation(x), play: () => musicPlayStation(x), label: `${x.name}: ${x.url}`, menu: () => musicNetMenu(x),
   });
 }
@@ -1667,7 +1718,11 @@ async function musicStationsPost(body) {
   const { status, body: got } = await api("/api/music/stations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
     .catch(() => ({ status: 0 }));
   if (status === 401) { showLock(); return null; }
-  if (status === 200 && got?.stations) { musicSetStations(got.stations); if (["radio", "home"].includes(music.view.kind)) musicRender(); }
+  if (status === 200 && got?.stations) {
+    musicSetStations(got.stations);
+    if (["radio", "home"].includes(music.view.kind)) musicRender();
+    musicLogosWatch(got.looking);
+  }
   return { status, body: got };
 }
 
@@ -1818,7 +1873,8 @@ function musicSaveSoon() {
 function musicRestore() {
   const saved = winLoad(MUSIC_KEY, null);
   if (!saved || typeof saved !== "object") return;
-  for (const [id, s] of Object.entries(saved.extra || {})) if (s && (id.startsWith("/") || (muIsStation(id) && music.extra.has(id)))) music.extra.set(id, { ...s, now: null });
+  // A station's logo as the server has it now, not as it was saved.
+  for (const [id, s] of Object.entries(saved.extra || {})) if (s && (id.startsWith("/") || (muIsStation(id) && music.extra.has(id)))) music.extra.set(id, { ...s, now: null, ...(muIsStation(id) ? { logo: music.extra.get(id).logo } : {}) });
   const ok = (id) => typeof id === "string" && muSong(id);
   Object.assign(music, {
     shuffle: Boolean(saved.shuffle), repeat: ["off", "all", "one"].includes(saved.repeat) ? saved.repeat : "off",

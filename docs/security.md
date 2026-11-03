@@ -166,8 +166,15 @@ Vikunja and the file is put aside.
 **Music's stations** are addresses you added (data/radio-stations.json).
 The server opens only those: a station's stream (or its playlist, to find
 the stream) is fetched and passed to your browser as it comes, so an
-http:// one plays on an https:// page; nothing else is asked for, and
-your browser never connects to the station itself.
+http:// one plays on an https:// page, and your browser never connects to
+the station itself. Its logo is looked for once (in the background; again
+after a week if there was none): radio-browser.info is asked by the
+station's address and name, and the station's own pages (the address the
+directory or its stream gives) are read for one. Only public internet
+addresses are fetched (not this machine, your network or the tailnet, nor
+a redirect to them), and only a picture (checked by its first bytes, at
+most 2 MB) is kept, in data/radio-logos/, and served from there, as an SVG
+with scripts blocked.
 
 **Calendar** asks your CalDAV server with `CALDAV_USER` and
 `CALDAV_PASSWORD`, which stay on the server: what calendars there are, and
