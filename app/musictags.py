@@ -6,6 +6,7 @@ the lyrics themselves on request. MP3 (ID3v2.2-2.4, ID3v1), FLAC, Ogg
 read_tags(path) -> dict (never raises: a file it can't read gives {}).
 read_cover(path) -> (mime, bytes) or None.
 read_lyrics(path) -> str or None (an LRC's [mm:ss] times kept, if it has them).
+read_comment(path) -> str or None (an MP3's comment: a podcast episode's notes).
 """
 import base64
 import struct
@@ -70,6 +71,14 @@ def read_cover(path):
     except (OSError, ValueError, struct.error, IndexError, KeyError, UnicodeError, OverflowError):
         return None
     return None
+
+
+def read_comment(path):
+    try:
+        with open(path, "rb") as f:
+            return _id3(f, want="comment")
+    except (OSError, ValueError, struct.error, IndexError, KeyError, UnicodeError, OverflowError):
+        return None
 
 
 def read_lyrics(path):
@@ -241,7 +250,7 @@ def _id3(f, want="tags"):
         if fsize <= 0 or pos + fsize > size + 10:
             break
         need = (want == "tags" and fid not in ID3_SKIP) or (want == "cover" and fid in ("APIC", "PIC")) \
-            or (want == "lyrics" and fid in ("USLT", "ULT", "SYLT", "SLT"))
+            or (want == "lyrics" and fid in ("USLT", "ULT", "SYLT", "SLT")) or (want == "comment" and fid in ("COMM", "COM", "TXXX", "TXX"))
         if data is not None:
             body = data[pos:pos + fsize] if need else b""
         elif need:
@@ -279,6 +288,16 @@ def _id3(f, want="tags"):
                     return found  # the front cover
                 tags.setdefault("_cover", found)
             continue
+        if want == "comment":
+            # COMM (its language, then a description), or TXXX "comment" or
+            # "description" (as ffmpeg writes them).
+            if len(body) > 4:
+                desc, value = _id3_split_desc(body[0], body[4:] if fid in ("COMM", "COM") else body[1:])
+                desc = _id3_decode(body[0], desc).strip("\x00").strip().lower()
+                text = _id3_decode(body[0], value).strip("\x00").strip()
+                if text and (fid in ("COMM", "COM") or desc in ("comment", "description")):
+                    return text
+            continue
         if want == "lyrics":
             enc = body[0]
             if fid in ("USLT", "ULT"):
@@ -300,6 +319,8 @@ def _id3(f, want="tags"):
         return tags.get("_cover")
     if want == "lyrics":
         return next((s for s in synced if s), None)
+    if want == "comment":
+        return None
     return tags
 
 
