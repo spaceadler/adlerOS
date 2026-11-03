@@ -49,6 +49,7 @@ import datetime
 import gzip
 import hashlib
 import hmac
+import http.client
 import ipaddress
 import json
 import os
@@ -62,6 +63,7 @@ import struct
 import sys
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -1928,6 +1930,419 @@ def radio_title(meta):
         except UnicodeDecodeError:
             continue
     return None
+
+
+# A station's logo, for Music: looked for once, in the background (the list
+# of stations never waits for it), and kept in data/radio-logos/<id>.<ext>,
+# served from here so a page never fetches it from anywhere else. First
+# radio-browser.info's directory of stations (the entry with this stream, or
+# this name), then the station's own pages (its address in the directory, the
+# one its stream gives, an AzuraCast server's page for it). A picture named
+# after the station beats a site's general icon, which on a broadcaster's
+# site (srf.ch, wdr.de) is the broadcaster's, not this station's. Nothing
+# found: Music draws one, and it's looked for again in a week (in an hour, if
+# the directory couldn't be reached at all).
+RADIO_LOGOS = DATA / "radio-logos"
+RADIO_LOGO_MAX = 2 * 1024 * 1024
+RADIO_LOGO_RETRY = 7 * 86400
+RADIO_LOGO_GOOD = 120  # pixels: a logo this big will do
+RADIO_LOGO_SMALL = 64  # and one smaller than this won't (a blurry favicon is worse than the drawn one)
+RADIO_BROWSER = ("all.api.radio-browser.info", "de1.api.radio-browser.info", "de2.api.radio-browser.info")
+RADIO_LOGO_AGENT = "Mozilla/5.0 (compatible; adlerOS station logos)"
+_radio_logo = {"busy": False}
+_radio_logo_lock = threading.Lock()
+
+
+def _public(url):
+    """Whether an address is out on the internet: not this machine, its
+    network or the tailnet (a directory's entry could point anywhere)."""
+    try:
+        parts = urllib.parse.urlsplit(url)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            return False
+        found = socket.getaddrinfo(parts.hostname, parts.port or (443 if parts.scheme == "https" else 80), type=socket.SOCK_STREAM)
+    except (OSError, ValueError, UnicodeError):
+        return False
+    return bool(found) and all(ipaddress.ip_address(a[4][0].split("%")[0]).is_global for a in found)
+
+
+class _PublicRedirects(urllib.request.HTTPRedirectHandler):
+    """Redirects followed only to the internet, as above."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return super().redirect_request(req, fp, code, msg, headers, newurl) if _public(newurl) else None
+
+
+_public_web = urllib.request.build_opener(_PublicRedirects)
+
+
+def _web_get(url, limit, kinds, agent=RADIO_LOGO_AGENT):
+    """(bytes, final address) of something on the internet, of one of these
+    content types and no bigger than limit; or None."""
+    if not _public(url):
+        return None
+    request = urllib.request.Request(url, headers={"User-Agent": agent, "Accept": "*/*"})
+    for again in (True, False):  # a second go if the network blipped (not if the site said no)
+        try:
+            with _public_web.open(request, timeout=10) as r:
+                ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+                if not ctype.startswith(kinds):
+                    return None
+                data = r.read(limit + 1)
+                return (data, r.geturl()) if len(data) <= limit else None
+        except urllib.error.HTTPError:
+            return None
+        except (OSError, ValueError, http.client.HTTPException):
+            if not again:
+                return None
+    return None
+
+
+def image_size(data):
+    """(width, height) of a PNG, JPEG, GIF, WebP, or an icon file's biggest
+    picture; an SVG is as big as wanted. None if it can't tell."""
+    try:
+        if data.startswith(b"\x89PNG\r\n\x1a\n"):
+            return struct.unpack(">II", data[16:24])
+        if data[:6] in (b"GIF87a", b"GIF89a"):
+            return struct.unpack("<HH", data[6:10])
+        if data.startswith(b"\x00\x00\x01\x00"):
+            count = struct.unpack("<H", data[4:6])[0]
+            sizes = [(data[6 + 16 * i] or 256, data[7 + 16 * i] or 256) for i in range(min(count, 64))]
+            return max(sizes) if sizes else None
+        if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            kind = data[12:16]
+            if kind == b"VP8X":
+                return (int.from_bytes(data[24:27], "little") + 1, int.from_bytes(data[27:30], "little") + 1)
+            if kind == b"VP8L":
+                bits = int.from_bytes(data[21:25], "little")
+                return ((bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1)
+            if kind == b"VP8 ":
+                w, h = struct.unpack("<HH", data[26:30])
+                return (w & 0x3FFF, h & 0x3FFF)
+        if data.startswith(b"\xff\xd8"):
+            i = 2
+            while i + 9 < len(data):
+                if data[i] != 0xFF:
+                    i += 1
+                    continue
+                marker = data[i + 1]
+                if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+                    h, w = struct.unpack(">HH", data[i + 5:i + 9])
+                    return (w, h)
+                if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7 or marker == 0xFF:
+                    i += 2 if marker != 0xFF else 1
+                    continue
+                i += 2 + struct.unpack(">H", data[i + 2:i + 4])[0]
+        if b"<svg" in data[:2048]:
+            return (1024, 1024)
+    except (struct.error, IndexError, ValueError):
+        pass
+    return None
+
+
+def _logo_words(text):
+    """Words to compare names by: lower case, no accents, letters apart from
+    digits (SWR3: swr, 3), and no "radio" (Radio SRF 3 is SRF 3)."""
+    text = unicodedata.normalize("NFKD", str(text or "")).encode("ascii", "ignore").decode().lower()
+    return [w for w in re.findall(r"[a-z]+|\d+", text) if w != "radio"]
+
+
+def _logo_core(name):
+    """A directory entry's name without what it says of the stream: "SRF 3
+    (AAC 192)", "Deutschlandfunk | DLF | MP3 128k"."""
+    return re.split(r"\s+\|\s*|\s*\(", str(name or ""))[0]
+
+
+def _logo_named(address, words):
+    """Whether a picture's address is named after the station: Radio_SRF_3.svg,
+    wdr5_logo.svg, radio-srf-1-square.svg. Its digits all, and all its words
+    (but one, of three or more)."""
+    want = set(words)
+    if not want:
+        return False
+    # Not the hash a site's build gives its files (srf-favicon-DaOBCX1Y.svg: no 1 in that).
+    path = urllib.parse.unquote(urllib.parse.urlsplit(address).path)
+    parts = [p for p in re.split(r"[^A-Za-z0-9]+", path)
+             if not (re.search(r"\d", p) and re.search(r"[A-Za-z]", p) and (len(p) >= 8 or (p != p.lower() and p != p.upper())))]
+    got = want & set(_logo_words(" ".join(parts)))
+    digits = {w for w in want if w.isdigit()}
+    return digits <= got and len(got) >= (len(want) if len(want) < 3 else len(want) - 1)
+
+
+def _logo_stream(url):
+    """A stream's address to compare by: no scheme, query, or trailing / or ;."""
+    try:
+        p = urllib.parse.urlsplit(url or "")
+        return f"{(p.hostname or '').lower()}{':' + str(p.port) if p.port else ''}{p.path.rstrip('/;')}" if p.hostname else None
+    except ValueError:
+        return None
+
+
+def _logo_stem(stream):
+    """The stream's place without its last part (…/m/drs2 of …/m/drs2/mp3_128):
+    the same station in another format. A one-part address is its own."""
+    host, _, path = stream.partition("/")
+    parts = path.split("/")
+    return f"{host}/{'/'.join(parts[:-1] if len(parts) > 1 else parts)}"
+
+
+def _logo_site(url):
+    """A site, to tell sites apart by: www1.wdr.de is wdr.de."""
+    host = (urllib.parse.urlsplit(url or "").hostname or "") if re.match(r"https?://", url or "") else ""
+    return ".".join(host.split(".")[-2:]) if host else None
+
+
+def _radio_browser(path, query):
+    """radio-browser.info's answer (a list of stations), from whichever of its
+    servers answers; None if none does."""
+    for server in RADIO_BROWSER:
+        got = _web_get(f"https://{server}/json/{path}?{urllib.parse.urlencode(query)}", 4 * 1024 * 1024,
+                       ("application/json",), "adlerOS/1 (finding station logos)")
+        if got:
+            try:
+                found = json.loads(got[0])
+            except ValueError:
+                continue
+            return [x for x in found if isinstance(x, dict)] if isinstance(found, list) else []
+    return None
+
+
+class _StationPage(_IconLinks):
+    """A station's page: its icons, and the picture it gives for sharing."""
+
+    def __init__(self):
+        super().__init__()
+        self.shared = []
+
+    def handle_starttag(self, tag, attrs):
+        super().handle_starttag(tag, attrs)
+        a = {k: (v or "") for k, v in attrs}
+        kind = (a.get("property") or a.get("name") or "").lower()
+        if tag == "meta" and a.get("content") and kind in ("og:image", "og:image:url", "og:image:secure_url", "twitter:image"):
+            self.shared.append(a["content"])
+
+
+def radio_logo_find(st):
+    """A station's logo: (extension, bytes) or None; and whether the
+    directory answered (if not, it's soon looked for again)."""
+    words = _logo_words(_logo_core(st["name"]))
+    key = "".join(words)
+    telling = {w for w in words if len(w) >= 3 or len(w) >= 2 and w.isdigit()}  # enough to tell a site is the station's
+    streams = {_logo_stream(st["url"])} - {None}
+    pages = []
+    # The stream itself: where its playlist leads (the directory may know
+    # that address), and the site it names (icy-url), if it's the station's.
+    try:
+        r, at = radio_open(st["url"])
+        site = r.headers.get("icy-url") or ""
+        r.close()
+        streams |= {_logo_stream(at)} - {None}
+        if not site.startswith(("http://", "https://")) and "." in site:
+            site = f"http://{site}"
+        if re.match(r"https?://", site) and telling & set(_logo_words(site)):
+            pages.append(site)
+    except (LookupError, OSError, ValueError, http.client.HTTPException):
+        at = None
+    # An AzuraCast server's stream (…/listen/<station>/…) has a page of its own.
+    m = re.match(r"(https?://[^/]+)/listen/([\w-]+)/", st["url"])
+    azuracast = f"{m[1]}/public/{m[2]}" if m else None
+
+    records, answered = [], False
+    asks = [("stations/byurl", {"url": st["url"]})]
+    if at and at != st["url"]:
+        asks.append(("stations/byurl", {"url": at}))
+    if key:
+        asks.append(("stations/search", {"name": _logo_core(st["name"]), "limit": 60, "order": "votes", "reverse": "true", "hidebroken": "true"}))
+    for path, query in asks:
+        got = _radio_browser(path, query)
+        if got is not None:
+            answered = True
+            records += got
+
+    # The entries that are this station: its stream (or the same one in
+    # another format, by the same name), or else its name, if every entry
+    # by that name is one site's (Radio 24 is three stations, in three countries).
+    stems = {_logo_stem(s) for s in streams}
+    keyed = lambda x: "".join(_logo_words(_logo_core(x.get("name"))))
+    users = {}  # favicon -> the names it's used for
+    matched = {}
+    for x in records:
+        icon = str(x.get("favicon") or "")
+        users.setdefault(icon, set()).add(keyed(x))
+        theirs = {_logo_stream(x.get("url")), _logo_stream(x.get("url_resolved"))} - {None}
+        if theirs & streams:
+            how = 3
+        elif {_logo_stem(s) for s in theirs} & stems and set(words) & set(_logo_words(x.get("name"))):
+            how = 2
+        elif keyed(x) == key and len(re.sub(r"\d", "", key)) >= 3:
+            how = 1
+        else:
+            continue
+        uuid = x.get("stationuuid") or id(x)
+        matched[uuid] = max(matched.get(uuid, (0, x)), (how, x), key=lambda t: t[0])
+    picked = sorted(matched.values(), key=lambda t: (-t[0], -int(t[1].get("votes") or 0)))
+    sure = {_logo_site(x.get("homepage")) for how, x in picked if how > 1} - {None}
+    by_name = {_logo_site(x.get("homepage")) for how, x in picked if how == 1} - {None}
+    picked = [(how, x) for how, x in picked
+              if how > 1 or (_logo_site(x.get("homepage")) in sure if sure else len(by_name) == 1)]
+
+    # What to try, best first: (rank, address, square only).
+    tries = []
+    for how, x in picked:
+        icon = str(x.get("favicon") or "")
+        if not re.match(r"https?://", icon):
+            continue
+        host = set(_logo_words(urllib.parse.urlsplit(icon).hostname))
+        if _logo_named(icon, words):
+            tries.append(((5, how), icon, False))
+        elif re.search(r"(favicon|icon)[^/]*$", urllib.parse.urlsplit(icon).path, re.I) and not telling & host:
+            # The general icon of a site that isn't the station's (mp3islam.com, of
+            # its many stations): after the station's own page has had its say.
+            tries.append(((1, 1, how), icon, False))
+        elif len(users.get(icon, ())) < 2:  # not one shared by other stations (the broadcaster's)
+            tries.append(((3, 1, how), icon, False))
+        else:
+            tries.append(((0, how), icon, False))
+    homes = [str(x.get("homepage") or "") for _, x in picked]
+    for n, page in enumerate(dict.fromkeys([*pages, *homes[:3], *([azuracast] if azuracast else [])])):
+        if not re.match(r"https?://", page):
+            continue
+        got = _web_get(page, 1024 * 1024, ("text/html", "application/xhtml"))
+        if not got:
+            continue
+        html, final = got[0].decode("utf-8", "replace"), got[1]
+        found = _StationPage()
+        try:
+            found.feed(html)
+        except Exception:  # a page too broken to read: what the patterns below find
+            pass
+        named = re.findall(r"""["'(]([^"'()\s<>]+\.(?:svg|png|jpe?g|webp))(?:\?[^"'()\s<>]*)?["')]""", html, re.I)
+        # One named a logo first (radio-srf-1-square.svg); any other (a news
+        # page's pictures, all under /br24/) after the directory's.
+        named = [src for src in dict.fromkeys(named) if _logo_named(src, words)]
+        for src in sorted(named, key=lambda src: not re.search(r"square|quadrat|logo", src, re.I))[:6]:
+            rank = (4, -n) if re.search(r"square|quadrat|logo", src, re.I) else (3, 0, -n)
+            tries.append((rank, urllib.parse.urljoin(final, src), False))
+        for src in found.shared:
+            tries.append(((2, -n), urllib.parse.urljoin(final, src), True))
+        for size, src in sorted(found.found, key=lambda t: -t[0]):
+            tries.append(((1, -n, size), urllib.parse.urljoin(final, src), False))
+    tries.sort(key=lambda t: t[0], reverse=True)
+
+    best = None  # (how good, extension, bytes)
+    seen = set()
+    for _, address, square in tries:
+        if address in seen or not re.match(r"https?://", address) or len(seen) >= 14:
+            continue
+        seen.add(address)
+        got = _web_get(address, RADIO_LOGO_MAX, ("image/", "application/octet-stream", "binary/octet-stream"))
+        kind = next((k for k in SITE_ICON_KINDS if got and k[2](got[0])), None)
+        size = image_size(got[0]) if kind else None
+        if not size or not size[0] or not size[1]:
+            continue
+        side, ratio = min(size), size[0] / size[1]
+        if square and not 0.8 <= ratio <= 1.25:
+            continue  # a picture for sharing a link: often a banner, and not a logo
+        # A wide one (a teaser, a banner with the name on) only if nothing squarer turns up.
+        squarish = 0.66 <= ratio <= 1.5
+        if squarish and side >= RADIO_LOGO_GOOD:
+            return (kind[0], got[0]), answered
+        if side >= RADIO_LOGO_SMALL and (not best or (squarish, side) > best[0]):
+            best = ((squarish, side), kind[0], got[0])
+    return (best[1:] if best else None), answered
+
+
+def _logo_key(sid):
+    return re.sub(r"[^a-z0-9-]", "-", str(sid).lower())[:40]
+
+
+def radio_logo_file(sid):
+    """(path, content type) of a station's logo, or (None, None)."""
+    for ext, ctype, _ in SITE_ICON_KINDS:
+        path = RADIO_LOGOS / f"{_logo_key(sid)}.{ext}"
+        if path.is_file():
+            return path, ctype
+    return None, None
+
+
+def radio_logo_due(sid):
+    """Whether a station's logo is still to be looked for."""
+    if radio_logo_file(sid)[0]:
+        return False
+    try:
+        return time.time() >= float((RADIO_LOGOS / f"{_logo_key(sid)}.missing").read_text())
+    except (OSError, ValueError):
+        return True
+
+
+def radio_logo_look(st):
+    """Look for one station's logo, and keep it (or that there isn't one)."""
+    try:
+        found, answered = radio_logo_find(st)
+    except Exception as e:  # whatever went wrong, it's tried again in an hour
+        print(f"station logo for {st.get('name')}: {e}", file=sys.stderr)
+        found, answered = None, False
+    if not any(x["id"] == st["id"] for x in radio_stations()):
+        return  # removed meanwhile
+    RADIO_LOGOS.mkdir(parents=True, exist_ok=True)
+    key = _logo_key(st["id"])
+    if found:
+        ext, data = found
+        tmp = RADIO_LOGOS / f".{key}.{ext}.{secrets.token_hex(4)}"
+        tmp.write_bytes(data)
+        tmp.replace(RADIO_LOGOS / f"{key}.{ext}")
+        (RADIO_LOGOS / f"{key}.missing").unlink(missing_ok=True)
+    else:
+        write_private(RADIO_LOGOS / f"{key}.missing", str(int(time.time() + (RADIO_LOGO_RETRY if answered else 3600))))
+
+
+def _radio_logos_look():
+    done = set()
+    try:
+        while True:
+            st = next((x for x in radio_stations() if x["id"] not in done and radio_logo_due(x["id"])), None)
+            if not st:
+                break
+            done.add(st["id"])
+            radio_logo_look(st)
+    finally:
+        with _radio_logo_lock:
+            _radio_logo["busy"] = False
+
+
+def radio_logos_soon():
+    """The logos still to find, looked for one after another in the
+    background. Whether that's going on."""
+    with _radio_logo_lock:
+        if not _radio_logo["busy"] and any(radio_logo_due(x["id"]) for x in radio_stations()):
+            _radio_logo["busy"] = True
+            threading.Thread(target=_radio_logos_look, daemon=True).start()
+        return _radio_logo["busy"]
+
+
+def radio_logo_forget(sid, logo=True):
+    """A station's logo forgotten (it's gone), or only that it had none (it's
+    renamed: its new name might find one)."""
+    key = _logo_key(sid)
+    for ext in [*(k[0] for k in SITE_ICON_KINDS if logo), "missing"]:
+        (RADIO_LOGOS / f"{key}.{ext}").unlink(missing_ok=True)
+
+
+def radio_listed(stations=None):
+    """Stations as Music gets them: each with its logo's version, if it has one."""
+    try:
+        have = {p.name: p for p in RADIO_LOGOS.iterdir()}
+    except OSError:
+        have = {}
+    out = []
+    for x in radio_stations() if stations is None else stations:
+        path = next((have[n] for n in (f"{_logo_key(x['id'])}.{k[0]}" for k in SITE_ICON_KINDS) if n in have), None)
+        try:
+            out.append({**x, "logo": int(path.stat().st_mtime)} if path else x)
+        except OSError:
+            out.append(x)
+    return out
 
 
 # ------------------------------------------------------------------ music
@@ -5805,7 +6220,9 @@ class Handler(BaseHTTPRequestHandler):
     # plays, and playlists to make, change and delete.
     def music_get(self, what, query):
         if what == "stations":
-            return self.send_json(200, {"stations": radio_stations()})
+            # looking: logos are being looked for (Music asks again soon).
+            looking = radio_logos_soon()
+            return self.send_json(200, {"stations": radio_listed(), "looking": looking})
         if what.startswith("station/"):
             return self.radio_get(what[len("station/"):])
         if not places_on():
@@ -5861,6 +6278,12 @@ class Handler(BaseHTTPRequestHandler):
         if part == "now":
             now = _radio_now.get(sid) or {}
             return self.send_json(200, {"title": now.get("title") if time.time() - now.get("at", 0) < 600 else None})
+        if part == "logo":
+            path, ctype = radio_logo_file(sid)
+            if not path:
+                return self.send(404, b"no logo")
+            # Asked for by its version (?v=), so it can be kept a long time.
+            return self.send(200, path.read_bytes(), ctype, [("Cache-Control", "private, max-age=2592000")], csp="default-src 'none'; sandbox")
         if part == "check":
             # Why one didn't play: an HLS stream (the browser's to play), or the station's answer.
             try:
@@ -5935,7 +6358,9 @@ class Handler(BaseHTTPRequestHandler):
                 stations = radio_stations()
                 kept = [x for x in stations if x["id"] != body["remove"]]
                 radio_save(kept)
-            return self.send_json(200 if len(kept) < len(stations) else 404, {"stations": kept})
+            if len(kept) < len(stations):
+                radio_logo_forget(body["remove"])
+            return self.send_json(200 if len(kept) < len(stations) else 404, {"stations": radio_listed(kept)})
         if "rename" in body:
             name = str(body.get("name") or "").strip()[:80]
             if not name:
@@ -5946,14 +6371,15 @@ class Handler(BaseHTTPRequestHandler):
                     if x["id"] == body["rename"]:
                         x["name"] = name
                 radio_save(stations)
-            return self.send_json(200, {"stations": stations})
+            radio_logo_forget(body["rename"], logo=False)
+            return self.send_json(200, {"stations": radio_listed(stations), "looking": radio_logos_soon()})
         if "order" in body and isinstance(body["order"], list):
             with _radio_lock:
                 stations = radio_stations()
                 rank = {sid: i for i, sid in enumerate(body["order"]) if isinstance(sid, str)}
                 stations.sort(key=lambda x: rank.get(x["id"], len(rank)))
                 radio_save(stations)
-            return self.send_json(200, {"stations": stations})
+            return self.send_json(200, {"stations": radio_listed(stations)})
         found, problems = [], []
         for f in body.get("files") or []:
             if not isinstance(f, dict) or not isinstance(f.get("text"), str):
@@ -5990,8 +6416,10 @@ class Handler(BaseHTTPRequestHandler):
         added, already = radio_add(found)
         # Already there: the ones a file named, for playing straight away.
         urls = [u for _, u in found]
-        named = [x for x in radio_stations() if x["url"] in urls]
-        return self.send_json(200, {"added": added, "already": already, "stations": radio_stations(), "named": named, "problems": problems})
+        listed = radio_listed()
+        named = [x for x in listed if x["url"] in urls]
+        return self.send_json(200, {"added": added, "already": already, "stations": listed, "named": named, "problems": problems,
+                                    "looking": radio_logos_soon()})
 
     def music_post(self, what, body):
         if what == "stations":
