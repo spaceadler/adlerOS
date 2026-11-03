@@ -254,7 +254,7 @@ async function bkOpenBook(id) {
   reader.replaceChildren(el("div", { class: "bk-loading" }, el("p", {}, `Opening ${b.title}…`)));
   let info;
   try { info = await bkGet(`info?id=${bkEnc(id)}`); } catch (e) { if (e.message !== "login") bkCloseBook(e.message); return; }
-  const r = { b, info, kind: info.kind, view: bk.prefs.view[id] || info.view || (phoneLayout() ? "text" : "book"), at: 0, total: 0, spread: 1,
+  const r = { b, info, kind: info.kind, view: bk.prefs.view[id] || info.view || (bkSmallScreen() ? "text" : "book"), at: 0, total: 0, spread: 1,
     flow: null, doc: null, canvases: new Map(), turning: null, gen: 0 };
   bk.r = r;
   bkReaderBuild(r);
@@ -316,10 +316,12 @@ function bkReaderBuild(r) {
     el("header", { class: "bk-top" }, back, el("div", { class: "bk-top-title" }, el("span", {}, r.b.title), el("span", { class: "bk-dim" }, r.b.author || "")),
       el("div", { class: "bk-top-tools" }, smaller, bigger, views, toc)),
     el("div", { class: "bk-body" }, prev, stage, next),
-    el("footer", { class: "bk-foot" }, slider, el("span", { class: "bk-count", id: "bk-count" }, "")),
+    el("footer", { class: "bk-foot" }, slider, el("span", { class: "bk-count", id: "bk-count" }, "\u00a0")),
     el("aside", { class: "bk-toc", id: "bk-toc", hidden: "" }),
     el("div", { class: "bk-measure", id: "bk-measure", "aria-hidden": "true" }));
   bkPointer(stage);
+  // The room for the pages changing (the bars settling, a phone turned): laid out again.
+  new ResizeObserver(() => { if (bk.r) bkResizeSoon(); }).observe(stage);
 }
 
 function bkSetView(v) {
@@ -360,6 +362,10 @@ function bkResizeSoon() {
   }, 180);
 }
 
+// A phone's screen, even held sideways or showing the desktop site: one
+// page at a time.
+function bkSmallScreen() { return phoneLayout() || Math.min(screen.width, screen.height) < 600; }
+
 // The pages' size for this window: a spread of two where there's room for
 // two (wide, and not a phone), else one.
 function bkMeasureBox(r) {
@@ -368,7 +374,7 @@ function bkMeasureBox(r) {
   const sh = stage.clientHeight;
   const paper = r.view === "book";
   const ratio = r.kind === "pdf" && paper ? r.ratio : paper ? 0.68 : null;
-  let spread = sw > 760 && sw / sh > 1.05 && !phoneLayout() ? 2 : 1;
+  let spread = sw > 760 && sw / sh > 1.05 && !bkSmallScreen() ? 2 : 1;
   let w, h;
   if (ratio) {
     h = sh;
