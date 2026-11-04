@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# adlerOS through WPE WebKit (cog), drawn straight to the screen: no window
+# system at all, as a TV box does it. Again whenever it closes.
+#
+#   kiosk/wpe URL
+#
+# Mouse (with a pointer) and keyboard through libinput. Extra cog options,
+# one per line, from ~/.config/adleros-kiosk/wpe-flags.
+set -u
+url=${1:?usage: kiosk/wpe URL}
+data=${XDG_DATA_HOME:-$HOME/.local/share}/adleros-kiosk-wpe
+extra=${XDG_CONFIG_HOME:-$HOME/.config}/adleros-kiosk/wpe-flags
+mkdir -p "$data"
+export COG_PLATFORM_DRM_CURSOR=1
+
+# The console behind it mustn't take the keys: Ctrl+C in adlerOS would stop
+# the kiosk, and what you typed would run in the shell once it closed.
+tty_saved=
+if [ -t 0 ]; then
+    tty_saved=$(stty -g)
+    stty raw -echo
+fi
+drop_typed() { [ -t 0 ] && python3 -c 'import sys, termios; termios.tcflush(sys.stdin, termios.TCIFLUSH)' 2>/dev/null; }
+restore() { drop_typed; [ -n "$tty_saved" ] && stty "$tty_saved"; }
+trap restore EXIT
+trap 'exit 0' INT TERM HUP
+
+fails=0
+while :; do
+    for _ in $(seq 60); do
+        curl -fsS -m 2 -o /dev/null "${url%/}/healthz" && break
+        sleep 2
+    done
+    flags=()
+    [ -r "$extra" ] && mapfile -t flags < <(grep -E '^-' "$extra")
+    began=$(date +%s)
+    cog -P drm --bg-color=black --webprocess-failure=restart \
+        --cookie-store=always --cookie-jar="sqlite:$data/cookies.sqlite" \
+        --enable-media=true --enable-webaudio=true --enable-fullscreen=true \
+        --enable-accelerated-2d-canvas=true --enable-html5-local-storage=true \
+        --enable-html5-database=true --enable-developer-extras=false \
+        "${flags[@]}" "$url" </dev/null
+    status=$?
+    drop_typed
+    # Failing at once, again and again: back to the console (kiosk/start).
+    if [ $(( $(date +%s) - began )) -lt 15 ]; then
+        fails=$((fails + 1))
+        [ "$fails" -ge 3 ] && exit "$status"
+    else
+        fails=0
+    fi
+    sleep 2
+done
