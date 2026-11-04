@@ -21,6 +21,7 @@ const BK_ICONS = {
   find: ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"],
   toc: ["M8 6h13", "M8 12h13", "M8 18h13", "M3 6h.01", "M3 12h.01", "M3 18h.01"],
   prev: ["m15 18-6-6 6-6"], next: ["m9 18 6-6-6-6"],
+  dir: ["M3 8h14", "m13 4 4 4-4 4", "M21 16H7", "m11 12-4 4 4 4"],
   text: ["M4 7V4h16v3", "M9 20h6", "M12 4v16"],
 };
 
@@ -69,7 +70,7 @@ function bkBuild() {
   if (bk.built) return;
   bk.built = true;
   const saved = winLoad(BK_KEY, null);
-  if (saved && typeof saved === "object") bk.prefs = { ...bk.prefs, ...saved, view: saved.view && typeof saved.view === "object" ? saved.view : {} };
+  if (saved && typeof saved === "object") bk.prefs = { ...bk.prefs, ...saved, view: saved.view && typeof saved.view === "object" ? saved.view : {}, rtl: saved.rtl && typeof saved.rtl === "object" ? saved.rtl : {} };
   const close = el("button", { class: "sheet-close bk-close", type: "button", "aria-label": "Close Books" }, svg(BK_ICONS.close));
   close.addEventListener("click", closeBooks);
   const search = el("input", { class: "field-input bk-search", id: "bk-search", type: "search", placeholder: "Search", spellcheck: "false", autocomplete: "off" });
@@ -254,7 +255,8 @@ async function bkOpenBook(id) {
   reader.replaceChildren(el("div", { class: "bk-loading" }, el("p", {}, `Opening ${b.title}…`)));
   let info;
   try { info = await bkGet(`info?id=${bkEnc(id)}`); } catch (e) { if (e.message !== "login") bkCloseBook(e.message); return; }
-  const r = { b, info, kind: info.kind, view: bk.prefs.view[id] || info.view || (bkSmallScreen() ? "text" : "book"), at: 0, total: 0, spread: 1,
+  const rtl = bk.prefs.rtl?.[id] ?? (info.rtl || /[\u0600-\u06ff]|\barabic\b/i.test(`${id} ${b.title}`));
+  const r = { b, info, rtl, kind: info.kind, view: bk.prefs.view[id] || info.view || (bkSmallScreen() ? "text" : "book"), at: 0, total: 0, spread: 1,
     flow: null, doc: null, canvases: new Map(), turning: null, gen: 0 };
   bk.r = r;
   bkReaderBuild(r);
@@ -302,6 +304,8 @@ function bkReaderBuild(r) {
     }));
   const smaller = el("button", { type: "button", class: "bk-tool bk-font", "aria-label": "Smaller text", title: "Smaller text" }, "A");
   const bigger = el("button", { type: "button", class: "bk-tool bk-font big", "aria-label": "Bigger text", title: "Bigger text" }, "A");
+  const dir = el("button", { type: "button", class: "bk-tool bk-dir", "aria-label": "Page order", title: "" }, svg(BK_ICONS.dir));
+  dir.addEventListener("click", () => bkSetRtl(!r.rtl));
   smaller.addEventListener("click", () => bkFont(-1));
   bigger.addEventListener("click", () => bkFont(1));
   const slider = el("input", { class: "bk-slider", id: "bk-slider", type: "range", min: "0", max: "1", step: "1", value: "0", "aria-label": "Page" });
@@ -314,7 +318,7 @@ function bkReaderBuild(r) {
   const stage = el("div", { class: "bk-stage", id: "bk-stage", tabindex: "-1" }, el("div", { class: "bk-spread", id: "bk-spread" }));
   reader.replaceChildren(
     el("header", { class: "bk-top" }, back, el("div", { class: "bk-top-title" }, el("span", {}, r.b.title), el("span", { class: "bk-dim" }, r.b.author || "")),
-      el("div", { class: "bk-top-tools" }, smaller, bigger, views, toc)),
+      el("div", { class: "bk-top-tools" }, dir, smaller, bigger, views, toc)),
     el("div", { class: "bk-body" }, prev, stage, next),
     el("footer", { class: "bk-foot" }, slider, el("span", { class: "bk-count", id: "bk-count" }, "\u00a0")),
     el("aside", { class: "bk-toc", id: "bk-toc", hidden: "" }),
@@ -323,6 +327,33 @@ function bkReaderBuild(r) {
   // The room for the pages changing (the bars settling, a phone turned): laid out again.
   new ResizeObserver(() => { if (bk.r) bkResizeSoon(); }).observe(stage);
 }
+
+// Right to left (Arabic and the like): the first page on the right, the
+// next pulled over from the left. The spread is drawn mirrored (the words
+// on its pages turned back the right way round), so the turn is too.
+function bkSetRtl(on) {
+  const r = bk.r;
+  if (!r || r.turning || r.rtl === on) return;
+  r.rtl = on;
+  bk.prefs.rtl = { ...(bk.prefs.rtl || {}), [r.b.id]: on };
+  bkSavePrefs();
+  bkDirMark(r);
+  bkShow(r, r.at);
+  toast(on ? "Pages turn right to left" : "Pages turn left to right");
+}
+
+function bkDirMark(r) {
+  $("bk-reader").classList.toggle("rtl", r.rtl);
+  $("bk-spread").classList.toggle("mirror", r.rtl);
+  const b = $("bk-reader").querySelector(".bk-dir");
+  if (b) {
+    b.title = r.rtl ? "Pages turn right to left (like Arabic). Click for left to right" : "Pages turn left to right. Click for right to left (like Arabic)";
+    b.classList.toggle("on", r.rtl);
+  }
+}
+
+// Where the pointer is, in the (maybe mirrored) spread's own terms.
+function bkMx(r, box, x) { return r.rtl ? box.left + box.right - x : x; }
 
 function bkSetView(v) {
   const r = bk.r;
@@ -401,6 +432,7 @@ async function bkLayout(r, pos) {
   spread.style.width = `${r.box.w * r.spread}px`;
   spread.style.height = `${r.box.h}px`;
   spread.className = `bk-spread ${r.view === "book" ? "paper" : "dark"} n${r.spread}`;
+  bkDirMark(r);
   if (r.view === "book" && r.kind === "pdf") {
     r.total = r.pages;
     r.flow = null;
@@ -992,10 +1024,11 @@ function bkPointer(stage) {
     if (!r || r.turning || e.button !== 0 || !r.total) return;
     if (e.target.closest("a[data-go], a[data-web]")) return;
     const box = $("bk-spread").getBoundingClientRect();
-    const x = e.clientX - box.left;
+    const ex = bkMx(r, box, e.clientX);
+    const x = ex - box.left;
     const y = e.clientY - box.top;
     const W = r.box.w * r.spread;
-    drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, bx: x, by: y, moved: false, box, dir: 0, t: null, c: null, at: performance.now() };
+    drag = { id: e.pointerId, x0: ex, y0: e.clientY, bx: x, by: y, moved: false, box, dir: 0, t: null, c: null, at: performance.now() };
     // Where it was taken hold of: the outer part of a page turns it.
     const edge = r.box.w * (r.view === "book" ? 0.42 : 0.5);
     drag.zone = x > W - edge ? 1 : x < edge ? -1 : 0;
@@ -1004,7 +1037,7 @@ function bkPointer(stage) {
   stage.addEventListener("pointermove", (e) => {
     const r = bk.r;
     if (!drag || e.pointerId !== drag.id || !r) return;
-    const dx = e.clientX - drag.x0;
+    const dx = bkMx(r, drag.box, e.clientX) - drag.x0;
     const dy = e.clientY - drag.y0;
     if (!drag.moved && Math.hypot(dx, dy) < 6) return;
     if (!drag.moved) {
@@ -1029,7 +1062,7 @@ function bkPointer(stage) {
       }
     }
     if (drag.dead) return;
-    const x = e.clientX - drag.box.left;
+    const x = bkMx(r, drag.box, e.clientX) - drag.box.left;
     const y = e.clientY - drag.box.top;
     if (drag.t) {
       const l = bkLocal(drag.t, x, y);
@@ -1052,18 +1085,19 @@ function bkPointer(stage) {
     }
     if (d.dead) return;
     const fast = (performance.now() - d.at) < 300;
+    const ex = bkMx(r, d.box, e.clientX);
     if (d.t) {
       const t = d.t;
       const p = d.p || d.c;
       // Over the middle of the spine's side (or flicked that way): it goes.
-      const go = t.undo ? p.x > -t.w * 0.5 || (fast && e.clientX - d.x0 > 30) : p.x < t.w * 0.49 || (fast && d.x0 - e.clientX > 30);
+      const go = t.undo ? p.x > -t.w * 0.5 || (fast && ex - d.x0 > 30) : p.x < t.w * 0.49 || (fast && d.x0 - ex > 30);
       const flat = { x: t.w, y: d.c.y };
       const over = { x: -t.w, y: d.c.y };
       const target = r.at + d.dir * r.spread;
       if (t.undo) bkCurlAnimate(t, d.c, p, go ? flat : over, 380, () => bkCurlEnd(r, go ? target : null));
       else bkCurlAnimate(t, d.c, p, go ? over : flat, 380, () => bkCurlEnd(r, go ? target : null));
     } else if (d.slide) {
-      const dx = e.clientX - d.x0;
+      const dx = ex - d.x0;
       const W = r.box.w * r.spread;
       const go = Math.abs(dx) > W * 0.25 || (fast && Math.abs(dx) > 30);
       bkSlideEnd(r, d.slide, go && Math.sign(-dx) === d.dir);
@@ -1114,7 +1148,8 @@ function bkSlideEnd(r, s, go) {
 function bkKeys(e) {
   const r = bk.r;
   if (!r || e.target.closest("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey) return;
-  const go = { ArrowRight: 1, PageDown: 1, " ": 1, ArrowLeft: -1, PageUp: -1 }[e.key];
+  const side = r.rtl ? -1 : 1;
+  const go = { ArrowRight: side, PageDown: 1, " ": 1, ArrowLeft: -side, PageUp: -1 }[e.key];
   if (go) { e.preventDefault(); return bkTurn(e.shiftKey && e.key === " " ? -1 : go); }
   if (e.key === "Home") { e.preventDefault(); return bkGo(0); }
   if (e.key === "End") { e.preventDefault(); return bkGo(r.total - 1); }

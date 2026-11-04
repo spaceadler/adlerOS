@@ -3996,6 +3996,13 @@ body:not(.wm) .bk-top { padding-top: 12px; }
 .bk-spread.dark .bk-face { background: #000; color: #e9e6e0; }
 .bk-shade-box { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
 .bk-shade { position: absolute; pointer-events: none; }
+/* Right to left: the spread mirrored, what's printed on its pages turned back. */
+.bk-spread.mirror { transform: scaleX(-1); }
+.bk-spread.mirror :is(.bk-text, .bk-folio, .bk-face > canvas) { transform: scaleX(-1); }
+.bk-reader.rtl .bk-body { flex-direction: row-reverse; }
+.bk-reader.rtl .bk-arrow svg { transform: scaleX(-1); }
+.bk-reader.rtl .bk-slider { direction: rtl; background: linear-gradient(to left, rgb(255 255 255 / 0.85) var(--done, 0%), rgb(255 255 255 / 0.2) var(--done, 0%)); }
+.bk-tool.bk-dir.on { color: var(--bk-accent); }
 .bk-folio { position: absolute; right: 0; bottom: 3.2%; left: 0; color: rgb(0 0 0 / 0.4); font-family: Georgia, serif; font-size: 11px; text-align: center; }
 .bk-text { position: absolute; overflow: hidden; }
 .bk-flow { overflow: visible; column-fill: auto; font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif; line-height: 1.55; text-align: justify; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word; }
