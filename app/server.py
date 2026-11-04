@@ -3052,6 +3052,8 @@ def books_dir():
 
 def book_path(book_id):
     """The real file of a book by its id (its path in the Books folder), or None."""
+    if isinstance(book_id, str) and book_id.startswith("abs:"):
+        return book_abs_file(book_id[4:])
     _, root = books_dir()
     if not root or not isinstance(book_id, str) or not book_id or len(book_id) > 600:
         return None
@@ -3142,6 +3144,166 @@ def books_save_state(book_id, change):
         data = books_state()
         data[book_id] = {**data.get(book_id, {}), **change, "at": time.time()}
         write_private(BOOKS_STATE, json.dumps(data, separators=(",", ":")))
+
+
+# ------------------------------------------------- Books and Audiobookshelf
+# With Podcasts' Audiobookshelf key (one key, both apps), Books is online:
+# the folder's books are matched to Audiobookshelf's (the same file: its
+# name and size), and where you are in them goes both ways; its ebooks that
+# aren't in the folder are listed too ("abs:<item id>") and fetched into
+# data/books/abs the first time they're opened. Offline (no key, or it
+# isn't answering), Books is the folder alone, and what wasn't sent is sent
+# when Audiobookshelf is back (data/books-abs.json).
+BOOKS_ABS_DIR = BOOKS_CACHE / "abs"
+BOOKS_ABS_PENDING = DATA / "books-abs.json"
+BOOKS_ABS_FRESH = 60  # seconds Audiobookshelf's list is good for
+BOOK_ABS_LIMIT = 400 * 1024 * 1024
+_books_abs = {"at": 0, "items": None}
+_books_abs_lock = threading.Lock()
+
+
+def books_abs_items(fresh=False):
+    """Audiobookshelf's ebooks ({item id: …}), or None when it's offline."""
+    url, key = abs_conn()
+    if not url or not key:
+        return None
+    with _books_abs_lock:
+        if not fresh and time.time() - _books_abs["at"] < BOOKS_ABS_FRESH:
+            return _books_abs["items"]
+        items = None
+        try:
+            progress = {p.get("libraryItemId"): p for p in abs_json("me", timeout=8).get("mediaProgress") or []}
+            items = {}
+            for lib in abs_json("libraries", timeout=8).get("libraries") or []:
+                if lib.get("mediaType") != "book":
+                    continue
+                page, only_ebooks = 0, True
+                while page < 50:
+                    query = {"limit": 200, "page": page}
+                    if only_ebooks:
+                        query["filter"] = "ebooks." + base64.b64encode(b"ebook").decode()
+                    try:
+                        got = abs_json(f"libraries/{lib['id']}/items", query, timeout=30)
+                    except urllib.error.HTTPError:
+                        if not only_ebooks:
+                            raise
+                        only_ebooks = False  # an Audiobookshelf without that filter: all, and look
+                        continue
+                    results = got.get("results") or []
+                    for it in results:
+                        media = it.get("media") or {}
+                        ebook = media.get("ebookFile") or {}
+                        meta = ebook.get("metadata") or {}
+                        ext = str(meta.get("ext") or media.get("ebookFormat") or "").lower().lstrip(".")
+                        if ext not in ("epub", "pdf") or not ABS_ID_RE.match(str(it.get("id") or "")):
+                            continue
+                        info = media.get("metadata") or {}
+                        prog = progress.get(it["id"]) or {}
+                        rel = str(it.get("relPath") or "").strip("/")
+                        # Where the file is in its library: the item itself (a
+                        # book that's one file), or its ebook in the item's folder.
+                        paths = [rel] if it.get("isFile") else [f"{rel}/{meta['relPath']}".strip("/")] if meta.get("relPath") else []
+                        name = meta.get("filename") or (posixpath.basename(rel) if it.get("isFile") else "")
+                        size = meta.get("size") or (it.get("size") if it.get("isFile") else 0) or 0
+                        items[it["id"]] = {
+                            "absId": it["id"], "kind": ext, "name": name, "size": size, "paths": paths,
+                            "title": info.get("title") or "", "author": info.get("authorName") or ", ".join(a.get("name", "") for a in info.get("authors") or []),
+                            "added": (it.get("addedAt") or 0) / 1000, "pct": prog.get("ebookProgress") or 0,
+                            "loc": prog.get("ebookLocation") or "", "absAt": (prog.get("lastUpdate") or 0) / 1000}
+                    page += 1
+                    if len(results) < 200 or page * 200 >= (got.get("total") or 0):
+                        break
+        except (OSError, ValueError, KeyError, TypeError):
+            items = None
+        _books_abs.update(at=time.time(), items=items)
+    if items is not None:
+        threading.Thread(target=books_abs_flush, daemon=True).start()
+    return items
+
+
+def books_abs_pending():
+    try:
+        data = json.loads(BOOKS_ABS_PENDING.read_text())
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def books_abs_send(abs_id, pct, page=None):
+    """Where you are, to Audiobookshelf; kept to send later if it's offline."""
+    body = {"ebookProgress": round(max(0.0, min(1.0, float(pct))), 5)}
+    if page:
+        body["ebookLocation"] = str(page)  # its PDF reader's page
+    try:
+        abs_json(f"me/progress/{abs_id}", body=body, method="PATCH", timeout=10)
+        sent = True
+    except (OSError, ValueError, LookupError):
+        sent = False
+    with _books_lock:
+        pending = books_abs_pending()
+        if sent and abs_id in pending:
+            del pending[abs_id]
+        elif not sent:
+            pending[abs_id] = {"pct": pct, "page": page}
+        else:
+            return
+        write_private(BOOKS_ABS_PENDING, json.dumps(pending, separators=(",", ":")))
+
+
+def books_abs_flush():
+    for abs_id, p in list(books_abs_pending().items()):
+        if ABS_ID_RE.match(abs_id) and isinstance(p, dict):
+            books_abs_send(abs_id, p.get("pct") or 0, p.get("page"))
+
+
+def books_abs_match(local, items):
+    """Each folder book's Audiobookshelf item (the same file), and the
+    Audiobookshelf ebooks that aren't in the folder."""
+    by_file = {(b["name"], b["size"]): b for b in items.values() if b["name"] and b["size"]}
+    by_path = {p: b for b in items.values() for p in b["paths"]}
+    matched, used = {}, set()
+    for book in local:
+        it = by_path.get(book["id"])
+        if it and it["size"] and it["size"] != book["size"]:
+            it = None
+        it = it or by_file.get((posixpath.basename(book["id"]), book["size"]))
+        if it:
+            matched[book["id"]] = it
+            used.add(it["absId"])
+    return matched, [it for it in items.values() if it["absId"] not in used]
+
+
+def book_abs_file(abs_id):
+    """An Audiobookshelf ebook's file here, fetched the first time."""
+    if not ABS_ID_RE.match(abs_id or ""):
+        return None
+    for ext in ("epub", "pdf"):
+        have = BOOKS_ABS_DIR / f"{abs_id}.{ext}"
+        if have.is_file():
+            return have
+    it = (books_abs_items() or {}).get(abs_id)
+    if not it:
+        return None
+    BOOKS_ABS_DIR.mkdir(parents=True, exist_ok=True)
+    real = BOOKS_ABS_DIR / f"{abs_id}.{it['kind']}"
+    part = real.with_suffix(".part")
+    try:
+        with abs_open(f"/api/items/{abs_id}/ebook", timeout=60) as r, open(part, "wb") as f:
+            got = 0
+            while chunk := r.read(1 << 20):
+                got += len(chunk)
+                if got > BOOK_ABS_LIMIT:
+                    raise ValueError("too big")
+                f.write(chunk)
+        os.chmod(part, 0o600)
+        part.replace(real)
+    except (OSError, ValueError, LookupError):
+        try:
+            part.unlink()
+        except OSError:
+            pass
+        return None
+    return real
 
 
 # ---------------------------------------------------------------- EPUBs
@@ -6835,7 +6997,41 @@ class Handler(BaseHTTPRequestHandler):
         q = lambda k: query.get(k, [""])[0]
         if what == "list":
             where, root = books_dir()
-            return self.send_json(200, {"dir": where, "found": bool(root), "books": books_list()})
+            books = books_list()
+            items = books_abs_items(fresh=q("fresh") == "1")
+            if items is not None:
+                matched, only = books_abs_match(books, items)
+                state = books_state()
+                for b in books:
+                    it = matched.get(b["id"])
+                    if it:
+                        b["abs"] = it["absId"]
+                        if it["absAt"] > (b.get("at") or 0) + 5:
+                            b["pct"], b["at"] = it["pct"], it["absAt"]
+                for it in only:
+                    book_id = f"abs:{it['absId']}"
+                    seen = state.get(book_id) or {}
+                    newer = it["absAt"] > (seen.get("at") or 0) + 5
+                    books.append({"id": book_id, "abs": it["absId"], "title": it["title"] or posixpath.splitext(it["name"])[0], "author": it["author"],
+                                  "kind": it["kind"], "size": it["size"], "added": it["added"], "cover": True, "remote": True,
+                                  "text": False, "pct": it["pct"] if newer else seen.get("pct") or 0, "at": it["absAt"] if newer else seen.get("at") or 0})
+            return self.send_json(200, {"dir": where, "found": bool(root) or bool(items), "books": books, "online": items is not None})
+        if what == "status":
+            return self.send_json(200, pods_status())
+        if what == "cover" and q("id").startswith("abs:") and ABS_ID_RE.match(q("id")[4:]):
+            cached = BOOKS_ABS_DIR / f"{q('id')[4:]}.jpg"
+            if not cached.is_file():
+                try:
+                    with abs_open(f"/api/items/{q('id')[4:]}/cover", {"format": "jpeg", "width": 600}, timeout=20) as r:
+                        data = r.read(BOOK_COVER_LIMIT * 4)
+                    if not data.startswith(b"\xff\xd8"):
+                        raise ValueError("not a JPEG")
+                    BOOKS_ABS_DIR.mkdir(parents=True, exist_ok=True)
+                    write_private(cached, "")
+                    cached.write_bytes(data)
+                except (OSError, ValueError, LookupError):
+                    return self.send(404, b"no cover")
+            return self.send(200, cached.read_bytes(), "image/jpeg", [("Cache-Control", "private, max-age=86400")], csp=ICON_CSP)
         real = book_path(q("id"))
         if not real:
             return self.send_json(404, {"error": "no such book"})
@@ -6844,6 +7040,18 @@ class Handler(BaseHTTPRequestHandler):
         if what == "info":
             seen = books_state().get(q("id")) or {}
             out = {"id": q("id"), "kind": real.suffix.lower()[1:], "pos": seen.get("pos"), "pct": seen.get("pct") or 0, "view": seen.get("view")}
+            abs_id = q("abs") if ABS_ID_RE.match(q("abs")) else None
+            if abs_id:
+                # Read on (in Audiobookshelf, or on another device) since: from there.
+                try:
+                    prog = abs_json(f"me/progress/{abs_id}", timeout=6)
+                except (OSError, ValueError, LookupError):
+                    prog = {}
+                at = (prog.get("lastUpdate") or 0) / 1000
+                pct = prog.get("ebookProgress")
+                if isinstance(pct, (int, float)) and at > (seen.get("at") or 0) + 5 and abs(pct - (seen.get("pct") or 0)) > 0.002:
+                    loc = str(prog.get("ebookLocation") or "")
+                    out["jump"] = {"pct": max(0.0, min(1.0, float(pct))), **({"page": int(loc)} if loc.isdigit() else {})}
             if out["kind"] == "epub":
                 book = epub_book(real)
                 if not book:
@@ -6887,6 +7095,13 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(404, b"not found")
 
     def books_post(self, what, body):
+        if what == "connect":
+            token = body.get("token")
+            if token is not None and not isinstance(token, str):
+                return self.send_json(400, {"error": "token: text"})
+            got = pods_connect((token or "").strip())
+            _books_abs.update(at=0)
+            return self.send_json(200, got)
         book_id = body.get("id")
         real = book_path(book_id)
         if not real:
@@ -6898,6 +7113,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(400, {"error": "pos and pct"})
             view = body.get("view") if body.get("view") in ("book", "text") else None
             books_save_state(book_id, {"pos": pos, "pct": max(0, min(1, float(pct))), **({"view": view} if view else {})})
+            abs_id = body.get("abs")
+            if isinstance(abs_id, str) and ABS_ID_RE.match(abs_id) and abs_conn()[1]:
+                page = pos.get("page") if real.suffix.lower() == ".pdf" and isinstance(pos.get("page"), int) else None
+                threading.Thread(target=books_abs_send, args=(abs_id, float(pct), page), daemon=True).start()
             return self.send_json(200, {"ok": True})
         BOOKS_CACHE.mkdir(parents=True, exist_ok=True)
         if what == "cover":
