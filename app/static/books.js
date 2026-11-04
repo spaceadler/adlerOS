@@ -457,7 +457,7 @@ async function bkSectionHtml(r, k) {
 
 // The measuring box: one section laid out in columns a page wide.
 function bkFlowEl(r) {
-  const f = el("div", { class: "bk-flow" });
+  const f = el("div", { class: r.info.rtl ? "bk-flow rtl" : "bk-flow" });
   const { iw, ih, gap } = r.inner;
   f.style.cssText = `width: ${iw}px; height: ${ih}px; column-width: ${iw}px; column-gap: ${gap}px; font-size: ${bk.prefs.font}px`;
   return f;

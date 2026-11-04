@@ -4000,6 +4000,9 @@ body:not(.wm) .bk-top { padding-top: 12px; }
 .bk-text { position: absolute; overflow: hidden; }
 .bk-flow { overflow: visible; column-fill: auto; font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif; line-height: 1.55; text-align: justify; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word; }
 .bk-flow p { margin: 0 0 0.75em; }
+/* Right-to-left books: each paragraph right to left (the pages still in columns). */
+.bk-flow.rtl > * { direction: rtl; }
+.bk-flow.rtl :is(h1, h2, h3, h4, h5, h6) { text-align: right; }
 .bk-spread.paper .bk-flow p + p { margin-top: -0.75em; text-indent: 1.4em; }
 .bk-flow :is(h1, h2, h3, h4, h5, h6) { margin: 0.4em 0 0.7em; font-weight: 700; line-height: 1.2; text-align: left; break-after: avoid; }
 .bk-flow h1 { font-size: 1.55em; } .bk-flow h2 { font-size: 1.3em; } .bk-flow h3 { font-size: 1.15em; } .bk-flow :is(h4, h5, h6) { font-size: 1em; }

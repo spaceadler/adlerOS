@@ -3182,10 +3182,15 @@ def epub_parse(real):
         opf = epub_xml(z, rootfile)
         base = posixpath.dirname(rootfile)
         join = lambda href: posixpath.normpath(posixpath.join(base, urllib.parse.unquote(href.split("#")[0])))
-        meta = {"title": "", "author": "", "cover": None}
+        meta = {"title": "", "author": "", "cover": None, "rtl": False}
         manifest, spine, cover_id, nav, ncx = {}, [], None, None, None
         for e in opf.iter():
             tag = epub_local(e.tag)
+            # Written right to left (Arabic, Hebrew, Persian, Urdu…).
+            if tag == "language" and re.match(r"(?i)(ar|he|fa|ur|yi|ps|ckb)\b", (e.text or "").strip()):
+                meta["rtl"] = True
+            elif tag == "spine" and e.get("page-progression-direction") == "rtl":
+                meta["rtl"] = True
             if tag == "title" and not meta["title"]:
                 meta["title"] = (e.text or "").strip()
             elif tag == "creator" and not meta["author"]:
@@ -6844,7 +6849,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not book:
                     return self.send_json(422, {"error": "This EPUB can't be opened (it's damaged, or not an EPUB)."})
                 out.update(title=book["title"], author=book["author"], sections=[s["chars"] for s in book["sections"]],
-                           hrefs=[s["href"] for s in book["sections"]], toc=book["toc"])
+                           hrefs=[s["href"] for s in book["sections"]], toc=book["toc"], rtl=book.get("rtl", False))
             return self.send_json(200, out)
         if what == "section":
             try:
