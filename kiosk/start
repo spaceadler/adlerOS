@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# adlerOS on the screen, full screen, no browser around it, in one of two
-# engines: Chromium in kiosk mode inside labwc (a small Wayland compositor),
-# or WPE WebKit (cog) drawn straight to the screen (kiosk/wpe). Run from the
+# adlerOS on the screen, full screen, no browser around it: labwc (a small
+# Wayland compositor) with one of two engines, Chromium in kiosk mode
+# (kiosk/browser) or WPE WebKit through cog (kiosk/wpe). Run from the
 # console's login (kiosk/setup on puts the hook there), not over SSH.
 #
 #   kiosk/start URL [chromium|wpe]
 #
-# Chromium comes back by itself if it closes or crashes (kiosk/browser);
-# labwc does too, unless it keeps failing at once: three quick failures in
+# The engine comes back by itself if it closes or crashes; labwc does too, unless it keeps failing at once: three quick failures in
 # a row and this gives up and leaves you at the console.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
@@ -25,19 +24,16 @@ if [ -r /etc/default/keyboard ]; then
     export XKB_DEFAULT_MODEL=${XKBMODEL:-} XKB_DEFAULT_LAYOUT=${XKBLAYOUT:-} XKB_DEFAULT_VARIANT=${XKBVARIANT:-} XKB_DEFAULT_OPTIONS=${XKBOPTIONS:-}
 fi
 
-if [ "$engine" = wpe ]; then
-    echo "$(date '+%F %T') starting WPE WebKit for $url" >>"$log"
-    "$here/wpe" "$url" 2>>"$log"
-    echo "$(date '+%F %T') WPE WebKit ended ($?)" >>"$log"
-    echo "adlerOS kiosk: WPE WebKit kept failing; see $log. Leaving you at the console."
-    exit 1
-fi
+case "$engine" in
+wpe) runner=$here/wpe ;;
+*) runner=$here/browser ;;
+esac
 
 fails=0
 while :; do
     began=$(date +%s)
-    echo "$(date '+%F %T') starting labwc for $url" >>"$log"
-    labwc -C "$here/labwc" -s "$here/browser $url" >>"$log" 2>&1
+    echo "$(date '+%F %T') starting labwc ($engine) for $url" >>"$log"
+    labwc -C "$here/labwc" -s "$runner $url" >>"$log" 2>&1
     echo "$(date '+%F %T') labwc ended ($?)" >>"$log"
     if [ $(( $(date +%s) - began )) -lt 15 ]; then
         fails=$((fails + 1))
