@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Turns adlerOS's kiosk on or off for the screen's console (tty1): when you
+# log in there (automatically, if the console logs you in by itself), labwc
+# and Chromium start on adlerOS instead of the shell.
+#
+#   kiosk/setup on URL     (e.g. http://100.64.0.1:8686)
+#   kiosk/setup off
+#
+# On needs nothing installed beyond labwc and Chromium, and no sudo: it adds
+# a few lines to your shell's login (fish's conf.d, else ~/.profile). Off
+# takes them out; a kiosk that's running stops at the next log-in.
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+mark="# adlerOS kiosk (kiosk/setup)"
+fishfile=${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/adleros-kiosk.fish
+profile=$HOME/.profile
+
+case "${1:-}" in
+on)
+    url=${2:?usage: kiosk/setup on URL}
+    case "$url" in http://* | https://*) ;; *) echo "URL: http://… or https://…" >&2; exit 2 ;; esac
+    for need in labwc curl; do command -v "$need" >/dev/null || { echo "needs $need" >&2; exit 1; }; done
+    command -v chromium >/dev/null || command -v chromium-browser >/dev/null || { echo "needs chromium" >&2; exit 1; }
+    q=$(printf '%q' "$url")
+    if [ "$(basename "${SHELL:-}")" = fish ] || [ -d "$(dirname "$fishfile")" ]; then
+        mkdir -p "$(dirname "$fishfile")"
+        cat >"$fishfile" <<EOF
+$mark
+if status is-login; and test (tty) = /dev/tty1; and not set -q WAYLAND_DISPLAY
+    "$here/start" $q
+end
+EOF
+        echo "on: $fishfile"
+    fi
+    if [ "$(basename "${SHELL:-}")" != fish ]; then
+        tmp=$(mktemp)
+        grep -vF "$mark" "$profile" 2>/dev/null >"$tmp" || true
+        echo "[ \"\$(tty)\" = /dev/tty1 ] && [ -z \"\${WAYLAND_DISPLAY:-}\" ] && \"$here/start\" $q $mark" >>"$tmp"
+        mv "$tmp" "$profile"
+        echo "on: $profile"
+    fi
+    echo "It starts the next time the console (tty1) logs in."
+    ;;
+off)
+    rm -f "$fishfile"
+    if [ -f "$profile" ] && grep -qF "$mark" "$profile"; then
+        tmp=$(mktemp)
+        grep -vF "$mark" "$profile" >"$tmp" || true
+        mv "$tmp" "$profile"
+    fi
+    echo "off: the console stays a console from its next log-in."
+    ;;
+*)
+    echo "usage: kiosk/setup on URL | off" >&2
+    exit 2
+    ;;
+esac
