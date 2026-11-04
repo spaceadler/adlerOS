@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!-- adlerOS's kiosk: Chromium full screen (its own kiosk mode), no title
+     bars, no desktop menus. -->
+<labwc_config>
+  <core>
+    <decoration>client</decoration>
+    <gap>0</gap>
+  </core>
+  <keyboard>
+    <default />
+  </keyboard>
+  <mouse>
+    <default />
+    <!-- No desktop menus from a click on the bare screen. -->
+    <context name="Root">
+      <mousebind button="Right" action="Press"><action name="None" /></mousebind>
+      <mousebind button="Left" action="Press"><action name="None" /></mousebind>
+      <mousebind button="Middle" action="Press"><action name="None" /></mousebind>
+    </context>
+  </mouse>
+</labwc_config>
