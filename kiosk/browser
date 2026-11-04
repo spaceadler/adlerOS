@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Inside labwc: Chromium on adlerOS, full screen, again whenever it closes.
+# Inside labwc: Chromium on adlerOS, full screen, again whenever it closes;
+# done when labwc is.
 #
 #   kiosk/browser URL
 #
@@ -12,7 +13,8 @@ extra=${XDG_CONFIG_HOME:-$HOME/.config}/adleros-kiosk/flags
 mkdir -p "$profile"
 chromium=$(command -v chromium || command -v chromium-browser)
 
-while :; do
+# Done when labwc is (its socket gone).
+while [ -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/${WAYLAND_DISPLAY:-none}" ]; do
     # adlerOS answering first (at boot it may be a moment behind).
     for _ in $(seq 60); do
         curl -fsS -m 2 -o /dev/null "${url%/}/healthz" && break

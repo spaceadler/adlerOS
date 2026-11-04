@@ -6,8 +6,8 @@
 #   kiosk/setup on URL [chromium|wpe]   (e.g. https://os.example.com wpe)
 #   kiosk/setup off
 #
-# chromium (the default): Chromium inside labwc. wpe: WPE WebKit (cog) drawn
-# straight to the screen, no window system; lighter, an older engine.
+# chromium (the default) or wpe (WPE WebKit through cog; lighter, an older
+# engine), both full screen inside labwc.
 #
 # On needs nothing installed beyond labwc and Chromium, and no sudo: it adds
 # a few lines to your shell's login (fish's conf.d, else ~/.profile). Off
