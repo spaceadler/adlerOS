@@ -3890,7 +3890,7 @@ body:not(.wm) .pc-panel-head { padding-top: 58px; }
 }
 
 /* Books (books.js): the library, and a book open: paper, or white on black. */
-.books-app { --bk-accent: #ff9f0a; --bk-paper: #fbf7ee; --bk-ink: #24211c; display: flex; flex-direction: column; }
+.books-app { --pc-accent: #ff9f0a; --bk-accent: #ff9f0a; --bk-paper: #fbf7ee; --bk-ink: #24211c; display: flex; flex-direction: column; }
 .bk-close { top: 10px; }
 .bk-shell { position: relative; z-index: 2; display: grid; flex: 1; grid-template-columns: 220px minmax(0, 1fr); min-height: 0; }
 .bk-shell[hidden] { display: none; }
@@ -3905,6 +3905,7 @@ body:not(.wm) .pc-panel-head { padding-top: 58px; }
 .bk-nav-item.on { background: rgb(255 255 255 / 0.13); color: #fff; }
 .bk-nav-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .bk-nav-count { font-size: 12px; color: rgb(255 255 255 / 0.45); }
+.bk-source { margin-top: auto; padding-top: 14px; }
 .bk-side-title { margin: 16px 10px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: rgb(255 255 255 / 0.4); }
 .bk-main { min-width: 0; min-height: 0; overflow-y: auto; outline: none; }
 .bk-page { padding: 26px 32px 60px; }

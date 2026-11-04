@@ -79,7 +79,7 @@ function bkBuild() {
     el("div", { class: "sheet-bg", "aria-hidden": "true" }, el("div", { class: "sheet-wallpaper" }), el("div", { class: "sheet-tint" })),
     close,
     el("div", { class: "bk-shell", id: "bk-shell" },
-      el("aside", { class: "bk-side" }, el("label", { class: "bk-search-box" }, svg(BK_ICONS.find), search), el("nav", { class: "bk-nav", id: "bk-nav", "aria-label": "Books" })),
+      el("aside", { class: "bk-side" }, el("label", { class: "bk-search-box" }, svg(BK_ICONS.find), search), el("nav", { class: "bk-nav", id: "bk-nav", "aria-label": "Books" }), el("div", { class: "bk-source", id: "bk-source" })),
       el("main", { class: "bk-main", id: "bk-main", tabindex: "-1" })),
     el("div", { class: "bk-reader", id: "bk-reader", hidden: "" }));
   document.body.insertBefore(section, $("modal"));
@@ -91,12 +91,14 @@ function bkBuild() {
   bkRenderSide();
 }
 
-async function bkLoad() {
+async function bkLoad({ fresh = false } = {}) {
+  bkGet("status").then((s) => { bk.status = s; bkRenderSide(); if (bk.view === "connect") bkRender(); }).catch(() => {});
   try {
-    const got = await bkGet("list");
+    const got = await bkGet(`list${fresh ? "?fresh=1" : ""}`);
     bk.books = got.books || [];
     bk.dir = got.dir;
     bk.found = got.found;
+    bk.online = Boolean(got.online);
     bk.loaded = true;
   } catch (e) {
     if (e.message !== "login") $("bk-main").replaceChildren(el("div", { class: "bk-empty" }, el("p", {}, e.message)));
@@ -119,6 +121,73 @@ function bkRenderSide() {
   const n = (kind) => (bk.loaded ? bk.books.filter((b) => !kind || b.kind === kind).length : null);
   nav.replaceChildren(item("now", BK_ICONS.now, "Reading Now"), el("p", { class: "bk-side-title" }, "Library"),
     item("all", BK_ICONS.all, "All Books", n()), item("pdf", BK_ICONS.pdf, "PDFs", n("pdf")), item("epub", BK_ICONS.all, "EPUBs", n("epub")));
+  // Online (Audiobookshelf) or offline (the folder alone): as in Podcasts.
+  const src = $("bk-source");
+  if (!src) return;
+  const s = bk.status || {};
+  const on = s.source === "abs";
+  const b = el("button", { type: "button", class: `pc-source-button${bk.view === "connect" ? " on" : ""}` },
+    el("span", { class: `pc-dot${on ? " on" : ""}` }),
+    el("span", { class: "pc-source-text" }, el("span", {}, on ? "Audiobookshelf" : "This computer's folder"),
+      el("span", { class: "pc-dim" }, on ? (s.user ? `Signed in as ${s.user}` : "Connected") : s.error === "unreachable" ? "Audiobookshelf isn't answering" : "Connect Audiobookshelf")));
+  b.addEventListener("click", () => { bk.view = "connect"; bkRenderSide(); bkRender(); });
+  src.replaceChildren(b);
+}
+
+// Connecting Audiobookshelf: the key Podcasts uses (one for both).
+function bkConnectPage(page) {
+  const s = bk.status || {};
+  page.append(el("h1", { class: "bk-h1" }, "Audiobookshelf"));
+  const box = el("div", { class: "pc-connect" });
+  page.append(box);
+  if (!bk.status) { box.append(el("p", { class: "bk-dim" }, "Asking Audiobookshelf…")); return; }
+  if (s.ok) {
+    const n = bk.books.filter((b) => b.abs && !b.remote).length;
+    const more = bk.books.filter((b) => b.remote).length;
+    box.append(el("p", {}, `Connected${s.user ? ` as ${s.user}` : ""}. ${n} of the books in your folder are in Audiobookshelf too: where you are in them is kept in step with it (its web reader and apps).${more ? ` ${more} of its ebooks aren't in your folder; they're here as well, and fetched when you open one.` : ""}`),
+      el("p", { class: "bk-dim" }, "Podcasts uses the same connection."));
+    if (s.keyHere) {
+      const off = el("button", { type: "button", class: "pc-button secondary" }, "Disconnect");
+      off.addEventListener("click", async () => {
+        if (!await confirmDialog({ title: "Disconnect Audiobookshelf?", body: `adlerOS forgets the key, for Books and Podcasts. Books shows what's in ${bk.dir}, and where you are is kept here.`, button: "Disconnect", destructive: true })) return;
+        if (await bkPost("connect", { token: "" })) { toast("Disconnected."); bk.status = null; await bkLoad({ fresh: true }); }
+      });
+      box.append(el("div", { class: "pc-hero-actions" }, off));
+    } else {
+      box.append(el("p", { class: "bk-dim" }, `Its key is in ${settingsFile()} (ABS_TOKEN).`));
+    }
+    return;
+  }
+  if (s.error === "noabs") {
+    box.append(el("p", {}, `Audiobookshelf isn't among your apps here: install it (the App Store has it), or set ABS_URL in ${settingsFile()} to where it runs.`));
+    return;
+  }
+  const why = s.error === "refused" ? "Audiobookshelf didn't take the key it has: paste a new one."
+    : s.error === "unreachable" ? "Audiobookshelf isn't answering right now, so Books is offline: your folder, and where you are is sent when it's back. The key below replaces the one adlerOS has."
+      : "Books can read with Audiobookshelf: where you are in a book kept in step with its reader and apps, and its ebooks listed here too. Until then (and whenever it's offline), Books reads your folder.";
+  const input = el("input", { class: "field-input pc-key", type: "password", placeholder: "API key", autocomplete: "off", spellcheck: "false", "aria-label": "Audiobookshelf API key" });
+  const go = el("button", { type: "button", class: "pc-button primary" }, "Connect");
+  const note = el("p", { class: "pc-note", hidden: "" });
+  const connect = async () => {
+    const token = input.value.trim();
+    if (!token) return input.focus();
+    go.disabled = true;
+    const got = await bkPost("connect", { token });
+    go.disabled = false;
+    if (!got?.ok) { note.hidden = false; note.textContent = got?.error || "That key didn't work."; return; }
+    input.value = "";
+    toast(`Connected to Audiobookshelf${got.user ? ` as ${got.user}` : ""}.`);
+    bk.status = null;
+    bk.view = "now";
+    await bkLoad({ fresh: true });
+  };
+  go.addEventListener("click", connect);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") connect(); });
+  box.append(el("p", {}, why),
+    el("ol", { class: "pc-steps" }, el("li", {}, "Open Audiobookshelf and sign in."), el("li", {}, "Settings, then API Keys, then Add API Key: any name, your user, no expiry."),
+      el("li", {}, "Copy the key it shows (only once) and paste it here.")),
+    el("div", { class: "pc-key-row" }, input, go), note,
+    el("p", { class: "bk-dim" }, "adlerOS keeps the key on the server: this page never sees it again. Podcasts uses it too."));
 }
 
 function bkRender() {
@@ -130,6 +199,7 @@ function bkRender() {
     page.append(el("div", { class: "bk-empty" }, el("h2", {}, "No Books folder"), el("p", {}, `Put your PDFs and EPUBs in ${bk.dir}.`)));
     return;
   }
+  if (bk.view === "connect") return bkConnectPage(page);
   const words = bk.q.toLowerCase().split(/\s+/).filter(Boolean);
   const match = (b) => words.every((w) => `${b.title} ${b.author}`.toLowerCase().includes(w));
   const by = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -254,7 +324,7 @@ async function bkOpenBook(id) {
   reader.hidden = false;
   reader.replaceChildren(el("div", { class: "bk-loading" }, el("p", {}, `Opening ${b.title}…`)));
   let info;
-  try { info = await bkGet(`info?id=${bkEnc(id)}`); } catch (e) { if (e.message !== "login") bkCloseBook(e.message); return; }
+  try { info = await bkGet(`info?id=${bkEnc(id)}${b.abs ? `&abs=${bkEnc(b.abs)}` : ""}`); } catch (e) { if (e.message !== "login") bkCloseBook(e.message); return; }
   const rtl = bk.prefs.rtl?.[id] ?? (info.rtl || /[\u0600-\u06ff]|\barabic\b/i.test(`${id} ${b.title}`));
   const r = { b, info, rtl, kind: info.kind, view: bk.prefs.view[id] || info.view || (bkSmallScreen() ? "text" : "book"), at: 0, total: 0, spread: 1,
     flow: null, doc: null, canvases: new Map(), turning: null, gen: 0 };
@@ -272,7 +342,20 @@ async function bkOpenBook(id) {
     r.outline = null;
   }
   if (r.kind === "pdf" && r.view === "text" && !(await bkPdfText(r))) r.view = "book";
-  await bkLayout(r, info.pos || null);
+  // Read on elsewhere since (Audiobookshelf's reader, or another device through it): from there.
+  let pos = info.pos || null;
+  if (info.jump) {
+    const j = info.jump;
+    if (r.kind === "pdf") pos = { page: Math.max(1, Math.min(r.pages, j.page || Math.round(j.pct * r.pages) || 1)), within: 0 };
+    else {
+      const chars = info.sections || [];
+      let left = j.pct * chars.reduce((a, c) => a + c, 0), k = 0;
+      while (k < chars.length - 1 && left >= chars[k]) { left -= chars[k]; k++; }
+      pos = { sec: k, off: Math.round(left) };
+    }
+    toast(`From where you got to in Audiobookshelf (${Math.round(j.pct * 100)}%).`);
+  }
+  await bkLayout(r, pos);
 }
 
 function bkCloseBook(why) {
@@ -1314,7 +1397,7 @@ function bkSaveNow() {
   const b = r.b;
   b.pct = pct;
   b.at = Date.now() / 1000;
-  const body = JSON.stringify({ id: b.id, pos, pct, view: r.view });
+  const body = JSON.stringify({ id: b.id, pos, pct, view: r.view, ...(b.abs ? { abs: b.abs } : {}) });
   if (document.visibilityState === "hidden" && navigator.sendBeacon) {
     navigator.sendBeacon("/api/books/progress", new Blob([body], { type: "application/json" }));
     return;
