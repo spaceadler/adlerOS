@@ -178,7 +178,7 @@ function mbLogoItems() {
     { label: "Settings…", run: () => openSettings() },
     { label: "App Store…", run: () => openStore() },
     { label: "Live Usage", run: () => openUsage() },
-    { label: "Home screen (leave desktop mode)", run: () => setDesktopMode(false) },
+    { label: "Mode", items: modeItems() },
     { label: "Log out…", run: confirmLogout },
   ];
   if (state.admin) items.push({ label: "Restart or shut down…", run: () => powerMenu(), destructive: true });
@@ -274,7 +274,11 @@ function ccRender() {
       await setAdmin(false);
       ccRender();
     }),
-    ccRow(MB_ICONS.desktop, "Desktop mode", "On", true, () => { ccClose(); setDesktopMode(false); }));
+    ccRow(MB_ICONS.desktop, "Mode", modeName(currentMode()), true, (e) => {
+      const r = e.currentTarget.getBoundingClientRect();
+      ccClose();
+      openMenu(r.left, r.bottom + 4, modeItems());
+    }));
   const dnd = ccTile("cc-wide", MB_ICONS.moon, "Do Not Disturb", dndOn(), () => { winSave(DND_KEY, !dndOn()); ccRender(); }, dndOn() ? "On: no pop-ups" : "");
   const small = [
     ccTile("cc-small", MB_ICONS.full, full ? "Exit full screen" : "Full screen", full, () => {

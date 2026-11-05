@@ -810,8 +810,10 @@ function openMenu(x, y, items, up = null) {
   const rows = up ? [{ label: "Back", back: true }, ...items] : items;
   menu.replaceChildren(...rows.map((item) => {
     // muted: greyed (it can't be done yet), but a click still says why.
-    const button = el("button", { type: "button", role: "menuitem", class: `${item.destructive ? "destructive" : ""}${item.muted ? " muted" : ""}${item.items ? " menu-sub" : ""}${item.back ? " menu-back" : ""}` },
-      ...(item.back ? [el("span", { class: "menu-chev", "aria-hidden": "true" }, "\u2039"), item.label] : item.items ? [item.label, el("span", { class: "menu-chev", "aria-hidden": "true" }, "\u203a")] : [item.label]));
+    const button = el("button", { type: "button", role: "menuitem", class: `${item.destructive ? "destructive" : ""}${item.muted ? " muted" : ""}${item.items ? " menu-sub" : ""}${item.checked ? " menu-on" : ""}${item.back ? " menu-back" : ""}` },
+      ...(item.back ? [el("span", { class: "menu-chev", "aria-hidden": "true" }, "\u2039"), item.label] : item.items ? [item.label, el("span", { class: "menu-chev", "aria-hidden": "true" }, "\u203a")]
+        : item.checked ? [item.label, el("span", { class: "menu-check", "aria-hidden": "true" }, "\u2713")] : [item.label]));
+    if (item.checked) button.setAttribute("aria-checked", "true");
     button.addEventListener("click", () => {
       if (item.back) return openMenu(x, y, up.items, up.up);
       if (item.items) return openMenu(x, y, item.items, { items, up });
@@ -925,7 +927,7 @@ function menuForItem(target) {
   return [{ label: "Edit widgets", run: editWidgets },
     arrange,
     // Desktop mode's own menu (desk.js) has the way back.
-    ...(computerScreen() ? [{ label: "Desktop mode", run: () => setDesktopMode(true) }] : []),
+    { label: "Mode", items: modeItems() },
     { label: "Change wallpaper", run: () => openSettings("wallpaper") },
     { label: "Log out", run: confirmLogout, destructive: true }];
 }

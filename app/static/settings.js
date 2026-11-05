@@ -313,9 +313,11 @@ function buildRow(row) {
     control.append(adminSwitch());
   } else if (c.type === "desktop-mode") {
     // Kept in this browser, not on the server: each device picks.
-    const sw = el("button", { type: "button", class: "switch", role: "switch", "aria-checked": String(desktopMode()), "aria-label": "Desktop mode" }, el("span"));
-    sw.addEventListener("click", () => setDesktopMode(!desktopMode()));
-    control.append(sw);
+    const select = el("select", { class: "field-input", "aria-label": row.title }, ...modeItems().map((m, i) =>
+      el("option", { value: MODES[i][0], ...(m.muted ? { disabled: "" } : {}) }, MODES_SOON.has(MODES[i][0]) ? `${m.label} (coming)` : m.label)));
+    select.value = currentMode();
+    select.addEventListener("change", () => { setMode(select.value); select.value = currentMode(); });
+    control.append(select);
   } else if (c.type === "glass") {
     // This device's, like desktop mode.
     const value = el("span", { class: "glass-value" }, glassLevel().toFixed(2));
