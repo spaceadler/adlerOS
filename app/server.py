@@ -6158,15 +6158,20 @@ def jf_home():
     views = jf_json("/UserViews", {"userId": uid}).get("Items") or []
     libs = [{"id": v["Id"], "name": v.get("Name") or "", "kind": v.get("CollectionType") or ""} for v in views
             if (v.get("CollectionType") or "") in ("", "movies", "tvshows", "homevideos", "mixed", "boxsets", "musicvideos")]
-    resume = [jf_item(i) for i in jf_json("/UserItems/Resume", {"userId": uid, "Limit": 20, "Fields": JF_FIELDS, "MediaTypes": "Video"}).get("Items") or []]
-    nxt = [jf_item(i) for i in jf_json("/Shows/NextUp", {"userId": uid, "Limit": 20, "Fields": JF_FIELDS}).get("Items") or []]
+    # All at once: on a Pi each of these takes Jellyfin a moment.
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        resume_f = pool.submit(jf_json, "/UserItems/Resume", {"userId": uid, "Limit": 20, "Fields": JF_FIELDS, "MediaTypes": "Video"})
+        next_f = pool.submit(jf_json, "/Shows/NextUp", {"userId": uid, "Limit": 20, "Fields": JF_FIELDS})
+        latest_f = [(lib, pool.submit(jf_json, "/Items/Latest", {"userId": uid, "ParentId": lib["id"], "Limit": 16, "Fields": JF_FIELDS})) for lib in libs[:12]]
+        resume = [jf_item(i) for i in resume_f.result().get("Items") or []]
+        nxt = [jf_item(i) for i in next_f.result().get("Items") or []]
+        shelves = []
+        for lib, f in latest_f:
+            got = f.result()
+            items = [jf_item(i) for i in (got if isinstance(got, list) else [])]
+            if items:
+                shelves.append({"library": lib, "items": items})
     seen = {i["id"] for i in resume}
-    shelves = []
-    for lib in libs[:12]:
-        got = jf_json("/Items/Latest", {"userId": uid, "ParentId": lib["id"], "Limit": 16, "Fields": JF_FIELDS})
-        items = [jf_item(i) for i in (got if isinstance(got, list) else [])]
-        if items:
-            shelves.append({"library": lib, "items": items})
     return {"libraries": libs, "resume": resume, "next": [i for i in nxt if i["id"] not in seen], "latest": shelves}
 
 

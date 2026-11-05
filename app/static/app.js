@@ -1522,6 +1522,7 @@ async function showDesktop() {
   startWidgets();
   startNotes();
   refreshDesk();
+  if (tvOn()) tvShow();
   // An install's first login: the welcome (unless a link asked for a window).
   if (!state.welcomed && !location.hash) openWelcome();
   // A link (or reload) to #settings or #settings/<row> opens Settings there;

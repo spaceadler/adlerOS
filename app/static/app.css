@@ -4382,3 +4382,47 @@ body.wm .nc.shown { pointer-events: auto; transform: none; }
   .vd-ep > .vd-art { width: 128px; }
   .vd-source { margin-top: 0; padding-top: 0; }
 }
+
+/* TV mode (tv.js): the home screen's pages and the dock make way for big
+   tiles and a top shelf; apps fill the screen; the focus shows from across
+   the room. */
+body.tv #desktop, body.tv #dock, body.tv .dock-edge { display: none !important; }
+#desktop[hidden] + .tv-home { display: none !important; }
+.tv-home { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; padding: 4vh 5vw 6vh; color: #fff; }
+.tv-home[hidden] { display: none; }
+.tv-home::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(to bottom, rgb(0 0 0 / 0.15), rgb(0 0 0 / 0.55) 55%, rgb(0 0 0 / 0.8)); }
+.tv-top { display: flex; align-items: center; justify-content: flex-end; gap: 18px; }
+.tv-clock { font-size: clamp(18px, 2vw, 30px); font-weight: 600; font-variant-numeric: tabular-nums; text-shadow: 0 2px 8px rgb(0 0 0 / 0.5); }
+.tv-mode { padding: 8px 16px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 0.14); color: #fff; font: inherit; font-size: clamp(13px, 1.1vw, 17px); font-weight: 600; cursor: pointer; }
+.tv-shelf { display: flex; flex: 1; flex-direction: column; justify-content: flex-end; min-height: 0; padding-bottom: 3vh; }
+.tv-shelf-about h1 { margin: 0 0 8px; font-size: clamp(32px, 4.4vw, 72px); font-weight: 800; letter-spacing: -0.03em; text-shadow: 0 4px 20px rgb(0 0 0 / 0.5); }
+.tv-shelf-about p { max-width: 60ch; margin: 0; font-size: clamp(15px, 1.4vw, 22px); color: rgb(255 255 255 / 0.75); }
+.tv-shelf-row { display: grid; grid-auto-columns: clamp(220px, 21vw, 380px); grid-auto-flow: column; gap: 2vw; overflow-x: auto; padding: 14px 6px; scrollbar-width: none; }
+.tv-card { display: flex; flex-direction: column; gap: 10px; padding: 0; border: 0; background: none; color: #fff; font: inherit; text-align: left; cursor: pointer; }
+.tv-card .vd-art { border-radius: 14px; transition: transform 0.2s, box-shadow 0.2s; }
+.tv-card-title { overflow: hidden; font-size: clamp(14px, 1.2vw, 19px); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; opacity: 0.8; }
+.tv-shelf-photo { position: relative; height: 100%; max-height: 52vh; overflow: hidden; border-radius: 18px; box-shadow: 0 20px 60px rgb(0 0 0 / 0.5); }
+.tv-shelf-photo img { width: 100%; height: 100%; object-fit: cover; }
+.tv-shelf-photo-text { position: absolute; inset: auto 0 0; padding: 40px 28px 22px; background: linear-gradient(to top, rgb(0 0 0 / 0.7), transparent); }
+.tv-shelf-photo-text h1 { margin: 0; font-size: clamp(26px, 3vw, 48px); }
+.tv-shelf-photo-text p { margin: 4px 0 0; font-size: clamp(14px, 1.2vw, 20px); opacity: 0.75; }
+.tv-apps { display: flex; gap: 2.2vw; overflow-x: auto; padding: 18px 8px 10px; scrollbar-width: none; }
+.tv-app { display: flex; flex: 0 0 auto; flex-direction: column; align-items: center; gap: 12px; width: clamp(110px, 10vw, 180px); padding: 0; border: 0; background: none; color: #fff; font: inherit; cursor: pointer; }
+.tv-app-icon { display: grid; width: 100%; aspect-ratio: 1; overflow: hidden; border-radius: 22%; box-shadow: 0 10px 26px rgb(0 0 0 / 0.45); transition: transform 0.2s, box-shadow 0.2s; }
+.tv-app-icon > img, .tv-app-icon > .plate { width: 100%; height: 100%; }
+.tv-app-name { overflow: hidden; max-width: 100%; font-size: clamp(13px, 1.1vw, 18px); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; opacity: 0; transition: opacity 0.2s; }
+.tv-app:focus { outline: none; }
+.tv-app:focus .tv-app-icon, .tv-app:hover .tv-app-icon { transform: scale(1.12); box-shadow: 0 0 0 4px #fff, 0 18px 40px rgb(0 0 0 / 0.6); }
+.tv-app:focus .tv-app-name, .tv-app:hover .tv-app-name { opacity: 1; }
+.tv-card:focus { outline: none; }
+.tv-card:focus .vd-art, .tv-card:hover .vd-art { transform: scale(1.06); box-shadow: 0 0 0 4px #fff, 0 18px 40px rgb(0 0 0 / 0.6); }
+.tv-card:focus .tv-card-title { opacity: 1; }
+/* Apps: the whole screen, and a focus you see from the sofa. */
+body.tv .sheet { left: 0; width: 100vw; max-width: none; height: 100dvh; border-radius: 0; transform: none; animation: tv-in 0.3s ease-out both; }
+body.tv .sheet.closing { animation: tv-out 0.25s ease-in both; }
+@keyframes tv-in { from { opacity: 0; transform: scale(1.03); } }
+@keyframes tv-out { to { opacity: 0; transform: scale(1.03); } }
+body.tv .sheet :focus-visible, body.tv .menu :focus-visible, body.tv .dialog :focus-visible { outline: 3px solid #fff !important; outline-offset: 3px; border-radius: 10px; }
+body.tv .mu-card:focus-visible .mu-card-art > * { transform: scale(1.05); transition: transform 0.2s; }
+body.tv .mu-card:focus-visible { outline: none !important; }
+body.tv .mu-card:focus-visible .mu-card-art { outline: 3px solid #fff; outline-offset: 4px; border-radius: 10px; }
