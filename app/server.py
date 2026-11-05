@@ -2500,6 +2500,7 @@ def music_track(item):
     song = music_song(sid if not sid.startswith("/") else sid.lstrip("/"), musictags.read_tags(real), st.st_mtime,
                       real.with_suffix(".lrc").exists())
     song["id"] = sid
+    song["dir"] = music_dir()[0]  # Music plays it before it has the library (and its dir)
     return song
 
 
