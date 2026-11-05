@@ -26,6 +26,13 @@ function desktopMode() { return document.body.classList.contains("wm"); }
 // it comes back when the screen is wide again.
 const NARROW_SCREEN = matchMedia("(max-width: 639px)");
 function computerScreen() { return !NARROW_SCREEN.matches; }
+// A phone (or another small touch screen) in desktop mode, e.g. turned
+// sideways: the dock is too big to keep, so it steps aside over a window
+// and comes back from the bottom edge (app.css .small-touch).
+const TOUCH_ONLY = matchMedia("(hover: none) and (pointer: coarse)");
+function smallTouch() { return TOUCH_ONLY.matches && Math.min(screen.width, screen.height) < 600; }
+function markSmallTouch() { document.body.classList.toggle("small-touch", smallTouch()); }
+function dockAway() { return desktopMode() && smallTouch(); }
 
 function winLoad(key, fallback) {
   try {
@@ -427,7 +434,7 @@ const MENUBAR_H = 28;
 function winTop() { return desktopMode() ? MENUBAR_H : 0; }
 function winArea() {
   const dock = $("dock");
-  const bottom = dock && !dock.hidden ? dock.getBoundingClientRect().top - 8 : innerHeight;
+  const bottom = dock && !dock.hidden && !dockAway() ? dock.getBoundingClientRect().top - 8 : innerHeight;
   return { w: innerWidth, h: Math.max(240, bottom - winTop()) };
 }
 
@@ -947,7 +954,7 @@ const dockEdge = el("div", { class: "dock-edge", "aria-hidden": "true" });
 document.body.append(dockEdge);
 dockEdge.addEventListener("pointerenter", () => {
   document.body.classList.add("dock-peek");
-  dockAwaySoon(1500);
+  dockAwaySoon(smallTouch() ? 3000 : 1500);
 });
 $("dock").addEventListener("pointerenter", () => { dockPeek.over = true; });
 $("dock").addEventListener("pointerleave", () => {
@@ -1009,5 +1016,8 @@ document.addEventListener("keydown", (e) => {
   e.stopImmediatePropagation();
 }, true);
 window.addEventListener("resize", () => {
+  markSmallTouch();
   if (desktopMode()) winLayout();
 });
+markSmallTouch();
+TOUCH_ONLY.addEventListener("change", () => { markSmallTouch(); if (desktopMode()) winLayout(); });

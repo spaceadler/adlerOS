@@ -2410,6 +2410,11 @@ body.sheet-open:not(.wm):not(.dock-peek) .dock:not(:focus-within) { translate: 0
 .dock-edge { position: fixed; left: 0; right: 0; bottom: 0; z-index: 49; display: none; height: 6px; }
 body.sheet-open:not(.wm):not(.dock-peek) .dock-edge { display: block; }
 body.phone .dock-edge { height: 16px; }
+/* The same in desktop mode on a phone turned sideways (windows.js
+   smallTouch), while a window is showing: there the dock took a third of the
+   screen. Windows then use the whole height (winArea). */
+body.wm.small-touch:has(.sheet:not([hidden]):not(.minimized)):not(.dock-peek) .dock:not(:focus-within) { translate: 0 calc(100% + 30px); }
+body.wm.small-touch:has(.sheet:not([hidden]):not(.minimized)):not(.dock-peek) .dock-edge { display: block; height: 18px; }
 
 .glass-range { width: 160px; accent-color: #fff; }
 .glass-value { min-width: 34px; font-size: 13px; font-variant-numeric: tabular-nums; color: rgb(255 255 255 / 0.75); text-align: right; }
