@@ -108,7 +108,7 @@ JOBS = DATA / "agent" / "jobs"
 ICON_OVERRIDES = Path(os.environ.get("OS_ICON_DIR", "/icons"))
 # adlerOS's own dock icons (./icons can replace each): All apps, and the ones
 # you pin like any app.
-DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "luna", "music", "podcasts", "books", "gallery", "documents", "calendar", "tasks")
+DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "luna", "music", "podcasts", "books", "videos", "gallery", "documents", "calendar", "tasks")
 DOCK_MAX_PINS = 16
 # The widgets you can put on the desktop, with the defaults and the limit.
 WIDGET_CATALOG = STATIC / "widgets-catalog.json"
@@ -461,7 +461,7 @@ def search_url():
 # from the start, in this order, until you take them out.
 BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal",
                 "adleros:notepad", "adleros:luna", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:tasks",
-                "adleros:podcasts", "adleros:books")
+                "adleros:podcasts", "adleros:books", "adleros:videos")
 DOCK_FIRST = BUILTIN_PINS[:5]  # a new dock's (Notepad, Luna and Music: in All apps, for you to pin)
 DOCK_SEED = 2  # 1: My Computer and the Terminal pinned; 2: the App Store, Settings and Live Usage too
 

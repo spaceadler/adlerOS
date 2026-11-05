@@ -304,7 +304,7 @@ const PAGE_TITLE_H = 18;
 
 // The home screen's first page: adlerOS's own apps, in this order until you
 // drag them about (the Terminal only in admin mode).
-const OWN_PAGE = ["adleros:files", "adleros:music", "adleros:podcasts", "adleros:books", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:tasks", "adleros:luna", "adleros:notepad",
+const OWN_PAGE = ["adleros:files", "adleros:music", "adleros:podcasts", "adleros:books", "adleros:videos", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:tasks", "adleros:luna", "adleros:notepad",
   "adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:terminal"];
 
 function ownApps() {
@@ -624,6 +624,7 @@ const BUILTIN_PINS = {
   "adleros:music": { name: "Music", icon: "music", dock: "music", open: () => toggleMusic() },
   "adleros:podcasts": { name: "Podcasts", icon: "podcasts", dock: "podcasts", open: () => togglePodcasts() },
   "adleros:books": { name: "Books", icon: "books", dock: "books", open: () => toggleBooks() },
+  "adleros:videos": { name: "Videos", icon: "videos", dock: "videos", open: () => toggleVideos() },
   "adleros:gallery": { name: "Gallery", icon: "gallery", dock: "gallery", open: () => toggleGallery() },
   "adleros:documents": { name: "Documents", icon: "documents", dock: "documents", open: () => toggleDocuments() },
   "adleros:calendar": { name: "Calendar", icon: "calendar", dock: "calendar", open: () => toggleCalendar() },
@@ -718,6 +719,7 @@ function buildDock() {
   markDockOpen("music", isOpen("music"));
   markDockOpen("podcasts", isOpen("podcasts"));
   markDockOpen("books", isOpen("books"));
+  markDockOpen("videos", isOpen("videos"));
   markDockOpen("gallery", isOpen("gallery"));
   markDockOpen("documents", isOpen("documents"));
   markDockOpen("calendar", isOpen("calendar"));
@@ -865,7 +867,7 @@ const newWindowItem = (id) => (desktopMode() && NEW_WINDOW[id] ? [{ label: "New 
 
 // What a right-click (or a long press) on `target` offers.
 // The window a dock item opens, if it's open: its id, for Close.
-const DOCK_WINDOWS = { "app-store": "store", settings: "settings", "live-usage": "usage", files: "files", terminal: "terminal", luna: "luna", music: "music", podcasts: "podcasts", books: "books", gallery: "gallery", documents: "documents", calendar: "calendar", tasks: "tasks" };
+const DOCK_WINDOWS = { "app-store": "store", settings: "settings", "live-usage": "usage", files: "files", terminal: "terminal", luna: "luna", music: "music", podcasts: "podcasts", books: "books", videos: "videos", gallery: "gallery", documents: "documents", calendar: "calendar", tasks: "tasks" };
 function openWindowFor(item) {
   const id = item?.dataset.window || DOCK_WINDOWS[item?.dataset.dock] || (item?.dataset.app && !BUILTIN_PINS[item.dataset.app] ? `app-${item.dataset.app}` : null);
   return id && wm.windows.has(id) && isOpen(id) ? id : null;
@@ -1316,6 +1318,7 @@ const ACTIONS = [
   { id: "tasks", name: "Tasks", keywords: "tasks todo to-do list kanban board projects vikunja due reminders checklist" },
   { id: "podcasts", name: "Podcasts", keywords: "podcasts audiobooks listen episodes chapters audiobookshelf abs" },
   { id: "books", name: "Books", keywords: "books read reading pdf epub ebook library novel" },
+  { id: "videos", name: "Videos", keywords: "videos films movies shows series tv documentaries episodes watch jellyfin" },
   { id: "desktop-mode", name: "Desktop mode or home screen", keywords: "desktop mode windows window manager floating side by side home screen switch" },
   { id: "welcome", name: "Welcome tour", keywords: "welcome tour intro introduction start first help guide find apps compose folders" },
   { id: "logout", name: "Log out", keywords: "log out sign out lock exit" },
@@ -1423,6 +1426,7 @@ function runResult(i) {
   else if (r.action.id === "tasks") openTasks();
   else if (r.action.id === "podcasts") openPodcasts();
   else if (r.action.id === "books") openBooks();
+  else if (r.action.id === "videos") openVideos();
   else if (r.action.id === "desktop-mode") setDesktopMode(!desktopMode());
   else if (r.action.id === "welcome") openWelcome();
   else if (r.action.id === "logout") confirmLogout();
