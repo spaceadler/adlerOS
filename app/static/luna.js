@@ -668,7 +668,8 @@ function mdNoteView(tab) {
   }));
   const more = el("button", { type: "button", class: "md-icon-button", title: "More", "aria-label": "More" }, svg(["M12 12h.01", "M19 12h.01", "M5 12h.01"]));
   more.addEventListener("click", () => { const r = more.getBoundingClientRect(); openMenu(r.left, r.bottom + 4, mdNoteMenu(tab)); });
-  const head = el("div", { class: "md-note-head" }, ...mdCrumbs(tab), el("span", { class: "md-note-state" }, !tab.writable ? "Read-only" : tab.saving ? "Saving…" : tab.dirty ? "Not saved yet" : ""), modes, more);
+  const head = el("div", { class: "md-note-head" }, ...mdCrumbs(tab), el("span", { class: "md-note-state" }, !tab.writable ? "Read-only" : tab.saving ? "Saving…" : tab.dirty ? "Not saved yet" : ""),
+    ...(tab.writable ? [mdInsertButton(tab)] : []), modes, more);
 
   const read = el("div", { class: "md-read md-view", tabindex: "0" });
   if (tab.mode === "live") return mdLiveNote(tab, title, head, read);

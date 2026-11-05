@@ -184,30 +184,77 @@ function mdInsertHooks(node, tab) {
     e.preventDefault();
     e.stopPropagation();
     const area = e.target.closest("textarea") || (e.target.closest(".md-flow") ? mdFlowOf(e.target.closest(".md-flow-box")) : null);
-    const picked = area && area.selectionEnd > area.selectionStart ? area.value.slice(area.selectionStart, area.selectionEnd) : "";
-    // The menu takes the focus (and Live puts the block away): the caret's held.
-    const back = area ? mdHold(area) : null;
-    const editor = async () => (back ? back() : mdEditorAt(tab, e.target));
-    const run = (label) => async () => {
-      const a = await editor();
-      if (!a) return toast("Can't write here.");
-      MD_INSERTS.find((x) => x[1] === label)[4](a, tab);
-    };
-    const items = [
-      ...(picked ? [{ label: "Cut", run: async () => { navigator.clipboard?.writeText(picked); const a = await editor(); if (a) mdPut(a, ""); } },
-        { label: "Copy", run: () => navigator.clipboard?.writeText(picked).then(() => toast("Copied."), () => toast("The browser won't copy from here: Ctrl+C.")) }] : []),
-      ...(area && navigator.clipboard?.readText ? [{ label: "Paste", run: () => navigator.clipboard.readText().then(async (t) => { const a = await editor(); if (a) mdPut(a, t); }, () => toast("The browser won't paste from here: Ctrl+V.")) }] : []),
-      { label: "New page…", run: run("New page…") },
-      { label: "Attach a file…", run: run("Attach a file…") },
-      { label: "Insert a picture…", run: run("Insert a picture…") },
-      { label: "Link to a note…", run: run("Link to a note…") },
-      { label: "Table…", run: run("Table…") },
-      { label: "Checklist", run: run("Checklist") },
-      ...(picked ? [{ label: "Bold", run: run("Bold") }, { label: "Highlight", run: run("Highlight") }] : []),
-      { label: "Insert… (Ctrl+/)", run: async () => mdInsertPalette(tab, await editor()) },
-    ];
-    openMenu(e.clientX, e.clientY, items);
+    openMenu(e.clientX, e.clientY, mdInsertMenu(tab, e.target, area));
   });
+  // A long press on a touch screen, which has no right click (an iPhone
+  // never sends one): the same menu, unless the press picked some text.
+  let press = null;
+  const stop = () => { if (press) clearTimeout(press.timer); press = null; };
+  node.addEventListener("pointerdown", (e) => {
+    stop();
+    if (e.pointerType !== "touch" || !tab.writable || e.target.closest(".md-note-head, a[href], input, textarea, button, .md-properties, [data-md]")) return;
+    const at = { x: e.clientX, y: e.clientY, target: e.target };
+    press = { ...at, timer: setTimeout(() => {
+      press = null;
+      if (!$("menu").hidden || String(getSelection() || "").trim()) return; // Android's own long press got there; or text picked
+      navigator.vibrate?.(8);
+      // Lifting the finger isn't a tap on the menu (it opens under it), nor
+      // on the line; the next real tap is.
+      const swallow = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
+      document.addEventListener("click", swallow, { capture: true, once: true });
+      document.addEventListener("pointerdown", () => document.removeEventListener("click", swallow, true), { capture: true, once: true });
+      openMenu(at.x, at.y, mdInsertMenu(tab, at.target, null));
+    }, 600) };
+  });
+  node.addEventListener("pointermove", (e) => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) stop(); });
+  for (const type of ["pointerup", "pointercancel"]) node.addEventListener(type, stop);
+  node.addEventListener("scroll", stop, true);
+}
+
+// What the menu has: the usual few, then everything Insert… does (the
+// Ctrl+/ list), by group. `area`: the editor it was opened from, if any.
+function mdInsertMenu(tab, target, area) {
+  const picked = area && area.selectionEnd > area.selectionStart ? area.value.slice(area.selectionStart, area.selectionEnd) : "";
+  // The menu takes the focus (and Live puts the block away): the caret's held.
+  const back = area ? mdHold(area) : null;
+  const editor = async () => (back ? back() : mdEditorAt(tab, target));
+  const run = (label) => async () => {
+    const a = await editor();
+    if (!a) return toast("Can't write here.");
+    MD_INSERTS.find((x) => x[1] === label)[4](a, tab);
+  };
+  const groups = [...new Set(MD_INSERTS.map((x) => x[0]))].map((group) => ({
+    label: group, items: MD_INSERTS.filter((x) => x[0] === group).map((x) => ({ label: x[1], run: run(x[1]) })),
+  }));
+  return [
+    ...(picked ? [{ label: "Cut", run: async () => { navigator.clipboard?.writeText(picked); const a = await editor(); if (a) mdPut(a, ""); } },
+      { label: "Copy", run: () => navigator.clipboard?.writeText(picked).then(() => toast("Copied."), () => toast("The browser won't copy from here: Ctrl+C.")) }] : []),
+    ...(area && navigator.clipboard?.readText ? [{ label: "Paste", run: () => navigator.clipboard.readText().then(async (t) => { const a = await editor(); if (a) mdPut(a, t); }, () => toast("The browser won't paste from here: Ctrl+V.")) }] : []),
+    { label: "New page…", run: run("New page…") },
+    { label: "Attach a file…", run: run("Attach a file…") },
+    { label: "Insert a picture…", run: run("Insert a picture…") },
+    { label: "Link to a note…", run: run("Link to a note…") },
+    { label: "Table…", run: run("Table…") },
+    { label: "Checklist", run: run("Checklist") },
+    ...(picked ? [{ label: "Bold", run: run("Bold") }, { label: "Highlight", run: run("Highlight") }] : []),
+    ...groups,
+    { label: "Search them all… (Ctrl+/)", run: async () => mdInsertPalette(tab, await editor()) },
+  ];
+}
+
+// The + in a note's bar: the menu, at the caret (if you're writing) or at
+// the note's end. Pressing it leaves the caret where it is.
+function mdInsertButton(tab) {
+  const b = el("button", { type: "button", class: "md-icon-button md-insert-button", title: "Insert (Ctrl+/)", "aria-label": "Insert" }, svg(["M12 5v14", "M5 12h14"]));
+  b.addEventListener("pointerdown", (e) => e.preventDefault()); // the editor keeps the focus
+  b.addEventListener("click", () => {
+    const act = document.activeElement;
+    const box = act?.closest?.(".md-flow-box");
+    const area = box ? mdFlowOf(box) : act?.matches?.("textarea.md-source") ? act : null;
+    const r = b.getBoundingClientRect();
+    openMenu(r.left, r.bottom + 4, mdInsertMenu(tab, null, area));
+  });
+  return b;
 }
 
 // Insert…: everything, by group; type to narrow it down; ↑ ↓, Enter.
