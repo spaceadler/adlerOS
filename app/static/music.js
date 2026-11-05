@@ -1178,8 +1178,17 @@ function musicStart(play = true, at = 0) {
   const id = muCurrent();
   const audio = music.audio;
   if (!id || !muSong(id)) { audio.pause(); musicNowPlaying(); return; }
-  audio.src = muUrl(id);
-  if (at > 0) audio.addEventListener("loadedmetadata", () => { audio.currentTime = Math.min(at, (audio.duration || at) - 1); }, { once: true });
+  // Where the last song was to start is not where this one does (a song
+  // opened from My Computer used to jump to that place, often its end).
+  if (music.seekTo) audio.removeEventListener("loadedmetadata", music.seekTo);
+  music.seekTo = null;
+  const url = muUrl(id);
+  // Already on (playSong starts it before anything else): left playing.
+  if (!(play && at <= 0 && audio.src === new URL(url, location.href).href)) audio.src = url;
+  if (at > 0) {
+    music.seekTo = () => { music.seekTo = null; audio.currentTime = Math.min(at, (audio.duration || at) - 1); };
+    audio.addEventListener("loadedmetadata", music.seekTo, { once: true });
+  }
   music.counted = false;
   music.retries = 0;
   if (play) {
@@ -1877,32 +1886,46 @@ function musicRestore() {
   for (const [id, s] of Object.entries(saved.extra || {})) if (s && (id.startsWith("/") || (muIsStation(id) && music.extra.has(id)))) music.extra.set(id, { ...s, now: null, ...(muIsStation(id) ? { logo: music.extra.get(id).logo } : {}) });
   const ok = (id) => typeof id === "string" && muSong(id);
   Object.assign(music, {
-    shuffle: Boolean(saved.shuffle), repeat: ["off", "all", "one"].includes(saved.repeat) ? saved.repeat : "off",
-    sort: saved.sort && typeof saved.sort === "object" ? saved.sort : {}, from: saved.from || "", radio: saved.radio || null,
+    repeat: ["off", "all", "one"].includes(saved.repeat) ? saved.repeat : "off", sort: saved.sort && typeof saved.sort === "object" ? saved.sort : {},
   });
   if (Number.isFinite(saved.volume)) music.audio.volume = Math.min(1, Math.max(0, saved.volume));
+  if (saved.panel) musicSetPanel(saved.panel);
+  // Something's on already (a song opened from My Computer): that stays.
+  if (music.audio.getAttribute("src")) return musicBarUpdate();
+  Object.assign(music, { shuffle: Boolean(saved.shuffle), from: saved.from || "", radio: saved.radio || null });
   const queue = Array.isArray(saved.queue) ? saved.queue : [];
   const current = queue[saved.at];
   music.queue = queue.filter(ok);
   music.original = Array.isArray(saved.original) ? saved.original.filter(ok) : null;
   music.at = ok(current) ? music.queue.indexOf(current) : -1;
   music.addedUntil = Math.max(music.at, Math.min(Number(saved.addedUntil) || -1, music.queue.length - 1));
-  if (music.at >= 0 && !music.audio.getAttribute("src")) musicStart(false, saved.time || 0);
-  if (saved.panel) musicSetPanel(saved.panel);
+  if (music.at >= 0) musicStart(false, saved.time || 0);
   musicBarUpdate();
 }
 
 // ------------------------------------------------- from My Computer
 
-// A song from My Computer: plays here (in your library or not).
+// A song from My Computer: plays here (in your library or not). The sound
+// first, while it's still your tap (a phone won't start it once the library
+// has taken its time loading), then its tags, then the rest of Music.
 async function playSong(entry, path) {
   musicBuild();
   openWindow("music");
-  if (!music.loaded) await musicLoad();
+  const audio = music.audio;
+  if (music.seekTo) audio.removeEventListener("loadedmetadata", music.seekTo);
+  music.seekTo = null;
+  audio.src = fileUrl(path, true);
+  audio.play().catch(() => {});
   const { status, body } = await api(`/api/music/track?id=${encodeURIComponent(path)}`).catch(() => ({ status: 0 }));
-  if (status !== 200) return toast(body?.error || `Can't play ${entry.name}.`);
-  if (!music.songs.has(body.id)) music.extra.set(body.id, body);
-  musicPlayList([body.id], 0, { from: "My Computer", shuffle: false });
+  if (status !== 200) {
+    if (!muCurrent()) { audio.pause(); audio.removeAttribute("src"); }
+    toast(body?.error || `Can't play ${entry.name}.`);
+  } else {
+    if (!music.dir && body.dir) music.dir = body.dir;
+    if (!music.songs.has(body.id)) music.extra.set(body.id, body);
+    musicPlayList([body.id], 0, { from: "My Computer", shuffle: false });
+  }
+  musicLoad();
 }
 
 // An .m3u8 (.m3u) from My Computer: its songs, in the queue.
