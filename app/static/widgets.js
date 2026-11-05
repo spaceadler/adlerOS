@@ -218,6 +218,176 @@ const TYPES = {
   },
 };
 
+// ------------------------------------------------- adlerOS's own apps
+
+// Each asks its app's part of the server for what it shows, at most once
+// a minute, and every copy of it on screen (home screen, desktop,
+// Notification Center) shares the answer: { items: [{text, subtext}],
+// empty, note }.
+const APP_WIDGET_MS = 60000;
+const appWidget = new Map(); // source -> { at, value, asking }
+
+const wDay = (d) => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const day = new Date(d); day.setHours(0, 0, 0, 0);
+  const n = Math.round((day - today) / 86400000);
+  return n === 0 ? "Today" : n === 1 ? "Tomorrow" : n === -1 ? "Yesterday"
+    : n < 0 && n > -7 ? `${-n} days ago` : day.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+};
+const wTime = (d) => new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const wYmd = (d) => d.toLocaleDateString("sv-SE");
+const wZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+async function wGet(path) {
+  const { status, body } = await api(path);
+  if (status === 401) { showLock(); throw new Error("login"); }
+  return { status, body };
+}
+
+const APP_SOURCES = {
+  notes: async () => {
+    const v = await wGet("/api/notes/vaults");
+    if (v.status !== 200 || !v.body.current) return { items: [], empty: "Luna has no vault yet." };
+    const i = await wGet(`/api/notes/index?vault=${encodeURIComponent(v.body.current)}`);
+    if (i.status !== 200) return { items: [], empty: "Can't open your notes right now." };
+    const notes = (i.body.files || []).filter((f) => /\.md$/i.test(f.path)).sort((a, b) => (b.mtime || 0) - (a.mtime || 0)).slice(0, 4);
+    return { items: notes.map((f) => ({ text: f.path.split("/").pop().replace(/\.md$/i, ""), subtext: wDay(f.mtime * 1000) })), empty: "No notes yet." };
+  },
+  calendar: async () => {
+    const from = new Date(), to = new Date(Date.now() + 14 * 86400000);
+    const q = new URLSearchParams({ from: wYmd(from), to: wYmd(to), tz: wZone() });
+    const r = await wGet(`/api/calendar/events?${q}`);
+    if (r.status === 409) return { items: [], empty: "Calendar isn't set up." };
+    if (r.status !== 200) return { items: [], empty: "Can't reach your calendar." };
+    const now = Date.now();
+    const at = (e) => (e.allDay ? new Date(`${e.start}T00:00`) : new Date(e.start));
+    const end = (e) => (e.allDay ? new Date(`${e.end || e.start}T00:00`).getTime() + (e.end ? 0 : 86400000) : new Date(e.end || e.start).getTime());
+    const next = (r.body.events || []).filter((e) => end(e) > now).sort((a, b) => at(a) - at(b)).slice(0, 4);
+    return { items: next.map((e) => ({ text: e.title || "(No title)", subtext: e.allDay ? `${wDay(at(e))}, all day` : `${wDay(at(e))} ${wTime(at(e))}` })),
+      empty: "Nothing in the next two weeks." };
+  },
+  tasks: async () => {
+    const tomorrow = new Date(Date.now() + 86400000);
+    const r = await wGet(`/api/tasks/due?until=${wYmd(tomorrow)}&tz=${encodeURIComponent(wZone())}`);
+    if (r.status !== 200) return { items: [], empty: "Can't reach your tasks." };
+    const today = wYmd(new Date());
+    const tasks = (r.body.tasks || []).slice(0, 4);
+    return { items: tasks.map((t) => ({ text: t.title, subtext: t.due && t.due.slice(0, 10) < today ? "Overdue" : t.due && t.due.length > 10 ? `Today ${wTime(t.due)}` : "Today" })),
+      empty: "Nothing due today.", note: r.body.tasks?.length > 4 ? `${r.body.tasks.length} due` : "" };
+  },
+  documents: async () => {
+    const [newest, inbox] = await Promise.all([wGet("/api/paperless/list?page=1&page_size=4&ordering=-added"),
+      wGet("/api/paperless/list?page=1&page_size=1&is_in_inbox=true").catch(() => ({ status: 0 }))]);
+    if (newest.status === 409) return { items: [], empty: "Documents isn't set up." };
+    if (newest.status !== 200) return { items: [], empty: "Can't reach Paperless." };
+    const n = inbox.status === 200 ? inbox.body.count || 0 : null;
+    return { items: (newest.body.results || []).map((d) => ({ text: d.title || d.original_file_name || `Document ${d.id}`, subtext: `Added ${wDay(d.added || d.created).toLowerCase()}` })),
+      empty: "No documents yet.", note: n === null ? "" : n ? `${n} in the inbox` : "Inbox empty" };
+  },
+  photos: async () => {
+    const r = await wGet("/api/gallery/memories");
+    if (r.status === 409) return { items: [], empty: "Photos isn't set up." };
+    if (r.status !== 200) return { items: [], empty: "Can't reach Immich." };
+    const m = (Array.isArray(r.body) ? r.body : []).find((x) => x.assets?.length);
+    if (!m) return { items: [], empty: "Nothing from this day." };
+    const ago = m.data?.year ? new Date().getFullYear() - m.data.year : null;
+    const pic = m.assets.find((a) => a.type === "IMAGE") || m.assets[0];
+    return { items: [], picture: `/api/gallery/thumb/${pic.id}?size=preview`,
+      caption: ago ? `${ago} year${ago === 1 ? "" : "s"} ago` : "On this day", note: `${m.assets.length} item${m.assets.length === 1 ? "" : "s"}` };
+  },
+};
+
+// What's known for `source` (null at first); asks again when it's old,
+// then `redraw`.
+function appWidgetValue(source, redraw) {
+  let entry = appWidget.get(source);
+  if (!entry) appWidget.set(source, entry = { at: 0, value: null, asking: null });
+  if (!entry.asking && Date.now() - entry.at > APP_WIDGET_MS && APP_SOURCES[source]) {
+    entry.asking = APP_SOURCES[source]().catch(() => ({ items: [], empty: "Can't reach it right now." }))
+      .then((v) => { Object.assign(entry, { at: Date.now(), value: v, asking: null }); return v; });
+  }
+  if (entry.asking) entry.asking.then(() => redraw());
+  return entry.value;
+}
+
+// The app widgets that open something: app:<id>.
+const APP_OPENERS = { luna: () => openLuna(), music: () => openMusic(), photos: () => openGallery(), documents: () => openDocuments(),
+  calendar: () => openCalendar(), tasks: () => openTasks() };
+
+Object.assign(TYPES, {
+  // A short list from one of the apps (notes, events, tasks, documents).
+  "app-list": (w) => {
+    const note = el("div", { class: "w-title w-app-note" });
+    const list = el("div", { class: "w-list w-app-list" });
+    const node = el("div", { class: "w-app" }, el("div", { class: "w-app-head" }, el("span", { class: "w-app-name" }, w.label), note), list);
+    let drawn = null;
+    const draw = (v) => {
+      if (!v || v === drawn) return;
+      drawn = v;
+      note.textContent = v.note || "";
+      list.replaceChildren(...(v.items.length ? v.items.map((item) =>
+        el("div", { class: "w-item" }, el("div", { class: "w-title" }, item.subtext || ""), el("div", { class: "w-item-text" }, item.text)))
+        : [el("div", { class: "w-empty" }, v.empty || "Nothing to show.")]));
+    };
+    const update = () => draw(appWidgetValue(w.source, () => draw(appWidget.get(w.source)?.value)));
+    return { node, update };
+  },
+  // A picture: Photos' "On this day".
+  "app-picture": (w) => {
+    const img = el("img", { class: "w-pic-img", alt: "", decoding: "async" });
+    img.addEventListener("error", () => img.removeAttribute("src"));
+    const caption = el("div", { class: "w-pic-caption" });
+    const note = el("div", { class: "w-title" });
+    const node = el("div", { class: "w-pic" }, img, el("div", { class: "w-pic-text" }, el("div", { class: "w-title" }, w.label), caption, note));
+    let drawn = null;
+    const draw = (v) => {
+      if (!v || v === drawn) return;
+      drawn = v;
+      node.classList.toggle("empty", !v.picture);
+      if (v.picture) img.src = v.picture; else img.removeAttribute("src");
+      caption.textContent = v.picture ? v.caption : v.empty || "";
+      note.textContent = v.note || "";
+    };
+    const update = () => draw(appWidgetValue(w.source, () => draw(appWidget.get(w.source)?.value)));
+    return { node, update };
+  },
+  // Music: the song that's on, its cover, play or pause and the next one.
+  "now-playing": (w, preview) => {
+    const art = el("span", { class: "w-np-art" });
+    const title = el("div", { class: "w-item-text w-np-title" });
+    const artist = el("div", { class: "w-title" });
+    const play = el(preview ? "span" : "button", { class: "w-np-button", ...(preview ? {} : { type: "button", "aria-label": "Play" }) });
+    const next = el(preview ? "span" : "button", { class: "w-np-button", ...(preview ? {} : { type: "button", "aria-label": "Next song" }) },
+      svg(["M5 4l10 8-10 8z", "M19 5v14"]));
+    const open = el(preview ? "span" : "button", { class: "w-np-open", ...(preview ? {} : { type: "button", "aria-label": "Open Music" }) }, art,
+      el("span", { class: "w-np-text" }, el("span", { class: "w-title" }, w.label), title, artist));
+    const node = el("div", { class: "w-np" }, open, el("div", { class: "w-np-controls" }, play, next));
+    const has = () => typeof music !== "undefined" && typeof muCurrent === "function";
+    if (!preview) {
+      open.addEventListener("click", () => openMusic());
+      play.addEventListener("click", () => { if (!has()) return openMusic(); musicToggle(); setTimeout(update, 150); });
+      next.addEventListener("click", () => { if (has() && muCurrent()) { musicNext(); setTimeout(update, 150); } });
+    }
+    let shown = "";
+    function update() {
+      const id = has() ? muCurrent() : null;
+      const s = id ? muSong(id) : null;
+      const on = Boolean(s && !music.audio.paused);
+      const key = `${id}|${on}|${s?.now || ""}`;
+      if (key === shown) return;
+      shown = key;
+      title.textContent = s ? (s.station && s.now ? s.now : s.title) : "Not playing";
+      artist.textContent = s ? (s.station ? s.title : muArtists(s)) : "Tap to play something";
+      art.replaceChildren(s?.cover && !s.station ? el("img", { src: muCover(id), alt: "", decoding: "async" }) : s?.logo ? el("img", { src: s.logo, alt: "" }) : svg(["M9 18V5l12-2v13", "M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M18 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"]));
+      play.replaceChildren(svg(on ? ["M7 4h3v16H7z", "M14 4h3v16h-3z"] : ["M7 4l13 8-13 8z"]));
+      if (!preview) play.setAttribute("aria-label", on ? "Pause" : "Play");
+      next.toggleAttribute("disabled", !s);
+    }
+    // As it happens, not only at the next poll.
+    if (!preview && has()) for (const type of ["play", "pause", "emptied", "loadedmetadata"]) music.audio.addEventListener(type, () => update());
+    return { node, update };
+  },
+});
+
 // ------------------------------------------------------------- desktop
 
 function widgetDef(id) {
@@ -230,6 +400,7 @@ function openWidget(w) {
   if (target === "live-usage") return openUsage();
   if (target === "settings") return openSettings();
   if (target.startsWith("settings:")) return openSettings(target.slice("settings:".length));
+  if (target.startsWith("app:")) return APP_OPENERS[target.slice(4)]?.();
 }
 
 // One widget as it sits on the desktop (or, `preview`, in the picker).
@@ -238,7 +409,7 @@ function widgetNode(w, { preview = false } = {}) {
   if (!type) return null;
   const body = type(w, preview);
   // A widget you type into (search) isn't a button.
-  const typed = w.type === "search";
+  const typed = w.type === "search" || w.type === "now-playing"; // (that one has buttons of its own)
   const panel = el(preview || typed ? "div" : "button", { class: "widget-panel", "data-widget": w.id, "data-type": w.type }, body.node);
   if (!preview && !typed) {
     panel.type = "button";
