@@ -3630,7 +3630,7 @@ body:not(.wm) .tk-detail { padding-top: 56px; }
 .tk-label-pick { background: rgb(255 255 255 / 0.08); color: rgb(255 255 255 / 0.75); cursor: pointer; }
 .tk-label-pick.on { background: color-mix(in srgb, var(--c) 60%, transparent); color: #fff; }
 .tk-label-new { background: none; border: 1px dashed rgb(255 255 255 / 0.3); color: rgb(255 255 255 / 0.65); cursor: pointer; }
-.tk-notes { width: 100%; min-height: 110px; resize: vertical; font: inherit; }
+.field-input.tk-notes { width: 100%; height: auto; min-height: 110px; padding: 10px 14px; border-radius: 14px; resize: vertical; font: inherit; font-size: 13px; line-height: 1.45; }
 .tk-detail-foot { display: flex; align-items: center; gap: 12px; margin-top: auto; padding-top: 6px; font-size: 12px; }
 .tk-delete { color: #ff6b63; }
 .tk-saved { flex: 1; color: rgb(255 255 255 / 0.5); }
