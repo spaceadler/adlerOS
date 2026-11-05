@@ -802,13 +802,22 @@ function toast(text) {
 
 // A context menu of {label, run, destructive} items at the pointer.
 let menuOpener = null; // focus goes back here when the menu closes
-function openMenu(x, y, items) {
+// An item with items of its own opens them in its place (a finger can't
+// hover over a side menu), with Back at the top.
+function openMenu(x, y, items, up = null) {
   const menu = $("menu");
   if (menu.hidden) menuOpener = document.activeElement !== document.body ? document.activeElement : null;
-  menu.replaceChildren(...items.map((item) => {
+  const rows = up ? [{ label: "Back", back: true }, ...items] : items;
+  menu.replaceChildren(...rows.map((item) => {
     // muted: greyed (it can't be done yet), but a click still says why.
-    const button = el("button", { type: "button", role: "menuitem", class: `${item.destructive ? "destructive" : ""}${item.muted ? " muted" : ""}` }, item.label);
-    button.addEventListener("click", () => { closeMenu(); item.run(); });
+    const button = el("button", { type: "button", role: "menuitem", class: `${item.destructive ? "destructive" : ""}${item.muted ? " muted" : ""}${item.items ? " menu-sub" : ""}${item.back ? " menu-back" : ""}` },
+      ...(item.back ? [el("span", { class: "menu-chev", "aria-hidden": "true" }, "\u2039"), item.label] : item.items ? [item.label, el("span", { class: "menu-chev", "aria-hidden": "true" }, "\u203a")] : [item.label]));
+    button.addEventListener("click", () => {
+      if (item.back) return openMenu(x, y, up.items, up.up);
+      if (item.items) return openMenu(x, y, item.items, { items, up });
+      closeMenu();
+      item.run();
+    });
     return button;
   }));
   menu.hidden = false;

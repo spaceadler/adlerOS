@@ -1032,6 +1032,12 @@ body.arranging .app:nth-child(2n) .app-icon { animation-delay: -0.12s; }
   cursor: pointer;
 }
 .menu button:hover, .menu button:focus-visible { outline: none; background: rgb(255 255 255 / 0.1); }
+.menu { max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain; }
+.menu button { flex-shrink: 0; }
+.menu-sub, .menu-back { display: flex; align-items: center; gap: 8px; }
+.menu-sub .menu-chev { margin-left: auto; padding-left: 16px; opacity: 0.55; }
+.menu-back { color: rgb(255 255 255 / 0.7); }
+.menu-back .menu-chev { opacity: 0.7; }
 .menu .destructive { color: var(--destructive-text); }
 
 .toast {
