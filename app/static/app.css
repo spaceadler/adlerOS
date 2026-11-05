@@ -445,6 +445,44 @@ button { font: inherit; color: inherit; }
   .w-clock { font-size: 44px; }
 }
 
+/* adlerOS's own apps' widgets (widgets.js app-list, app-picture, now-playing). */
+.w-app { display: flex; flex: 1; flex-direction: column; min-width: 0; overflow: hidden; padding-top: 8px; }
+.w-app-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; padding: 0 10px; }
+.w-app-name { font-size: 11px; font-weight: 700; letter-spacing: -0.01em; }
+.w-app-note { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.w-app .w-list { padding-top: 4px; }
+.w-pic { position: relative; flex: 1; min-width: 0; overflow: hidden; border-radius: inherit; }
+.w-pic-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.w-pic-img:not([src]) { display: none; }
+.w-pic-text { position: absolute; inset: auto 0 0; display: flex; flex-direction: column; gap: 1px; padding: 22px 10px 8px; background: linear-gradient(to top, rgb(0 0 0 / 0.6), transparent); }
+.w-pic-caption { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+.w-pic.empty .w-pic-text { inset: 0; justify-content: center; background: none; text-align: center; }
+.w-pic.empty .w-pic-caption { font-size: 12px; font-weight: 500; opacity: 0.6; }
+.w-np { display: flex; flex: 1; flex-direction: column; justify-content: space-between; gap: 6px; min-width: 0; padding: 10px; }
+.w-np-open { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.w-np-art { display: grid; flex-shrink: 0; place-items: center; width: 42px; height: 42px; overflow: hidden; border-radius: 8px; background: rgb(255 255 255 / 0.1); }
+.w-np-art img { width: 100%; height: 100%; object-fit: cover; }
+.w-np-art svg, .w-np-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.w-np-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.w-np-title { white-space: nowrap; }
+.w-np-controls { display: flex; gap: 8px; }
+.w-np-button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: rgb(255 255 255 / 0.14); color: #fff; cursor: pointer; }
+.w-np-button svg { fill: currentColor; }
+.w-np-button:hover { background: rgb(255 255 255 / 0.24); }
+.w-np-button[disabled] { opacity: 0.4; cursor: default; }
+.widget-panel[data-type="now-playing"] { cursor: default; }
+.widget-panel[data-type="now-playing"]:hover, .widget-panel[data-type="now-playing"]:active { transform: none; }
+@media (min-width: 640px) {
+  .w-app { padding-top: 14px; }
+  .w-app-head { padding: 0 16px; }
+  .w-app-name { font-size: 13px; }
+  .w-pic-text { padding: 30px 16px 12px; }
+  .w-pic-caption { font-size: 16px; }
+  .w-np { padding: 16px 18px; }
+  .w-np-art { width: 56px; height: 56px; border-radius: 10px; }
+  .w-np-button { width: 40px; height: 40px; }
+}
+
 /* Edit widgets: every widget, live, to pick from. */
 .dialog.widget-picker { width: min(940px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; text-align: left; }
 .picker-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }

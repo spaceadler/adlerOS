@@ -3,12 +3,13 @@
     "The desktop widgets, as data: add one here to offer it in Edit widgets.",
     "max: how many you can show. default: shown until you pick your own.",
     "type: how it's drawn (four-stats, three-stats, progress, gauges, list,",
-    "      text-button, clock, search); see TYPES in widgets.js.",
+    "      text-button, clock, search, app-list, app-picture, now-playing);\n      see TYPES in widgets.js.",
     "value / items[].value: a named value from VALUES in widgets.js, read from",
     "      GET /api/widgets (system, apps, backups).",
-    "open: what clicking it does: live-usage, app-store, settings, settings:<row>.",
+    "open: what clicking it does: live-usage, app-store, settings, settings:<row>, app:<id>.",
     "desk: true: only on the desktop in desktop mode (not in Edit widgets).",
-    "size: [columns, half rows] it takes there; three by three if not given."
+    "size: [columns, half rows] it takes there; three by three if not given.",
+    "source: for app-list and app-picture, which app's data (APP_SOURCES in widgets.js)."
   ],
   "max": 4,
   "default": [
@@ -130,6 +131,53 @@
         4,
         2
       ]
+    },
+    {
+      "id": "app-notes",
+      "label": "Notes",
+      "description": "Your latest notes in Luna",
+      "type": "app-list",
+      "source": "notes",
+      "open": "app:luna"
+    },
+    {
+      "id": "app-music",
+      "label": "Now Playing",
+      "description": "The song that's on, with play, pause and next",
+      "type": "now-playing",
+      "open": "app:music"
+    },
+    {
+      "id": "app-photos",
+      "label": "On This Day",
+      "description": "A photo from this day in years gone by",
+      "type": "app-picture",
+      "source": "photos",
+      "open": "app:photos"
+    },
+    {
+      "id": "app-documents",
+      "label": "Documents",
+      "description": "Your newest documents and how many wait in the inbox",
+      "type": "app-list",
+      "source": "documents",
+      "open": "app:documents"
+    },
+    {
+      "id": "app-calendar",
+      "label": "Calendar",
+      "description": "What's coming up in the next two weeks",
+      "type": "app-list",
+      "source": "calendar",
+      "open": "app:calendar"
+    },
+    {
+      "id": "app-tasks",
+      "label": "Tasks",
+      "description": "What's due today, and anything overdue",
+      "type": "app-list",
+      "source": "tasks",
+      "open": "app:tasks"
     }
   ]
 }
