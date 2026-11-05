@@ -310,7 +310,7 @@ function appWidgetValue(source, redraw) {
 }
 
 // The app widgets that open something: app:<id>.
-const APP_OPENERS = { luna: () => openLuna(), music: () => openMusic(), photos: () => openGallery(), documents: () => openDocuments(),
+const APP_OPENERS = { luna: () => openLuna(), music: () => openMusic(), photos: () => openGallery(), documents: () => openDocuments(), videos: () => openVideos(),
   calendar: () => openCalendar(), tasks: () => openTasks() };
 
 Object.assign(TYPES, {

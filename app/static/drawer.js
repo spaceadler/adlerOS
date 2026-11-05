@@ -57,6 +57,7 @@ const BUILT_IN = [
   { id: "music", name: "Music", about: "Your songs, albums, playlists and radio", open: () => openMusic(), keywords: "music songs albums artists playlists radio lyrics" },
   { id: "podcasts", name: "Podcasts", about: "Your audiobooks and podcasts, from Audiobookshelf", open: () => openPodcasts(), keywords: "podcasts audiobooks books episodes audiobookshelf" },
   { id: "books", name: "Books", about: "Your PDFs and EPUBs, read like a book", open: () => openBooks(), keywords: "books read pdf epub ebook" },
+  { id: "videos", name: "Videos", about: "Films, shows and documentaries, from Jellyfin or your Media folders", open: () => openVideos(), keywords: "videos films movies shows tv documentaries jellyfin" },
   { id: "gallery", name: "Gallery", about: "Your photos and videos, from Immich", open: () => openGallery(), keywords: "gallery photos pictures albums people immich" },
   { id: "documents", name: "Documents", about: "Your papers, from Paperless", open: () => openDocuments(), keywords: "documents papers paperless pdf scans" },
   { id: "calendar", name: "Calendar", about: "Your calendars, from Radicale (CalDAV)", open: () => openCalendar(), keywords: "calendar events schedule radicale caldav agenda" },
