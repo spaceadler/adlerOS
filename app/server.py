@@ -6069,6 +6069,269 @@ def note_refused(address, via_proxy=False):
                   file=sys.stderr, flush=True)
 
 
+# ------------------------------------------------------------- videos
+#
+# Videos: Jellyfin's films, shows and documentaries (online: a key pasted
+# once, like Audiobookshelf's), or, without it, the video files in your
+# Media folders (offline). The key stays here: pictures and streams come
+# through adlerOS, and your place goes back to Jellyfin as you watch.
+
+VIDEOS_KEY_FILE = DATA / "videos-jellyfin.json"
+VIDEOS_PROGRESS = DATA / "videos-progress.json"
+VIDEOS_CACHE = DATA / "videos-cache"
+VIDEO_SUFFIXES = {".mp4", ".m4v", ".webm", ".mov", ".mkv", ".ogv"}
+JF_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+JF_TYPES = {"Movie": "movie", "Series": "series", "Episode": "episode", "Season": "season", "Video": "video",
+            "MusicVideo": "video", "BoxSet": "folder", "Folder": "folder", "CollectionFolder": "folder"}
+_videos_progress_lock = threading.Lock()
+
+
+def jf_conn():
+    """(url, {token, user, name}) or (url or None, None)."""
+    try:
+        saved = json.loads(VIDEOS_KEY_FILE.read_text())
+    except (OSError, ValueError):
+        saved = None
+    url = install_setting("JELLYFIN_URL").rstrip("/")
+    if not url:
+        host = install_setting("TS_IP") if HOMELAB_MODE else install_setting("ADLEROS_HOST")
+        app = next((a for a in installed_apps() if a["id"] == "jellyfin" or a.get("known") == "jellyfin"), None)
+        url = f"http://{host}:{app['port']}" if host and app and app.get("port") else None
+    return url, saved if isinstance(saved, dict) and saved.get("token") else None
+
+
+def jf_open(path, query=None, body=None, method="GET", headers=None, timeout=20, token=None):
+    url, saved = jf_conn()
+    key = token or (saved or {}).get("token")
+    if not url or not key:
+        raise LookupError("not set up")
+    full = f"{url}{path}" + (f"?{urllib.parse.urlencode(query)}" if query else "")
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(full, data=data, method=method, headers={
+        "Authorization": f'MediaBrowser Client="adlerOS", Device="adlerOS", DeviceId="adleros", Version="1", Token="{key}"',
+        "Accept": "application/json", **({"Content-Type": "application/json"} if data else {}), **(headers or {})})
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
+def jf_json(path, query=None, body=None, method="GET", timeout=20, token=None):
+    with jf_open(path, query, body, method, timeout=timeout, token=token) as r:
+        raw = r.read()
+    try:
+        return json.loads(raw) if raw else {}
+    except ValueError:
+        return {}
+
+
+def jf_error(e):
+    if isinstance(e, urllib.error.HTTPError):
+        return "Jellyfin refused: the key can't do that" if e.code in (401, 403) else f"Jellyfin said {e.code}"
+    if isinstance(e, LookupError):
+        return "Jellyfin isn't connected"
+    return "Jellyfin didn't answer"
+
+
+def jf_user():
+    _, saved = jf_conn()
+    if not saved or not saved.get("user"):
+        raise LookupError("not set up")
+    return saved["user"]
+
+
+def jf_item(i):
+    """One of Jellyfin's items, as Videos shows it."""
+    t = i.get("Type")
+    ud = i.get("UserData") or {}
+    out = {"id": i.get("Id"), "name": i.get("Name") or "", "type": JF_TYPES.get(t, "video"), "year": i.get("ProductionYear"),
+           "overview": (i.get("Overview") or "")[:3000], "runtime": round(i["RunTimeTicks"] / 1e7) if i.get("RunTimeTicks") else None,
+           "pos": round((ud.get("PlaybackPositionTicks") or 0) / 1e7), "played": bool(ud.get("Played")),
+           "image": bool((i.get("ImageTags") or {}).get("Primary")), "unplayed": ud.get("UnplayedItemCount")}
+    if t == "Episode":
+        out.update(series=i.get("SeriesName") or "", seriesId=i.get("SeriesId"), season=i.get("ParentIndexNumber"), episode=i.get("IndexNumber"))
+    return out
+
+
+JF_FIELDS = "Overview,ProductionYear"
+
+
+def jf_home():
+    uid = jf_user()
+    views = jf_json("/UserViews", {"userId": uid}).get("Items") or []
+    libs = [{"id": v["Id"], "name": v.get("Name") or "", "kind": v.get("CollectionType") or ""} for v in views
+            if (v.get("CollectionType") or "") in ("", "movies", "tvshows", "homevideos", "mixed", "boxsets", "musicvideos")]
+    resume = [jf_item(i) for i in jf_json("/UserItems/Resume", {"userId": uid, "Limit": 20, "Fields": JF_FIELDS, "MediaTypes": "Video"}).get("Items") or []]
+    nxt = [jf_item(i) for i in jf_json("/Shows/NextUp", {"userId": uid, "Limit": 20, "Fields": JF_FIELDS}).get("Items") or []]
+    seen = {i["id"] for i in resume}
+    shelves = []
+    for lib in libs[:12]:
+        got = jf_json("/Items/Latest", {"userId": uid, "ParentId": lib["id"], "Limit": 16, "Fields": JF_FIELDS})
+        items = [jf_item(i) for i in (got if isinstance(got, list) else [])]
+        if items:
+            shelves.append({"library": lib, "items": items})
+    return {"libraries": libs, "resume": resume, "next": [i for i in nxt if i["id"] not in seen], "latest": shelves}
+
+
+def jf_library(lib, start, sort):
+    uid = jf_user()
+    order = {"name": ("SortName", "Ascending"), "added": ("DateCreated", "Descending"), "year": ("ProductionYear,SortName", "Descending")}.get(sort, ("SortName", "Ascending"))
+    got = jf_json("/Items", {"userId": uid, "ParentId": lib, "Recursive": "true", "IncludeItemTypes": "Movie,Series,Video,MusicVideo,BoxSet",
+                             "SortBy": order[0], "SortOrder": order[1], "StartIndex": start, "Limit": 120, "Fields": JF_FIELDS})
+    return {"items": [jf_item(i) for i in got.get("Items") or []], "total": got.get("TotalRecordCount") or 0}
+
+
+def jf_detail(item_id):
+    uid = jf_user()
+    item = jf_item(jf_json(f"/Items/{item_id}", {"userId": uid}))
+    if item["type"] == "series":
+        eps = jf_json(f"/Shows/{item_id}/Episodes", {"userId": uid, "Fields": JF_FIELDS}).get("Items") or []
+        seasons = {}
+        for e in eps:
+            n = e.get("ParentIndexNumber")
+            seasons.setdefault(n, {"name": e.get("SeasonName") or (f"Season {n}" if n is not None else "Episodes"), "number": n, "episodes": []})["episodes"].append(jf_item(e))
+        item["seasons"] = [seasons[k] for k in sorted(seasons, key=lambda n: (n is None, n or 0))]
+    elif item["type"] == "folder":
+        item["items"] = jf_library(item_id, 0, "name")["items"]
+    return item
+
+
+def jf_search(q):
+    uid = jf_user()
+    got = jf_json("/Items", {"userId": uid, "searchTerm": q[:100], "Recursive": "true", "IncludeItemTypes": "Movie,Series,Episode,Video", "Limit": 60, "Fields": JF_FIELDS})
+    return {"items": [jf_item(i) for i in got.get("Items") or []]}
+
+
+def videos_status():
+    url, saved = jf_conn()
+    out = {"configured": bool(url and saved), "local": [r[1] for r in videos_roots()], "keyHere": VIDEOS_KEY_FILE.is_file()}
+    if not url:
+        return {**out, "source": "local", "error": "nojellyfin"}
+    out["url"] = url
+    if not saved:
+        return {**out, "source": "local", "error": "nokey"}
+    try:
+        jf_json("/System/Info", timeout=8)
+        out.update(ok=True, source="jellyfin", user=saved.get("name") or "")
+    except urllib.error.HTTPError as e:
+        out.update(source="local", error="refused" if e.code in (401, 403) else f"jellyfin {e.code}")
+    except (OSError, ValueError) as e:
+        out.update(source="local", error="unreachable", why=str(e)[:160])
+    return out
+
+
+def videos_connect(token):
+    """Tries the key; kept (with whose library it reads) if Jellyfin takes it."""
+    if not token:
+        try:
+            VIDEOS_KEY_FILE.unlink()
+        except FileNotFoundError:
+            pass
+        return {"ok": True, "forgot": True}
+    url, _ = jf_conn()
+    if not url:
+        return {"ok": False, "error": "Jellyfin isn't among your apps here: install it from the App Store, or set JELLYFIN_URL in the settings file."}
+    try:
+        users = jf_json("/Users", timeout=10, token=token)
+    except urllib.error.HTTPError as e:
+        return {"ok": False, "error": "Jellyfin didn't take that key." if e.code in (401, 403) else f"Jellyfin said {e.code}."}
+    except (OSError, ValueError):
+        return {"ok": False, "error": "Jellyfin didn't answer. Is it running?"}
+    users = [u for u in users if isinstance(u, dict) and not (u.get("Policy") or {}).get("IsDisabled")] if isinstance(users, list) else []
+    if not users:
+        return {"ok": False, "error": "Jellyfin has no user to watch as yet: finish its setup first."}
+    # An API key reads as anyone: as the first administrator (yours).
+    user = next((u for u in users if (u.get("Policy") or {}).get("IsAdministrator")), users[0])
+    write_private(VIDEOS_KEY_FILE, json.dumps({"token": token, "user": user["Id"], "name": user.get("Name") or ""}))
+    return {"ok": True, "user": user.get("Name") or ""}
+
+
+def videos_roots():
+    """[(name, /user/… folder, real folder)]: the Media folders with films in them."""
+    if not places_on():
+        return []
+    names = [n.strip() for n in install_setting("VIDEOS_DIRS", "Media/Documentaries,Media/Movies,Media/Shows,Media/Videos").split(",") if n.strip()]
+    out = []
+    for rel in names:
+        _, real = locate(f"/user/{rel.strip('/')}")
+        if real and real.is_dir():
+            out.append((rel.rstrip("/").split("/")[-1], f"/user/{rel.strip('/')}", real))
+    return out
+
+
+def videos_progress():
+    try:
+        got = json.loads(VIDEOS_PROGRESS.read_text())
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def videos_local_item(virtual, real, st, prog):
+    p = prog.get(virtual) or {}
+    return {"id": f"l:{virtual}", "name": real.stem.replace("_", " ").replace(".", " ").strip() if real.suffix else real.name, "type": "video",
+            "year": None, "overview": "", "runtime": p.get("dur"), "pos": p.get("pos") or 0, "played": bool(p.get("done")), "image": False,
+            "local": virtual, "size": st.st_size, "added": st.st_mtime}
+
+
+def videos_local():
+    """Each Media folder's films; a folder in one (a series, say): its videos, in order."""
+    prog = videos_progress()
+    out = []
+    for name, virtual, real in videos_roots():
+        items = []
+        try:
+            entries = sorted(real.iterdir(), key=lambda p: pods_natural(p.name))
+        except OSError:
+            continue
+        for child in entries[:2000]:
+            if child.name.startswith("."):
+                continue
+            v = f"{virtual}/{child.name}"
+            try:
+                if child.is_file() and child.suffix.lower() in VIDEO_SUFFIXES:
+                    items.append(videos_local_item(v, child, child.stat(), prog))
+                elif child.is_dir():
+                    eps = []
+                    for f in sorted((f for f in child.rglob("*") if f.is_file() and f.suffix.lower() in VIDEO_SUFFIXES and not f.name.startswith(".")),
+                                    key=lambda f: pods_natural(str(f.relative_to(child))))[:1000]:
+                        eps.append(videos_local_item(f"{v}/{f.relative_to(child).as_posix()}", f, f.stat(), prog))
+                    if eps:
+                        items.append({"id": f"l:{v}", "name": child.name, "type": "series", "local": v, "image": False, "year": None, "overview": "",
+                                      "seasons": [{"name": "Episodes", "number": None, "episodes": eps}], "unplayed": sum(1 for e in eps if not e["played"])})
+            except OSError:
+                continue
+        out.append({"name": name, "path": virtual, "items": items})
+    return out
+
+
+def videos_progress_set(item_id, pos, dur, done):
+    """Where you are in one: back to Jellyfin, or kept here for a file."""
+    pos = max(0, int(pos or 0))
+    if item_id.startswith("l:"):
+        virtual = item_id[2:]
+        _, real = locate(virtual)
+        if not real or not real.is_file():
+            return {"ok": False, "error": "no such video"}
+        with _videos_progress_lock:
+            prog = videos_progress()
+            prog[virtual] = {"pos": 0 if done else pos, "dur": int(dur) if dur else prog.get(virtual, {}).get("dur"), "done": bool(done), "at": int(time.time())}
+            if len(prog) > 5000:
+                for k in sorted(prog, key=lambda k: prog[k].get("at", 0))[:len(prog) - 5000]:
+                    del prog[k]
+            write_private(VIDEOS_PROGRESS, json.dumps(prog))
+        return {"ok": True}
+    if not JF_ID_RE.match(item_id):
+        return {"ok": False, "error": "not a video"}
+    uid = jf_user()
+    data = {"PlaybackPositionTicks": 0 if done else pos * 10_000_000, "Played": bool(done),
+            "LastPlayedDate": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())}
+    try:
+        jf_json(f"/UserItems/{item_id}/UserData", {"userId": uid}, data, "POST")
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            raise
+        jf_json(f"/Users/{uid}/Items/{item_id}/UserData", None, data, "POST")  # Jellyfin before 10.9
+    return {"ok": True}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "homelab"
     sys_version = ""
@@ -6292,6 +6555,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.podcasts_get(path[len("/api/podcasts/"):], query)
         if path.startswith("/api/books/"):
             return self.books_get(path[len("/api/books/"):], query)
+        if path.startswith("/api/videos/"):
+            return self.videos_get(path[len("/api/videos/"):], query)
         if path.startswith("/api/paperless/"):
             return self.documents_get(path[len("/api/paperless/"):], query)
         if path == "/api/maintenance":
@@ -6392,6 +6657,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.podcasts_post(path[len("/api/podcasts/"):], body)
         if path.startswith("/api/books/"):
             return self.books_post(path[len("/api/books/"):], body)
+        if path.startswith("/api/videos/"):
+            return self.videos_post(path[len("/api/videos/"):], body)
         if path.startswith("/api/paperless/"):
             return self.documents_post(path[len("/api/paperless/"):], body)
         if path == "/api/calendar/event":
@@ -7234,6 +7501,108 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(chunk)
             except (BrokenPipeError, ConnectionResetError):
                 pass
+
+    def videos_get(self, what, query):
+        q = lambda k: query.get(k, [""])[0]
+        if what == "status":
+            return self.send_json(200, videos_status())
+        if what == "local":
+            return self.send_json(200, {"folders": videos_local()})
+        if what == "stream":
+            return self.videos_stream(q("id"))
+        if what == "image":
+            return self.videos_image(q("id"), q("w"))
+        try:
+            if what == "home":
+                return self.send_json(200, jf_home())
+            if what == "library":
+                if not JF_ID_RE.match(q("id")):
+                    return self.send_json(404, {"error": "no such library"})
+                return self.send_json(200, jf_library(q("id"), max(0, int(q("start") or 0)), q("sort")))
+            if what == "item":
+                if not JF_ID_RE.match(q("id")):
+                    return self.send_json(404, {"error": "no such video"})
+                return self.send_json(200, jf_detail(q("id")))
+            if what == "search":
+                return self.send_json(200, jf_search(q("q")))
+        except LookupError:
+            return self.send_json(409, {"error": "Jellyfin isn't connected", "status": videos_status()})
+        except urllib.error.HTTPError as e:
+            return self.send_json(502 if e.code not in (404,) else 404, {"error": jf_error(e)})
+        except (OSError, ValueError) as e:
+            return self.send_json(502, {"error": jf_error(e)})
+        return self.send_json(404, {"error": "not found"})
+
+    def videos_post(self, what, body):
+        if what == "connect":
+            token = str(body.get("token") or "").strip()
+            if len(token) > 200 or not re.fullmatch(r"[A-Za-z0-9_-]*", token):
+                return self.send_json(400, {"error": "That doesn't look like a Jellyfin key."})
+            return self.send_json(200, videos_connect(token))
+        if what == "progress":
+            try:
+                got = videos_progress_set(str(body.get("id") or ""), body.get("pos"), body.get("dur"), bool(body.get("done")))
+            except LookupError:
+                return self.send_json(409, {"error": "Jellyfin isn't connected"})
+            except (urllib.error.HTTPError, OSError, ValueError) as e:
+                return self.send_json(502, {"error": jf_error(e)})
+            return self.send_json(200 if got.get("ok") else 404, got)
+        return self.send_json(404, {"error": "not found"})
+
+    def videos_stream(self, item_id):
+        """A film from Jellyfin as it is (no transcoding: the Pi can't), Range
+        and all, so the player can seek."""
+        if not JF_ID_RE.match(item_id or ""):
+            return self.send(404, b"")
+        try:
+            r = jf_open(f"/Videos/{item_id}/stream", {"static": "true"}, headers={"Range": self.headers["Range"]} if self.headers.get("Range") else None, timeout=60)
+        except LookupError:
+            return self.send(409, b"Jellyfin isn't connected")
+        except urllib.error.HTTPError as e:
+            return self.send(e.code if e.code in (404, 416) else 502, b"")
+        except OSError:
+            return self.send(502, b"can't reach Jellyfin")
+        with r:
+            ctype = (r.headers.get("Content-Type") or "video/mp4").split(";")[0].strip().lower()
+            if not ctype.startswith(("video/", "audio/")):
+                ctype = "application/octet-stream"
+            self.send_response(r.status)
+            self.send_header("Content-Type", ctype)
+            for name in ("Content-Length", "Content-Range", "Accept-Ranges"):
+                if r.headers.get(name):
+                    self.send_header(name, r.headers[name])
+            self.send_header("Content-Disposition", "inline")
+            self.send_header("Content-Security-Policy", "default-src 'none'; sandbox")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cache-Control", "private, no-cache")
+            self.end_headers()
+            if self.command == "HEAD":
+                return
+            try:
+                while chunk := r.read(256 * 1024):
+                    self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    def videos_image(self, item_id, width):
+        """A poster or a still, kept here a week (Jellyfin's are the same until it rescans)."""
+        if not JF_ID_RE.match(item_id or ""):
+            return self.send(404, b"")
+        w = 600 if width == "600" else 1200 if width == "1200" else 300
+        cached = VIDEOS_CACHE / f"{item_id}-{w}.jpg"
+        try:
+            if cached.is_file() and time.time() - cached.stat().st_mtime < 7 * 86400:
+                return self.send(200, cached.read_bytes(), "image/jpeg", [("Cache-Control", "private, max-age=86400")])
+            with jf_open(f"/Items/{item_id}/Images/Primary", {"maxWidth": w, "quality": 85, "format": "Jpg"}, timeout=30) as r:
+                data = r.read(8 * 1024 * 1024)
+        except (LookupError, urllib.error.HTTPError, OSError):
+            return self.send(404, b"")
+        VIDEOS_CACHE.mkdir(parents=True, exist_ok=True)
+        try:
+            cached.write_bytes(data)
+        except OSError:
+            pass
+        return self.send(200, data, "image/jpeg", [("Cache-Control", "private, max-age=86400")])
 
     def podcasts_post(self, what, body):
         item_id = str(body.get("id") or "")
