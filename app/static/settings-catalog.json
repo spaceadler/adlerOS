@@ -116,7 +116,7 @@
       "category": "account",
       "icon": "windows",
       "title": "Mode",
-      "description": "How adlerOS looks on this device. Home screen: your apps on pages, like a phone's. Desktop: windows side by side that you move and resize, and your Desktop folder (for a computer, or a phone turned sideways). TV: big tiles for a television, worked with a remote or the arrow keys. Car is on its way. Each device keeps its own.",
+      "description": "How adlerOS looks on this device. Home screen: your apps on pages, like a phone's. Desktop: windows side by side that you move and resize, and your Desktop folder (for a computer, or a phone turned sideways). TV: big tiles for a television, worked with a remote or the arrow keys. Car: for a phone on a car mount, what's playing with big controls, and Navigate (Google Maps). Each device keeps its own.",
       "keywords": "mode desktop home screen windows window manager floating computer laptop multitask side by side split tv car carplay",
       "control": {
         "type": "desktop-mode"
