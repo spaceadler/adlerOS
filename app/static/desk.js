@@ -664,7 +664,7 @@ function deskMenu(target) {
   const cell = desk.menuAt && deskCellAt(desk.menuAt[0], desk.menuAt[1]);
   items.push({ label: "Add widget…", run: () => deskWidgetPicker(cell) },
     { label: "Change wallpaper", run: () => openSettings("wallpaper") },
-    { label: "Home screen mode", run: () => setDesktopMode(false) },
+    { label: "Mode", items: modeItems() },
     { label: "Log out", run: confirmLogout, destructive: true });
   return items;
 }

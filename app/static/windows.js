@@ -132,6 +132,21 @@ function setDesktopMode(on) {
   toast(on ? "Desktop mode: windows side by side, and your Desktop folder." : "Back to the home screen.");
 }
 
+// The ways adlerOS can look, each device its own: the home screen, desktop
+// mode, and (on their way) TV and Car. One list for Settings, Control
+// Center and the menus.
+const MODES = [["home", "Home screen"], ["desktop", "Desktop"], ["tv", "TV"], ["car", "Car"]];
+const MODES_SOON = new Set(["tv", "car"]);
+function currentMode() { return desktopMode() ? "desktop" : "home"; }
+function modeName(mode) { return MODES.find(([m]) => m === mode)?.[1] || mode; }
+function setMode(mode) {
+  if (MODES_SOON.has(mode)) return toast(`${modeName(mode)} mode isn't here yet; it's on the list.`);
+  setDesktopMode(mode === "desktop");
+}
+function modeItems() {
+  return MODES.map(([m, label]) => ({ label, checked: currentMode() === m, muted: MODES_SOON.has(m) || (m === "desktop" && !computerScreen()), run: () => setMode(m) }));
+}
+
 function switchDesktopMode(on) {
   for (const [id, w] of wm.windows) if (isOpen(id)) (w.hide || w.close)();
   // Back to sliding sheets: no window keeps its place or size.
