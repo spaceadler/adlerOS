@@ -439,20 +439,13 @@ function drawWidgets(fit) {
     widgets.live.push(made.update);
     nodes.push(made.node);
   }
-  // Nothing chosen: one slot that says how to add some.
-  if (!nodes.length && fit > 0) {
-    const panel = el("button", { class: "widget-panel", type: "button", "aria-label": "Add widgets" },
-      el("span", { class: "widget-empty" }, svg(["M12 5v14", "M5 12h14"]), "Add widgets"));
-    panel.addEventListener("click", editWidgets);
-    nodes.push(el("div", { class: "widget" }, panel, el("span", { class: "widget-label" }, "Widgets")));
-  }
   $("widgets").replaceChildren(...nodes);
 }
 
 function redrawWidgets() {
   drawnKey = "";
   drawWidgets(widgets.slots);
-  if (phoneLayout()) layout(); // none picked, or the first: the apps' rows change
+  layout(); // none picked, or the first: the apps' rows change
 }
 
 // Any widget picked for the home screen (yes, until we know).
