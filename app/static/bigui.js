@@ -666,12 +666,13 @@ function bigPhotoTiles(assets) {
 async function bigTimeline(params, max = 240) {
   const q = new URLSearchParams(params).toString();
   const buckets = await gaGet(`buckets?${q}`);
+  // As many months as make `max`, asked for together.
+  const need = [];
+  let n = 0;
+  for (const b of buckets) { if (n >= max) break; need.push(b); n += b.count || 0; }
+  const got = await Promise.all(need.map((b) => gaGet(`bucket?${q}&timeBucket=${encodeURIComponent(b.timeBucket)}`).catch(() => null)));
   const out = [];
-  for (const b of buckets) {
-    if (out.length >= max) break;
-    const c = await gaGet(`bucket?${q}&timeBucket=${encodeURIComponent(b.timeBucket)}`);
-    c.id.forEach((id, k) => out.push({ id, isImage: c.isImage[k] }));
-  }
+  for (const c of got) if (c) c.id.forEach((id, k) => out.push({ id, isImage: c.isImage[k] }));
   return out.slice(0, max);
 }
 
