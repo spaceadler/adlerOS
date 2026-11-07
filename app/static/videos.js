@@ -10,6 +10,7 @@
 "use strict";
 
 const VD_ICONS = {
+  zoomIn: ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3", "M11 8v6", "M8 11h6"], zoomOut: ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3", "M8 11h6"],
   home: ["M3 11l9-8 9 8", "M5 10v10h14V10"],
   film: ["M3 5h18v14H3z", "M7 5v14", "M17 5v14", "M3 9h4", "M3 15h4", "M17 9h4", "M17 15h4"],
   tv: ["M3 6h18v12H3z", "M8 21h8"],
@@ -363,7 +364,15 @@ function vdPlay(item, { queue = null, from = null } = {}) {
   const close = el("button", { type: "button", class: "vd-player-close", "aria-label": "Stop" }, svg(VD_ICONS.close));
   close.addEventListener("click", vdStop);
   const title = el("div", { class: "vd-player-title" }, item.type === "episode" ? `${item.series} · ${vdEpLabel(item)} ${item.name}` : item.name);
-  box.replaceChildren(video, el("div", { class: "vd-player-top" }, close, title));
+  // All of the picture in sight; the zoom fills the screen with it (its
+  // edges cut off), again back.
+  const zoom = el("button", { type: "button", class: "vd-player-zoom", "aria-label": "Fill the screen" }, svg(VD_ICONS.zoomIn));
+  zoom.addEventListener("click", () => {
+    const on = video.classList.toggle("fill");
+    zoom.replaceChildren(svg(on ? VD_ICONS.zoomOut : VD_ICONS.zoomIn));
+    zoom.setAttribute("aria-label", on ? "Fit the screen" : "Fill the screen");
+  });
+  box.replaceChildren(video, el("div", { class: "vd-player-top" }, close, title, zoom));
   box.hidden = false;
   vd.player = { item, list, video, timer: setInterval(() => vdSave(false), 15000), sent: -1 };
   video.play().catch(() => {}); // the browser may want a click first (the controls are there)
