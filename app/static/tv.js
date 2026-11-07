@@ -25,18 +25,41 @@
 
 const TV_KEY = "adleros.tvMode";
 const tv = { built: false, focus: null, lastTile: null, tick: null, shelfTimer: null, shelfFor: "", appsKey: "", bg: "",
-  byPointer: false, soon: false, lost: 0, videos: null, videosAt: 0, ccFrom: null };
+  byPointer: false, soon: false, lost: 0, videos: null, videosAt: 0, ccFrom: null, feed: new Map(), feedAt: 0, feeding: false };
 
 // adlerOS's own, first: [id, icon, name, open, about]. The first ones (as
 // many as a row holds) are the dock's.
+// The media apps open drawn for the TV (bigui.js).
 const TV_OWN = [
-  ["adleros:videos", "videos", "Videos", () => openVideos(), "Films, shows and documentaries."],
-  ["adleros:music", "music", "Music", () => openMusic(), "Your songs, albums, playlists and radio."],
-  ["adleros:podcasts", "podcasts", "Podcasts", () => openPodcasts(), "Your audiobooks and podcasts."],
-  ["adleros:gallery", "gallery", "Photos", () => openGallery(), "Your photos and videos."],
-  ["adleros:books", "books", "Books", () => openBooks(), "Your books."],
+  ["adleros:videos", "videos", "Videos", () => bigOpen("videos", "tv"), "Films, shows and documentaries."],
+  ["adleros:music", "music", "Music", () => bigOpen("music", "tv"), "Your songs, albums, playlists and radio."],
+  ["adleros:podcasts", "podcasts", "Podcasts", () => bigOpen("podcasts", "tv"), "Your audiobooks and podcasts."],
+  ["adleros:gallery", "gallery", "Photos", () => bigOpen("photos", "tv"), "Your photos and videos."],
+  ["adleros:books", "books", "Books", () => bigOpen("books", "tv"), "Your books."],
+  ["adleros:calendar", "calendar", "Calendar", () => bigOpen("calendar", "tv"), "What's coming up."],
   ["adleros:files", "files", "My Computer", () => openFiles(), "Your files."],
   ["adleros:settings", "settings", "Settings", () => openSettings(), "How adlerOS looks and works."],
+];
+
+// Under the apps, the feed: what you were in the middle of, in each, in the
+// apps' order. [app id, its row's title, the big app, its items (bigui.js)].
+const TV_FEED = [
+  ["adleros:videos", "Continue Watching", "videos", async () => (await tvVideoList()).map((i) => bigVideoItem(i, "wide")), "wide"],
+  ["adleros:music", "Recently Played", "music", async () => { await bigMusicReady(); return bigMusicRecent().slice(0, 18); }, "square"],
+  ["adleros:podcasts", "Continue Listening", "podcasts", async () => { await bigPodsReady(); return bigPodContinue().map((it) => ({ ...it, side: "" })); }, "square"],
+  ["adleros:gallery", "On This Day", "photos", async () => {
+    const mem = (await gaGet("memories").catch(() => [])).filter((m) => m.assets?.length);
+    return mem.flatMap((m) => m.assets).slice(0, 18).map((a) => ({ art: () => el("img", { src: gaThumb(a.id, "preview"), alt: "", loading: "lazy", draggable: "false" }), shape: "photo",
+      run: () => bigOpen("photos", "tv", { tab: 1 }) }));
+  }, "photo"],
+  ["adleros:books", "Continue Reading", "books", async () => {
+    if (typeof bkBuild === "function") bkBuild();
+    if (!bk.loaded) await bkLoad();
+    return bk.books.filter((b) => b.at && b.pct < 0.995).sort((a, b) => b.at - a.at).slice(0, 18).map(bigBookItem);
+  }, "poster"],
+  ["adleros:calendar", "Coming Up", "calendar", async () => (await bigEvents(7)).slice(0, 12).map((e) => ({ ...bigEventItem(e), lead: null,
+    art: () => el("span", { class: "tv-date" }, el("strong", {}, bigDayName(e.at)), el("span", {}, e.allDay ? "All day" : e.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))),
+    sub: e.location || "" })), "wide"],
 ];
 
 const TV_ICONS = {
@@ -70,14 +93,15 @@ function tvBuild() {
   const status = el("button", { type: "button", class: "tv-status", id: "tv-status", "aria-label": "Control Center" },
     el("span", { class: "tv-clock", id: "tv-clock" }), svg(TV_ICONS.cc));
   status.addEventListener("click", tvControlCenter);
-  const node = el("section", { id: "tv", class: "tv-home", "aria-label": "TV", hidden: "" },
+  const node = el("section", { id: "tv", class: "tv-home big-tv", "aria-label": "TV", hidden: "" },
     el("div", { class: "tv-bg", "aria-hidden": "true" },
       el("div", { class: "tv-bg-pic", id: "tv-bg-a" }), el("div", { class: "tv-bg-pic", id: "tv-bg-b" }),
       el("div", { class: "tv-scrim" }), el("div", { class: "tv-blur" })),
     el("div", { class: "tv-scroll", id: "tv-scroll" },
       el("div", { class: "tv-shelf", id: "tv-shelf" }),
       el("nav", { class: "tv-dock", id: "tv-dock", "aria-label": "Top row" }),
-      el("nav", { class: "tv-grid", id: "tv-grid", "aria-label": "Apps" })),
+      el("nav", { class: "tv-grid", id: "tv-grid", "aria-label": "Apps" }),
+      el("div", { class: "tv-feed", id: "tv-feed" })),
     el("header", { class: "tv-top" }, status),
     el("aside", { class: "tv-cc", id: "tv-cc", "aria-label": "Control Center", hidden: "" }));
   $("desktop").after(node);
@@ -96,8 +120,10 @@ function tvShow() {
   const tick = () => {
     $("tv-clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     tvTiles(); // apps added or gone
+    if (Date.now() - tv.feedAt > 120000) tvFeed();
   };
   tick();
+  setTimeout(tvFeed, 1200);
   clearInterval(tv.tick);
   tv.tick = setInterval(tick, 5000);
   requestAnimationFrame(() => {
@@ -109,11 +135,9 @@ function tvShow() {
 // How many to a row: five on a television, fewer on a small screen.
 function tvColumns() { return innerWidth >= 1100 ? 5 : innerWidth >= 700 ? 4 : 3; }
 
+// adlerOS's own apps only: the TV's are the ones made for it.
 function tvAppList() {
-  const own = TV_OWN.map(([id, icon, name, open, about]) => ({ id, name, open, about, own: icon }));
-  const apps = (state.apps || []).filter((a) => a.genre !== "background").sort((a, b) => a.name.localeCompare(b.name))
-    .map((a) => ({ id: a.id, name: a.name, open: () => openApp(a), about: a.about || "", app: a }));
-  return [...own, ...apps];
+  return TV_OWN.map(([id, icon, name, open, about]) => ({ id, name, open, about, own: icon }));
 }
 
 function tvTiles() {
@@ -206,6 +230,70 @@ function tvNudge(n, dx, dy) {
   setTimeout(() => n.classList.remove("tv-nudge"), 260);
 }
 
+// ------------------------------------------------------------- the feed
+
+// Each app's things, kept two minutes (the shelf and the feed share them).
+async function tvFeedItems(id) {
+  const kept = tv.feed.get(id);
+  if (kept && Date.now() - kept.at < 120000) return kept.items;
+  const row = TV_FEED.find((f) => f[0] === id);
+  if (!row) return [];
+  const items = (await row[3]().catch(() => [])).map((it) => ({ ...it, app: row[2] }));
+  tv.feed.set(id, { at: Date.now(), items });
+  return items;
+}
+
+// The rows, one app after another, drawn as each arrives; not while the
+// focus is in them (nothing moves under you).
+async function tvFeed() {
+  if (tv.feeding || !tv.built) return;
+  if ($("tv-feed").contains(document.activeElement)) return;
+  tv.feeding = true;
+  tv.feedAt = Date.now();
+  try {
+    for (const [id, title, , , shape] of TV_FEED) {
+      const items = await tvFeedItems(id);
+      if ($("tv-feed").contains(document.activeElement)) break;
+      let row = $("tv-feed").querySelector(`[data-feed="${CSS.escape(id)}"]`);
+      if (!items.length) { row?.remove(); continue; }
+      const fresh = bigSection({ title, layout: "shelf", shape, items: items.map((it) => ({ ...it, shape: it.shape || shape })) });
+      fresh.dataset.feed = id;
+      tvHoverFocus(fresh);
+      if (row) row.replaceWith(fresh);
+      else {
+        // In the apps' order, whatever came first.
+        const after = TV_FEED.slice(TV_FEED.findIndex((f) => f[0] === id) + 1).map((f) => $("tv-feed").querySelector(`[data-feed="${CSS.escape(f[0])}"]`)).find(Boolean);
+        $("tv-feed").insertBefore(fresh, after || null);
+      }
+    }
+  } finally { tv.feeding = false; }
+}
+
+// The mouse moves the focus on the TV's cards too (without the page).
+function tvHoverFocus(box) {
+  for (const b of box.querySelectorAll("button")) {
+    b.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse" && $("tv-cc").hidden && document.activeElement !== b) b.focus({ preventScroll: true }); });
+  }
+}
+
+async function tvVideoList() {
+  if (tv.videos && Date.now() - tv.videosAt < 60000) return tv.videos;
+  const status = await api("/api/videos/status").then((r) => r.body).catch(() => null);
+  let items = [];
+  if (status?.source === "jellyfin") {
+    const h = await api("/api/videos/home").then((r) => (r.status === 200 ? r.body : null)).catch(() => null);
+    if (h) items = [...h.resume.map((i) => ({ ...i, kicker: "Continue Watching" })), ...h.next.map((i) => ({ ...i, kicker: "Up Next" })),
+      ...h.latest.flatMap((s) => s.items.map((i) => ({ ...i, kicker: `New in ${s.name}` })))];
+  } else {
+    const l = await api("/api/videos/local").then((r) => (r.status === 200 ? r.body.folders : [])).catch(() => []);
+    items = l.flatMap((f) => f.items.map((i) => ({ ...i, kicker: f.name })));
+  }
+  const seen = new Set();
+  tv.videos = items.filter((i) => !seen.has(i.id) && seen.add(i.id)).slice(0, 18);
+  tv.videosAt = Date.now();
+  return tv.videos;
+}
+
 // ------------------------------------------------------------- the top shelf
 
 // The picture behind it all: two layers, one fading into the other.
@@ -255,6 +343,7 @@ async function tvShelf(t) {
     tvBackdrop(v.picture);
     return show(tvHead("On This Day", v.caption || "Photos", v.note || ""));
   }
+  if (["adleros:books", "adleros:calendar"].includes(t.id) || (t.id === "adleros:podcasts" && !(typeof pcNow === "function" && pcNow()))) return tvFeedShelf(t, here, show, plain);
   if (t.id === "adleros:music") {
     const id = typeof muCurrent === "function" ? muCurrent() : null;
     const s = id ? muSong(id) : null;
@@ -264,13 +353,7 @@ async function tvShelf(t) {
       return show(tvHead(music.audio.paused ? "Paused" : "Now Playing", s.station && s.now ? s.now : s.title, s.station ? s.title : muArtists(s)),
         el("div", { class: "tv-shelf-row" }, tvCard(art, music.audio.paused ? "Play" : "Pause", () => { musicToggle(); setTimeout(() => here() && tvShelf(t), 300); })));
     }
-    tvBackdrop("");
-    const shuffle = el("span", { class: "tv-card-square tv-card-glyph" }, svg(TV_ICONS.shuffle));
-    return show(tvHead("", "Music", t.about), el("div", { class: "tv-shelf-row" }, tvCard(shuffle, "Shuffle your library", async () => {
-      toast("Getting your music…");
-      if (!music.loaded) await musicLoad();
-      if (music.all.length) { musicRadio({ kind: "all", label: "Your library" }); setTimeout(() => here() && tvShelf(t), 600); }
-    })));
+    return tvFeedShelf(t, here, show, plain);
   }
   if (t.id === "adleros:podcasts" && typeof pcNow === "function" && pcNow()) {
     const n = pcNow();
@@ -282,26 +365,26 @@ async function tvShelf(t) {
   plain();
 }
 
+// Music (nothing playing), Podcasts (nothing playing), Books, Calendar: what
+// you were in the middle of, as cards; the first one's picture behind.
+async function tvFeedShelf(t, here, show, plain) {
+  const items = (await tvFeedItems(t.id)).slice(0, 10);
+  if (!here()) return;
+  if (!items.length) return plain();
+  const row = TV_FEED.find((f) => f[0] === t.id);
+  const arts = items.map((it) => bigArt(it));
+  const pic = arts[0]?.querySelector?.("img")?.src || (arts[0]?.tagName === "IMG" ? arts[0].src : "");
+  tvBackdrop(pic, true);
+  const cards = el("div", { class: "tv-shelf-row big-items shelf" }, ...items.map((it, k) => bigTile({ ...it, art: arts[k] }, row[4])));
+  tvHoverFocus(cards);
+  show(tvHead(row[1], t.name, ""), cards);
+}
+
 // Videos: Continue Watching, Up Next and what's new (Jellyfin), or your
 // films (offline). The focused one fills the screen.
 async function tvVideosShelf(t, here, show) {
-  if (!tv.videos || Date.now() - tv.videosAt > 60000) {
-    const status = await api("/api/videos/status").then((r) => r.body).catch(() => null);
-    let items = [];
-    if (status?.source === "jellyfin") {
-      const h = await api("/api/videos/home").then((r) => (r.status === 200 ? r.body : null)).catch(() => null);
-      if (h) items = [...h.resume.map((i) => ({ ...i, kicker: "Continue Watching" })), ...h.next.map((i) => ({ ...i, kicker: "Up Next" })),
-        ...h.latest.flatMap((s) => s.items.map((i) => ({ ...i, kicker: `New in ${s.name}` })))];
-    } else {
-      const l = await api("/api/videos/local").then((r) => (r.status === 200 ? r.body.folders : [])).catch(() => []);
-      items = l.flatMap((f) => f.items.map((i) => ({ ...i, kicker: f.name })));
-    }
-    const seen = new Set();
-    tv.videos = items.filter((i) => !seen.has(i.id) && seen.add(i.id)).slice(0, 12);
-    tv.videosAt = Date.now();
-  }
+  const items = (await tvVideoList()).slice(0, 12);
   if (!here()) return;
-  const items = tv.videos;
   if (!items.length) { tvBackdrop(""); return show(tvHead("", "Videos", "Nothing to watch yet: connect Jellyfin in Videos, or put films in Media/Documentaries.")); }
   const head = el("div", { class: "tv-shelf-headbox" });
   const feature = (i) => {
@@ -309,18 +392,11 @@ async function tvVideosShelf(t, here, show) {
     tvBackdrop(pic);
     head.replaceChildren(tvHead(i.kicker, i.type === "episode" ? i.series : i.name, i.type === "episode" ? [vdSub(i), i.name].filter(Boolean).join(" · ") : vdSub(i)));
   };
-  const cards = items.map((i) => tvCard(vdArt(i, { wide: true }), i.type === "episode" ? `${i.series} · ${i.name}` : i.name, async () => {
+  const cards = items.map((i) => tvCard(vdArt(i, { wide: true }), i.type === "episode" ? `${i.series} · ${i.name}` : i.name, () => {
     tv.lastTile = t.id;
-    if (i.type === "series" || i.type === "folder") {
-      await openVideos();
-      vdShow({ kind: "item", id: i.id, item: i });
-    } else {
-      // The film first; Videos loads behind it, for when it ends.
-      vdBuild();
-      openWindow("videos");
-      vdPlay(i);
-      vdLoad();
-    }
+    const it = bigVideoItem(i, "wide");
+    if (it.page) bigOpenPage("videos", "tv", it.page);
+    else it.run();
     tvFocusSoon();
   }, () => feature(i)));
   feature(items[0]);
@@ -390,7 +466,9 @@ function tvScope() {
   if (!$("modal").hidden) return $("modal");
   if (typeof vd !== "undefined" && vd.player) return $("vd-player");
   const open = [...document.querySelectorAll(".sheet:not([hidden]):not(.closing)")];
-  return open.at(-1) || $("tv");
+  if (open.length) return open.at(-1);
+  if (typeof bigOn === "function" && bigOn()) return $("big");
+  return $("tv");
 }
 
 function tvShown(n) {
@@ -482,6 +560,7 @@ function tvBack() {
     setTimeout(() => { if (tvFocusLost()) tvFocusFirst(); }, 350);
     return true;
   }
+  if (typeof bigOn === "function" && bigOn()) return bigBack();
   // The home screen: down in the grid (or up in the shelf), back to the top row.
   const a = document.activeElement;
   if (tv.built && $("tv").contains(a) && !a.closest("#tv-dock")) {
@@ -502,7 +581,10 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); t.currentTime = Math.max(0, t.currentTime + (e.key === "ArrowLeft" ? -10 : 10)); return; }
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); t.paused ? t.play().catch(() => {}) : t.pause(); return; }
   }
+  if (typeof bigKeys === "function" && bigKeys(e)) { e.preventDefault(); e.stopPropagation(); return; }
   const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+  // A book open: the arrows turn its pages (Books' own keys).
+  if (dir && $("bk-reader") && !$("bk-reader").hidden && isOpen("books")) return;
   if (dir) {
     if (typing && dir[0] && t.value) return; // the caret moves
     if (t.tagName === "SELECT" && dir[1]) return; // its own choices
