@@ -4564,7 +4564,7 @@ body.car .sheet { left: 0; width: 100vw; max-width: none; height: 100dvh; border
 body.car .sheet.closing { animation: tv-out 0.2s ease-in both; }
 .dialog.car-dialog { width: min(720px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; text-align: left; }
 .car-search { display: flex; gap: 10px; }
-.car-input.field-input { flex: 1; width: auto; height: 56px; padding: 0 20px; font-size: 19px; }
+.car-input.field-input { flex: 1; width: auto; min-width: 0; height: 56px; padding: 0 20px; font-size: 19px; }
 .car-go { min-width: 92px; height: 56px; padding: 0 22px; border: 0; border-radius: 28px; background: #34c759; color: #fff; font: inherit; font-size: 19px; font-weight: 700; cursor: pointer; }
 .car-go.secondary { height: 48px; background: rgb(255 255 255 / 0.14); font-size: 17px; }
 .car-places { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 14px 0 16px; }
