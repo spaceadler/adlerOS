@@ -48,7 +48,7 @@ function setCar(on, quiet = false) {
   document.body.classList.toggle("car", on);
   winSave(CAR_KEY, on);
   if (on) carShow();
-  else { $("car")?.setAttribute("hidden", ""); clearInterval(car.timer); layout(true); }
+  else { bigClose(); $("car")?.setAttribute("hidden", ""); clearInterval(car.timer); layout(true); }
   if (!quiet) toast(on ? "Car mode. Eyes on the road." : "Car mode off.");
 }
 
@@ -83,11 +83,11 @@ function carBuild() {
       el("div", { class: "car-ctls" }, control("car-prev", CAR_ICONS.prev, "Back"), control("car-play", CAR_ICONS.play, "Play"), control("car-next", CAR_ICONS.next, "Next"))),
     el("div", { class: "car-tiles", id: "car-tiles" }, el("div", { class: "car-track", id: "car-track" },
       tile("nav", CAR_ICONS.nav, "Navigate", () => carNavigate()),
-      tile("calendar", CAR_ICONS.calendar, "Calendar", () => openCalendar()),
-      tile("music", CAR_ICONS.music, "Music", () => openMusic()),
-      tile("pods", CAR_ICONS.pods, "Podcasts", () => openPodcasts()),
-      tile("photos", CAR_ICONS.photos, "Photos", () => openGallery()),
-      tile("videos", CAR_ICONS.videos, "Videos", () => openVideos()),
+      tile("calendar", CAR_ICONS.calendar, "Calendar", () => bigOpen("calendar", "car")),
+      tile("music", CAR_ICONS.music, "Music", () => bigOpen("music", "car")),
+      tile("pods", CAR_ICONS.pods, "Podcasts", () => bigOpen("podcasts", "car")),
+      tile("photos", CAR_ICONS.photos, "Photos", () => bigOpen("photos", "car")),
+      tile("videos", CAR_ICONS.videos, "Videos", () => bigOpen("videos", "car")),
       tile("exit", CAR_ICONS.exit, "Leave car mode", () => carLeave()))),
     el("div", { class: "car-dots", id: "car-dots", "aria-hidden": "true" }));
   $("desktop").after(node);

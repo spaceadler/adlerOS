@@ -1174,6 +1174,7 @@ function musicPlayList(ids, start = 0, { from = "", shuffle = null, radio = null
     if (shuffle === false || radio) music.shuffle = false;
   }
   music.addedUntil = music.at;
+  if (typeof bigNoteMusic === "function") bigNoteMusic(ids, from); // an album or a playlist: Recently Played (bigui.js)
   musicStart(true);
 }
 
