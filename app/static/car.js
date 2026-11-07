@@ -17,7 +17,7 @@
 const CAR_KEY = "adleros.carMode";
 const CAR_BEFORE_KEY = "adleros.carBefore"; // the mode to go back to
 const CAR_PLACES_KEY = "adleros.carPlaces"; // the server's, for offline
-const car = { built: false, timer: null, shown: "", places: null };
+const car = { built: false, timer: null, shown: "", places: null, seeking: null };
 
 const CAR_ICONS = {
   nav: ["M3 11l18-8-8 18-2-8z"],
@@ -77,7 +77,9 @@ function carBuild() {
     el("div", { class: "car-now", id: "car-now" },
       el("div", { class: "car-art", id: "car-art" }),
       el("div", { class: "car-text" }, el("div", { class: "car-title", id: "car-title" }), el("div", { class: "car-sub", id: "car-sub" })),
-      el("div", { class: "car-bar" }, el("span", { id: "car-bar" })),
+      el("div", { class: "car-seek", id: "car-seek" }, el("span", { class: "car-time", id: "car-at" }),
+        el("div", { class: "car-bar" }, el("span", { id: "car-bar" }), el("i", { class: "car-knob", id: "car-knob" })),
+        el("span", { class: "car-time", id: "car-left" })),
       el("div", { class: "car-ctls" }, control("car-prev", CAR_ICONS.prev, "Back"), control("car-play", CAR_ICONS.play, "Play"), control("car-next", CAR_ICONS.next, "Next"))),
     el("div", { class: "car-tiles", id: "car-tiles" }, el("div", { class: "car-track", id: "car-track" },
       tile("nav", CAR_ICONS.nav, "Navigate", () => carNavigate()),
@@ -90,6 +92,7 @@ function carBuild() {
     el("div", { class: "car-dots", id: "car-dots", "aria-hidden": "true" }));
   $("desktop").after(node);
   carPaging();
+  carSeekBar();
   $("car-play").addEventListener("click", carToggle);
   $("car-prev").addEventListener("click", () => (carPods() ? pcSkip(-30) : carMusicReady() && musicPrev()));
   $("car-next").addEventListener("click", () => (carPods() ? pcSkip(30) : carMusicReady() && musicNext()));
@@ -163,6 +166,53 @@ function carShow() {
   carPlacesLoad(); // fresh from the server, for Navigate
 }
 
+// Seeking: drag along the bar (or tap a spot on it); it goes there on
+// letting go. A radio station has nowhere to go.
+function carDuration() {
+  if (carPods()) return pc.np?.duration || 0;
+  const d = music.audio.duration;
+  return carMusicReady() && Number.isFinite(d) && d > 0 ? d : 0;
+}
+function carClock(t) {
+  t = Math.max(0, Math.round(t));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = String(t % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+}
+function carShowAt(frac) {
+  const d = carDuration();
+  const f = Math.min(1, Math.max(0, frac || 0));
+  $("car-bar").style.width = `${Math.round(f * 1000) / 10}%`;
+  $("car-knob").style.left = `${Math.round(f * 1000) / 10}%`;
+  $("car-seek").classList.toggle("off", !d);
+  $("car-at").textContent = d ? carClock(f * d) : "";
+  $("car-left").textContent = d ? `-${carClock(d - f * d)}` : "";
+}
+function carSeekBar() {
+  const seek = $("car-seek");
+  const at = (e) => { const r = seek.querySelector(".car-bar").getBoundingClientRect(); return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); };
+  seek.addEventListener("pointerdown", (e) => {
+    if (!carDuration()) return;
+    car.seeking = at(e);
+    seek.setPointerCapture?.(e.pointerId);
+    seek.classList.add("seeking");
+    carShowAt(car.seeking);
+  });
+  seek.addEventListener("pointermove", (e) => { if (car.seeking != null) { car.seeking = at(e); carShowAt(car.seeking); } });
+  const done = (go) => {
+    if (car.seeking == null) return;
+    const d = carDuration(), f = car.seeking;
+    car.seeking = null;
+    seek.classList.remove("seeking");
+    if (go && d) {
+      if (carPods()) pcSeek(f * d);
+      else music.audio.currentTime = f * d;
+    }
+    carUpdate();
+  };
+  seek.addEventListener("pointerup", () => done(true));
+  seek.addEventListener("pointercancel", () => done(false));
+}
+
 // What's on: a podcast or book that's playing (or paused, last touched),
 // else Music's song.
 function carPods() { return typeof pcOwnsMedia === "function" && pcOwnsMedia() && (!pc.audio.paused || music.audio.paused); }
@@ -214,7 +264,7 @@ function carUpdate() {
   }
   $("car-play").replaceChildren(svg(paused ? CAR_ICONS.play : CAR_ICONS.pause));
   $("car-play").setAttribute("aria-label", paused ? "Play" : "Pause");
-  $("car-bar").style.width = `${Math.round(Math.min(1, Math.max(0, frac)) * 1000) / 10}%`;
+  if (car.seeking == null) carShowAt(frac);
   $("car-prev").disabled = $("car-next").disabled = !(pods || carMusicReady());
 }
 
