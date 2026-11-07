@@ -334,7 +334,12 @@ function carLyricsFollow(jump = false) {
   l.at = i;
   box.querySelectorAll(".car-line").forEach((n, k) => { n.classList.toggle("past", k < i); n.classList.toggle("now", k === i); });
   const line = box.querySelector(`.car-line[data-i="${i}"]`);
-  if (line) box.scrollTo({ top: line.offsetTop - box.clientHeight / 2 + line.offsetHeight / 2, behavior: jump === true ? "auto" : "smooth" });
+  // In the middle of the words' space (measured on screen: the line's
+  // offsetTop counts from the player, not from the words).
+  if (line) {
+    const at = box.scrollTop + line.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    box.scrollTo({ top: at - box.clientHeight / 2 + line.offsetHeight / 2, behavior: jump === true ? "auto" : "smooth" });
+  }
 }
 
 // The cover's tap: it shrinks to the top left, the song and the artist
