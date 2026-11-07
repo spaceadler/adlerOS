@@ -79,18 +79,78 @@ function carBuild() {
       el("div", { class: "car-text" }, el("div", { class: "car-title", id: "car-title" }), el("div", { class: "car-sub", id: "car-sub" })),
       el("div", { class: "car-bar" }, el("span", { id: "car-bar" })),
       el("div", { class: "car-ctls" }, control("car-prev", CAR_ICONS.prev, "Back"), control("car-play", CAR_ICONS.play, "Play"), control("car-next", CAR_ICONS.next, "Next"))),
-    el("div", { class: "car-tiles", id: "car-tiles" },
-      tile("nav", CAR_ICONS.nav, "Navigate", carNavigate),
+    el("div", { class: "car-tiles", id: "car-tiles" }, el("div", { class: "car-track", id: "car-track" },
+      tile("nav", CAR_ICONS.nav, "Navigate", () => carNavigate()),
       tile("calendar", CAR_ICONS.calendar, "Calendar", () => openCalendar()),
       tile("music", CAR_ICONS.music, "Music", () => openMusic()),
       tile("pods", CAR_ICONS.pods, "Podcasts", () => openPodcasts()),
       tile("photos", CAR_ICONS.photos, "Photos", () => openGallery()),
       tile("videos", CAR_ICONS.videos, "Videos", () => openVideos()),
-      tile("exit", CAR_ICONS.exit, "Leave car mode", carLeave)));
+      tile("exit", CAR_ICONS.exit, "Leave car mode", () => carLeave()))),
+    el("div", { class: "car-dots", id: "car-dots", "aria-hidden": "true" }));
   $("desktop").after(node);
+  carPaging();
   $("car-play").addEventListener("click", carToggle);
   $("car-prev").addEventListener("click", () => (carPods() ? pcSkip(-30) : carMusicReady() && musicPrev()));
   $("car-next").addEventListener("click", () => (carPods() ? pcSkip(30) : carMusicReady() && musicNext()));
+}
+
+// The tiles: two rows in sight, moved a row at a time by a swipe (or the
+// wheel). Our own, not the browser's scrolling: its snapping let a tap land
+// on the tile the rows were still moving to, on a phone. A finger that
+// moves is a swipe, never a press.
+function carPaging() {
+  const box = $("car-tiles"), track = $("car-track");
+  const page = { row: 0, y: null, dy: 0, swiped: false, wheel: 0, wheelAt: 0 };
+  const step = () => (track.firstElementChild?.offsetHeight || 0) + 12;
+  const rows = () => Math.round((track.scrollHeight + 12) / step());
+  const last = () => Math.max(0, rows() - 2);
+  const place = (animate = true) => {
+    page.row = Math.min(last(), Math.max(0, page.row));
+    track.style.transition = animate ? "" : "none";
+    track.style.transform = `translateY(${-page.row * step() + page.dy}px)`;
+    $("car-dots").replaceChildren(...Array.from({ length: last() + 1 }, (_, i) => el("span", { class: i === page.row ? "on" : "" })));
+  };
+  const size = () => { box.style.setProperty("--car-row", `${Math.max(60, (box.clientHeight - 12) / 2)}px`); place(false); };
+  new ResizeObserver(size).observe(box);
+  box.addEventListener("pointerdown", (e) => { if (e.isPrimary) { page.y = e.clientY; page.dy = 0; page.swiped = false; } });
+  box.addEventListener("pointermove", (e) => {
+    if (page.y == null || !e.isPrimary) return;
+    const dy = e.clientY - page.y;
+    if (!page.swiped && Math.abs(dy) < 10) return;
+    if (!page.swiped) { page.swiped = true; box.setPointerCapture?.(e.pointerId); }
+    // Past the first or last row it gives a little, not a lot.
+    const edge = (page.row === 0 && dy > 0) || (page.row === last() && dy < 0);
+    page.dy = edge ? dy / 4 : dy;
+    place(false);
+  });
+  const end = (e) => {
+    if (page.y == null || !e.isPrimary) return;
+    const dy = page.dy;
+    page.y = null;
+    page.dy = 0;
+    if (page.swiped) {
+      if (Math.abs(dy) > 36) page.row -= Math.sign(dy) * Math.max(1, Math.round(Math.abs(dy) / step()));
+      place();
+      // A click that comes with the end of a swipe (a mouse's does) opens
+      // nothing; the next tap does.
+      const swallow = (c) => { c.stopPropagation(); c.preventDefault(); };
+      addEventListener("click", swallow, { capture: true, once: true });
+      setTimeout(() => { removeEventListener("click", swallow, { capture: true }); page.swiped = false; }, 60);
+    }
+  };
+  box.addEventListener("pointerup", end);
+  box.addEventListener("pointercancel", end);
+  box.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    if (Date.now() - page.wheelAt < 350) return;
+    page.wheel += e.deltaY;
+    if (Math.abs(page.wheel) < 30) return;
+    page.row += Math.sign(page.wheel);
+    page.wheel = 0;
+    page.wheelAt = Date.now();
+    place();
+  }, { passive: false });
 }
 
 function carShow() {

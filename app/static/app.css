@@ -4530,11 +4530,14 @@ body.car #desktop, body.car #dock, body.car .dock-edge { display: none !importan
 .car-ctl[disabled] { opacity: 0.35; }
 .car-ctl:active { transform: scale(0.94); }
 .car-clock { grid-area: clock; padding: 0 6px; font-size: clamp(22px, 5vh, 40px); font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; text-align: right; }
-.car-tiles { grid-area: tiles; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: calc((100% - 12px) / 2); gap: 12px; min-height: 0; overflow-y: auto;
-  overscroll-behavior: contain; scroll-snap-type: y mandatory; scrollbar-width: none; border-radius: 24px; }
-.car-tiles::-webkit-scrollbar { display: none; }
+.car-tiles { grid-area: tiles; position: relative; min-height: 0; overflow: hidden; border-radius: 24px; touch-action: none; }
+.car-track { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: var(--car-row, 140px); gap: 12px; transition: transform 0.38s cubic-bezier(0.25, 0.9, 0.3, 1); will-change: transform; }
+.car-dots { grid-area: tiles; z-index: 1; display: flex; flex-direction: column; justify-content: center; gap: 6px; justify-self: end; margin-right: -11px; pointer-events: none; }
+.car-dots > span { width: 5px; height: 5px; border-radius: 50%; background: rgb(255 255 255 / 0.35); transition: background 0.2s, height 0.2s; }
+.car-dots > span.on { height: 14px; border-radius: 3px; background: #fff; }
+.car-dots:has(> span:only-child) { display: none; }
 .car-tile { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; min-height: 0; padding: 16px; border: 0; border-radius: 24px; color: #fff; font: inherit;
-  font-size: clamp(17px, 3.2vh, 24px); font-weight: 700; text-align: left; cursor: pointer; scroll-snap-align: start; }
+  font-size: clamp(17px, 3.2vh, 24px); font-weight: 700; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .car-tile svg { width: clamp(30px, 8vh, 48px); height: clamp(30px, 8vh, 48px); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .car-tile:active { transform: scale(0.97); }
 .car-tile.nav { background: linear-gradient(135deg, #34c759, #1f8f3e); }
