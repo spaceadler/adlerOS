@@ -1,35 +1,46 @@
 // Car mode: adlerOS on a phone in the car (turned sideways, on a mount).
 // Only big things you can hit without looking twice: what's playing (Music
-// or Podcasts) with large controls, and four tiles: Navigate, Music,
-// Podcasts, and the way out. Navigate hands the drive to the phone's
-// Google Maps (it has the traffic and the voice), to a place you saved
-// (Home, Work) or typed, and remembers the last few. One of the modes
-// (windows.js MODES), kept per device.
-// Uses $, el, svg, toast, winLoad, winSave, wm, isOpen, desktopMode,
+// or Podcasts) with large controls, and big tiles, two to a row, scrolled
+// up and down: Navigate and Calendar, Music and Podcasts, then Photos and
+// Videos (a film for the passengers) and the way out, back to the mode you
+// came from. Navigate hands the drive to the phone's Google Maps (it has
+// the traffic and the voice), to a place you saved (Home, Work, ones you
+// named) or typed, and remembers the last few; the places are kept on the
+// server, so every device has the same ones. One of the modes (windows.js
+// MODES), kept per device.
+// Uses $, el, svg, api, toast, winLoad, winSave, wm, isOpen, desktopMode,
 // switchDesktopMode, DESKTOP_MODE_KEY, layout, openModal, closeModal,
-// tvOn, setTv, and Music's and Podcasts' players.
+// currentMode, setMode, tvOn, setTv, the apps' open functions, and Music's
+// and Podcasts' players.
 "use strict";
 
 const CAR_KEY = "adleros.carMode";
-const CAR_PLACES_KEY = "adleros.carPlaces";
-const car = { built: false, timer: null, shown: "" };
+const CAR_BEFORE_KEY = "adleros.carBefore"; // the mode to go back to
+const CAR_PLACES_KEY = "adleros.carPlaces"; // the server's, for offline
+const car = { built: false, timer: null, shown: "", places: null };
 
 const CAR_ICONS = {
   nav: ["M3 11l18-8-8 18-2-8z"],
+  calendar: ["M4 6h16v14H4z", "M4 10h16", "M8 3v4", "M16 3v4"],
   music: ["M9 18V5l12-2v13", "M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M18 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
   pods: ["M12 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2z", "M8.5 15a5 5 0 1 1 7 0", "M6 18a8.5 8.5 0 1 1 12 0", "M12 13v8"],
+  photos: ["M4 5h16v14H4z", "M4 16l5-5 4 4 2-2 5 5", "M15.5 9.5a1.5 1.5 0 1 0 0-.01"],
+  videos: ["M3 6h13v12H3z", "M16 10l5-3v10l-5-3"],
   exit: ["M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4", "M10 17l-5-5 5-5", "M5 12h12"],
   play: ["M7 4l13 8-13 8z"], pause: ["M7 4h3v16H7z", "M14 4h3v16h-3z"],
   next: ["M5 4l10 8-10 8z", "M19 5v14"], prev: ["M19 20 9 12l10-8z", "M5 19V5"],
   back30: ["M3 12a9 9 0 1 0 3-6.7", "M3 4v5h5"], fwd30: ["M21 12a9 9 0 1 1-3-6.7", "M21 4v5h-5"],
   home: ["M3 11l9-8 9 8", "M5 10v10h14V10"], work: ["M3 7h18v13H3z", "M8 7V4h8v3"], pin: ["M12 21s-7-6.5-7-12a7 7 0 1 1 14 0c0 5.5-7 12-7 12z", "M12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"],
+  star: ["M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"],
+  x: ["M18 6 6 18", "M6 6l12 12"], plus: ["M12 5v14", "M5 12h14"], check: ["M5 12l5 5 9-10"],
 };
 
 function carOn() { return document.body.classList.contains("car"); }
 
-function setCar(on) {
+function setCar(on, quiet = false) {
   if (on === carOn()) return;
   if (on) {
+    winSave(CAR_BEFORE_KEY, currentMode()); // where "Leave car mode" goes back to
     if (tvOn()) { document.body.classList.remove("tv"); winSave(TV_KEY, false); $("tv")?.setAttribute("hidden", ""); }
     if (desktopMode()) { switchDesktopMode(false); winSave(DESKTOP_MODE_KEY, false); }
   }
@@ -38,7 +49,16 @@ function setCar(on) {
   winSave(CAR_KEY, on);
   if (on) carShow();
   else { $("car")?.setAttribute("hidden", ""); clearInterval(car.timer); layout(true); }
-  toast(on ? "Car mode. Eyes on the road." : "Back to the home screen.");
+  if (!quiet) toast(on ? "Car mode. Eyes on the road." : "Car mode off.");
+}
+
+// Back to the mode you were in before the car: the home screen, desktop
+// mode or the TV.
+function carLeave() {
+  const before = winLoad(CAR_BEFORE_KEY, "home");
+  const back = ["home", "desktop", "tv"].includes(before) ? before : "home";
+  setCar(false, back !== "home");
+  if (back !== "home") setMode(back);
 }
 
 // ------------------------------------------------------------- the screen
@@ -53,18 +73,20 @@ function carBuild() {
   };
   const control = (id, icon, label) => el("button", { type: "button", class: "car-ctl", id, "aria-label": label }, svg(icon));
   const node = el("section", { id: "car", class: "car-home", "aria-label": "Car", hidden: "" },
+    el("div", { class: "car-clock", id: "car-clock" }),
     el("div", { class: "car-now", id: "car-now" },
       el("div", { class: "car-art", id: "car-art" }),
       el("div", { class: "car-text" }, el("div", { class: "car-title", id: "car-title" }), el("div", { class: "car-sub", id: "car-sub" })),
       el("div", { class: "car-bar" }, el("span", { id: "car-bar" })),
       el("div", { class: "car-ctls" }, control("car-prev", CAR_ICONS.prev, "Back"), control("car-play", CAR_ICONS.play, "Play"), control("car-next", CAR_ICONS.next, "Next"))),
-    el("div", { class: "car-side" },
-      el("div", { class: "car-clock", id: "car-clock" }),
-      el("div", { class: "car-tiles" },
-        tile("nav", CAR_ICONS.nav, "Navigate", carNavigate),
-        tile("music", CAR_ICONS.music, "Music", () => openMusic()),
-        tile("pods", CAR_ICONS.pods, "Podcasts", () => openPodcasts()),
-        tile("exit", CAR_ICONS.exit, "Leave car mode", () => setMode("home")))));
+    el("div", { class: "car-tiles", id: "car-tiles" },
+      tile("nav", CAR_ICONS.nav, "Navigate", carNavigate),
+      tile("calendar", CAR_ICONS.calendar, "Calendar", () => openCalendar()),
+      tile("music", CAR_ICONS.music, "Music", () => openMusic()),
+      tile("pods", CAR_ICONS.pods, "Podcasts", () => openPodcasts()),
+      tile("photos", CAR_ICONS.photos, "Photos", () => openGallery()),
+      tile("videos", CAR_ICONS.videos, "Videos", () => openVideos()),
+      tile("exit", CAR_ICONS.exit, "Leave car mode", carLeave)));
   $("desktop").after(node);
   $("car-play").addEventListener("click", carToggle);
   $("car-prev").addEventListener("click", () => (carPods() ? pcSkip(-30) : carMusicReady() && musicPrev()));
@@ -78,6 +100,7 @@ function carShow() {
   carUpdate();
   clearInterval(car.timer);
   car.timer = setInterval(carUpdate, 1000);
+  carPlacesLoad(); // fresh from the server, for Navigate
 }
 
 // What's on: a podcast or book that's playing (or paused, last touched),
@@ -137,56 +160,127 @@ function carUpdate() {
 
 // ------------------------------------------------------------- navigate
 
-function carPlaces() {
-  const p = winLoad(CAR_PLACES_KEY, null);
-  return { home: p?.home || "", work: p?.work || "", recent: Array.isArray(p?.recent) ? p.recent.slice(0, 4) : [] };
+// The places: { home, work, named: [{name, where}], recent: [where] }. The
+// server's are the ones; this device keeps a copy for when it's offline.
+function carPlacesClean(p) {
+  return { home: p?.home || "", work: p?.work || "", named: Array.isArray(p?.named) ? p.named.filter((n) => n?.name && n?.where) : [],
+    recent: Array.isArray(p?.recent) ? p.recent.filter(Boolean).slice(0, 6) : [], at: p?.at || 0 };
+}
+function carPlaces() { return car.places || carPlacesClean(winLoad(CAR_PLACES_KEY, null)); }
+
+async function carPlacesLoad() {
+  const got = await api("/api/car/places").then((r) => (r.status === 200 ? r.body : null)).catch(() => null);
+  if (!got) return carPlaces();
+  const local = carPlacesClean(winLoad(CAR_PLACES_KEY, null));
+  // Nothing on the server yet: what this device had goes up, once.
+  if (!got.at && (local.home || local.work || local.named.length || local.recent.length)) return carPlacesSave(local);
+  car.places = carPlacesClean(got);
+  winSave(CAR_PLACES_KEY, car.places);
+  return car.places;
+}
+
+async function carPlacesSave(p) {
+  car.places = carPlacesClean(p);
+  winSave(CAR_PLACES_KEY, car.places);
+  const r = await api("/api/car/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(car.places) }).catch(() => null);
+  if (r?.status === 200 && r.body) { car.places = carPlacesClean(r.body); winSave(CAR_PLACES_KEY, car.places); }
+  else toast("Saved on this device; the server didn't answer.");
+  return car.places;
 }
 
 function carGo(place) {
   const where = place.trim();
   if (!where) return;
   const p = carPlaces();
-  if (where !== p.home && where !== p.work) p.recent = [where, ...p.recent.filter((r) => r !== where)].slice(0, 4);
-  winSave(CAR_PLACES_KEY, p);
+  const saved = where === p.home || where === p.work || p.named.some((n) => n.where === where);
+  if (!saved) { p.recent = [where, ...p.recent.filter((r) => r !== where)].slice(0, 6); carPlacesSave(p); }
   closeModal();
   // On a phone this opens Google Maps itself, with the route, ready to go.
   window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(where)}&travelmode=driving`, "_blank", "noopener");
 }
 
-function carNavigate() {
+// Changed the places: the dialog again, as it is now.
+async function carPlacesChange(change, note) {
   const p = carPlaces();
-  const input = el("input", { class: "field-input car-input", type: "search", placeholder: "Where to?", autocomplete: "street-address", enterkeyhint: "go", "aria-label": "Where to" });
+  change(p);
+  if (note) toast(note);
+  carNavigateDraw();
+  await carPlacesSave(p);
+  carNavigateDraw();
+}
+
+function carNavigate() {
+  const input = el("input", { class: "field-input car-input", id: "car-where", type: "search", placeholder: "Where to?", autocomplete: "street-address", enterkeyhint: "go", "aria-label": "Where to" });
   const go = el("button", { type: "button", class: "car-go" }, "Go");
   go.addEventListener("click", () => carGo(input.value));
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") carGo(input.value); });
-  const place = (icon, label, where, set) => {
-    const b = el("button", { type: "button", class: "car-place" }, svg(icon), el("span", { class: "car-place-text" }, el("span", {}, label), where ? el("small", {}, where) : el("small", {}, "Tap to set")));
-    b.addEventListener("click", () => {
-      if (where) return carGo(where);
-      const v = input.value.trim();
-      if (!v) { toast(`Type ${label.toLowerCase()}'s address above, then tap ${label} again.`); return input.focus(); }
-      const q = carPlaces();
-      q[set] = v;
-      winSave(CAR_PLACES_KEY, q);
-      toast(`${label} saved.`);
-      closeModal();
-      carNavigate();
-    });
-    if (where) b.addEventListener("contextmenu", (e) => { e.preventDefault(); const q = carPlaces(); q[set] = ""; winSave(CAR_PLACES_KEY, q); toast(`${label} forgotten.`); closeModal(); carNavigate(); });
-    return b;
-  };
   const close = el("button", { type: "button", class: "car-go secondary" }, "Close");
   close.addEventListener("click", closeModal);
   openModal(el("div", { class: "dialog material car-dialog", role: "dialog", "aria-modal": "true", "aria-label": "Navigate" },
     el("div", { class: "car-search" }, input, go),
-    el("div", { class: "car-places" }, place(CAR_ICONS.home, "Home", p.home, "home"), place(CAR_ICONS.work, "Work", p.work, "work"),
-      ...p.recent.map((r) => {
-        const b = el("button", { type: "button", class: "car-place" }, svg(CAR_ICONS.pin), el("span", { class: "car-place-text" }, el("span", {}, r)));
-        b.addEventListener("click", () => carGo(r));
-        return b;
-      })),
-    el("p", { class: "car-note" }, "Opens Google Maps with the route. A saved place: hold it to forget it."),
+    el("div", { class: "car-places", id: "car-places" }),
     el("div", { class: "dialog-actions" }, close)));
+  carNavigateDraw();
+  carPlacesLoad().then(() => { if ($("car-places")) carNavigateDraw(); });
+}
+
+// A corner button on a place: its X (clear or delete), its + (name it).
+function carCorner(kind, label, run) {
+  const b = el("button", { type: "button", class: `car-corner ${kind}`, "aria-label": label }, svg(CAR_ICONS[kind]));
+  b.addEventListener("click", (e) => { e.stopPropagation(); run(); });
+  return b;
+}
+
+function carNavigateDraw() {
+  const list = $("car-places");
+  if (!list) return;
+  const p = carPlaces();
+  const input = $("car-where");
+  const place = (icon, label, where, corners, onTap) => {
+    const b = el("button", { type: "button", class: "car-place-main" }, svg(icon),
+      el("span", { class: "car-place-text" }, el("span", {}, label), where !== null ? el("small", {}, where || "Tap to set") : ""));
+    b.addEventListener("click", onTap);
+    return el("div", { class: `car-place${corners.length ? " has-corners" : ""}` }, b, el("div", { class: "car-corners" }, ...corners));
+  };
+  // Home and Work: an address, or empty to set by typing it and tapping.
+  const fixed = (key, icon, label) => {
+    const where = p[key];
+    return place(icon, label, where, where ? [carCorner("x", `Clear ${label}`, () => carPlacesChange((q) => { q[key] = ""; }, `${label} cleared.`))] : [], () => {
+      if (where) return carGo(where);
+      const v = input.value.trim();
+      if (!v) { toast(`Type ${label === "Home" ? "your home's" : "your work's"} address above, then tap ${label} again.`); return input.focus(); }
+      input.value = "";
+      carPlacesChange((q) => { q[key] = v; }, `${label} saved.`);
+    });
+  };
+  const named = p.named.map((n) => place(CAR_ICONS.star, n.name, n.where,
+    [carCorner("x", `Delete ${n.name}`, () => carPlacesChange((q) => { q.named = q.named.filter((m) => m.name !== n.name); }, `${n.name} deleted.`))],
+    () => carGo(n.where)));
+  const recent = p.recent.map((r) => {
+    const tile = place(CAR_ICONS.pin, r, null, [
+      carCorner("plus", "Give it a name", () => carNameIt(tile, r)),
+      carCorner("x", "Delete it", () => carPlacesChange((q) => { q.recent = q.recent.filter((x) => x !== r); })),
+    ], () => carGo(r));
+    return tile;
+  });
+  list.replaceChildren(fixed("home", CAR_ICONS.home, "Home"), fixed("work", CAR_ICONS.work, "Work"), ...named, ...recent);
+}
+
+// A recent place's +: a name for it, and it's saved like Home and Work.
+function carNameIt(tile, where) {
+  const name = el("input", { class: "field-input car-name", type: "text", placeholder: "Name it", maxlength: "40", enterkeyhint: "done", "aria-label": "Name for this place" });
+  const save = () => {
+    const v = name.value.trim();
+    if (!v) return name.focus();
+    const p = carPlaces();
+    if (["home", "work"].includes(v.toLowerCase()) || p.named.some((n) => n.name.toLowerCase() === v.toLowerCase())) { toast(`There's a ${v} already.`); return name.focus(); }
+    carPlacesChange((q) => { q.named.push({ name: v, where }); q.recent = q.recent.filter((x) => x !== where); }, `${v} saved.`);
+  };
+  name.addEventListener("keydown", (e) => { if (e.key === "Enter") save(); if (e.key === "Escape") { e.stopPropagation(); carNavigateDraw(); } });
+  tile.classList.add("naming");
+  tile.replaceChildren(el("div", { class: "car-place-name" }, svg(CAR_ICONS.star), name,
+    carCorner("check", "Save", save), carCorner("x", "Cancel", carNavigateDraw)));
+  name.focus();
 }
 
 // Back on (this device was in car mode): before the first draw.
