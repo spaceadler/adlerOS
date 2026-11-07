@@ -6337,6 +6337,52 @@ def videos_progress_set(item_id, pos, dur, done):
     return {"ok": True}
 
 
+# ------------------------------------------------------------- Car mode
+# Navigate's places (car.js): Home, Work, the ones you named and the last
+# few you went to. Kept here, so every device has the same ones.
+
+CAR_PLACES = DATA / "car-places.json"
+_car_lock = threading.Lock()
+
+
+def car_text(v, limit):
+    return " ".join(str(v or "").split())[:limit]
+
+
+def car_places_clean(got):
+    got = got if isinstance(got, dict) else {}
+    named, seen = [], set()
+    for p in got.get("named") or []:
+        if not isinstance(p, dict):
+            continue
+        name, where = car_text(p.get("name"), 40), car_text(p.get("where"), 300)
+        if name and where and name.lower() not in seen:
+            seen.add(name.lower())
+            named.append({"name": name, "where": where})
+    recent = []
+    for r in got.get("recent") or []:
+        r = car_text(r, 300)
+        if r and r not in recent:
+            recent.append(r)
+    return {"home": car_text(got.get("home"), 300), "work": car_text(got.get("work"), 300),
+            "named": named[:20], "recent": recent[:6], "at": int(got.get("at") or 0)}
+
+
+def car_places():
+    try:
+        return car_places_clean(json.loads(CAR_PLACES.read_text()))
+    except (OSError, ValueError):
+        return car_places_clean({})
+
+
+def car_places_set(body):
+    places = car_places_clean(body)
+    places["at"] = int(time.time() * 1000)
+    with _car_lock:
+        write_private(CAR_PLACES, json.dumps(places))
+    return places
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "homelab"
     sys_version = ""
@@ -6562,6 +6608,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.books_get(path[len("/api/books/"):], query)
         if path.startswith("/api/videos/"):
             return self.videos_get(path[len("/api/videos/"):], query)
+        if path == "/api/car/places":
+            return self.send_json(200, car_places())
         if path.startswith("/api/paperless/"):
             return self.documents_get(path[len("/api/paperless/"):], query)
         if path == "/api/maintenance":
@@ -6641,7 +6689,8 @@ class Handler(BaseHTTPRequestHandler):
                               else 2 * 1024 * 1024 if path.startswith("/api/music/")
                               else 64 * 1024 if path.startswith("/api/podcasts/")
                               else BOOK_TEXT_LIMIT if path == "/api/books/text"
-                              else BOOK_COVER_LIMIT * 2 if path == "/api/books/cover" else 4096)
+                              else BOOK_COVER_LIMIT * 2 if path == "/api/books/cover"
+                              else 32 * 1024 if path == "/api/car/places" else 4096)
         if body is None:
             return self.send_json(400, {"error": "expected a JSON object"})
         if path == "/api/settings":
@@ -6664,6 +6713,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.books_post(path[len("/api/books/"):], body)
         if path.startswith("/api/videos/"):
             return self.videos_post(path[len("/api/videos/"):], body)
+        if path == "/api/car/places":
+            return self.send_json(200, car_places_set(body))
         if path.startswith("/api/paperless/"):
             return self.documents_post(path[len("/api/paperless/"):], body)
         if path == "/api/calendar/event":
