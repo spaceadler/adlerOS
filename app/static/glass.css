@@ -24,7 +24,7 @@
 /* The surfaces. */
 :is(.material, .input, .button-secondary, .arrow, .web-search, .widget-panel, .search-pill, .dock, .bell,
     .folder-icon, .desk-glyph.file-icon, .desk-widget.bar .widget-panel, .side-toggle,
-    body.wm .menubar, .nc-card, .nc-pill, .nc-empty, .car-now, .car-tile.exit,
+    body.wm .menubar, .nc-card, .nc-pill, .nc-empty, .car-now, .car-tile.exit, .tv-dock, .tv-status, .tv-cc,
     body.phone .widget-panel, body.phone .search-pill, body.phone .pills, body.phone .dock,
     body.phone .menu, body.phone .dialog):not(body.phone .search-panel) {
   -webkit-backdrop-filter: var(--lg-backdrop);
@@ -39,7 +39,7 @@
 
 /* Bent light (Chromium only). */
 html.lg-refract :is(.material, .web-search, .widget-panel, .search-pill, .dock, .bell, .desk-widget.bar .widget-panel,
-    body.wm .menubar, .nc-card, .car-now, .car-tile.exit, body.phone .widget-panel, body.phone .dock, body.phone .menu, body.phone .dialog):not(body.phone .search-panel) {
+    body.wm .menubar, .nc-card, .car-now, .car-tile.exit, .tv-dock, .tv-status, .tv-cc, body.phone .widget-panel, body.phone .dock, body.phone .menu, body.phone .dialog):not(body.phone .search-panel) {
   -webkit-backdrop-filter: url(#lg-refract) var(--lg-backdrop);
   backdrop-filter: url(#lg-refract) var(--lg-backdrop);
 }
@@ -51,7 +51,7 @@ html.glass-off *, html.glass-off *::before, html.glass-off *::after {
   backdrop-filter: none !important;
 }
 html.glass-off :is(.material, .web-search, .widget-panel, .search-pill, .dock, .bell, .desk-widget.bar .widget-panel,
-    body.wm .menubar, .nc-card, .nc-pill, .nc-empty, .car-now, .car-tile.exit, .folder-icon, .desk-glyph.file-icon,
+    body.wm .menubar, .nc-card, .nc-pill, .nc-empty, .car-now, .car-tile.exit, .tv-dock, .tv-status, .tv-cc, .folder-icon, .desk-glyph.file-icon,
     body.phone .widget-panel, body.phone .search-pill, body.phone .pills, body.phone .dock,
     body.phone .menu, body.phone .dialog):not(body.phone .search-panel) {
   background-color: rgb(28 30 36 / 0.94);
