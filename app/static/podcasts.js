@@ -113,9 +113,10 @@ async function openPodcasts() {
 function togglePodcasts() { toggleWindow("podcasts", () => openPodcasts()); }
 
 // Closing it stops it (and Audiobookshelf hears where you got to); putting
-// it away doesn't.
+// it away doesn't (on a phone, in the car or on the TV, closing is putting
+// it away: music.js mediaKeepsPlaying).
 function closePodcasts() {
-  if (!phoneLayout() && pc.np) {
+  if (!mediaKeepsPlaying() && pc.np) {
     pc.audio.pause();
     pcSync(true);
   }

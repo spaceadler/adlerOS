@@ -182,8 +182,11 @@ async function openMusic() {
 function toggleMusic() { toggleWindow("music", () => openMusic()); }
 
 // Closing it stops it; putting it away (another window over it) doesn't.
+// On a phone, in the car and on the TV, closing it is only putting it away:
+// the song plays on.
+function mediaKeepsPlaying() { return phoneLayout() || carOn() || tvOn(); }
 function closeMusic() {
-  if (!phoneLayout()) music.audio.pause();
+  if (!mediaKeepsPlaying()) music.audio.pause();
   musicSave();
   closeWindow("music");
 }
