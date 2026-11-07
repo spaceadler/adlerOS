@@ -7567,7 +7567,7 @@ class Handler(BaseHTTPRequestHandler):
         if what == "stream":
             return self.videos_stream(q("id"))
         if what == "image":
-            return self.videos_image(q("id"), q("w"))
+            return self.videos_image(q("id"), q("w"), q("kind"))
         try:
             if what == "home":
                 return self.send_json(200, jf_home())
@@ -7640,17 +7640,27 @@ class Handler(BaseHTTPRequestHandler):
             except (BrokenPipeError, ConnectionResetError):
                 pass
 
-    def videos_image(self, item_id, width):
-        """A poster or a still, kept here a week (Jellyfin's are the same until it rescans)."""
+    def videos_image(self, item_id, width, kind=""):
+        """A poster or a still, kept here a week (Jellyfin's are the same until it
+        rescans). kind=backdrop: the wide picture behind it (TV mode's top
+        shelf), else its poster."""
         if not JF_ID_RE.match(item_id or ""):
             return self.send(404, b"")
-        w = 600 if width == "600" else 1200 if width == "1200" else 300
-        cached = VIDEOS_CACHE / f"{item_id}-{w}.jpg"
+        w = {"600": 600, "1200": 1200, "1920": 1920}.get(width, 300)
+        back = kind == "backdrop"
+        cached = VIDEOS_CACHE / f"{item_id}-{'b' if back else ''}{w}.jpg"
         try:
             if cached.is_file() and time.time() - cached.stat().st_mtime < 7 * 86400:
                 return self.send(200, cached.read_bytes(), "image/jpeg", [("Cache-Control", "private, max-age=86400")])
-            with jf_open(f"/Items/{item_id}/Images/Primary", {"maxWidth": w, "quality": 85, "format": "Jpg"}, timeout=30) as r:
-                data = r.read(8 * 1024 * 1024)
+            data = None
+            for image in (["Backdrop", "Primary"] if back else ["Primary"]):
+                try:
+                    with jf_open(f"/Items/{item_id}/Images/{image}", {"maxWidth": w, "quality": 85, "format": "Jpg"}, timeout=30) as r:
+                        data = r.read(8 * 1024 * 1024)
+                    break
+                except urllib.error.HTTPError as e:
+                    if e.code != 404 or image == "Primary":
+                        raise
         except (LookupError, urllib.error.HTTPError, OSError):
             return self.send(404, b"")
         VIDEOS_CACHE.mkdir(parents=True, exist_ok=True)
