@@ -4534,7 +4534,7 @@ body.car #desktop, body.car #dock, body.car .dock-edge { display: none !importan
 .car-seek.seeking .car-bar > span, .car-seek.seeking .car-knob { transition: none; }
 .car-seek.seeking .car-knob { scale: 1.3; }
 .car-ctls { display: flex; flex-shrink: 0; justify-content: space-evenly; align-items: center; width: 100%; margin-top: auto; }
-.car-ctl { display: grid; place-items: center; width: 64px; height: 64px; border: 0; border-radius: 50%; background: rgb(255 255 255 / 0.12); color: #fff; cursor: pointer; }
+.car-ctl { display: grid; flex-shrink: 0; place-items: center; width: 64px; height: 64px; border: 0; border-radius: 50%; background: rgb(255 255 255 / 0.12); color: #fff; cursor: pointer; }
 .car-ctl#car-play { width: 76px; height: 76px; background: #fff; color: #000; }
 .car-ctl svg { width: 42%; height: 42%; fill: currentColor; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
 .car-ctl[disabled] { opacity: 0.35; }
@@ -4613,7 +4613,7 @@ body.car #desktop, body.car #dock, body.car .dock-edge { display: none !importan
 @media (orientation: portrait) {
   .car-home { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "clock" "now" "tiles"; }
   .car-clock { justify-content: center; padding: 4px 0 0; font-size: clamp(30px, 6vh, 52px); }
-  .car-ctls { padding: 0 40px; }
+
   /* Upright: the cover with the song beside it; always a column (a switch
      between grid and flex left parts undrawn). */
   .car-now { gap: 12px; padding: 16px; }
@@ -4622,9 +4622,9 @@ body.car #desktop, body.car #dock, body.car .dock-edge { display: none !importan
   .car-text { flex: 1; align-items: flex-start; text-align: left; }
   .car-title { display: -webkit-box; white-space: normal; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .car-words .car-head { flex: 0 0 auto; }
-  .car-ctls { margin-top: 0; }
-  .car-ctl { width: clamp(64px, 10vh, 84px); height: clamp(64px, 10vh, 84px); }
-  .car-ctl#car-play { width: clamp(76px, 12vh, 100px); height: clamp(76px, 12vh, 100px); }
+  .car-ctls { justify-content: center; gap: 22px; margin-top: 0; }
+  .car-ctl { flex-shrink: 0; width: 62px; height: 62px; }
+  .car-ctl#car-play { width: 78px; height: 78px; }
 }
 body.car .sheet { left: 0; width: 100vw; max-width: none; height: 100dvh; border-radius: 0; transform: none; animation: tv-in 0.25s ease-out both; }
 body.car .sheet.closing { animation: tv-out 0.2s ease-in both; }
