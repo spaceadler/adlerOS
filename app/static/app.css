@@ -4786,15 +4786,22 @@ body.car .sheet.closing { animation: tv-out 0.2s ease-in both; }
 .big-car .big-action svg { width: 20px; height: 20px; }
 .big-car .big-action.primary svg { fill: currentColor; }
 .big-car .big-action:active { transform: scale(0.96); }
-.big-car .big-mini { display: flex; align-items: center; gap: 10px; margin: 0 -16px; padding: 8px 16px; padding-bottom: max(8px, env(safe-area-inset-bottom));
-  background: linear-gradient(to bottom, rgb(255 255 255 / 0.1), rgb(12 14 18 / 0.34)); box-shadow: var(--shine); }
-.big-mini-open { display: flex; flex: 1; align-items: center; gap: 12px; min-width: 0; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
+/* What's playing floats over the page: the song in a glass pill, its
+   play button beside it, where it always is (bottom right). */
+.big-car .big-main { position: relative; }
+.big-car .big-mini { position: absolute; left: 16px; right: 16px; bottom: max(10px, env(safe-area-inset-bottom)); z-index: 2; display: flex; align-items: center; gap: 10px; pointer-events: none; }
+.big-car .big-mini > * { pointer-events: auto; }
+.big-car .big-main:has(.big-mini:not([hidden])) .big-body { padding-bottom: 86px; }
+.big-mini-open { display: flex; flex: 0 1 auto; align-items: center; gap: 12px; min-width: 0; max-width: calc(100% - 70px); padding: 6px 22px 6px 6px; border: 0; border-radius: 999px;
+  text-align: left; cursor: pointer; background: linear-gradient(to bottom, rgb(255 255 255 / 0.14), rgb(12 14 18 / 0.4)); box-shadow: var(--shine), 0 10px 26px rgb(0 0 0 / 0.4); }
+.big-mini-open .big-mini-art { border-radius: 50%; }
 .big-mini-art { flex-shrink: 0; width: 48px; height: 48px; overflow: hidden; border-radius: 8px; background: rgb(255 255 255 / 0.1); }
 .big-mini-art > * { width: 100%; height: 100%; border-radius: 0; }
 .big-mini-text { display: flex; flex-direction: column; min-width: 0; font-size: 16px; }
 .big-mini-text > * { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .big-mini-text span { font-size: 14px; color: rgb(255 255 255 / 0.6); }
-.big-mini-play { display: grid; flex-shrink: 0; place-items: center; width: 56px; height: 56px; border: 0; border-radius: 50%; background: #fff; color: #000 !important; cursor: pointer; }
+.big-mini-play { display: grid; flex-shrink: 0; place-items: center; width: 56px; height: 56px; margin-left: auto; border: 0; border-radius: 50%; background: #fff; color: #000 !important;
+  cursor: pointer; box-shadow: 0 10px 26px rgb(0 0 0 / 0.45); }
 .big-mini-play svg { width: 24px; height: 24px; fill: currentColor; }
 @media (orientation: portrait) {
   .big-car { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; padding-left: env(safe-area-inset-left); }
@@ -4803,7 +4810,7 @@ body.car .sheet.closing { animation: tv-out 0.2s ease-in both; }
   .big-car .big-rail-clock { display: none; }
   .big-car .big-rail-home, .big-car .big-rail-app { width: 52px; height: 52px; }
   .big-car .big-rail-app img { width: 46px; height: 46px; }
-  .big-car .big-mini { padding-bottom: 8px; }
+  .big-car .big-mini { bottom: 10px; }
   .big-car .big-hero { flex-direction: column; align-items: flex-start; }
   .big-car .big-items.grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
   .big-car .big-items.grid.shape-photo { grid-template-columns: repeat(3, 1fr); }
