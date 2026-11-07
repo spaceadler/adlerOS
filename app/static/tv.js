@@ -250,12 +250,13 @@ async function tvFeed() {
   if ($("tv-feed").contains(document.activeElement)) return;
   tv.feeding = true;
   tv.feedAt = Date.now();
-  try {
-    for (const [id, title, , , shape] of TV_FEED) {
+  // All asked for at once (a slow one holds up none of the others), each
+  // row drawn as it comes.
+  const draw = async ([id, title, , , shape]) => {
       const items = await tvFeedItems(id);
-      if ($("tv-feed").contains(document.activeElement)) break;
+      if ($("tv-feed").contains(document.activeElement)) return;
       let row = $("tv-feed").querySelector(`[data-feed="${CSS.escape(id)}"]`);
-      if (!items.length) { row?.remove(); continue; }
+      if (!items.length) { row?.remove(); return; }
       const fresh = bigSection({ title, layout: "shelf", shape, items: items.map((it) => ({ ...it, shape: it.shape || shape })) });
       fresh.dataset.feed = id;
       tvHoverFocus(fresh);
@@ -265,8 +266,8 @@ async function tvFeed() {
         const after = TV_FEED.slice(TV_FEED.findIndex((f) => f[0] === id) + 1).map((f) => $("tv-feed").querySelector(`[data-feed="${CSS.escape(f[0])}"]`)).find(Boolean);
         $("tv-feed").insertBefore(fresh, after || null);
       }
-    }
-  } finally { tv.feeding = false; }
+  };
+  try { await Promise.all(TV_FEED.map(draw)); } finally { tv.feeding = false; }
 }
 
 // The mouse moves the focus on the TV's cards too (without the page).
