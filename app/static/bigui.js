@@ -25,7 +25,8 @@ const BIG_ICONS = {
   play: ["M7 4l13 8-13 8z"], pause: ["M7 4h3v16H7z", "M14 4h3v16h-3z"], next: ["M5 4l10 8-10 8z", "M19 5v14"], prev: ["M19 20 9 12l10-8z", "M5 19V5"],
   shuffle: ["M16 3h5v5", "M4 20 21 3", "M21 16v5h-5", "M15 15l6 6", "M4 4l5 5"],
   back30: ["M3 12a9 9 0 1 0 3-6.7", "M3 4v5h5"], fwd30: ["M21 12a9 9 0 1 1-3-6.7", "M21 4v5h-5"],
-  nav: ["M3 11l18-8-8 18-2-8z"], close: ["M18 6 6 18", "M6 6l12 12"], left: ["m15 18-6-6 6-6"], right: ["m9 18 6-6-6-6"],
+  nav: ["M3 11l18-8-8 18-2-8z"], close: ["M18 6 6 18", "M6 6l12 12"],
+  zoomIn: ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3", "M11 8v6", "M8 11h6"], zoomOut: ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3", "M8 11h6"], left: ["m15 18-6-6 6-6"], right: ["m9 18 6-6-6-6"],
 };
 
 // The apps: [id, name, dock icon, the root page].
@@ -382,10 +383,12 @@ function bigNowUpdate() {
 
 // ------------------------------------------------------------- the photo viewer
 
-// Full screen, one at a time: swiped (or the arrows) to the next, a video
-// plays; the X (or Back) closes it.
+// Full screen, one at a time, all of it in sight (its edges at the
+// screen's): swiped (or the arrows) to the next, a video plays; the zoom
+// button (or a double tap) fills the screen with it, dragged to look
+// about; the X (or Back) closes it.
 function bigViewerOpen(list, i) {
-  big.viewer = { list, i };
+  big.viewer = { list, i, zoom: false, x: 50, y: 50 };
   const v = $("big-viewer");
   const button = (cls, icon, label, run) => {
     const b = el("button", { type: "button", class: `big-viewer-btn ${cls}`, "aria-label": label }, svg(icon));
@@ -394,13 +397,34 @@ function bigViewerOpen(list, i) {
   };
   v.replaceChildren(el("div", { class: "big-viewer-stage", id: "big-viewer-stage" }),
     button("close", BIG_ICONS.close, "Close", bigViewerClose),
+    button("zoom", BIG_ICONS.zoomIn, "Zoom in", () => bigViewerZoom(!big.viewer.zoom)),
     button("prev", BIG_ICONS.left, "Previous", () => bigViewerStep(-1)),
     button("next", BIG_ICONS.right, "Next", () => bigViewerStep(1)),
     el("div", { class: "big-viewer-count", id: "big-viewer-count" }));
   v.hidden = false;
-  let x0 = null;
-  v.onpointerdown = (e) => { x0 = e.clientX; };
-  v.onpointerup = (e) => { if (x0 != null && Math.abs(e.clientX - x0) > 50) bigViewerStep(e.clientX < x0 ? 1 : -1); x0 = null; };
+  // Zoomed, a drag looks about; not zoomed, a swipe goes to the next one.
+  let down = null, lastTap = 0;
+  v.onpointerdown = (e) => {
+    if (e.target.closest(".big-viewer-btn") || e.target.tagName === "VIDEO" && !big.viewer.zoom) { down = null; return; }
+    down = { x: e.clientX, y: e.clientY, px: big.viewer.x, py: big.viewer.y };
+    if (big.viewer.zoom) v.setPointerCapture?.(e.pointerId);
+  };
+  v.onpointermove = (e) => {
+    if (!down || !big.viewer.zoom) return;
+    big.viewer.x = Math.min(100, Math.max(0, down.px - ((e.clientX - down.x) / v.clientWidth) * 150));
+    big.viewer.y = Math.min(100, Math.max(0, down.py - ((e.clientY - down.y) / v.clientHeight) * 150));
+    bigViewerPlace();
+  };
+  v.onpointerup = (e) => {
+    if (!down) return;
+    const dx = e.clientX - down.x, dy = e.clientY - down.y;
+    down = null;
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      if (Date.now() - lastTap < 320) { lastTap = 0; bigViewerZoom(!big.viewer.zoom); } else lastTap = Date.now();
+      return;
+    }
+    if (!big.viewer.zoom && Math.abs(dx) > 50) bigViewerStep(dx < 0 ? 1 : -1);
+  };
   bigViewerShow();
   if (big.mode === "tv") v.querySelector(".next")?.focus({ preventScroll: true });
 }
@@ -424,6 +448,26 @@ function bigViewerStep(dir) {
   if (j < 0 || j >= big.viewer.list.length) return;
   big.viewer.i = j;
   bigViewerShow();
+  bigViewerZoom(false);
+}
+
+// Zoomed: it fills the screen (what's past the edges, dragged into sight).
+function bigViewerZoom(on) {
+  if (!big.viewer) return;
+  big.viewer.zoom = on;
+  big.viewer.x = big.viewer.y = 50;
+  bigViewerPlace();
+  const b = $("big-viewer").querySelector(".zoom");
+  b.replaceChildren(svg(on ? BIG_ICONS.zoomOut : BIG_ICONS.zoomIn));
+  b.setAttribute("aria-label", on ? "Zoom out" : "Zoom in");
+  $("big-viewer").classList.toggle("zoomed", on);
+}
+
+function bigViewerPlace() {
+  const m = $("big-viewer-stage")?.firstElementChild;
+  if (!m) return;
+  m.classList.toggle("zoomed", big.viewer.zoom);
+  m.style.objectPosition = `${big.viewer.x}% ${big.viewer.y}%`;
 }
 
 function bigViewerClose() {
