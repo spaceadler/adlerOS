@@ -372,9 +372,7 @@ function carFull(on) {
   const home = $("car"), now = $("car-now");
   const from = now.getBoundingClientRect();
   if (on) {
-    const cs = getComputedStyle(home);
-    const to = { left: parseFloat(cs.paddingLeft), top: parseFloat(cs.paddingTop),
-      width: home.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), height: home.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) };
+    const to = { left: 0, top: 0, width: home.clientWidth, height: home.clientHeight }; // the whole screen
     home.classList.add("car-full");
     carMorph(now, from, to);
     carLyricsLoad();
@@ -393,7 +391,7 @@ function carMorph(node, from, to) {
   const px = (r) => ({ left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
   Object.assign(node.style, { position: "absolute", gridArea: "auto", margin: "0", zIndex: "3", transition: "none", ...px(from) });
   node.getBoundingClientRect();
-  node.style.transition = "left 0.45s cubic-bezier(0.3, 0.8, 0.2, 1), top 0.45s cubic-bezier(0.3, 0.8, 0.2, 1), width 0.45s cubic-bezier(0.3, 0.8, 0.2, 1), height 0.45s cubic-bezier(0.3, 0.8, 0.2, 1)";
+  node.style.transition = ["left", "top", "width", "height", "border-radius", "padding"].map((p) => `${p} 0.45s cubic-bezier(0.3, 0.8, 0.2, 1)`).join(", ");
   Object.assign(node.style, px(to));
   clearTimeout(car.morph);
   car.morph = setTimeout(() => { node.style.cssText = ""; carLyricsFollow(true); }, 480);
