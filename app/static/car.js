@@ -17,7 +17,7 @@
 const CAR_KEY = "adleros.carMode";
 const CAR_BEFORE_KEY = "adleros.carBefore"; // the mode to go back to
 const CAR_PLACES_KEY = "adleros.carPlaces"; // the server's, for offline
-const car = { built: false, timer: null, shown: "", places: null, seeking: null };
+const car = { built: false, timer: null, shown: "", places: null, seeking: null, lyrics: null, event: null, eventAt: 0, morph: null };
 
 const CAR_ICONS = {
   nav: ["M3 11l18-8-8 18-2-8z"],
@@ -33,6 +33,7 @@ const CAR_ICONS = {
   home: ["M3 11l9-8 9 8", "M5 10v10h14V10"], work: ["M3 7h18v13H3z", "M8 7V4h8v3"], pin: ["M12 21s-7-6.5-7-12a7 7 0 1 1 14 0c0 5.5-7 12-7 12z", "M12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"],
   star: ["M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"],
   x: ["M18 6 6 18", "M6 6l12 12"], plus: ["M12 5v14", "M5 12h14"], check: ["M5 12l5 5 9-10"],
+  expand: ["M5 12h14", "m13 6 6 6-6 6"], collapse: ["M19 12H5", "m11 6-6 6 6 6"],
 };
 
 function carOn() { return document.body.classList.contains("car"); }
@@ -73,14 +74,18 @@ function carBuild() {
   };
   const control = (id, icon, label) => el("button", { type: "button", class: "car-ctl", id, "aria-label": label }, svg(icon));
   const node = el("section", { id: "car", class: "car-home", "aria-label": "Car", hidden: "" },
-    el("div", { class: "car-clock", id: "car-clock" }),
+    el("div", { class: "car-clock", id: "car-clock" }, el("span", { class: "car-next-event", id: "car-event" }), el("span", { class: "car-clock-time", id: "car-time" })),
     el("div", { class: "car-now", id: "car-now" },
-      el("div", { class: "car-art", id: "car-art" }),
-      el("div", { class: "car-text" }, el("div", { class: "car-title", id: "car-title" }), el("div", { class: "car-sub", id: "car-sub" })),
+      el("div", { class: "car-bgart", id: "car-bgart", "aria-hidden": "true" }),
+      el("div", { class: "car-head" },
+        el("button", { type: "button", class: "car-art", id: "car-art", "aria-label": "Lyrics" }),
+        el("div", { class: "car-text" }, el("div", { class: "car-title", id: "car-title" }), el("div", { class: "car-sub", id: "car-sub" }))),
+      el("div", { class: "car-lyrics", id: "car-lyrics" }),
       el("div", { class: "car-seek", id: "car-seek" }, el("span", { class: "car-time", id: "car-at" }),
         el("div", { class: "car-bar" }, el("span", { id: "car-bar" }), el("i", { class: "car-knob", id: "car-knob" })),
         el("span", { class: "car-time", id: "car-left" })),
-      el("div", { class: "car-ctls" }, control("car-prev", CAR_ICONS.prev, "Back"), control("car-play", CAR_ICONS.play, "Play"), control("car-next", CAR_ICONS.next, "Next"))),
+      el("div", { class: "car-ctls" }, control("car-prev", CAR_ICONS.prev, "Back"), control("car-play", CAR_ICONS.play, "Play"), control("car-next", CAR_ICONS.next, "Next")),
+      el("button", { type: "button", class: "car-expand", id: "car-expand", "aria-label": "Full screen" }, svg(CAR_ICONS.expand))),
     el("div", { class: "car-tiles", id: "car-tiles" }, el("div", { class: "car-track", id: "car-track" },
       tile("nav", CAR_ICONS.nav, "Navigate", () => carNavigate()),
       tile("calendar", CAR_ICONS.calendar, "Calendar", () => bigOpen("calendar", "car")),
@@ -94,6 +99,11 @@ function carBuild() {
   carPaging();
   carSeekBar();
   $("car-play").addEventListener("click", carToggle);
+  $("car-art").addEventListener("click", () => carLyricsMode(!$("car").classList.contains("car-words")));
+  $("car-expand").addEventListener("click", () => carFull(!$("car").classList.contains("car-full")));
+  // The words follow the song (a few times a second, while they show).
+  music.audio.addEventListener("timeupdate", carLyricsFollow);
+  addEventListener("resize", () => { if ($("car").classList.contains("car-full")) $("car-now").style.cssText = ""; });
   $("car-prev").addEventListener("click", () => (carPods() ? pcSkip(-30) : carMusicReady() && musicPrev()));
   $("car-next").addEventListener("click", () => (carPods() ? pcSkip(30) : carMusicReady() && musicNext()));
 }
@@ -164,6 +174,7 @@ function carShow() {
   clearInterval(car.timer);
   car.timer = setInterval(carUpdate, 1000);
   carPlacesLoad(); // fresh from the server, for Navigate
+  carNextEvent();
 }
 
 // Seeking: drag along the bar (or tap a spot on it); it goes there on
@@ -231,7 +242,9 @@ async function carToggle() {
 
 function carUpdate() {
   if (!carOn()) return;
-  $("car-clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  $("car-time").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (Date.now() - (car.eventAt || 0) > 300000) carNextEvent();
+  else carEventShow();
   const pods = carPods();
   let title = "Nothing playing", sub = "Tap play for your music, shuffled", paused = true, frac = 0, art = null, key;
   if (pods) {
@@ -251,6 +264,10 @@ function carUpdate() {
   if (key !== car.shown) {
     car.shown = key;
     $("car-art").replaceChildren(art || svg(CAR_ICONS.music));
+    // The cover, big and soft, behind the full screen player.
+    const pic = art?.querySelector?.("img")?.src || "";
+    $("car-bgart").style.backgroundImage = pic ? `url("${pic}")` : "";
+    carLyricsLoad();
     $("car-title").textContent = title;
     $("car-sub").textContent = sub;
     // A book or an episode: 30 s back and on, not the last and next song.
@@ -266,6 +283,137 @@ function carUpdate() {
   $("car-play").setAttribute("aria-label", paused ? "Play" : "Pause");
   if (car.seeking == null) carShowAt(frac);
   $("car-prev").disabled = $("car-next").disabled = !(pods || carMusicReady());
+}
+
+// ------------------------------------------------------------- the words
+
+// The song's lyrics (Music's: an .lrc beside it, or its own), for the cover's
+// tap (the cover small, top left, the words under it) and the full screen
+// player (the words over the cover). Fetched when one of them shows.
+function carLyricsWanted() { const c = $("car").classList; return c.contains("car-words") || c.contains("car-full"); }
+
+async function carLyricsLoad() {
+  if (!carLyricsWanted()) return;
+  const id = !carPods() && carMusicReady() ? muCurrent() : null;
+  if (car.lyrics?.id === id && !car.lyrics.loading) return carLyricsDraw();
+  car.lyrics = { id, loading: Boolean(id), lines: [] };
+  carLyricsDraw();
+  if (!id) return;
+  const s = muSong(id);
+  let got = { id, lines: [] };
+  if (music.lyrics?.id === id && !music.lyrics.loading) got = music.lyrics;
+  else if (s?.lyrics) {
+    const { status, body } = await api(`/api/music/lyrics?id=${encodeURIComponent(id)}`).catch(() => ({ status: 0 }));
+    if (status === 200 && body?.text) got = { id, ...musicParseLyrics(body.text) };
+  }
+  if (car.lyrics?.id !== id) return;
+  car.lyrics = { id, synced: got.synced, lines: got.lines || [] };
+  carLyricsDraw();
+}
+
+function carLyricsDraw() {
+  const box = $("car-lyrics"), l = car.lyrics;
+  const none = !l?.loading && !l?.lines?.length;
+  $("car-now").classList.toggle("no-lyrics", none);
+  if (!l || l.loading) return box.replaceChildren(el("p", { class: "car-line wait" }, "…"));
+  if (none) return box.replaceChildren(el("p", { class: "car-line none" }, carPods() ? "No lyrics for this." : "No lyrics for this song."));
+  box.classList.toggle("synced", Boolean(l.synced));
+  box.replaceChildren(...l.lines.map((line, i) => el("p", { class: "car-line", "data-i": String(i) }, line.text || "♪")));
+  l.at = null;
+  carLyricsFollow(true);
+}
+
+// The line being sung: lit, and in the middle of the space there is.
+function carLyricsFollow(jump = false) {
+  const l = car.lyrics, box = $("car-lyrics");
+  if (!l?.synced || !box || !carLyricsWanted() || l.id !== muCurrent()) return;
+  const t = music.audio.currentTime + 0.2;
+  let i = -1;
+  for (let k = 0; k < l.lines.length && l.lines[k].t <= t; k++) i = k;
+  if (i === l.at && jump !== true) return;
+  l.at = i;
+  box.querySelectorAll(".car-line").forEach((n, k) => { n.classList.toggle("past", k < i); n.classList.toggle("now", k === i); });
+  const line = box.querySelector(`.car-line[data-i="${i}"]`);
+  if (line) box.scrollTo({ top: line.offsetTop - box.clientHeight / 2 + line.offsetHeight / 2, behavior: jump === true ? "auto" : "smooth" });
+}
+
+// The cover's tap: it shrinks to the top left, the song and the artist
+// beside it, the words under them; again, back. The cover moves to its new
+// place (it's measured before and after).
+function carLyricsMode(on) {
+  const art = $("car-art");
+  const before = art.getBoundingClientRect();
+  $("car").classList.toggle("car-words", on);
+  carGlide(art, before);
+  if (on) carLyricsLoad();
+}
+
+function carGlide(node, before) {
+  const after = node.getBoundingClientRect();
+  if (!after.width || !before.width) return;
+  node.style.transition = "none";
+  node.style.transformOrigin = "top left";
+  node.style.transform = `translate(${before.left - after.left}px, ${before.top - after.top}px) scale(${before.width / after.width})`;
+  node.getBoundingClientRect();
+  node.style.transition = "transform 0.42s cubic-bezier(0.3, 0.8, 0.2, 1)";
+  node.style.transform = "";
+  setTimeout(() => { node.style.transition = ""; node.style.transformOrigin = ""; }, 460);
+}
+
+// The → button: the tiles and the time go off to the right and the player
+// grows to fill the screen, the cover behind it (and the words, if the song
+// has them); ← brings it all back.
+function carFull(on) {
+  const home = $("car"), now = $("car-now");
+  const from = now.getBoundingClientRect();
+  if (on) {
+    const cs = getComputedStyle(home);
+    const to = { left: parseFloat(cs.paddingLeft), top: parseFloat(cs.paddingTop),
+      width: home.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), height: home.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) };
+    home.classList.add("car-full");
+    carMorph(now, from, to);
+    carLyricsLoad();
+  } else {
+    home.classList.remove("car-full");
+    now.style.cssText = "";
+    const to = now.getBoundingClientRect();
+    carMorph(now, from, to);
+  }
+  $("car-expand").replaceChildren(svg(on ? CAR_ICONS.collapse : CAR_ICONS.expand));
+  $("car-expand").setAttribute("aria-label", on ? "Back to the tiles" : "Full screen");
+}
+
+// From one place and size to another, then back to its own rules.
+function carMorph(node, from, to) {
+  const px = (r) => ({ left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+  Object.assign(node.style, { position: "absolute", gridArea: "auto", margin: "0", zIndex: "3", transition: "none", ...px(from) });
+  node.getBoundingClientRect();
+  node.style.transition = "left 0.45s cubic-bezier(0.3, 0.8, 0.2, 1), top 0.45s cubic-bezier(0.3, 0.8, 0.2, 1), width 0.45s cubic-bezier(0.3, 0.8, 0.2, 1), height 0.45s cubic-bezier(0.3, 0.8, 0.2, 1)";
+  Object.assign(node.style, px(to));
+  clearTimeout(car.morph);
+  car.morph = setTimeout(() => { node.style.cssText = ""; carLyricsFollow(true); }, 480);
+}
+
+// ------------------------------------------------------------- what's next
+
+// Left of the time, in grey: your next event today or later, and its time
+// (one without a time, all day, isn't shown).
+async function carNextEvent() {
+  car.eventAt = Date.now();
+  const list = await bigEvents(3).catch(() => []);
+  car.event = list.find((e) => !e.allDay && e.at.getTime() > Date.now()) || null;
+  carEventShow();
+}
+
+function carEventShow() {
+  const box = $("car-event");
+  if (!box) return;
+  const e = car.event;
+  if (!e || e.at.getTime() <= Date.now()) { box.textContent = ""; box.hidden = true; return; }
+  const today = new Date().toDateString() === e.at.toDateString();
+  const time = e.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  box.textContent = `${e.title || "(No title)"} · ${today ? time : `${e.at.toLocaleDateString([], { weekday: "short" })} ${time}`}`;
+  box.hidden = false;
 }
 
 // ------------------------------------------------------------- navigate
