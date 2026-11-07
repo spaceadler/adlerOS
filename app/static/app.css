@@ -4513,7 +4513,8 @@ body.car #desktop, body.car #dock, body.car .dock-edge { display: none !importan
 .car-home[hidden] { display: none; }
 .car-now { grid-area: now; container-type: size; display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 0; padding: 14px 16px; border-radius: 26px;
   background: linear-gradient(to bottom, rgb(255 255 255 / 0.1), rgb(12 14 18 / 0.34)); box-shadow: var(--shine), 0 10px 24px rgb(0 0 0 / 0.25); }
-.car-art { display: grid; flex-shrink: 0; place-items: center; width: max(80px, min(100cqw - 8px, 100cqh - 188px)); aspect-ratio: 1; overflow: hidden; border-radius: 18px;
+.car-head { display: contents; }
+.car-art { display: grid; flex-shrink: 0; place-items: center; padding: 0; border: 0; cursor: pointer; width: max(80px, min(100cqw - 8px, 100cqh - 188px)); aspect-ratio: 1; overflow: hidden; border-radius: 18px;
   background: rgb(255 255 255 / 0.1); box-shadow: 0 10px 28px rgb(0 0 0 / 0.4); }
 .car-art > .mu-art, .car-art > span { width: 100%; height: 100%; border-radius: 0; }
 .car-art > svg { width: 40%; height: 40%; fill: none; stroke: rgb(255 255 255 / 0.5); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
@@ -4538,7 +4539,59 @@ body.car #desktop, body.car #dock, body.car .dock-edge { display: none !importan
 .car-ctl svg { width: 42%; height: 42%; fill: currentColor; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
 .car-ctl[disabled] { opacity: 0.35; }
 .car-ctl:active { transform: scale(0.94); }
-.car-clock { grid-area: clock; padding: 0 6px; font-size: clamp(22px, 5vh, 40px); font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; text-align: right; }
+.car-clock { grid-area: clock; display: flex; align-items: baseline; justify-content: flex-end; gap: 12px; min-width: 0; padding: 0 6px; font-size: clamp(22px, 5vh, 40px);
+  font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.car-clock-time { flex-shrink: 0; }
+/* The next event, grey, so it's not read as the time. */
+.car-next-event { min-width: 0; overflow: hidden; font-size: 0.48em; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; color: rgb(255 255 255 / 0.5); }
+.car-next-event[hidden] { display: none; }
+/* The → (bottom left): the player full screen. Half a back button's size. */
+.car-expand { position: absolute; left: 12px; bottom: 35px; z-index: 2; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%;
+  background: rgb(255 255 255 / 0.14); color: #fff; cursor: pointer; }
+.car-expand svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.car-expand:active { transform: scale(0.92); }
+.car-now { position: relative; overflow: hidden; }
+.car-bgart { display: none; }
+.car-lyrics { display: none; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain;
+  -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent); mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent); }
+.car-lyrics::-webkit-scrollbar { display: none; }
+.car-line { margin: 0; padding: 5px 0; font-size: clamp(18px, 3.6vh, 26px); font-weight: 750; line-height: 1.3; color: rgb(255 255 255 / 0.85); transition: color 0.3s, opacity 0.3s; }
+.car-lyrics.synced .car-line { color: rgb(255 255 255 / 0.38); }
+.car-lyrics.synced .car-line.past { color: rgb(255 255 255 / 0.25); }
+.car-lyrics.synced .car-line.now { color: #fff; }
+.car-line.wait, .car-line.none { color: rgb(255 255 255 / 0.5); font-weight: 600; }
+.car-lyrics > :first-child { margin-top: 30cqh; }
+.car-lyrics > :last-child { margin-bottom: 30cqh; }
+.car-lyrics > .car-line.wait:only-child, .car-lyrics > .car-line.none:only-child { margin: 0; }
+/* The cover's tap: small, top left, the song and the artist beside it, the
+   words under them in the space there is. */
+.car-words .car-now { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+.car-words .car-head { display: flex; flex-shrink: 0; align-items: center; gap: 14px; min-width: 0; }
+.car-words .car-art { width: 64px; border-radius: 10px; }
+.car-words .car-text { flex: 1; align-items: flex-start; text-align: left; }
+.car-words .car-title { display: block; font-size: clamp(18px, 3.2vh, 24px); white-space: nowrap; }
+.car-words .car-lyrics { display: block; flex: 1; }
+.car-words .car-ctls { margin-top: 0; }
+/* Full screen: the tiles and the time go off to the right, the player
+   fills the screen over its cover (soft), the song on top, the words in
+   the middle; without words, the song in the middle. */
+.car-tiles, .car-clock, .car-dots { transition: transform 0.45s cubic-bezier(0.3, 0.8, 0.2, 1), opacity 0.45s; }
+.car-home.car-full .car-tiles, .car-home.car-full .car-clock, .car-home.car-full .car-dots { transform: translateX(110vw); opacity: 0; pointer-events: none; }
+.car-home.car-full .car-now { position: absolute; z-index: 3; grid-area: auto; display: flex; flex-direction: column; align-items: stretch; gap: 12px;
+  inset: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); padding: 16px 22px; }
+.car-home.car-full .car-bgart { position: absolute; inset: -40px; z-index: 0; display: block; background: center / cover no-repeat; filter: blur(34px) saturate(1.3) brightness(0.5); }
+.car-home.car-full .car-now > :not(.car-bgart):not(.car-expand) { position: relative; z-index: 1; }
+.car-home.car-full .car-head { display: flex; flex: 0 0 auto; flex-direction: column; align-items: center; justify-content: center; }
+.car-home.car-full .car-art { display: none; }
+.car-home.car-full .car-text { align-items: center; text-align: center; }
+.car-home.car-full .car-title { display: block; font-size: clamp(22px, 5vh, 34px); white-space: nowrap; }
+.car-home.car-full .car-sub { font-size: clamp(16px, 3.4vh, 22px); }
+.car-home.car-full .car-lyrics { display: block; flex: 1; text-align: center; }
+.car-home.car-full .car-line { font-size: clamp(20px, 4.6vh, 32px); }
+.car-home.car-full .car-now.no-lyrics .car-lyrics { display: none; }
+.car-home.car-full .car-now.no-lyrics .car-head { flex: 1; }
+.car-home.car-full .car-now.no-lyrics .car-title { font-size: clamp(28px, 7vh, 46px); white-space: normal; }
+.car-home.car-full .car-ctls { margin-top: 0; }
 .car-tiles { grid-area: tiles; position: relative; min-height: 0; overflow: hidden; border-radius: 24px; touch-action: none; }
 .car-track { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: var(--car-row, 140px); gap: 12px; transition: transform 0.38s cubic-bezier(0.25, 0.9, 0.3, 1); will-change: transform; }
 .car-dots { grid-area: tiles; z-index: 1; display: flex; flex-direction: column; justify-content: center; gap: 6px; justify-self: end; margin-right: -11px; pointer-events: none; }
@@ -4559,13 +4612,17 @@ body.car #desktop, body.car #dock, body.car .dock-edge { display: none !importan
   background: linear-gradient(to bottom, rgb(255 255 255 / 0.1), rgb(12 14 18 / 0.34)); box-shadow: var(--shine), 0 10px 24px rgb(0 0 0 / 0.25); }
 @media (orientation: portrait) {
   .car-home { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "clock" "now" "tiles"; }
-  .car-clock { padding: 4px 0 0; font-size: clamp(30px, 6vh, 52px); text-align: center; }
-  .car-now { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto; align-items: center; gap: 12px 16px; padding: 16px; }
-  .car-art { grid-row: 1; grid-column: 1; width: min(26vh, 36vw); }
-  .car-text { grid-row: 1; grid-column: 2; align-items: flex-start; text-align: left; }
+  .car-clock { justify-content: center; padding: 4px 0 0; font-size: clamp(30px, 6vh, 52px); }
+  .car-ctls { padding: 0 40px; }
+  /* Upright: the cover with the song beside it; always a column (a switch
+     between grid and flex left parts undrawn). */
+  .car-now { gap: 12px; padding: 16px; }
+  .car-head { display: flex; flex: 1; align-items: center; gap: 16px; min-height: 0; }
+  .car-art { width: min(26vh, 36vw); }
+  .car-text { flex: 1; align-items: flex-start; text-align: left; }
   .car-title { display: -webkit-box; white-space: normal; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  .car-seek { grid-row: 2; grid-column: 1 / -1; }
-  .car-ctls { grid-row: 3; grid-column: 1 / -1; margin-top: 0; }
+  .car-words .car-head { flex: 0 0 auto; }
+  .car-ctls { margin-top: 0; }
   .car-ctl { width: clamp(64px, 10vh, 84px); height: clamp(64px, 10vh, 84px); }
   .car-ctl#car-play { width: clamp(76px, 12vh, 100px); height: clamp(76px, 12vh, 100px); }
 }
