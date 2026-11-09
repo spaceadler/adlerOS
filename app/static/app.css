@@ -3032,6 +3032,11 @@ body:not(.wm) .mu-panel-head { padding-top: 58px; }
 .mu-qremove svg { width: 14px; height: 14px; }
 .mu-qrow:hover .mu-qremove, .mu-qremove:focus-visible { opacity: 1; }
 .mu-lyrics { padding: 30px 22px 40vh; }
+/* Synced: room above the first line and below the last, so the line being
+   sung can always sit in the middle. */
+.mu-lyrics.synced { container-type: size; padding-top: 0; padding-bottom: 0; }
+.mu-lyrics.synced > :first-child { margin-top: 50cqh; }
+.mu-lyrics.synced > :last-child { margin-bottom: 50cqh; }
 .mu-line { margin: 0 0 16px; color: rgb(255 255 255 / 0.85); font-size: 21px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; }
 .mu-lyrics.synced .mu-line { color: rgb(255 255 255 / 0.32); transition: color 0.25s; cursor: pointer; }
 .mu-lyrics.synced .mu-line.past { color: rgb(255 255 255 / 0.5); }

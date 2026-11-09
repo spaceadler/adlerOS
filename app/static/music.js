@@ -1545,8 +1545,11 @@ function musicLyricsFollow(jump = false) {
   box.querySelectorAll(".mu-line").forEach((n, k) => { if (k < i) n.classList.add("past"); });
   const line = box.querySelector(`.mu-line[data-i="${i}"]`);
   line?.classList.add("now");
+  // In the middle of the lyrics' space (measured on screen: the line's
+  // offsetTop counts from the window, not from the lyrics).
   if (line && Date.now() - music.lyricsScrolled > 3000) {
-    box.scrollTo({ top: line.offsetTop - box.clientHeight / 2 + line.offsetHeight / 2, behavior: jump ? "auto" : "smooth" });
+    const at = box.scrollTop + line.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    box.scrollTo({ top: at - box.clientHeight / 2 + line.offsetHeight / 2, behavior: jump ? "auto" : "smooth" });
   }
 }
 
