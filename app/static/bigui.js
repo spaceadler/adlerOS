@@ -342,14 +342,63 @@ function bigNowPage() {
     return b;
   };
   const pods = () => typeof carPods === "function" && carPods();
-  return el("div", { class: "big-now" }, el("div", { class: "big-now-art", id: "big-now-art" }),
+  return el("div", { class: "big-now", id: "big-now" }, el("div", { class: "big-now-bg", id: "big-now-bg", "aria-hidden": "true" }),
+    el("div", { class: "big-now-art", id: "big-now-art" }),
     el("div", { class: "big-now-text" }, el("div", { class: "big-now-title", id: "big-now-title" }), el("div", { class: "big-now-sub", id: "big-now-sub" }),
       el("div", { class: "big-now-bar" }, el("span", { id: "big-now-bar" })), el("div", { class: "big-now-times" }, el("span", { id: "big-now-at" }), el("span", { id: "big-now-left" })),
       el("div", { class: "big-now-ctls" },
         ctl("big-now-prev", BIG_ICONS.prev, "Back", () => (pods() ? pcSkip(-30) : musicPrev())),
         ctl("big-now-play", BIG_ICONS.play, "Play", () => (pods() ? pcToggle() : musicToggle()), true),
-        ctl("big-now-next", BIG_ICONS.next, "Next", () => (pods() ? pcSkip(30) : musicNext())))));
+        ctl("big-now-next", BIG_ICONS.next, "Next", () => (pods() ? pcSkip(30) : musicNext())))),
+    el("div", { class: "big-now-lyrics", id: "big-now-lyrics" }));
 }
+
+// The TV's Now Playing: the song's words beside it, the line being sung lit
+// and in the middle (synced ones; plain ones just to read).
+async function bigLyricsLoad(id) {
+  if (big.lyrics?.id === id) return bigLyricsDraw();
+  big.lyrics = { id, loading: true, lines: [] };
+  bigLyricsDraw();
+  const s = id ? muSong(id) : null;
+  const r = s?.lyrics && !s.station ? await api(`/api/music/lyrics?id=${encodeURIComponent(id)}`).catch(() => ({ status: 0 })) : { status: 200, body: {} };
+  if (big.lyrics?.id !== id) return;
+  big.lyrics = r.status === 200 && r.body?.text ? { id, ...musicParseLyrics(r.body.text) } : { id, lines: [] };
+  bigLyricsDraw();
+}
+
+function bigLyricsDraw() {
+  const box = $("big-now-lyrics");
+  if (!box) return;
+  const l = big.lyrics;
+  const has = Boolean(l && !l.loading && l.lines.length);
+  $("big-now").classList.toggle("with-lyrics", has);
+  box.classList.toggle("synced", Boolean(has && l.synced));
+  box.replaceChildren(...(has ? l.lines.map((line, i) => {
+    const p = el("p", { class: "big-now-line", "data-i": String(i) }, line.text || "♪");
+    if (l.synced) p.addEventListener("click", () => { music.audio.currentTime = Math.max(0, line.t); });
+    return p;
+  }) : []));
+  if (has) { l.at = null; bigLyricsFollow(true); }
+}
+
+function bigLyricsFollow(jump = false) {
+  const l = big.lyrics, box = $("big-now-lyrics");
+  if (!box || !l?.synced || !l.lines.length || l.id !== muCurrent()) return;
+  const t = music.audio.currentTime + 0.2;
+  let i = -1;
+  for (let k = 0; k < l.lines.length && l.lines[k].t <= t; k++) i = k;
+  if (i === l.at && jump !== true) return;
+  l.at = i;
+  box.querySelectorAll(".big-now-line").forEach((n, k) => { n.classList.toggle("past", k < i); n.classList.toggle("now", k === i); });
+  const line = box.querySelector(`.big-now-line[data-i="${Math.max(0, i)}"]`);
+  if (line) {
+    const at = box.scrollTop + line.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    const top = at - box.clientHeight / 2 + line.offsetHeight / 2;
+    // A jump (a seek) straight there; the next line, a glide.
+    box.scrollTo({ top, behavior: jump === true || Math.abs(top - box.scrollTop) > box.clientHeight / 2 ? "auto" : "smooth" });
+  }
+}
+if (typeof music !== "undefined") music.audio.addEventListener("timeupdate", () => { if ($("big-now-lyrics") && bigOn()) bigLyricsFollow(); });
 
 function bigNowUpdate() {
   if (!$("big-now-title")) return;
@@ -368,7 +417,15 @@ function bigNowUpdate() {
     key = `m|${id}`;
     if ($("big-now-art").dataset.key !== key) art = musicArt(id);
   }
-  if ($("big-now-art").dataset.key !== key) { $("big-now-art").dataset.key = key; $("big-now-art").replaceChildren(art || ""); }
+  if ($("big-now-art").dataset.key !== key) {
+    $("big-now-art").dataset.key = key;
+    $("big-now-art").replaceChildren(art || "");
+    // The cover, blurred, behind it all; the words for a song.
+    const img = $("big-now-art").querySelector("img");
+    $("big-now-bg").style.backgroundImage = img?.src ? `url("${img.src}")` : "";
+    if (!pods && id) bigLyricsLoad(id);
+    else { big.lyrics = null; bigLyricsDraw(); }
+  }
   $("big-now-title").textContent = title;
   $("big-now-sub").textContent = sub;
   $("big-now-bar").style.width = `${dur ? Math.min(100, (at / dur) * 100) : 0}%`;
