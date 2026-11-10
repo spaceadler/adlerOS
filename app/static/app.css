@@ -3063,10 +3063,11 @@ body:not(.wm) .mu-mini-body { padding-top: max(64px, calc(env(safe-area-inset-to
 .mu-mini-title, .mu-mini-artist { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .mu-mini-title { font-size: 17px; font-weight: 700; }
 .mu-mini-artist { margin-top: 2px; color: rgb(255 255 255 / 0.65); font-size: 14px; }
-.mu-mini-lyric { width: 100%; max-width: 520px; min-height: 52px; text-align: center; }
+.mu-mini-lyric { width: 100%; max-width: 520px; height: 50px; overflow: hidden; text-align: center; }
 .mu-mini-lyric[hidden] { display: block; visibility: hidden; min-height: 0; height: 0; }
 .mu-mini-line { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.mu-mini-line.now { color: #fff; font-size: 18px; font-weight: 700; line-height: 1.35; }
+.mu-mini-line.now { display: -webkit-box; color: #fff; font-size: 18px; font-weight: 700; line-height: 1.35; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.mu-mini-lyric.long .mu-mini-line.next { display: none; }
 .mu-mini-line.next { color: rgb(255 255 255 / 0.4); font-size: 14px; font-weight: 600; line-height: 1.4; }
 .mu-mini-lyric.step .mu-mini-line { animation: mu-mini-step 0.35s ease-out; }
 @keyframes mu-mini-step { from { opacity: 0; transform: translateY(8px); } }
@@ -3080,6 +3081,18 @@ body:not(.wm) .mu-mini-body { padding-top: max(64px, calc(env(safe-area-inset-to
 .mu-mini-ctls .mu-icon svg { width: 24px; height: 24px; }
 .mu-mini-ctls .mu-mini-play { width: 58px; height: 58px; background: #fff; color: #111; }
 .mu-mini-ctls .mu-mini-play svg { width: 26px; height: 26px; }
+/* In and out (music.js: musicMini). */
+.mu-mini.opening { animation: mu-mini-in 0.4s ease-out both; }
+.mu-mini.opening .mu-mini-art { animation: mu-mini-art-in 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.1) both; }
+.mu-mini.opening .mu-mini-body > :not(.mu-mini-art) { animation: mu-mini-rise 0.45s 0.12s ease-out both; }
+.mu-mini.opening .mu-mini-back { animation: mu-mini-in 0.4s 0.15s ease-out both; }
+.mu-mini.closing { animation: mu-mini-in 0.36s ease-in reverse both; pointer-events: none; }
+.mu-mini.closing .mu-mini-art { animation: mu-mini-art-in 0.36s ease-in reverse both; }
+.mu-mini.closing .mu-mini-body > :not(.mu-mini-art) { animation: mu-mini-rise 0.25s ease-in reverse both; }
+.music-app.mu-back .mu-shell { animation: mu-mini-in 0.4s ease-out; }
+@keyframes mu-mini-in { from { opacity: 0; } }
+@keyframes mu-mini-art-in { from { opacity: 0; transform: translateY(60px) scale(0.6); } }
+@keyframes mu-mini-rise { from { opacity: 0; transform: translateY(18px); } }
 
 /* A narrower window (a half of the screen, tiled): no album column; Up next
    or the lyrics in the list's place, on the same glass. */
