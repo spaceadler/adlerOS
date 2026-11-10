@@ -209,8 +209,7 @@ function musicBuild() {
   document.body.insertBefore(section, $("modal"));
   $("mu-shell").append(sideToggle(section, "music"));
   // Left in the mini player at the last reload: the window's own size back.
-  const before = winLoad(MU_MINI_KEY, null);
-  if (before) { winSave(MU_MINI_KEY, null); wm.geometry.music = before; winRemember(); }
+  miniRestore("music", MU_MINI_KEY, false);
   registerWindow("music", { title: "Music", close: closeMusic, hide: () => closeWindow("music"), dock: "music", size: [1180, 760] });
   $("mu-main").addEventListener("scroll", () => music.vdraw?.(), { passive: true });
   new ResizeObserver(() => music.vdraw?.(true)).observe($("mu-main"));
@@ -1449,40 +1448,48 @@ function musicMiniView() {
 function musicMini(on) {
   if (!music.built || Boolean(music.mini) === on) return;
   music.mini = on;
-  const section = $("music");
-  const view = $("mu-mini");
-  // In: the cover rises and grows, the rest after it; out: the other way,
-  // the library coming back behind it.
-  clearTimeout(music.miniTimer);
-  section.classList.toggle("mu-is-mini", on);
-  section.classList.toggle("mu-back", !on);
-  view.classList.remove("opening", "closing");
-  void view.offsetWidth;
-  view.classList.add(on ? "opening" : "closing");
-  if (on) view.hidden = false;
-  music.miniTimer = setTimeout(() => { view.classList.remove("opening", "closing"); section.classList.remove("mu-back"); if (!music.mini) view.hidden = true; }, on ? 600 : 380);
-  const g = wm.geometry.music;
-  if (on && desktopMode() && g && section.dataset.tiled !== "1") {
-    winSave(MU_MINI_KEY, { ...g });
-    // Its right edge stays where it was (a full or half screen one: to the right).
-    const w = 340, h = Math.min(620, winArea().h - 24);
-    const x = g.mode === "normal" ? g.x + g.w - w : winArea().w - w - 24;
-    const y = g.mode === "normal" ? g.y : 24;
-    Object.assign(g, { mode: "normal", x: Math.max(0, x), y, w, h });
-    winApply("music");
-  } else if (!on) musicMiniRestore();
+  miniSwitch("music", $("mu-mini"), on, music, MU_MINI_KEY);
   if (on) { musicLyricsLoad(muCurrent()); musicMiniUpdate(); $("mu-mini").querySelector(".mu-mini-play").focus({ preventScroll: true }); }
   else setTimeout(() => music.vdraw?.(true), 50);
 }
 
+// Shared with Podcasts' mini player. In: the cover rises and grows, the rest
+// after it; out: the other way, the library coming back behind it. On the
+// desktop the window shrinks to it, its right edge where it was (a full or
+// half screen one: to the right), and grows back after.
+function miniSwitch(id, view, on, holder, key) {
+  const section = $(id);
+  clearTimeout(holder.miniTimer);
+  section.classList.toggle("is-mini", on);
+  section.classList.toggle("mini-back", !on);
+  view.classList.remove("opening", "closing");
+  void view.offsetWidth;
+  view.classList.add(on ? "opening" : "closing");
+  if (on) view.hidden = false;
+  holder.miniTimer = setTimeout(() => {
+    view.classList.remove("opening", "closing");
+    section.classList.remove("mini-back");
+    if (!holder.mini) view.hidden = true;
+  }, on ? 600 : 380);
+  const g = wm.geometry[id];
+  if (on && desktopMode() && g && section.dataset.tiled !== "1") {
+    winSave(key, { ...g });
+    const w = 340, h = Math.min(620, winArea().h - 24);
+    const x = g.mode === "normal" ? g.x + g.w - w : winArea().w - w - 24;
+    const y = g.mode === "normal" ? g.y : 24;
+    Object.assign(g, { mode: "normal", x: Math.max(0, x), y, w, h });
+    winApply(id);
+  } else if (!on) miniRestore(id, key);
+}
+
 // The window's size before the mini player (kept, so a reload gets it back).
-function musicMiniRestore() {
-  const before = winLoad(MU_MINI_KEY, null);
+function miniRestore(id, key, apply = true) {
+  const before = winLoad(key, null);
   if (!before) return;
-  winSave(MU_MINI_KEY, null);
-  if (!wm.geometry.music) return;
-  wm.geometry.music = before;
-  winApply("music");
+  winSave(key, null);
+  if (!wm.geometry[id] && apply) return;
+  wm.geometry[id] = before;
+  if (apply) winApply(id);
   winRemember();
 }
 
