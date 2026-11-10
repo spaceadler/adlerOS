@@ -3043,6 +3043,44 @@ body:not(.wm) .mu-panel-head { padding-top: 58px; }
 .mu-lyrics.synced .mu-line:hover { color: rgb(255 255 255 / 0.75); }
 .mu-lyrics.synced .mu-line.now { color: #fff; }
 
+/* The mini player (music.js: musicMini): the cover, the line being sung,
+   the seek bar and the buttons, on the cover's blurred colours. */
+.mu-mini { position: absolute; inset: 0; z-index: 4; overflow: hidden; container-type: size; border-radius: inherit; background: #111; }
+.mu-mini[hidden] { display: none; }
+.mu-is-mini .mu-shell { visibility: hidden; }
+.mu-mini-bg { position: absolute; inset: -60px; background: center / cover no-repeat; filter: blur(50px) saturate(1.5) brightness(0.55); transform: scale(1.1); }
+.mu-mini-back { position: absolute; top: 10px; left: 10px; z-index: 1; background: rgb(0 0 0 / 0.25); }
+body.wm .mu-mini-back { top: 46px; }
+body:not(.wm) .mu-mini-back { top: max(12px, env(safe-area-inset-top)); }
+.mu-mini-back svg { width: 16px; height: 16px; }
+.mu-mini-body { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; height: 100%; padding: 56px 24px 24px; }
+body.wm .mu-mini { --mini-room: 370px; }
+body.wm .mu-mini-body { padding-top: 84px; }
+body:not(.wm) .mu-mini-body { padding-top: max(64px, calc(env(safe-area-inset-top) + 52px)); padding-bottom: max(28px, env(safe-area-inset-bottom)); }
+.mu-mini-art { flex-shrink: 0; width: min(100cqw - 48px, 100cqh - var(--mini-room, 330px), 520px); min-width: 120px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: rgb(255 255 255 / 0.08); box-shadow: 0 18px 50px rgb(0 0 0 / 0.5); cursor: pointer; }
+.mu-mini-art .mu-art { display: block; width: 100%; border-radius: 0; }
+.mu-mini-text { width: 100%; max-width: 520px; text-align: center; }
+.mu-mini-title, .mu-mini-artist { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mu-mini-title { font-size: 17px; font-weight: 700; }
+.mu-mini-artist { margin-top: 2px; color: rgb(255 255 255 / 0.65); font-size: 14px; }
+.mu-mini-lyric { width: 100%; max-width: 520px; min-height: 52px; text-align: center; }
+.mu-mini-lyric[hidden] { display: block; visibility: hidden; min-height: 0; height: 0; }
+.mu-mini-line { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mu-mini-line.now { color: #fff; font-size: 18px; font-weight: 700; line-height: 1.35; }
+.mu-mini-line.next { color: rgb(255 255 255 / 0.4); font-size: 14px; font-weight: 600; line-height: 1.4; }
+.mu-mini-lyric.step .mu-mini-line { animation: mu-mini-step 0.35s ease-out; }
+@keyframes mu-mini-step { from { opacity: 0; transform: translateY(8px); } }
+.mu-mini-seekrow { width: 100%; max-width: 520px; }
+.mu-mini-seek { display: block; width: 100%; height: 5px; }
+.mu-mini-seek::-webkit-slider-thumb { opacity: 1; }
+.mu-mini-seek:disabled { opacity: 0.35; cursor: default; }
+.mu-mini-times { display: flex; justify-content: space-between; margin-top: 6px; color: rgb(255 255 255 / 0.6); font-size: 12px; font-variant-numeric: tabular-nums; }
+.mu-mini-ctls { display: flex; align-items: center; justify-content: center; gap: 22px; }
+.mu-mini-ctls .mu-icon { flex-shrink: 0; width: 44px; height: 44px; color: #fff; }
+.mu-mini-ctls .mu-icon svg { width: 24px; height: 24px; }
+.mu-mini-ctls .mu-mini-play { width: 58px; height: 58px; background: #fff; color: #111; }
+.mu-mini-ctls .mu-mini-play svg { width: 26px; height: 26px; }
+
 /* A narrower window (a half of the screen, tiled): no album column; Up next
    or the lyrics in the list's place, on the same glass. */
 @container sheet (max-width: 900px) {

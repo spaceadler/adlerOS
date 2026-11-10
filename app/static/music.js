@@ -22,6 +22,7 @@ const MU_ICONS = {
   volume: ["M11 5 6 9H2v6h4l5 4z", "M15.5 8.5a5 5 0 0 1 0 7", "M19 5a10 10 0 0 1 0 14"],
   muted: ["M11 5 6 9H2v6h4l5 4z", "m22 9-6 6", "m16 9 6 6"],
   queue: ["M3 6h13", "M3 12h13", "M3 18h8", "M18 14v7", "M14.5 17.5h7"],
+  mini: ["M3 5h18v14H3z", "M12 11h6v5h-6z"], expand: ["M15 3h6v6", "M9 21H3v-6", "m21 3-7 7", "m3 21 7-7"],
   lyrics: ["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z", "M8 9h8", "M8 13h5"],
   home: ["M3 10.5 12 3l9 7.5", "M5 9v11h14V9"],
   radio: ["M12 12h.01", "M16.2 7.8a6 6 0 0 1 0 8.4", "M7.8 16.2a6 6 0 0 1 0-8.4", "M19.1 4.9a10 10 0 0 1 0 14.2", "M4.9 19.1a10 10 0 0 1 0-14.2"],
@@ -203,9 +204,13 @@ function musicBuild() {
       el("aside", { class: "mu-side", id: "mu-side" }, musicSearchBox(), el("nav", { class: "mu-side-nav", id: "mu-side-nav", "aria-label": "Music" })),
       el("main", { class: "mu-main", id: "mu-main", tabindex: "-1" }),
       el("aside", { class: "mu-panel", id: "mu-panel" }),
-      musicBar()));
+      musicBar()),
+    musicMiniView());
   document.body.insertBefore(section, $("modal"));
   $("mu-shell").append(sideToggle(section, "music"));
+  // Left in the mini player at the last reload: the window's own size back.
+  const before = winLoad(MU_MINI_KEY, null);
+  if (before) { winSave(MU_MINI_KEY, null); wm.geometry.music = before; winRemember(); }
   registerWindow("music", { title: "Music", close: closeMusic, hide: () => closeWindow("music"), dock: "music", size: [1180, 760] });
   $("mu-main").addEventListener("scroll", () => music.vdraw?.(), { passive: true });
   new ResizeObserver(() => music.vdraw?.(true)).observe($("mu-main"));
@@ -1294,7 +1299,7 @@ function musicNowPlaying() {
   musicMarkPlaying();
   musicRenderPanel();
   musicMediaNext();
-  if (music.panel === "lyrics") musicLyricsLoad(id);
+  if (music.panel === "lyrics" || music.mini) musicLyricsLoad(id);
   if ("mediaSession" in navigator && s) {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: s.station && s.now ? s.now : s.title, artist: s.station ? (s.now ? s.title : "Live radio") : muArtists(s), album: s.album || "",
@@ -1352,7 +1357,8 @@ function musicBar() {
     el("div", { class: "mu-bar-tools" },
       musicIconButton("Mute", "volume", () => { music.audio.muted = !music.audio.muted; musicBarUpdate(); }, "mu-mute"), volume,
       musicIconButton("Lyrics", "lyrics", () => musicSetPanel(music.panel === "lyrics" ? null : "lyrics"), "mu-lyrics-button"),
-      musicIconButton("Up next", "queue", () => musicSetPanel(music.panel === "queue" ? null : "queue"), "mu-queue-button")));
+      musicIconButton("Up next", "queue", () => musicSetPanel(music.panel === "queue" ? null : "queue"), "mu-queue-button"),
+      musicIconButton("Mini player", "mini", () => musicMini(true), "mu-mini-button")));
 }
 
 function musicBarUpdate() {
@@ -1385,6 +1391,7 @@ function musicBarUpdate() {
   $("music").querySelector(".mu-lyrics-button").classList.toggle("on", music.panel === "lyrics");
   $("music").querySelector(".mu-queue-button").classList.toggle("on", music.panel === "queue");
   musicBarTime();
+  musicMiniUpdate();
   if ("mediaSession" in navigator) navigator.mediaSession.playbackState = s ? (audio.paused ? "paused" : "playing") : "none";
 }
 
@@ -1398,6 +1405,127 @@ function musicBarTime() {
   }
   $("mu-total-time").textContent = muIsStation(muCurrent()) ? "Live" : muTime(d);
   $("mu-seek").style.setProperty("--done", `${d ? Math.min(100, ((audio.currentTime || 0) / d) * 100) : 0}%`);
+  musicMiniTime();
+}
+
+// ------------------------------------------------------- the mini player
+
+// Like Apple Music's MiniPlayer: only the cover, the line being sung, where
+// in the song (to drag) and the buttons. On the desktop the window shrinks
+// to it, and grows back after.
+const MU_MINI_KEY = "adleros.musicMiniBefore";
+
+function musicMiniView() {
+  const seek = el("input", { type: "range", class: "mu-seek mu-mini-seek", id: "mu-mini-seek", min: "0", max: "1000", value: "0", step: "1", "aria-label": "Where in the song" });
+  seek.addEventListener("input", () => {
+    music.seeking = true;
+    $("mu-mini-at").textContent = muTime((seek.value / 1000) * music.audio.duration);
+    seek.style.setProperty("--done", `${seek.value / 10}%`);
+  });
+  seek.addEventListener("change", () => {
+    const d = music.audio.duration;
+    if (Number.isFinite(d)) music.audio.currentTime = (seek.value / 1000) * d;
+    music.seeking = false;
+  });
+  const back = musicIconButton("Back to Music", "expand", () => musicMini(false), "mu-mini-back");
+  const art = el("button", { type: "button", class: "mu-mini-art", id: "mu-mini-art", "aria-label": "Back to Music" });
+  art.addEventListener("click", () => musicMini(false));
+  const view = el("div", { class: "mu-mini", id: "mu-mini", hidden: "" },
+    el("div", { class: "mu-mini-bg", id: "mu-mini-bg", "aria-hidden": "true" }),
+    back,
+    el("div", { class: "mu-mini-body" },
+      art,
+      el("div", { class: "mu-mini-text" }, el("div", { class: "mu-mini-title", id: "mu-mini-title" }), el("div", { class: "mu-mini-artist", id: "mu-mini-artist" })),
+      el("div", { class: "mu-mini-lyric", id: "mu-mini-lyric", "aria-live": "off" }, el("div", { class: "mu-mini-line now" }), el("div", { class: "mu-mini-line next" })),
+      el("div", { class: "mu-mini-seekrow" }, seek, el("div", { class: "mu-mini-times" }, el("span", { id: "mu-mini-at" }, "0:00"), el("span", { id: "mu-mini-left" }, "–:––"))),
+      el("div", { class: "mu-mini-ctls" },
+        musicIconButton("Previous", "prev", musicPrev, "mu-fill"),
+        musicIconButton("Play", "play", musicToggle, "mu-fill mu-mini-play"),
+        musicIconButton("Next", "next", () => musicNext(), "mu-fill"))));
+  view.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); musicMini(false); } });
+  return view;
+}
+
+function musicMini(on) {
+  if (!music.built || Boolean(music.mini) === on) return;
+  music.mini = on;
+  const section = $("music");
+  section.classList.toggle("mu-is-mini", on);
+  $("mu-mini").hidden = !on;
+  const g = wm.geometry.music;
+  if (on && desktopMode() && g && section.dataset.tiled !== "1") {
+    winSave(MU_MINI_KEY, { ...g });
+    // Its right edge stays where it was (a full or half screen one: to the right).
+    const w = 340, h = Math.min(620, winArea().h - 24);
+    const x = g.mode === "normal" ? g.x + g.w - w : winArea().w - w - 24;
+    const y = g.mode === "normal" ? g.y : 24;
+    Object.assign(g, { mode: "normal", x: Math.max(0, x), y, w, h });
+    winApply("music");
+  } else if (!on) musicMiniRestore();
+  if (on) { musicLyricsLoad(muCurrent()); musicMiniUpdate(); $("mu-mini").querySelector(".mu-mini-play").focus({ preventScroll: true }); }
+  else setTimeout(() => music.vdraw?.(true), 50);
+}
+
+// The window's size before the mini player (kept, so a reload gets it back).
+function musicMiniRestore() {
+  const before = winLoad(MU_MINI_KEY, null);
+  if (!before) return;
+  winSave(MU_MINI_KEY, null);
+  if (!wm.geometry.music) return;
+  wm.geometry.music = before;
+  winApply("music");
+  winRemember();
+}
+
+function musicMiniUpdate() {
+  if (!music.mini || !$("mu-mini")) return;
+  const id = muCurrent();
+  const s = id ? muSong(id) : null;
+  const key = id || "none";
+  if ($("mu-mini-art").dataset.key !== key) {
+    $("mu-mini-art").dataset.key = key;
+    $("mu-mini-art").replaceChildren(musicArt(id));
+    const cover = s?.cover ? muCover(id) : s?.logo || "";
+    $("mu-mini-bg").style.backgroundImage = cover ? `url("${cover}")` : "";
+  }
+  $("mu-mini-title").textContent = s ? (s.station && s.now ? s.now : s.title) : "Not playing";
+  $("mu-mini-artist").textContent = s ? (s.station ? s.title : muArtists(s)) : "";
+  const play = $("mu-mini").querySelector(".mu-mini-play");
+  play.replaceChildren(svg(music.audio.paused ? MU_ICONS.play : MU_ICONS.pause));
+  play.setAttribute("aria-label", music.audio.paused ? "Play" : "Pause");
+  $("mu-mini-seek").disabled = Boolean(s?.station);
+  musicMiniTime();
+}
+
+function musicMiniTime() {
+  if (!music.mini || !$("mu-mini")) return;
+  const audio = music.audio;
+  const id = muCurrent();
+  const d = Number.isFinite(audio.duration) ? audio.duration : muSong(id)?.duration;
+  const at = audio.currentTime || 0;
+  if (!music.seeking) {
+    $("mu-mini-at").textContent = muTime(at);
+    $("mu-mini-seek").value = d ? String(Math.round((at / d) * 1000)) : "0";
+    $("mu-mini-seek").style.setProperty("--done", `${d ? Math.min(100, (at / d) * 100) : 0}%`);
+  }
+  $("mu-mini-left").textContent = muIsStation(id) ? "Live" : d ? `-${muTime(Math.max(0, d - at))}` : "–:––";
+  // The line being sung and the one after it (synced lyrics only).
+  const l = music.lyrics;
+  const box = $("mu-mini-lyric");
+  const synced = Boolean(l?.synced && l.id === id && l.lines.length);
+  box.hidden = !synced;
+  if (!synced) return;
+  const t = at + 0.2;
+  let i = -1;
+  for (let k = 0; k < l.lines.length && l.lines[k].t <= t; k++) i = k;
+  if (box.dataset.i === String(i)) return;
+  box.dataset.i = String(i);
+  const [now, next] = box.children;
+  now.textContent = i >= 0 ? l.lines[i].text || "♪" : "♪";
+  next.textContent = l.lines[i + 1]?.text || "";
+  box.classList.remove("step");
+  void box.offsetWidth;
+  box.classList.add("step");
 }
 
 // --------------------------------------------------------- queue, lyrics
@@ -1508,6 +1636,7 @@ async function musicLyricsLoad(id) {
   if (music.lyrics?.id !== id) return;
   music.lyrics = status === 200 && body?.text ? { id, ...musicParseLyrics(body.text) } : { id, lines: [] };
   musicRenderPanel();
+  musicMiniTime();
 }
 
 function musicLyricsBody() {
