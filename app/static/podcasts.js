@@ -27,6 +27,7 @@ const PC_ICONS = {
   play: ["M7 4v16l13-8z"], pause: ["M7 4h3v16H7z", "M14 4h3v16h-3z"],
   back: ["M3 12a9 9 0 1 0 3-6.7", "M3 4v5h5"], ahead: ["M21 12a9 9 0 1 1-3-6.7", "M21 4v5h-5"],
   moon: ["M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"],
+  mini: ["M3 5h18v14H3z", "M12 11h6v5h-6z"], expand: ["M15 3h6v6", "M9 21H3v-6", "m21 3-7 7", "m3 21 7-7"],
   list: ["M8 6h13", "M8 12h13", "M8 18h13", "M3 6h.01", "M3 12h.01", "M3 18h.01"],
   more: ["M12 12h.01", "M19 12h.01", "M5 12h.01"], check: ["M20 6 9 17l-5-5"],
   chevron: ["m15 18-6-6 6-6"], volume: ["M11 5 6 9H2v6h4l5 4z", "M15.5 8.5a5 5 0 0 1 0 7", "M19 5a10 10 0 0 1 0 14"],
@@ -150,9 +151,11 @@ function pcBuild() {
         el("nav", { class: "pc-nav", id: "pc-nav", "aria-label": "Podcasts" }), el("div", { class: "pc-source", id: "pc-source" })),
       el("main", { class: "pc-main", id: "pc-main", tabindex: "-1" }),
       el("aside", { class: "pc-panel", id: "pc-panel", "aria-label": "Chapters" }),
-      pcBar()));
+      pcBar()),
+    pcMiniView());
   document.body.insertBefore(section, $("modal"));
   $("pc-shell").append(sideToggle(section, "podcasts"));
+  miniRestore("podcasts", PC_MINI_KEY, false);
   registerWindow("podcasts", { title: "Podcasts", close: closePodcasts, hide: () => closeWindow("podcasts"), dock: "podcasts", size: [1180, 780] });
   registerNav("podcasts", (dir) => pcNav(dir));
   section.addEventListener("keydown", pcKeys);
@@ -997,7 +1000,86 @@ function pcBar() {
     el("div", { class: "pc-bar-controls" }, pcIcon("Back 15 seconds", PC_ICONS.back, () => pcSkip(-15), "pc-skip back"), play, pcIcon("Forward 30 seconds", PC_ICONS.ahead, () => pcSkip(30), "pc-skip ahead")),
     el("div", { class: "pc-bar-seek" }, el("span", { class: "pc-bar-time", id: "pc-now-time" }, "0:00"), seek, el("span", { class: "pc-bar-time", id: "pc-left-time" }, "")),
     el("div", { class: "pc-bar-tools" }, rate, sleep, pcIcon("Chapters", PC_ICONS.list, () => pcPanel(!pc.panel), "pc-panel-button"),
-      pcIcon("Mute", PC_ICONS.volume, () => { pc.audio.muted = !pc.audio.muted; pcBarUpdate(); }, "pc-mute"), volume));
+      pcIcon("Mute", PC_ICONS.volume, () => { pc.audio.muted = !pc.audio.muted; pcBarUpdate(); }, "pc-mute"), volume,
+      pcIcon("Mini player", PC_ICONS.mini, () => pcMini(true), "pc-mini-button")));
+}
+
+// ------------------------------------------------------- the mini player
+
+// As in Music (music.js: miniSwitch, and its look): the cover, the episode
+// or the book, the show or the chapter under it, where in it, the buttons.
+const PC_MINI_KEY = "adleros.podcastsMiniBefore";
+
+function pcMiniView() {
+  const seek = el("input", { type: "range", class: "mu-seek mu-mini-seek", id: "pc-mini-seek", min: "0", max: "1000", value: "0", step: "1", "aria-label": "Where in it" });
+  seek.addEventListener("input", () => {
+    pc.seeking = true;
+    $("pc-mini-at").textContent = pcTime((Number(seek.value) / 1000) * (pc.np?.duration || 0));
+    seek.style.setProperty("--done", `${seek.value / 10}%`);
+  });
+  seek.addEventListener("change", () => { pc.seeking = false; if (pc.np) pcSeek((Number(seek.value) / 1000) * pc.np.duration); });
+  const button = (label, icon, run, cls) => {
+    const b = el("button", { type: "button", class: `mu-icon ${cls}`, "aria-label": label, title: label }, svg(icon));
+    b.addEventListener("click", run);
+    return b;
+  };
+  const art = el("button", { type: "button", class: "mu-mini-art", id: "pc-mini-art", "aria-label": "Back to Podcasts" });
+  art.addEventListener("click", () => pcMini(false));
+  const view = el("div", { class: "mu-mini", id: "pc-mini", hidden: "" },
+    el("div", { class: "mu-mini-bg", id: "pc-mini-bg", "aria-hidden": "true" }),
+    button("Back to Podcasts", PC_ICONS.expand, () => pcMini(false), "mu-mini-back"),
+    el("div", { class: "mu-mini-body" },
+      art,
+      el("div", { class: "mu-mini-text" }, el("div", { class: "mu-mini-title", id: "pc-mini-title" }), el("div", { class: "mu-mini-artist", id: "pc-mini-sub" })),
+      el("div", { class: "mu-mini-seekrow" }, seek, el("div", { class: "mu-mini-times" }, el("span", { id: "pc-mini-at" }, "0:00"), el("span", { id: "pc-mini-left" }, ""))),
+      el("div", { class: "mu-mini-ctls" },
+        button("Back 15 seconds", PC_ICONS.back, () => pcSkip(-15), "pc-mini-skip"),
+        button("Play", PC_ICONS.play, () => pcToggle(), "mu-fill mu-mini-play"),
+        button("Forward 30 seconds", PC_ICONS.ahead, () => pcSkip(30), "pc-mini-skip"))));
+  view.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); pcMini(false); } });
+  return view;
+}
+
+function pcMini(on) {
+  if (!pc.built || Boolean(pc.mini) === on || (on && !pc.np)) return;
+  pc.mini = on;
+  miniSwitch("podcasts", $("pc-mini"), on, pc, PC_MINI_KEY);
+  if (on) { pcMiniUpdate(); $("pc-mini").querySelector(".mu-mini-play").focus({ preventScroll: true }); }
+}
+
+function pcMiniUpdate() {
+  if (!pc.mini || !$("pc-mini")) return;
+  const np = pc.np;
+  if (!np) return pcMini(false);
+  const art = $("pc-mini-art");
+  const key = `${np.id}|${np.ep}`;
+  if (art.dataset.key !== key) {
+    art.dataset.key = key;
+    art.replaceChildren(pcArt(np.item, 600));
+    const img = art.querySelector("img");
+    $("pc-mini-bg").style.backgroundImage = img?.src ? `url("${img.src}")` : "";
+  }
+  const playing = !pc.audio.paused;
+  const play = $("pc-mini").querySelector(".mu-mini-play");
+  play.replaceChildren(svg(playing ? PC_ICONS.pause : PC_ICONS.play));
+  play.setAttribute("aria-label", playing ? "Pause" : "Play");
+  play.title = playing ? "Pause" : "Play";
+  pcMiniTime();
+}
+
+function pcMiniTime() {
+  if (!pc.mini || !pc.np || !$("pc-mini")) return;
+  const np = pc.np;
+  const t = pcPos();
+  $("pc-mini-title").textContent = np.title;
+  $("pc-mini-sub").textContent = pcNow().sub || "";
+  if (!pc.seeking) {
+    const frac = np.duration ? t / np.duration : 0;
+    $("pc-mini-seek").value = String(Math.round(frac * 1000));
+    $("pc-mini-seek").style.setProperty("--done", `${frac * 100}%`);
+    $("pc-mini-at").textContent = pcTime(t);
+  }
+  $("pc-mini-left").textContent = `-${pcTime((np.duration - t) / (pc.prefs.rate || 1))}`;
 }
 
 function pcBarUpdate() {
@@ -1006,7 +1088,7 @@ function pcBarUpdate() {
   const bar = $("pc-bar");
   bar.hidden = !np;
   $("pc-shell").classList.toggle("with-bar", Boolean(np));
-  if (!np) return;
+  if (!np) return pcMiniUpdate();
   const playing = !pc.audio.paused;
   const play = $("pc-play");
   play.replaceChildren(svg(playing ? PC_ICONS.pause : PC_ICONS.play));
@@ -1024,6 +1106,7 @@ function pcBarUpdate() {
   $("pc-volume").value = String(pc.audio.muted ? 0 : pc.audio.volume);
   $("pc-volume").style.setProperty("--done", `${(pc.audio.muted ? 0 : pc.audio.volume) * 100}%`);
   pcBarTime();
+  pcMiniUpdate();
   if ("mediaSession" in navigator && pc.owner) navigator.mediaSession.playbackState = playing ? "playing" : "paused";
 }
 
@@ -1046,6 +1129,7 @@ function pcBarTime() {
   const ch = pcChapter();
   if (pc.panel && ch && pc.shownChapter !== ch.index) pcMarkChapter();
   if (pc.shownSub !== now.sub) { pc.shownSub = now.sub; pcMedia(); }
+  pcMiniTime();
 }
 
 // The playing one's row, wherever it's shown.
