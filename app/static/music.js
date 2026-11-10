@@ -1450,8 +1450,17 @@ function musicMini(on) {
   if (!music.built || Boolean(music.mini) === on) return;
   music.mini = on;
   const section = $("music");
+  const view = $("mu-mini");
+  // In: the cover rises and grows, the rest after it; out: the other way,
+  // the library coming back behind it.
+  clearTimeout(music.miniTimer);
   section.classList.toggle("mu-is-mini", on);
-  $("mu-mini").hidden = !on;
+  section.classList.toggle("mu-back", !on);
+  view.classList.remove("opening", "closing");
+  void view.offsetWidth;
+  view.classList.add(on ? "opening" : "closing");
+  if (on) view.hidden = false;
+  music.miniTimer = setTimeout(() => { view.classList.remove("opening", "closing"); section.classList.remove("mu-back"); if (!music.mini) view.hidden = true; }, on ? 600 : 380);
   const g = wm.geometry.music;
   if (on && desktopMode() && g && section.dataset.tiled !== "1") {
     winSave(MU_MINI_KEY, { ...g });
@@ -1523,6 +1532,9 @@ function musicMiniTime() {
   const [now, next] = box.children;
   now.textContent = i >= 0 ? l.lines[i].text || "♪" : "♪";
   next.textContent = l.lines[i + 1]?.text || "";
+  // Too long for one line: it takes the second line too, in the next one's place.
+  box.classList.remove("long");
+  box.classList.toggle("long", now.offsetHeight > parseFloat(getComputedStyle(now).lineHeight) * 1.5);
   box.classList.remove("step");
   void box.offsetWidth;
   box.classList.add("step");
