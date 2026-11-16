@@ -115,7 +115,8 @@ catalog/store/memos/
 
 When it's installed, `.env.example` becomes `.env` with these filled in:
 `__PORT__` (the first free port from `port` in `app.json`), `__PASS__` (a new
-password each time it appears), `__HEX64__` (a new key), `__TZ__`, `__PUID__`,
+password each time it appears), `__HEX64__` (a new key), `__HEX32__` (a
+32-character key: a Laravel app's `APP_KEY`), `__TZ__`, `__PUID__`,
 `__PGID__` and `__STORAGE__` (the storage folder). Folders the compose file
 mounts with `./` or `${...}` are made first, as you. `firstRun` is shown on
 its card: what to do on first login. Two more, for apps that need them:

@@ -664,13 +664,16 @@ def apps_dir():
 
 def render_env(template_text, values):
     """A store app's .env.example with its placeholders filled in:
-    __PASS__ (a new password), __HEX64__ (a new key), __PORT__, __TZ__,
-    __PUID__, __PGID__, __STORAGE__."""
+    __PASS__ (a new password), __HEX64__ (a new key), __HEX32__ (one of 32
+    characters: a Laravel app's APP_KEY), __PORT__, __TZ__, __PUID__,
+    __PGID__, __STORAGE__."""
     out = template_text
     while "__PASS__" in out:
         out = out.replace("__PASS__", secrets.token_urlsafe(18), 1)
     while "__HEX64__" in out:
         out = out.replace("__HEX64__", secrets.token_hex(32), 1)
+    while "__HEX32__" in out:
+        out = out.replace("__HEX32__", secrets.token_hex(16), 1)
     for key, value in values.items():
         out = out.replace(f"__{key}__", str(value))
     return out

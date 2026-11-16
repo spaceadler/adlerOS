@@ -1,0 +1,8 @@
+{
+  "name": "Monica",
+  "collection": "life",
+  "icon": "di:monica",
+  "about": "Personal CRM: the people in your life",
+  "port": 8181,
+  "firstRun": "Register on its first page; that's your account. For adlerOS's Contacts: Settings, API, Create a new token, and paste it in Contacts."
+}
