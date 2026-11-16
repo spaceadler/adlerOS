@@ -4714,15 +4714,15 @@ body.car .sheet.closing { animation: tv-out 0.2s ease-in both; }
 
 /* Big screens (bigui.js): the apps drawn for the car and the TV. Over the
    car's or the TV's home, under a film's player. */
-#desktop[hidden] ~ .big { display: none !important; }
-.big { --big-accent: #fa2d48; position: fixed; inset: 0; z-index: 15; display: grid; color: #fff; -webkit-user-select: none; user-select: none;
+#desktop[hidden] ~ section.big { display: none !important; }
+section.big { --big-accent: #fa2d48; position: fixed; inset: 0; z-index: 15; display: grid; color: #fff; -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; background: rgb(10 11 14 / 0.86); }
-.big[hidden] { display: none; }
-.big[data-app="podcasts"] { --big-accent: #b46cff; }
-.big[data-app="videos"] { --big-accent: #8b5cf6; }
-.big[data-app="photos"] { --big-accent: #ff9f0a; }
-.big[data-app="calendar"] { --big-accent: #ff453a; }
-.big[data-app="books"] { --big-accent: #ff9f0a; }
+section.big[hidden] { display: none; }
+section.big[data-app="podcasts"] { --big-accent: #b46cff; }
+section.big[data-app="videos"] { --big-accent: #8b5cf6; }
+section.big[data-app="photos"] { --big-accent: #ff9f0a; }
+section.big[data-app="calendar"] { --big-accent: #ff453a; }
+section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .big button { font: inherit; color: inherit; }
 .big svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .big-main { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
