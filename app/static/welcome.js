@@ -3,13 +3,14 @@
 // for any of it); your apps (standalone: where your containers are, looked
 // for while you watch; a homelab: the catalog's apps you can still add);
 // making your accounts in them; your storage, as a desktop; and adlerOS's
-// apps over Navidrome, Immich and Paperless, each one's connection asked live,
-// with how to connect it. Then a short look around: the pages, the dock,
-// search, the bell, and where the rest is. Seen once, it's remembered on the
-// server.
+// apps over Navidrome, Immich, Paperless, Radicale, Vikunja, Jellyfin and
+// Audiobookshelf, each one's connection asked live, with how to connect it.
+// Then a short look around: the pages, the dock, search, the bell, the modes,
+// and where the rest is. Seen once, it's remembered on the server.
 // Uses $, el, api, toast, state, refresh, postAction, waitForJob, plateFor,
 // openStore, renderStore, store, openFiles, openMusic, openGallery,
-// openDocuments, openCalendar, openTasks, settingsFile, settingsThen.
+// openDocuments, openCalendar, openTasks, openVideos, openBooks,
+// settingsFile, settingsThen.
 "use strict";
 
 const welcome = { steps: [], at: 0, spot: null, roots: "", busy: false, found: false, links: null };
@@ -121,18 +122,21 @@ const welcomeFolders = {
     area.addEventListener("input", () => { welcome.roots = area.value; });
     const status = el("div", { class: "welcome-status", "aria-live": "polite" }, welcomeKnown());
     const log = el("pre", { class: "welcome-log", hidden: "" });
-    const look = el("button", { type: "button", class: "button-primary" }, welcome.found ? "Next" : "Look for apps");
-    const skipLooking = el("button", { type: "button", class: "button-secondary" }, state.apps.length ? "Keep these" : "Not now");
-    skipLooking.addEventListener("click", () => goWelcome(welcome.at + 1));
-    skipLooking.hidden = welcome.found;
-    // Once it has looked, the same button goes on.
-    look.addEventListener("click", () => (welcome.found ? goWelcome(welcome.at + 1) : lookForApps(area, look, status, log, skipLooking)));
+    // Apps already known: Next goes on, and looking again is beside it.
+    // Otherwise the button looks, and goes on by itself once it's found some.
+    const known = welcome.found || state.apps.length > 0;
+    const next = el("button", { type: "button", class: "button-primary" }, "Next");
+    next.addEventListener("click", () => goWelcome(welcome.at + 1));
+    const look = el("button", { type: "button", class: known ? "button-secondary" : "button-primary" }, known ? "Look again" : "Look for apps");
+    look.addEventListener("click", () => lookForApps(area, look, status, log));
+    const notNow = el("button", { type: "button", class: "button-secondary" }, "Not now");
+    notNow.addEventListener("click", () => goWelcome(welcome.at + 1));
     return {
       title: "Where are your containers?",
       body: [welcomeText("The folders that hold your docker compose files, one per line: ~/docker, /opt/stacks… adlerOS looks up to three folders deep and puts each app in a collection (the ones it doesn't know go in Extras). It only reads them: nothing's started, stopped or changed."),
         area, status, log],
-      extra: [skipLooking],
-      primary: look,
+      extra: known ? [look] : [notNow],
+      primary: known ? next : look,
     };
   },
 };
@@ -146,7 +150,7 @@ function welcomeKnown() {
     .map(([g, n]) => `${names[g] || g} ${n}`).join(", ")}.`;
 }
 
-async function lookForApps(area, look, status, log, skipLooking) {
+async function lookForApps(area, look, status, log) {
   if (welcome.busy) return;
   const roots = area.value.split(/[\n:]+/).map((r) => r.trim()).filter(Boolean);
   if (!roots.length) return toast("Put at least one folder in.");
@@ -174,11 +178,12 @@ async function lookForApps(area, look, status, log, skipLooking) {
   }
   log.textContent = (job.log || []).filter((l) => !l.startsWith("$")).slice(-8).join("\n");
   await refresh();
-  welcome.found = true;
   status.textContent = welcomeKnown();
-  look.textContent = "Next";
-  skipLooking.hidden = true;
-  look.focus();
+  if (!state.apps.length) return; // nothing there: change the folders and look again
+  // Found them: on to the next page (what it found stays said, in a toast).
+  welcome.found = true;
+  toast(welcomeKnown());
+  if (welcomeOpen() && welcome.steps[welcome.at] === welcomeFolders) goWelcome(welcome.at + 1);
 }
 
 // A homelab: its catalog's apps you haven't installed, by collection.
@@ -270,14 +275,25 @@ const LAYERED = [
     adds: "your projects as lists and boards, due dates, labels and repeats, the same as on your phone",
     alone: "keeps your tasks in adlerOS, and moves them to Vikunja once it's connected",
   },
+  {
+    id: "videos", name: "Videos", over: "Jellyfin", apps: ["jellyfin"], icon: "videos", open: () => openVideos(),
+    adds: "Jellyfin's movies and series, with their posters, where you stopped, and what's next",
+    alone: "plays the videos in Media/Documentaries, Movies, Shows and Videos in your storage",
+  },
+  {
+    id: "books", name: "Books and Podcasts", over: "Audiobookshelf", apps: ["audiobookshelf"], icon: "books", open: () => openBooks(),
+    adds: "your audiobooks, books and podcasts with their covers and chapters, and where you got to, the same as on your phone",
+    alone: "reads and plays the books and podcasts in your storage's Media folder",
+  },
 ];
 
 // Their connections, asked once a tour (and again on "Check again").
 function welcomeLinks(again = false) {
   if (welcome.links && !again) return welcome.links;
   const ask = (path) => api(path).then(({ status, body }) => (status === 200 && body ? body : { error: "noanswer" }), () => ({ error: "noanswer" }));
-  welcome.links = Promise.all([ask("/api/music/navidrome"), ask("/api/gallery/status"), ask("/api/paperless/status"), ask("/api/calendar/status"), ask("/api/tasks/status")])
-    .then(([music, gallery, documents, calendar, tasks]) => ({ music, gallery, documents, calendar, tasks }));
+  welcome.links = Promise.all([ask("/api/music/navidrome"), ask("/api/gallery/status"), ask("/api/paperless/status"), ask("/api/calendar/status"),
+    ask("/api/tasks/status"), ask("/api/videos/status"), ask("/api/books/status")])
+    .then(([music, gallery, documents, calendar, tasks, videos, books]) => ({ music, gallery, documents, calendar, tasks, videos, books }));
   return welcome.links;
 }
 
@@ -294,6 +310,12 @@ function layeredState(l, st) {
     if (st.error === "refused") return { at: 2, label: "Token refused" };
     if (st.configured) return { at: 3, label: "Not answering" };
     return st.error === "novikunja" ? { at: 0, label: `No ${l.over}` } : { at: 1, label: "Needs a token" };
+  }
+  if (l.id === "videos" || l.id === "books") {
+    if (st.error === "nojellyfin" || st.error === "noabs") return { at: 0, label: `No ${l.over}` };
+    if (st.error === "nokey") return { at: 1, label: "Needs a key" };
+    if (st.error === "refused") return { at: 2, label: "Key refused" };
+    return { at: 3, label: "Not answering" };
   }
   if (l.id === "calendar") {
     if (st.error === "refused") return { at: 2, label: "Login refused" };
@@ -329,7 +351,7 @@ const welcomeLayered = {
     return {
       title: "Apps on top of your apps",
       body: [
-        welcomeText("Music, Gallery, Documents, Calendar and Tasks sit on top of Navidrome, Immich, Paperless, Radicale and Vikunja. They read what those apps already know, through the apps' own APIs, and show it the same way, all in one place."),
+        welcomeText("Music, Gallery, Documents, Calendar, Tasks, Videos, Books and Podcasts sit on top of Navidrome, Immich, Paperless, Radicale, Vikunja, Jellyfin and Audiobookshelf. They read what those apps already know, through the apps' own APIs, and show it the same way, all in one place."),
         el("div", { class: "welcome-apps" }, ...rows),
         welcomeText("They don't replace those apps or touch how your homelab is set up: the photos stay Immich's and the documents Paperless's, and what you do here (a play, an upload) goes to the app, as if you'd done it there. They need those apps for the good parts; without them, each still shows the files themselves, and says what connecting adds."),
       ],
@@ -341,23 +363,27 @@ const welcomeLayered = {
 function welcomeHow(l, s, st) {
   const perms = (st.permissions || []).map((p) => el("code", {}, p));
   const file = settingsFile();
-  const install = `Install ${l.over} (the App Store has it), or if it runs elsewhere, put its address in ${file} as ${{ music: "NAVIDROME_URL", gallery: "IMMICH_URL", documents: "PAPERLESS_URL", calendar: "CALDAV_URL", tasks: "VIKUNJA_URL" }[l.id]}=…${l.id === "calendar" ? " (any CalDAV server's)" : ""}`;
+  const install = `Install ${l.over} (the App Store has it), or if it runs elsewhere, put its address in ${file} as ${{ music: "NAVIDROME_URL", gallery: "IMMICH_URL", documents: "PAPERLESS_URL", calendar: "CALDAV_URL", tasks: "VIKUNJA_URL", videos: "JELLYFIN_URL", books: "ABS_URL" }[l.id]}=…${l.id === "calendar" ? " (any CalDAV server's)" : ""}`;
   // A homelab's install.sh makes Paperless's admin itself.
   const account = state.mode !== "standalone" && l.id === "documents"
     ? "Log in to Paperless as admin: install.sh made the account, with the password PAPERLESS_ADMIN_PASSWORD in containers/productivity/paperless-ngx/.env."
     : l.id === "calendar" ? `Have a login for ${l.over}, and a calendar in it (your phone's calendar app can make one).`
-      : `Open ${l.over} and make your account.`;
+      : l.id === "videos" ? "Open Jellyfin and finish its wizard (that's your admin account), with a library on your videos' folder."
+        : l.id === "books" ? "Open Audiobookshelf, make your account, and give it a library on each folder: audiobooks, podcasts (a podcast library), books."
+          : `Open ${l.over} and make your account.`;
   const key = {
     music: [`Your Navidrome login is all it takes: put it in ${file} as NAVIDROME_USER=… and NAVIDROME_PASSWORD=…${settingsThen()}.`],
     gallery: ["In Immich: Account Settings → API Keys → New API Key, with these permissions (they only read):", el("span", { class: "welcome-perms" }, ...perms),
-      `Put it in ${file} as IMMICH_API_KEY=…${settingsThen()}.`],
+      `Put it in ${file} as IMMICH_API_KEY=…${settingsThen()}.`, ...(st.mapKey ? [] : [welcomeMapKey()])],
     documents: ["In Paperless: your name (top right) → My Profile → API Auth Token.", `Put it in ${file} as PAPERLESS_TOKEN=…${settingsThen()}.`],
     calendar: [`Your ${l.over} login is all it takes: put it in ${file} as CALDAV_USER=… and CALDAV_PASSWORD=…${settingsThen()}.`],
     tasks: ["In Vikunja: Settings → API Tokens → Create a token, with tasks, projects and labels (or all of them).", `Put it in ${file} as VIKUNJA_TOKEN=…${settingsThen()}. (Or your login, as VIKUNJA_USER and VIKUNJA_PASSWORD.)`],
+    videos: ["In Jellyfin: Dashboard → API Keys → +, and call it adlerOS.", "Paste it in Videos: Connect Jellyfin, at the bottom of its sidebar."],
+    books: ["In Audiobookshelf: Settings → API Keys → Add API Key (any name, your user, no expiry).", "Paste it in Books or Podcasts (Connect Audiobookshelf): one key does both."],
   }[l.id];
   const steps = s.at === 0 ? [install, account, ...key]
     : s.at === 1 ? [account, ...key]
-      : s.at === 2 ? [`${l.over} doesn't know the ${l.id === "music" || l.id === "calendar" ? "login" : l.id === "gallery" ? "key" : "token"} in ${file} (deleted, or mistyped). Make a new one:`, ...key]
+      : s.at === 2 ? [`${l.over} doesn't know the ${l.id === "music" || l.id === "calendar" ? "login" : ["gallery", "videos", "books"].includes(l.id) ? "key" : "token"}${["videos", "books"].includes(l.id) ? " adlerOS has" : ` in ${file}`} (deleted, or mistyped). Make a new one:`, ...key]
         : st.error === "nocalendars" ? [`${l.over} answered at ${st.url}, but has no calendars for that login. Make one (your phone's calendar app can), or check CALDAV_URL.`]
           : [`${l.over} isn't answering${st.url ? ` at ${st.url}` : ""}. Is it running? The App Store starts it.`];
   const items = [];
@@ -380,14 +406,18 @@ const welcomeConnect = {
       const states = LAYERED.map((l) => [l, layeredState(l, links[l.id]), links[l.id]]);
       const done = states.filter(([, s]) => s.ok).map(([l]) => l.name);
       const todo = states.filter(([, s]) => !s.ok);
+      // Gallery connected, but its map has no key: that one step on its own.
+      const map = links.gallery?.ok && !links.gallery.mapKey
+        ? [el("section", { class: "welcome-group" }, el("h3", { class: "group-title" }, "Gallery's map"), el("ol", { class: "welcome-steps" }, el("li", {}, welcomeMapKey())))]
+        : [];
       box.replaceChildren(
         ...(done.length ? [el("p", { class: "welcome-status" }, `${new Intl.ListFormat("en").format(done)} ${done.length === 1 ? "is" : "are"} connected.`)] : []),
-        ...todo.map(([l, s, st]) => welcomeHow(l, s, st)));
+        ...todo.map(([l, s, st]) => welcomeHow(l, s, st)), ...map);
     });
     return {
       title: "Connecting them",
       body: [
-        welcomeText(`Each takes one login or key, made in that app and put in ${settingsFile()}. It stays on this server; your browser never sees it.`),
+        welcomeText(`Each takes one login or key, made in that app: put in ${settingsFile()}, or for Videos, Books and Podcasts, pasted in the app itself. It stays on this server; your browser never sees it.`),
         welcomeText(state.mode === "standalone"
           ? "Or let adlerOS's installer do it: ./install.sh --connect in adlerOS's folder, in a terminal, makes each one's key with your login (and the admin, where an app has none yet)."
           : "Or let the installer do it: ./install.sh again in your homelab's folder, in a terminal, connects Documents by itself, and Gallery and Music with your login (making their admin, where they have none yet)."),
@@ -398,6 +428,11 @@ const welcomeConnect = {
   },
 };
 
+// Gallery's map: CARTO's tiles want a key.
+function welcomeMapKey() {
+  return `For Gallery's map: a free key from CARTO (carto.com/basemaps/apikey, emailed to you), in ${settingsFile()} as CARTO_API_KEY=…. Without it, the map says "API key required".`;
+}
+
 // ---------------------------------------------------------- a look around
 
 const TOUR = [
@@ -407,7 +442,7 @@ const TOUR = [
   },
   {
     spot: "#dock",
-    view: () => ({ title: "The dock", body: [welcomeText("The apps you keep here (Music, Gallery, Documents, Calendar and Tasks too), then adlerOS's own: All apps, always here, the App Store (start, stop, update, install), Settings, and Live Usage.")] }),
+    view: () => ({ title: "The dock", body: [welcomeText("The apps you keep here (adlerOS's own too: Music, Gallery, Videos…), then All apps, always here, the App Store (start, stop, update, install, and each app's address), Settings, and Live Usage.")] }),
   },
   {
     spot: "#search-open",
@@ -419,8 +454,9 @@ const TOUR = [
   },
   {
     view: () => ({
-      title: "And the rest",
-      body: [welcomeText("My Computer, Music, Gallery, Documents, Calendar, Tasks and Luna are in All apps. On a computer, Settings → Desktop mode puts windows side by side, and the mouse's side buttons go back and forward in them. Press ? for every key; it all works without a mouse."),
+      title: "Four ways to use it",
+      body: [welcomeText("Each device picks its mode (right-click the desktop, or Settings → Mode): the Home screen, as here; Desktop, for a computer, with windows side by side that you drag and snap; TV, big and made for a remote or arrow keys; and Car, for a phone on the dashboard, with music and the road."),
+        welcomeText("My Computer, Notepad, Luna, Music, Videos, Books, Podcasts, Gallery, Documents, Calendar, Tasks and Contacts are in All apps. Press ? for every key; it all works without a mouse."),
         welcomeText("This tour is in Settings, if you want it again.")],
     }),
   },
