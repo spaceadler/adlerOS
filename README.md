@@ -87,6 +87,7 @@ The whole list, word for word: **[docs/features.md](docs/features.md)**. A tour 
 | [docs/customizing.md](docs/customizing.md) | Wallpapers, dock icons, widgets, settings, actions, known apps, store apps |
 | [docs/security.md](docs/security.md) | The trust model, in detail |
 | [docs/screenshots/README.md](docs/screenshots/README.md) | The screenshots these docs use, and how to take them |
+| [CODEMAP.md](CODEMAP.md) | Files, hub functions and the call graph, generated from the code |
 
 ## Layout
 
