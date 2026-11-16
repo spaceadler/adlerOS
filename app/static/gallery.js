@@ -778,11 +778,13 @@ function gaViewerKeys(e) {
 
 // ---------------------------------------------------------------- the map
 
-// Where they were taken: OpenStreetMap's map (CARTO's dark tiles), your
-// photos on it in clusters (a click shows a cluster's, a double click or the
-// wheel zooms, a drag moves it; two fingers on a phone).
+// Where they were taken: OpenStreetMap's map (CARTO's dark tiles, with the
+// key in CARTO_API_KEY: without one CARTO sends a watermark), your photos on
+// it in clusters (a click shows a cluster's, a double click or the wheel
+// zooms, a drag moves it; two fingers on a phone).
 const GA_TILE = 256;
-const gaTileUrl = (z, x, y) => `https://${"abcd"[(x + y) % 4]}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}${devicePixelRatio > 1 ? "@2x" : ""}.png`;
+const gaTileUrl = (z, x, y) => `https://basemaps.cartocdn.com/rastertiles/dark_all/${z}/${x}/${y}${devicePixelRatio > 1 ? "@2x" : ""}.png`
+  + (gallery.status?.mapKey ? `?key=${encodeURIComponent(gallery.status.mapKey)}` : "");
 const gaMercator = (lat, lon) => {
   const s = Math.sin((Math.max(-85, Math.min(85, lat)) * Math.PI) / 180);
   return [(lon + 180) / 360, 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)];
@@ -803,7 +805,9 @@ async function gaMapView(page) {
   const box = el("div", { class: "ga-map", tabindex: "0", "aria-label": "Map of your photos" }, tiles, pins,
     el("div", { class: "ga-map-zoom" }, zoomButton("Zoom in", "plus", 1), zoomButton("Zoom out", "minus", -1)),
     el("div", { class: "ga-map-credit" }, "© OpenStreetMap contributors · © CARTO"), panel);
-  page.append(el("header", { class: "ga-head" }, el("h1", {}, "Map"), el("p", { class: "ga-dim" }, `${markers.length.toLocaleString()} photos with a place`)), box);
+  page.append(el("header", { class: "ga-head" }, el("h1", {}, "Map"), el("p", { class: "ga-dim" }, `${markers.length.toLocaleString()} photos with a place`)),
+    ...(gallery.status?.mapKey ? [] : [el("p", { class: "ga-note" }, `The map's tiles need a key from CARTO (free): ask for one at carto.com/basemaps/apikey, then put it in ${settingsFile()} as CARTO_API_KEY=… (read as it changes: no restart). Until then the map says "API key required".`)]),
+    box);
   const map = { z: 2, cx: 0.5, cy: 0.5, cache: new Map() };
   gallery.map = { redraw: () => draw() };
 

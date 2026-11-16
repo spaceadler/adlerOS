@@ -2984,7 +2984,10 @@ def gallery_query(query, keys):
 def gallery_status():
     """Whether Gallery can see your photos, and if not, why."""
     url, key = immich()
-    out = {"url": url, "configured": bool(url and key), "permissions": list(GALLERY_PERMISSIONS)}
+    out = {"url": url, "configured": bool(url and key), "permissions": list(GALLERY_PERMISSIONS),
+           # The map's tiles come from CARTO, which wants a key (free, from
+           # carto.com/basemaps/apikey); without one they're a watermark.
+           "mapKey": install_setting("CARTO_API_KEY")}
     if not url:
         return {**out, "error": "noimmich"}
     if not key:
