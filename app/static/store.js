@@ -321,7 +321,48 @@ function siteCard(app) {
         el("div", { class: "store-state site" }, busy ? `${VERBS[busy.action]}…` : "Website")),
       open),
     el("p", { class: "row-description" }, app.url),
-    el("div", { class: "store-actions" }, busy ? "" : button("Remove", "destructive", () => appAction(app, "app-forget"))));
+    el("div", { class: "store-actions" }, ...(busy ? [] : [button("Address", "", () => addressDialog(app)), button("Remove", "destructive", () => appAction(app, "app-forget"))])));
+}
+
+// Where an app's page is: what its icon and window open. Changed when your
+// reverse proxy gives it a name (or takes one away); empty goes back to this
+// machine's address and the app's port.
+function addressDialog(app) {
+  const input = el("input", { class: "field-input", type: "text", inputmode: "url", value: app.url || "", placeholder: app.port ? "Empty: this machine and its port" : "https://…",
+    spellcheck: "false", autocapitalize: "off", "aria-label": `${app.name}'s address` });
+  const error = el("p", { class: "error", role: "alert" });
+  const cancel = el("button", { type: "button", class: "button-secondary" }, "Cancel");
+  const save = el("button", { type: "submit", class: "button-primary wide" }, "Save");
+  const form = el("form", {}, input, error);
+  const dialog = el("div", { class: "dialog material", role: "dialog", "aria-modal": "true" },
+    el("h2", {}, `${app.name}'s address`),
+    el("p", {}, app.site ? "The website this opens." : `What its icon and window open: your reverse proxy's name for it (https://${app.known || app.id}.example.com), or empty for this machine and its port${app.port ? ` (${app.port})` : ""}.`),
+    form, el("div", { class: "dialog-actions" }, cancel, save));
+  cancel.addEventListener("click", closeModal);
+  const submit = async (e) => {
+    e.preventDefault();
+    const url = input.value.trim();
+    if (url && !/^https?:\/\/[^\s"'<>\\]{1,300}$/.test(url)) return (error.textContent = "An address starting with http:// or https://.");
+    if (!url && (app.site || !app.port)) return (error.textContent = "It needs an address.");
+    if (url === app.url) return closeModal();
+    save.disabled = true;
+    const job = await actionDone("app-url", { app: app.id, url });
+    save.disabled = false;
+    if (!job) return;
+    if (job.status !== "done") {
+      error.textContent = (job.log || []).filter((l) => !l.startsWith("$")).pop() || job.error || "That didn't work.";
+      return;
+    }
+    closeModal();
+    toast(`${app.name}: ${url || "its own address again"}.`);
+    await refresh();
+    renderStore();
+  };
+  form.addEventListener("submit", submit);
+  save.addEventListener("click", submit);
+  openModal(dialog);
+  input.focus();
+  input.select();
 }
 
 // Add a website: its address and a name, and it's an app like the rest,
@@ -405,6 +446,7 @@ function storeCard(app) {
     if (s && s.state !== "no-compose" && !locked) actions.append(button("Restart", "", () => appAction(app, "app-restart")));
     if (s && s.state !== "no-compose" && !locked) actions.append(button("Update", update ? "primary" : "", () => appAction(app, "app-update")));
     if (s?.containers.length) actions.append(button("Logs", "", () => logsDialog(app)));
+    if (app.imported && !locked) actions.append(button("Address", "", () => addressDialog(app)));
     // Core apps (Pi-hole, Vaultwarden) are always installed.
     if (s && !core && state.admin) actions.append(button("Delete", "destructive", () => appAction(app, "app-delete")));
   }

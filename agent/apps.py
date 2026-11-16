@@ -1138,6 +1138,28 @@ def forget(app_id):
     return 0
 
 
+def set_url(app_id, url):
+    """Where an app's page is (its icon and window open it): an address you
+    give (your reverse proxy's, say), or with none, this machine's and its
+    port again. One you set is kept (use_proxy_addresses leaves it)."""
+    app = registry_app(app_id) if APP_ID.fullmatch(app_id) else None
+    if not app:
+        sys.exit(f"{app_id}: not an app whose address adlerOS keeps (a homelab's own apps have their names from it)")
+    info = app["info"]
+    if url and not re.fullmatch(r"https?://[^\s\"'<>\\]{1,300}", url):
+        sys.exit("address: an http:// or https:// address")
+    if not url:
+        if not info.get("port"):
+            sys.exit(f"{app['name']} has no port to make its address from: give one")
+        url = f"http://{host_address()}:{info['port']}"
+    if info.get("url") == url:
+        say(f"{app['name']} is already at {url}.")
+        return 0
+    write_record(app_id, {**info, "url": url})
+    say(f"{app['name']} now opens at {url} (was {info.get('url') or 'no address'}).")
+    return 0
+
+
 # ------------------------------------------------- the web, in Firefox
 
 def firefox_container(app):
@@ -1287,6 +1309,8 @@ def main(argv):
         return add_site(*argv[1:])
     if len(argv) == 2 and argv[0] == "forget":
         return forget(argv[1])
+    if len(argv) == 3 and argv[0] == "url":
+        return set_url(argv[1], argv[2])
     if len(argv) == 1 and argv[0] == "usage":
         try:
             print(json.dumps(usage(all_apps())))
@@ -1313,7 +1337,7 @@ def main(argv):
         return 0
     if len(argv) != 2 or argv[0] not in COMMANDS or not APP_ID.fullmatch(argv[1]):
         sys.exit(f"usage: apps.py status | usage | discover | set-roots FOLDERS | logs APP | {{{'|'.join(COMMANDS)}}} APP | scan PATH | forget APP"
-                 " | import NAME FILE SERVICES URL ICON PORT | site NAME URL COLLECTION")
+                 " | import NAME FILE SERVICES URL ICON PORT | site NAME URL COLLECTION | url APP [URL]")
     app = every_app().get(argv[1])
     if not app:
         sys.exit(f"{argv[1]}: not an app the App Store manages")
