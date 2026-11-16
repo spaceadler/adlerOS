@@ -530,7 +530,7 @@ def widget_data():
     offline = [a["name"] for a in apps if not status[a["id"]]]
     device = device_info()
     return {
-        "system": {k: device[k] for k in ("cpu", "cpus", "memory", "disk", "temperature", "uptime", "load")},
+        "system": {k: device.get(k) for k in ("cpu", "cpus", "memory", "disk", "temperature", "uptime", "load", "source", "history", "beszel")},
         "apps": {"total": len(apps), "up": len(apps) - len(offline), "offline": offline},
         "backups": backups_info(),
     }
@@ -651,6 +651,110 @@ def cpu_usage():
         return _cpu_sample["value"]
 
 
+# ------------------------------------------------------------------ Beszel
+
+# The machine's CPU, memory, storage and temperature from Beszel, when it's
+# there and adlerOS has a login for it (BESZEL_EMAIL, BESZEL_PASSWORD; its
+# address from BESZEL_URL, else this machine's and Beszel's port): the same
+# numbers Beszel's own page shows, per minute, with the last hour of them.
+# Without it, adlerOS reads them itself (device_info).
+BESZEL_EVERY = 20  # seconds between asks: Beszel's agent reports once a minute
+_beszel = {"token": None, "for": None, "at": 0.0, "answer": None, "lock": threading.Lock()}
+GIB = 1024 ** 3
+
+
+def beszel_conn():
+    url = install_setting("BESZEL_URL").rstrip("/")
+    if not url:
+        host = install_setting("TS_IP") if HOMELAB_MODE else install_setting("ADLEROS_HOST")
+        app = next((a for a in installed_apps() if a["id"] == "beszel"), None)
+        url = f"http://{host}:{app['port']}" if host and app and app.get("port") else ""
+    return url, install_setting("BESZEL_EMAIL"), install_setting("BESZEL_PASSWORD")
+
+
+def beszel_json(url, path, token=None, body=None):
+    req = urllib.request.Request(f"{url}{path}", data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Content-Type": "application/json", **({"Authorization": token} if token else {})})
+    with urllib.request.urlopen(req, timeout=6) as r:
+        return json.loads(r.read())
+
+
+def beszel_records(url, path, email, password):
+    """GET a PocketBase list, logging in (again) when the token's missing or old."""
+    if _beszel["for"] != (url, email, password):  # a new login in the settings file: use it
+        _beszel.update(token=None, **{"for": (url, email, password)})
+    for attempt in (0, 1):
+        if not _beszel["token"]:
+            auth = beszel_json(url, "/api/collections/users/auth-with-password", body={"identity": email, "password": password})
+            _beszel["token"] = auth["token"]
+        try:
+            return beszel_json(url, path, _beszel["token"])
+        except urllib.error.HTTPError as e:
+            if e.code not in (401, 403) or attempt:
+                raise
+            _beszel["token"] = None
+    return None
+
+
+def beszel_system():
+    """{"ok": True, cpu, memory, disk, temperature, load, uptime, history} from
+    Beszel, or {"ok": False, "error": why}. Asked at most every BESZEL_EVERY s."""
+    with _beszel["lock"]:
+        if _beszel["answer"] and time.monotonic() - _beszel["at"] < BESZEL_EVERY:
+            return _beszel["answer"]
+        url, email, password = beszel_conn()
+        if not url:
+            answer = {"ok": False, "error": "nobeszel"}
+        elif not email or not password:
+            answer = {"ok": False, "error": "nologin", "url": url}
+        else:
+            try:
+                answer = beszel_read(url, email, password)
+            except urllib.error.HTTPError as e:
+                answer = {"ok": False, "error": "refused" if e.code in (400, 401, 403) else f"beszel {e.code}", "url": url}
+            except (OSError, ValueError, KeyError, TypeError) as e:
+                answer = {"ok": False, "error": "unreachable", "why": str(e)[:160], "url": url}
+        _beszel.update(answer=answer, at=time.monotonic())
+        return answer
+
+
+def beszel_read(url, email, password):
+    systems = beszel_records(url, "/api/collections/systems/records?perPage=50", email, password)["items"]
+    if not systems:
+        return {"ok": False, "error": "nosystem", "url": url}
+    # This machine: by its address, else its name, else the only one.
+    here = {install_setting("ADLEROS_HOST"), install_setting("TS_IP"), socket.gethostname()} - {""}
+    system = next((x for x in systems if x.get("host") in here or x.get("name") in here), systems[0] if len(systems) == 1 else None)
+    if not system:
+        return {"ok": False, "error": "nosystem", "url": url, "why": f"none of Beszel's systems is at {', '.join(sorted(here))}"}
+    q = urllib.parse.urlencode({"filter": f"system='{system['id']}' && type='1m'", "sort": "-created", "perPage": 60,
+                                "fields": "created,stats"})
+    rows = beszel_records(url, f"/api/collections/system_stats/records?{q}", email, password)["items"]
+    info = system.get("info") or {}
+
+    def temp(st):
+        ts = [v for v in (st.get("t") or {}).values() if isinstance(v, (int, float))]
+        return round(max(ts), 1) if ts else None
+
+    def mem(st):
+        if isinstance(st.get("mem"), list) and len(st["mem"]) >= 2:
+            return {"total": st["mem"][0], "used": st["mem"][1]}
+        return {"total": round(st["m"] * GIB), "used": round(st["mu"] * GIB)} if st.get("m") else None
+
+    last = rows[0]["stats"] if rows else {}
+    out = {"ok": True, "url": url, "system": system.get("name"), "status": system.get("status"),
+           "cpu": info.get("cpu", last.get("cpu")), "memory": mem(last),
+           "disk": {"total": round(last["d"] * GIB), "used": round(last["du"] * GIB)} if last.get("d") else None,
+           "temperature": round(info["dt"], 1) if isinstance(info.get("dt"), (int, float)) else temp(last),
+           "load": (info.get("la") or last.get("la") or [None])[0], "uptime": info.get("u"),
+           "at": rows[0]["created"] if rows else None}
+    # Oldest first: {t (ms), cpu, memory (%), temperature}.
+    out["history"] = [{"t": int(datetime.datetime.fromisoformat(r["created"].replace("Z", "+00:00")).timestamp() * 1000),
+                       "cpu": r["stats"].get("cpu"), "memory": r["stats"].get("mp"), "temperature": temp(r["stats"])}
+                      for r in reversed(rows) if r.get("created")]
+    return out
+
+
 def device_info():
     info = {"hostname": socket.gethostname(), "kernel": os.uname().release, "arch": os.uname().machine,
             "cpus": os.cpu_count()}
@@ -682,6 +786,15 @@ def device_info():
         info["disk"] = None
     info["cpu"] = cpu_usage()
     info["load"] = os.getloadavg()[0]
+    info["source"] = "here"
+    bz = beszel_system()
+    if bz.get("ok"):
+        for k in ("cpu", "memory", "disk", "temperature", "load", "uptime"):
+            if bz.get(k) is not None:
+                info[k] = bz[k]
+        info.update(source="beszel", history=bz["history"], beszelAt=bz["at"])
+    else:
+        info["beszel"] = {k: bz.get(k) for k in ("error", "why", "url") if bz.get(k)}
     return info
 
 

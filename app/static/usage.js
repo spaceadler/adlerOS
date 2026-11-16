@@ -1,6 +1,7 @@
 // Live Usage: CPU, memory, storage and temperature as they change, and which
 // apps use the most. The machine's numbers come from GET /api/widgets every
-// 2 seconds; each app's share from the helper's app-usage action (one
+// 2 seconds (from Beszel when adlerOS has its login: then the charts are
+// Beszel's last hour, a point a minute); each app's share from the helper's app-usage action (one
 // `docker stats` sample) every 10. Charts are single-series lines, white on
 // the window's glass like everything else here.
 // Uses $, el, api, toast, state, plateFor, appById, isOpen, markDockOpen,
@@ -69,11 +70,21 @@ async function tickUsage() {
   if (result.status === 401) return showLock();
   if (result.status !== 200 || !result.body) return;
   const s = result.body.data.system;
+  const was = usage.latest?.source;
   usage.latest = s;
-  push("cpu", s.cpu);
-  push("memory", s.memory && percent(s.memory.used, s.memory.total));
-  push("temperature", s.temperature);
+  if (s.source === "beszel" && Array.isArray(s.history)) {
+    // Beszel's own minutes, not samples taken here.
+    for (const series of ["cpu", "memory", "temperature"]) {
+      usage.history[series] = s.history.filter((h) => h[series] != null).map((h) => ({ t: h.t, v: h[series] })).slice(-USAGE_HISTORY);
+    }
+  } else {
+    if (was === "beszel") usage.history = { cpu: [], memory: [], temperature: [] };
+    push("cpu", s.cpu);
+    push("memory", s.memory && percent(s.memory.used, s.memory.total));
+    push("temperature", s.temperature);
+  }
   for (const tile of Object.values(usage.tiles)) tile.update();
+  usageSource(s);
 }
 
 async function measureApps() {
@@ -151,7 +162,7 @@ function lineChart({ min, max, format, label }) {
     const [x, y] = points.at(-1);
     place(dot, x, y);
     dot.hidden = false;
-    svg.setAttribute("aria-label", `${label}: ${format(points.at(-1)[2].v)} now, over the last ${Math.round(points.length * USAGE_TICK_MS / 1000)} seconds`);
+    svg.setAttribute("aria-label", `${label}: ${format(points.at(-1)[2].v)} now, over the last ${usageAgo(points[0][2].t)}`);
   };
   // The crosshair finds the nearest sample to the pointer.
   box.addEventListener("pointermove", (e) => {
@@ -162,9 +173,8 @@ function lineChart({ min, max, format, label }) {
     cross.setAttribute("x1", px);
     cross.setAttribute("x2", px);
     cross.setAttribute("visibility", "visible");
-    const ago = Math.round((Date.now() - p.t) / 1000);
     tip.firstChild.textContent = format(p.v);
-    tip.lastChild.textContent = ago < 3 ? "now" : `${ago} s ago`;
+    tip.lastChild.textContent = Date.now() - p.t < 3000 ? "now" : `${usageAgo(p.t)} ago`;
     tip.hidden = false;
     place(tip, px, py);
     tip.classList.toggle("left", px > W * 0.6);
@@ -174,6 +184,26 @@ function lineChart({ min, max, format, label }) {
     tip.hidden = true;
   });
   return { node: box, update };
+}
+
+function usageAgo(t) {
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  return s < 120 ? `${s} s` : `${Math.round(s / 60)} min`;
+}
+
+// Where the numbers come from, under the tiles.
+function usageSource(s) {
+  const tiles = $("usage-tiles");
+  if (!tiles) return;
+  let line = $("usage-source");
+  if (!line) {
+    line = el("p", { id: "usage-source", class: "u-detail" });
+    tiles.after(line);
+  }
+  const why = { nologin: "it needs your Beszel login: BESZEL_EMAIL and BESZEL_PASSWORD in the settings file", refused: "Beszel refused the login in the settings file",
+    unreachable: "Beszel isn't answering", nosystem: "Beszel doesn't watch this machine" }[s.beszel?.error];
+  line.textContent = s.source === "beszel" ? "From Beszel, as it measures them: a point a minute."
+    : why ? `Measured by adlerOS, every 2 seconds (not from Beszel: ${why}).` : "Measured by adlerOS, every 2 seconds.";
 }
 
 // ---------------------------------------------------------------- tiles
