@@ -476,7 +476,7 @@ def iso(when):
 
 def escape(value):
     """A TEXT value, escaped."""
-    return value.replace("\\", "\\\\").replace(";", "\;").replace(",", "\\,").replace("\r\n", "\\n").replace("\n", "\\n")
+    return value.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\r\n", "\\n").replace("\n", "\\n")
 
 
 def fold(line):
