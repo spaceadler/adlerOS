@@ -764,11 +764,14 @@ function winCycle(back) {
 
 // Open windows without a dock item of their own (Files, the terminal, apps
 // you haven't pinned) show at the end of the dock; a pinned app with a
-// window gets the open mark.
+// window gets the open mark. Called often (a window's title changes as you
+// type in it), so a window's item is kept and only updated: made again, its
+// icon would load again, a white flash each key.
 function winDock() {
   const dock = $("dock");
   if (!dock) return;
   if (typeof mbUpdate === "function") mbUpdate(); // the menu bar's name for the window in front
+  const had = new Map([...dock.querySelectorAll(".dock-item.dock-run")].map((n) => [n.dataset.window, n]));
   dock.querySelectorAll(".dock-run").forEach((n) => n.remove());
   dock.querySelectorAll(".dock-app:not(.dock-builtin).open").forEach((n) => n.classList.remove("open")); // adlerOS's own: markDockOpen
   if (!desktopMode()) return sizeDock();
@@ -782,7 +785,13 @@ function winDock() {
       pinned.classList.add("open");
       continue;
     }
-    running.push(winDockItem(id, w));
+    const kept = had.get(id);
+    if (kept) {
+      kept.classList.toggle("active", wm.active === id);
+      kept.setAttribute("aria-label", w.title);
+      kept.querySelector(".dock-label").textContent = w.title;
+    }
+    running.push(kept || winDockItem(id, w));
   }
   // Like a Mac's: after your pinned apps, before the divider (and with no
   // pins, a divider of their own).
