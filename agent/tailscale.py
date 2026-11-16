@@ -1,9 +1,10 @@
 """Taildrop for adlerOS, run by the helper as your user (Tailscale's operator,
 so no sudo): what's possible, files sent to this machine into your storage
-folder's Tailscale/, and files sent to your other devices. JSON out.
+folder's Tailscale/ (or a folder you pick), and files sent to your other
+devices. JSON out.
 
   tailscale.py ADLEROS status
-  tailscale.py ADLEROS get
+  tailscale.py ADLEROS get FOLDER          (FOLDER: an adlerOS path in User or the Desktop)
   tailscale.py ADLEROS send DEVICE PATHS   (PATHS: adlerOS paths, one a line)
 """
 import getpass
@@ -51,31 +52,35 @@ def status():
     return {"ok": True, "operator": True, "user": me, "inbox": f"/user/{INBOX}", "targets": targets}
 
 
-def get(adleros):
-    storage = settings(adleros).get("STORAGE_DIR")
-    if not storage or not Path(storage).is_dir():
-        return {"ok": False, "why": "adlerOS has no storage folder (STORAGE_DIR)"}
-    inbox = Path(storage, INBOX)
-    inbox.mkdir(exist_ok=True)
-    before = set(os.listdir(inbox))
-    done = ts("file", "get", "--conflict=rename", str(inbox))
-    got = sorted(set(os.listdir(inbox)) - before)
+def get(adleros, into=f"/user/{INBOX}"):
+    """`tailscale file get` into a folder of User or the Desktop (User/Tailscale
+    is made the first time)."""
+    if into.strip("/") == f"user/{INBOX}":
+        storage = settings(adleros).get("STORAGE_DIR")
+        if storage and Path(storage).is_dir():
+            Path(storage, INBOX).mkdir(exist_ok=True)
+    folder = host_path(adleros, into, places=("user", "desktop"), want=Path.is_dir)
+    if not folder:
+        return {"ok": False, "why": "files can only be got into a folder of User or the Desktop"}
+    before = set(os.listdir(folder))
+    done = ts("file", "get", "--conflict=rename", str(folder))
+    got = sorted(set(os.listdir(folder)) - before)
     if done.returncode and not got:
         return {"ok": False, "why": (done.stderr or done.stdout).strip()[-300:] or "tailscale file get failed"}
-    return {"ok": True, "got": got, "inbox": f"/user/{INBOX}"}
+    return {"ok": True, "got": got, "into": into}
 
 
-def host_path(adleros, path):
+def host_path(adleros, path, places=("user", "desktop", "root"), want=Path.is_file):
     """An adlerOS path (/user/…, /desktop/…, /root/…) on this machine, or None
-    if it leads out of its place."""
+    if it leads out of its place or isn't what's wanted (a file, a folder)."""
     env = settings(adleros)
     tops = {"user": env.get("STORAGE_DIR"), "desktop": env.get("DESKTOP_DIR"), "root": env.get("FILES_ROOT")}
     parts = [p for p in path.split("/") if p not in ("", ".")]
-    if not parts or ".." in parts or not tops.get(parts[0]):
+    if not parts or ".." in parts or parts[0] not in places or not tops.get(parts[0]):
         return None
     top = Path(tops[parts[0]]).resolve()
     real = top.joinpath(*parts[1:]).resolve()
-    return real if real.is_file() and real.is_relative_to(top) else None
+    return real if want(real) and real.is_relative_to(top) else None
 
 
 def send(adleros, device, paths):
@@ -90,5 +95,5 @@ def send(adleros, device, paths):
 
 if __name__ == "__main__":
     adleros, what = sys.argv[1], sys.argv[2]
-    reply = status() if what == "status" else get(adleros) if what == "get" else send(adleros, sys.argv[3], sys.argv[4]) if what == "send" else {"ok": False}
+    reply = status() if what == "status" else get(adleros, sys.argv[3]) if what == "get" else send(adleros, sys.argv[3], sys.argv[4]) if what == "send" else {"ok": False}
     print(json.dumps(reply))

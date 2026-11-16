@@ -663,9 +663,15 @@
   },
   "tailscale-get": {
     "label": "Receiving from Tailscale",
-    "description": "Files sent to this machine with Taildrop, into Tailscale/ in your storage folder.",
+    "description": "Files sent to this machine with Taildrop (tailscale file get), into a folder of your storage or Desktop: Tailscale/ in your storage folder, unless you pick one.",
     "quiet": true,
     "admin": true,
+    "params": {
+      "into": {
+        "pattern": "^/(user|desktop)(/[^\\n\\x00]{1,1000})?$",
+        "maxLength": 1100
+      }
+    },
     "steps": [
       {
         "run": [
@@ -673,7 +679,8 @@
           "-I",
           "{adleros}/agent/tailscale.py",
           "{adleros}",
-          "get"
+          "get",
+          "{param:into}"
         ],
         "result": true
       }

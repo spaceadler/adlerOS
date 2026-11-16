@@ -194,15 +194,16 @@ function renderPlaces(f) {
 // ------------------------------------------------------------ Tailscale
 
 // Taildrop, in admin mode (agent/tailscale.py, as your user: Tailscale's
-// operator, so no sudo): files sent to this machine land in User/Tailscale
-// (pulled when you open it, or Receive); files you pick go to one of your
-// devices. Until Tailscale lets your user do that, the entries are greyed
-// and say how.
+// operator, so no sudo). The Tailscale place is User/Tailscale, with what's
+// waiting pulled into it as it opens; "Get Tailscale files here" is
+// `tailscale file get` into the folder you're in; files you pick go to one
+// of your devices. Until Tailscale lets your user do that, the entries are
+// greyed and say how.
 const tailscale = { status: null, at: 0, loading: null };
 function tsStatus(force = false) {
   if (!state.admin) return Promise.resolve(null);
   if (tailscale.loading && !force) return tailscale.loading;
-  tailscale.loading = postAction("tailscale-status").then((job) => (job ? waitForJob(job) : null)).then((job) => {
+  tailscale.loading = actionDone("tailscale-status").then((job) => {
     tailscale.status = job?.result || { ok: false, why: job?.error || "the helper didn't answer" };
     tailscale.at = Date.now();
     tailscale.loading = null;
@@ -223,15 +224,18 @@ function tsExplain(st = tailscale.status) {
   openModal(el("div", { class: "dialog material", role: "dialog", "aria-modal": "true" }, el("h2", {}, "Tailscale needs one setting"), body,
     el("div", { class: "dialog-actions" }, copy, ok)));
 }
-// Pull what's waiting into User/Tailscale; resolves with the names.
-async function tsReceive({ quiet = false } = {}) {
+const TS_INBOX = "/user/Tailscale";
+// `tailscale file get` into a folder (User/Tailscale unless one is given);
+// resolves with the names it got.
+async function tsReceive({ into = TS_INBOX, quiet = false } = {}) {
   const st = await tsStatus();
   if (!st?.ok) { tsExplain(st); return null; }
   if (!quiet) toast("Looking for Tailscale files…");
-  const job = await postAction("tailscale-get").then((j) => (j ? waitForJob(j) : null)).catch(() => null);
+  const job = await actionDone("tailscale-get", { into }).catch(() => null);
   const r = job?.result;
   if (!r?.ok) { toast(`Tailscale: ${r?.why || job?.error || "couldn't receive"}.`); return null; }
-  if (r.got.length || !quiet) toast(r.got.length ? `Received ${r.got.length === 1 ? r.got[0] : `${r.got.length} files`} in User/Tailscale.` : "No Tailscale files waiting.");
+  const where = into.split("/").filter(Boolean).pop();
+  if (r.got.length || !quiet) toast(r.got.length ? `Got ${r.got.length === 1 ? r.got[0] : `${r.got.length} files`} in ${where}.` : "No Tailscale files waiting.");
   if (r.got.length) refreshFiles();
   return r.got;
 }
@@ -239,9 +243,11 @@ async function tsOpen(f) {
   const st = await tsStatus();
   if (!st?.ok) return tsExplain(st);
   await tsReceive({ quiet: true });
-  showFolder("/user/Tailscale", f);
+  showFolder(TS_INBOX, f);
 }
-const tsItem = () => (!state.admin ? [] : [{ label: "Receive Tailscale files", muted: tailscale.status?.ok === false, run: () => tsReceive() }]);
+// In a folder of User or the Desktop (Root is read-only).
+const tsItem = (f) => (!state.admin || !f.writable || !/^\/(user|desktop)(\/|$)/.test(f.path) ? []
+  : [{ label: "Get Tailscale files here", muted: tailscale.status?.ok === false, run: () => tsReceive({ into: f.path }) }]);
 // Files you can send: files (no folders), ten at most.
 function tsSendable(entries) { return state.admin && entries.length > 0 && entries.length <= 10 && entries.every((e) => !e.dir); }
 const tsSendItem = (paths) => [{ label: paths.length > 1 ? `Send ${paths.length} files to a device…` : "Send to a device…", muted: tailscale.status?.ok === false, run: () => tsSend(paths) }];
@@ -257,7 +263,7 @@ async function tsSend(paths) {
   });
   if (!to) return;
   toast(`Sending to ${to}…`);
-  const job = await postAction("tailscale-send", { device: to, paths: paths.join("\n") }).then((j) => (j ? waitForJob(j) : null)).catch(() => null);
+  const job = await actionDone("tailscale-send", { device: to, paths: paths.join("\n") }).catch(() => null);
   const r = job?.result;
   toast(r?.ok ? `Sent ${r.sent === 1 ? paths[0].split("/").pop() : `${r.sent} files`} to ${to}.` : `Tailscale: ${r?.why || job?.error || "couldn't send"}.`);
 }
@@ -926,7 +932,7 @@ function wireFiles(f) {
     const items = f.writable ? [{ label: "New folder", run: () => newFolder(f.path) }, { label: "New text file", run: () => newTextFile(f.path) },
       ...(files.clip ? [{ label: `Paste ${files.clip.label}`, run: () => paste(f.path) }] : []),
       { label: "Upload…", run: () => uploadFrom(() => { files.uploadTo = f.path; f.part("picker").click(); }, (paths) => copyInto(paths, f.path, f)) }] : [];
-    items.push(...tsItem());
+    items.push(...tsItem(f));
     if (items.length) openMenu(e.clientX, e.clientY, items);
   });
   f.part("list").addEventListener("pointerdown", (e) => {

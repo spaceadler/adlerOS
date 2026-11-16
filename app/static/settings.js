@@ -517,7 +517,7 @@ function maintLoad(again = false) {
     maint.statusP = api("/api/maintenance").then((r) => (maint.status = r.status === 200 ? r.body : null)).catch(() => null);
   }
   if (!maint.checkP || again) {
-    maint.checkP = postAction("maint-check").then((job) => (job ? waitForJob(job) : null))
+    maint.checkP = actionDone("maint-check")
       .then((job) => (maint.check = job?.result || null)).catch(() => null);
   }
   return maint.statusP;

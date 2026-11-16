@@ -129,6 +129,15 @@ async function postAction(action, params = {}) {
   }
 }
 
+// An action run to its end: the finished job (or a failed one saying why),
+// null when the session has ended.
+async function actionDone(action, params = {}) {
+  const { status, body } = await postAction(action, params);
+  if (status === 401) { showLock(); return null; }
+  if (status !== 202 || !body) return { status: "failed", error: body?.error || "the helper couldn't be asked" };
+  return waitForJob(body);
+}
+
 // Ask the helper what every app's containers are doing.
 async function checkApps() {
   if (store.checking) return;
