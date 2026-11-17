@@ -18,3 +18,8 @@ first page (a phone's). The scanned-page decoders are WebAssembly (a page in
 (PDF_WORKER_CSP), and where that's refused pdf.js takes the JS fallbacks.
 A font a PDF names but doesn't carry is drawn with the standard fonts here
 (useSystemFonts off), as every PDF reader does, not the phone's own.
+
+hls.js 1.5.17 (Dailymotion, Apache 2.0: hls-LICENSE.txt), npm's
+dist/hls.min.js, as hls.js. Live TV plays a channel's HLS stream (.m3u8)
+with it in browsers that don't play HLS themselves; it runs without its
+worker, the page's CSP allowing media from blob: only.

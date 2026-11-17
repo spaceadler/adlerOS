@@ -108,7 +108,7 @@ JOBS = DATA / "agent" / "jobs"
 ICON_OVERRIDES = Path(os.environ.get("OS_ICON_DIR", "/icons"))
 # adlerOS's own dock icons (./icons can replace each): All apps, and the ones
 # you pin like any app.
-DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "luna", "music", "podcasts", "books", "videos", "gallery", "documents", "calendar", "tasks")
+DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "luna", "music", "podcasts", "books", "videos", "gallery", "documents", "calendar", "tasks", "contacts", "iptv")
 DOCK_MAX_PINS = 16
 # The widgets you can put on the desktop, with the defaults and the limit.
 WIDGET_CATALOG = STATIC / "widgets-catalog.json"
@@ -158,7 +158,7 @@ IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".avif")
 # since an app may redirect elsewhere (its login, https); whether it may be
 # framed is the app's call, and adlerOS asks it first (/api/frame). img-src
 # https: pictures from the internet, in a note (Luna, Notepad).
-PAGE_CSP = ("default-src 'self'; img-src 'self' data: https:; style-src 'self'; script-src 'self'; "
+PAGE_CSP = ("default-src 'self'; img-src 'self' data: https:; style-src 'self'; script-src 'self'; media-src 'self' blob:; "
             "connect-src 'self'; frame-src http: https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 # pdf.js's worker (Luna's PDFs, on a phone): its image decoders are
 # WebAssembly. Only that worker may compile it; the page itself can't.
@@ -461,7 +461,7 @@ def search_url():
 # from the start, in this order, until you take them out.
 BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal",
                 "adleros:notepad", "adleros:luna", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:tasks",
-                "adleros:podcasts", "adleros:books", "adleros:videos")
+                "adleros:podcasts", "adleros:books", "adleros:videos", "adleros:contacts", "adleros:iptv")
 DOCK_FIRST = BUILTIN_PINS[:5]  # a new dock's (Notepad, Luna and Music: in All apps, for you to pin)
 DOCK_SEED = 2  # 1: My Computer and the Terminal pinned; 2: the App Store, Settings and Live Usage too
 
@@ -6185,6 +6185,305 @@ def note_refused(address, via_proxy=False):
                   file=sys.stderr, flush=True)
 
 
+# ------------------------------------------------------------- live tv
+
+# Live TV: channels from your M3U playlists (an address, or a .m3u file in
+# your storage), played in adlerOS. A channel's stream and its logo come
+# through here (IPTV streams are rarely HTTPS and never allow another
+# page): a playlist's addresses are rewritten to /api/iptv/via, each signed,
+# so this relays only what your playlists name, never an address of the
+# page's choosing.
+IPTV_FILE = DATA / "iptv.json"
+IPTV_CACHE_SECONDS = 600
+_iptv = {"at": 0.0, "key": None, "channels": [], "errors": [], "lock": threading.Lock()}
+IPTV_UA = "Mozilla/5.0 (adlerOS Live TV)"
+
+
+def iptv_settings():
+    try:
+        got = json.loads(IPTV_FILE.read_text())
+    except (OSError, ValueError):
+        got = {}
+    lists = [x for x in got.get("playlists") or [] if isinstance(x, dict) and isinstance(x.get("url"), str)]
+    favs = [x for x in got.get("favorites") or [] if isinstance(x, str)]
+    return {"playlists": lists, "favorites": favs}
+
+
+def iptv_save(settings):
+    write_private(IPTV_FILE, json.dumps(settings))
+    _iptv["at"] = 0.0
+
+
+def iptv_sign(url):
+    return hmac.new(SESSION_SECRET, b"iptv:" + url.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def iptv_via(url, kind="s"):
+    return f"/api/iptv/via?k={kind}&u={urllib.parse.quote(url, safe='')}&s={iptv_sign(url)}"
+
+
+def iptv_fetch(url, timeout=20):
+    req = urllib.request.Request(url, headers={"User-Agent": IPTV_UA, "Accept": "*/*"})
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
+def iptv_read_list(source):
+    """A playlist's text: from the internet, or a .m3u in your storage."""
+    if source.startswith("/user/"):
+        _, real = locate(source)
+        if not real or not real.is_file():
+            raise OSError(f"{source}: no such file")
+        return real.read_text(errors="replace")[:20_000_000]
+    with iptv_fetch(source, timeout=30) as r:
+        return r.read(20_000_000).decode("utf-8", "replace")
+
+
+def iptv_parse(text, list_name):
+    """[{id, name, logo, group, url}] from an M3U's #EXTINF lines."""
+    out, meta = [], None
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("#EXTINF"):
+            attrs = dict(re.findall(r'([\w-]+)="([^"]*)"', line))
+            name = line.rsplit(",", 1)[-1].strip() if "," in line else attrs.get("tvg-name", "")
+            meta = {"name": name or attrs.get("tvg-name") or "Channel", "logo": attrs.get("tvg-logo", ""),
+                    "group": (attrs.get("group-title") or "").split(";")[0].strip() or list_name}
+        elif line and not line.startswith("#") and meta is not None:
+            if re.match(r"https?://", line):
+                cid = hashlib.sha1(line.encode()).hexdigest()[:16]
+                out.append({"id": cid, **meta, "url": line})
+            meta = None
+    return out
+
+
+def iptv_channels(again=False):
+    settings = iptv_settings()
+    key = json.dumps(settings["playlists"])
+    with _iptv["lock"]:
+        if not again and _iptv["key"] == key and time.monotonic() - _iptv["at"] < IPTV_CACHE_SECONDS:
+            return _iptv["channels"], _iptv["errors"]
+        channels, errors, seen = [], [], set()
+        for pl in settings["playlists"]:
+            try:
+                for c in iptv_parse(iptv_read_list(pl["url"]), pl.get("name") or "Channels"):
+                    if c["id"] not in seen:
+                        seen.add(c["id"])
+                        channels.append(c)
+            except (OSError, ValueError) as e:
+                errors.append(f"{pl.get('name') or pl['url']}: {str(e)[:120]}")
+        _iptv.update(at=time.monotonic(), key=key, channels=channels, errors=errors)
+        return channels, errors
+
+
+def iptv_rewrite(text, base):
+    """An HLS playlist with every address in it through /api/iptv/via."""
+    def via(uri):
+        return iptv_via(urllib.parse.urljoin(base, uri.strip()))
+    out = []
+    for line in text.splitlines():
+        s = line.strip()
+        if s and not s.startswith("#"):
+            out.append(via(s))
+        elif s.startswith("#") and 'URI="' in s:
+            out.append(re.sub(r'URI="([^"]+)"', lambda m: f'URI="{via(m[1])}"', line))
+        else:
+            out.append(line)
+    return "\n".join(out) + "\n"
+
+
+# ------------------------------------------------------------- contacts
+
+# Contacts: the people in Monica (a personal CRM), read and written through
+# its API with a token made in Monica (Settings, API) and pasted once in
+# Contacts; it stays here, the page never sees it. Monica is at MONICA_URL,
+# else this machine's address and its port.
+CONTACTS_KEY_FILE = DATA / "contacts-monica.json"
+CONTACT_ID = re.compile(r"[0-9]{1,12}")
+
+
+def monica_conn():
+    """(url or None, token or None)."""
+    try:
+        saved = json.loads(CONTACTS_KEY_FILE.read_text())
+    except (OSError, ValueError):
+        saved = None
+    url = install_setting("MONICA_URL").rstrip("/")
+    if not url:
+        host = install_setting("TS_IP") if HOMELAB_MODE else install_setting("ADLEROS_HOST")
+        app = next((a for a in installed_apps() if a["id"] == "monica" or a.get("known") == "monica"), None)
+        url = f"http://{host}:{app['port']}" if host and app and app.get("port") else None
+    token = saved.get("token") if isinstance(saved, dict) else None
+    return url, token if isinstance(token, str) and token else None
+
+
+def monica_json(path, query=None, body=None, method="GET", token=None, timeout=20):
+    url, saved = monica_conn()
+    token = token or saved
+    if not url or not token:
+        raise LookupError("Monica isn't connected")
+    full = f"{url}/api/{path}" + (f"?{urllib.parse.urlencode(query)}" if query else "")
+    req = urllib.request.Request(full, method=method, data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Authorization": f"Bearer {token}", "Accept": "application/json",
+                                          **({"Content-Type": "application/json"} if body is not None else {})})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read()
+    return json.loads(raw) if raw else {}
+
+
+def monica_error(e):
+    if isinstance(e, LookupError):
+        return "Monica isn't connected"
+    if isinstance(e, urllib.error.HTTPError):
+        if e.code in (401, 403):
+            return "Monica refused the token (made again, or deleted?)"
+        try:
+            said = json.loads(e.read() or b"{}")
+            msg = said.get("error", {}).get("message") if isinstance(said.get("error"), dict) else said.get("message")
+            if isinstance(msg, list):
+                msg = " ".join(map(str, msg))
+            if msg:
+                return f"Monica: {msg}"
+        except (OSError, ValueError, AttributeError):
+            pass
+        return f"Monica said {e.code}"
+    return "Monica didn't answer. Is it running?"
+
+
+def contacts_status():
+    url, token = monica_conn()
+    out = {"configured": bool(url and token), "url": url}
+    if not url:
+        return {**out, "error": "nomonica"}
+    if not token:
+        return {**out, "error": "nokey"}
+    try:
+        me = monica_json("me", timeout=8).get("data") or {}
+        out.update(ok=True, user=" ".join(x for x in (me.get("first_name"), me.get("last_name")) if x))
+    except urllib.error.HTTPError as e:
+        out["error"] = "refused" if e.code in (401, 403) else f"monica {e.code}"
+    except (OSError, ValueError) as e:
+        out.update(error="unreachable", why=str(e)[:160])
+    return out
+
+
+def contacts_connect(token):
+    """Tries the token; kept if Monica takes it. An empty one: forget it."""
+    if not token:
+        try:
+            CONTACTS_KEY_FILE.unlink()
+        except FileNotFoundError:
+            pass
+        return {"ok": True, "forgot": True}
+    url, _ = monica_conn()
+    if not url:
+        return {"ok": False, "error": "Monica isn't among your apps here: install it from the App Store, or set MONICA_URL in the settings file."}
+    try:
+        me = monica_json("me", token=token, timeout=10).get("data") or {}
+    except (urllib.error.HTTPError, OSError, ValueError) as e:
+        return {"ok": False, "error": monica_error(e)}
+    write_private(CONTACTS_KEY_FILE, json.dumps({"token": token}))
+    return {"ok": True, "user": " ".join(x for x in (me.get("first_name"), me.get("last_name")) if x)}
+
+
+def contact_card(c):
+    """What the list needs of a contact."""
+    info = c.get("information") or {}
+    avatar = info.get("avatar") or {}
+    return {"id": c.get("id"), "name": c.get("complete_name") or " ".join(x for x in (c.get("first_name"), c.get("last_name")) if x) or "?",
+            "first": c.get("first_name") or "", "last": c.get("last_name") or "", "nickname": c.get("nickname") or "",
+            "initials": c.get("initials") or "", "color": avatar.get("default_avatar_color") or "",
+            "starred": bool(c.get("is_starred")), "partial": bool(c.get("is_partial")),
+            "job": (info.get("career") or {}).get("job") or "", "company": (info.get("career") or {}).get("company") or ""}
+
+
+def contacts_list(query="", page=1):
+    q = {"limit": 100, "page": page}  # Monica sorts only by date: by name below
+    if query:
+        q["query"] = query[:100]
+    got = monica_json("contacts", q)
+    meta = got.get("meta") or {}
+    people = sorted((contact_card(c) for c in got.get("data") or [] if not c.get("is_partial")), key=lambda c: c["name"].casefold())
+    return {"contacts": people,
+            "page": meta.get("current_page", page), "pages": meta.get("last_page", 1), "total": meta.get("total")}
+
+
+def contact_detail(cid):
+    c = monica_json(f"contacts/{cid}", {"with": "contactfields"}).get("data") or {}
+    info = c.get("information") or {}
+    birth = ((info.get("dates") or {}).get("birthdate") or {})
+    notes = monica_json(f"contacts/{cid}/notes", {"limit": 100}).get("data") or []
+    return {**contact_card(c), "description": c.get("description") or "",
+            "birthday": {"date": (birth.get("date") or "")[:10], "yearUnknown": bool(birth.get("is_year_unknown")),
+                         "ageBased": bool(birth.get("is_age_based"))} if birth.get("date") else None,
+            "fields": [{"id": f.get("id"), "value": f.get("content") or f.get("data") or "",
+                        "type": (f.get("contact_field_type") or {}).get("name") or "",
+                        "kind": (f.get("contact_field_type") or {}).get("type") or ""} for f in c.get("contactFields") or c.get("contact_fields") or []],
+            "addresses": [", ".join(x for x in (a.get("street"), a.get("city"), a.get("province"), a.get("postal_code"),
+                                                (a.get("country") or {}).get("name") if isinstance(a.get("country"), dict) else a.get("country")) if x)
+                          for a in c.get("addresses") or []],
+            "tags": [t.get("name") for t in c.get("tags") or [] if t.get("name")],
+            "notes": [{"id": n.get("id"), "body": n.get("body") or "", "at": (n.get("created_at") or "")[:10]} for n in notes],
+            "url": monica_conn()[0] and f"{monica_conn()[0]}/people/{c.get('hash_id') or cid}"}
+
+
+def contact_fields_body(body):
+    """Monica's contact fields from the page's: names, nickname, description, birthday."""
+    first = str(body.get("first") or "").strip()[:50]
+    if not first:
+        raise ValueError("A first name, at least.")
+    out = {"first_name": first, "last_name": str(body.get("last") or "").strip()[:100] or None,
+           "nickname": str(body.get("nickname") or "").strip()[:100] or None,
+           "description": str(body.get("description") or "").strip()[:2000] or None,
+           "is_birthdate_known": False, "is_deceased": False, "is_deceased_date_known": False}
+    bday = str(body.get("birthday") or "").strip()
+    if bday:
+        m = re.fullmatch(r"(?:(\d{4})-)?(\d{2})-(\d{2})", bday)
+        if not m:
+            raise ValueError("A birthday as YYYY-MM-DD (or MM-DD).")
+        out.update(is_birthdate_known=True, birthdate_day=int(m[3]), birthdate_month=int(m[2]),
+                   birthdate_year=int(m[1]) if m[1] else None, birthdate_is_age_based=False)
+    return out
+
+
+def contacts_write(what, body):
+    cid = str(body.get("id") or "")
+    if what in ("update", "delete", "field-add", "note-add") and not CONTACT_ID.fullmatch(cid):
+        raise ValueError("no such contact")
+    if what == "create":
+        made = monica_json("contacts", body=contact_fields_body(body), method="POST").get("data") or {}
+        return {"ok": True, "id": made.get("id")}
+    if what == "update":
+        monica_json(f"contacts/{cid}", body=contact_fields_body(body), method="PUT")
+        return {"ok": True, "id": int(cid)}
+    if what == "delete":
+        monica_json(f"contacts/{cid}", method="DELETE")
+        return {"ok": True}
+    if what == "field-add":
+        kind = str(body.get("kind") or "")
+        value = str(body.get("value") or "").strip()[:255]
+        if not value:
+            raise ValueError("Nothing to add.")
+        types = monica_json("contactfieldtypes", {"limit": 100}).get("data") or []
+        t = next((t for t in types if (t.get("type") or "").lower() == kind or (t.get("name") or "").lower() == kind), None)
+        if not t:
+            raise ValueError(f"Monica has no field for {kind}.")
+        monica_json("contactfields", body={"contact_field_type_id": t["id"], "contact_id": int(cid), "data": value}, method="POST")
+        return {"ok": True}
+    if what in ("field-delete", "note-delete"):
+        fid = str(body.get("fieldId") or body.get("noteId") or "")
+        if not CONTACT_ID.fullmatch(fid):
+            raise ValueError("no such field")
+        monica_json(f"{'contactfields' if what == 'field-delete' else 'notes'}/{fid}", method="DELETE")
+        return {"ok": True}
+    if what == "note-add":
+        text = str(body.get("body") or "").strip()[:20000]
+        if not text:
+            raise ValueError("An empty note.")
+        monica_json("notes", body={"body": text, "contact_id": int(cid), "is_favorited": False}, method="POST")
+        return {"ok": True}
+    raise ValueError("unknown")
+
+
 # ------------------------------------------------------------- videos
 #
 # Videos: Jellyfin's films, shows and documentaries (online: a key pasted
@@ -6724,6 +7023,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.books_get(path[len("/api/books/"):], query)
         if path.startswith("/api/videos/"):
             return self.videos_get(path[len("/api/videos/"):], query)
+        if path.startswith("/api/contacts/"):
+            return self.contacts_get(path[len("/api/contacts/"):], query)
+        if path.startswith("/api/iptv/"):
+            return self.iptv_get(path[len("/api/iptv/"):], query)
         if path == "/api/car/places":
             return self.send_json(200, car_places())
         if path.startswith("/api/paperless/"):
@@ -6804,6 +7107,8 @@ class Handler(BaseHTTPRequestHandler):
                               else 256 * 1024 if path.startswith("/api/files/")
                               else 2 * 1024 * 1024 if path.startswith("/api/music/")
                               else 64 * 1024 if path.startswith("/api/podcasts/")
+                              else 64 * 1024 if path.startswith("/api/contacts/")
+                              else 64 * 1024 if path.startswith("/api/iptv/")
                               else BOOK_TEXT_LIMIT if path == "/api/books/text"
                               else BOOK_COVER_LIMIT * 2 if path == "/api/books/cover"
                               else 32 * 1024 if path == "/api/car/places" else 4096)
@@ -6829,6 +7134,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.books_post(path[len("/api/books/"):], body)
         if path.startswith("/api/videos/"):
             return self.videos_post(path[len("/api/videos/"):], body)
+        if path.startswith("/api/contacts/"):
+            return self.contacts_post(path[len("/api/contacts/"):], body)
+        if path.startswith("/api/iptv/"):
+            return self.iptv_post(path[len("/api/iptv/"):], body)
         if path == "/api/car/places":
             return self.send_json(200, car_places_set(body))
         if path.startswith("/api/paperless/"):
@@ -7673,6 +7982,128 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(chunk)
             except (BrokenPipeError, ConnectionResetError):
                 pass
+
+    def iptv_get(self, what, query):
+        q = lambda k: query.get(k, [""])[0]
+        if what == "settings":
+            return self.send_json(200, iptv_settings())
+        if what == "channels":
+            channels, errors = iptv_channels(again=q("again") == "1")
+            return self.send_json(200, {"channels": [{**{k: c[k] for k in ("id", "name", "group")},
+                                                      "logo": iptv_via(c["logo"], "i") if re.match(r"https?://", c["logo"]) else "",
+                                                      "play": iptv_via(c["url"])} for c in channels], "errors": errors})
+        if what == "via":
+            url, kind = q("u"), q("k")
+            if not re.match(r"https?://", url) or not hmac.compare_digest(q("s"), iptv_sign(url)):
+                return self.send(403, b"")
+            return self.iptv_relay(url, image=kind == "i")
+        return self.send_json(404, {"error": "not found"})
+
+    def iptv_post(self, what, body):
+        if what == "playlists":
+            lists = body.get("playlists")
+            if not isinstance(lists, list) or len(lists) > 20:
+                return self.send_json(400, {"error": "playlists: a list"})
+            clean = []
+            for x in lists:
+                url = str((x or {}).get("url") or "").strip()
+                if not (re.fullmatch(r"https?://[^\s\"'<>\\]{1,1000}", url) or re.fullmatch(r"/user/[^\x00\n]{1,1000}\.m3u8?", url, re.I)):
+                    return self.send_json(400, {"error": f"{url[:80] or 'An empty one'}: an http(s):// address, or a .m3u file in your storage"})
+                clean.append({"name": str(x.get("name") or "").strip()[:60], "url": url})
+            iptv_save({**iptv_settings(), "playlists": clean})
+            channels, errors = iptv_channels(again=True)
+            return self.send_json(200, {"ok": True, "count": len(channels), "errors": errors})
+        if what == "favorite":
+            cid = str(body.get("id") or "")
+            if not re.fullmatch(r"[0-9a-f]{16}", cid):
+                return self.send_json(400, {"error": "no such channel"})
+            st = iptv_settings()
+            favs = [f for f in st["favorites"] if f != cid] + ([cid] if body.get("on") else [])
+            iptv_save({**st, "favorites": favs[-500:]})
+            return self.send_json(200, {"ok": True, "favorites": favs})
+        return self.send_json(404, {"error": "not found"})
+
+    def iptv_relay(self, url, image=False):
+        """One of a channel's addresses: an HLS playlist (its addresses
+        rewritten), a segment, a stream or a logo, as it comes."""
+        try:
+            r = iptv_fetch(url, timeout=20)
+        except urllib.error.HTTPError as e:
+            return self.send(e.code if e.code in (403, 404, 410) else 502, b"")
+        except (OSError, ValueError):
+            return self.send(502, b"the channel didn't answer")
+        with r:
+            ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            if image:
+                if not ctype.startswith("image/") or ctype == "image/svg+xml":
+                    return self.send(415, b"")
+                data = r.read(2 * 1024 * 1024)
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "private, max-age=86400")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            head = r.read(8)
+            if head.startswith(b"#EXTM3U") or "mpegurl" in ctype:
+                text = (head + r.read(4 * 1024 * 1024)).decode("utf-8", "replace")
+                data = iptv_rewrite(text, r.geturl()).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/vnd.apple.mpegurl")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", ctype if ctype.startswith(("video/", "audio/")) else "video/mp2t")
+            if r.headers.get("Content-Length"):
+                self.send_header("Content-Length", r.headers["Content-Length"])
+            self.send_header("Content-Security-Policy", "default-src 'none'; sandbox")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            try:
+                self.wfile.write(head)
+                while chunk := r.read(64 * 1024):
+                    self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError, TimeoutError):
+                pass
+
+    def contacts_get(self, what, query):
+        q = lambda k: query.get(k, [""])[0]
+        if what == "status":
+            return self.send_json(200, contacts_status())
+        try:
+            if what == "list":
+                page = int(q("page") or 1) if (q("page") or "1").isdigit() else 1
+                return self.send_json(200, contacts_list(q("q").strip(), max(1, min(page, 10000))))
+            if what == "contact" and CONTACT_ID.fullmatch(q("id")):
+                return self.send_json(200, contact_detail(q("id")))
+        except LookupError:
+            return self.send_json(409, {"error": "Monica isn't connected", "status": contacts_status()})
+        except (urllib.error.HTTPError, OSError, ValueError) as e:
+            return self.send_json(404 if isinstance(e, urllib.error.HTTPError) and e.code == 404 else 502, {"error": monica_error(e)})
+        return self.send_json(404, {"error": "not found"})
+
+    def contacts_post(self, what, body):
+        if what == "connect":
+            token = str(body.get("token") or "").strip()
+            if len(token) > 4000 or not re.fullmatch(r"[A-Za-z0-9._-]*", token):
+                return self.send_json(400, {"error": "That doesn't look like a Monica token."})
+            return self.send_json(200, contacts_connect(token))
+        try:
+            return self.send_json(200, contacts_write(what, body))
+        except LookupError:
+            return self.send_json(409, {"error": "Monica isn't connected", "status": contacts_status()})
+        except urllib.error.HTTPError as e:
+            return self.send_json(502, {"error": monica_error(e)})
+        except ValueError as e:
+            return self.send_json(400, {"error": str(e)})
+        except OSError as e:
+            return self.send_json(502, {"error": monica_error(e)})
 
     def videos_get(self, what, query):
         q = lambda k: query.get(k, [""])[0]

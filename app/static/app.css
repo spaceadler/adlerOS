@@ -4985,3 +4985,64 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .tv-date span { font-size: max(14px, 1.1vw); opacity: 0.85; }
 .big-tile-art > .tv-date { width: 100%; height: 100%; }
 .big-more { height: 1px; }
+
+/* Contacts (contacts.js): Music's window, the people down the side. */
+.contacts-app { --mu-accent: #6d8cc0; }
+.ct-list { overflow-y: auto; }
+.ct-letter { margin: 12px 10px 4px; color: rgb(255 255 255 / 0.45); font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.ct-row { gap: 9px; }
+.ct-new { margin: 2px 0 6px; }
+.ct-none { padding: 8px 10px; font-size: 13px; }
+.ct-avatar { display: inline-grid; flex-shrink: 0; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--mu-accent); color: #fff; font-size: 11px; font-weight: 600; }
+.ct-avatar.big { width: 72px; height: 72px; font-size: 26px; }
+.ct-head { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
+.ct-head h1 { margin: 0; }
+.ct-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.ct-star.on svg path { fill: #ffd60a; stroke: #ffd60a; }
+.ct-section { max-width: 640px; margin: 22px 0; }
+.ct-section h2 { margin: 0 0 8px; color: rgb(255 255 255 / 0.55); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.ct-field { display: flex; align-items: baseline; gap: 12px; padding: 7px 0; border-bottom: 1px solid rgb(255 255 255 / 0.07); font-size: 14px; }
+.ct-field a { color: #fff; }
+.ct-label { flex: 0 0 90px; color: rgb(255 255 255 / 0.5); font-size: 12.5px; text-transform: capitalize; }
+.ct-x { display: grid; place-items: center; width: 24px; height: 24px; margin-left: auto; padding: 0; border: 0; border-radius: 50%; background: none; color: rgb(255 255 255 / 0.4); cursor: pointer; }
+.ct-x:hover { background: rgb(255 255 255 / 0.1); color: #fff; }
+.ct-x svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.ct-add { display: flex; gap: 8px; margin-top: 10px; }
+.ct-add .ct-kind { flex: 0 0 110px; }
+.ct-add-row { display: flex; justify-content: flex-end; gap: 8px; margin: 8px 0; }
+.ct-description { margin: 10px 0 0; color: rgb(255 255 255 / 0.8); line-height: 1.55; white-space: pre-wrap; }
+.ct-note-input { width: 100%; resize: vertical; }
+.ct-note { margin: 10px 0; padding: 10px 12px; border-radius: 10px; background: rgb(255 255 255 / 0.06); }
+.ct-note p { margin: 4px 0 0; line-height: 1.5; white-space: pre-wrap; }
+.ct-note-top { display: flex; align-items: center; font-size: 12px; }
+.ct-more { margin-top: 26px; font-size: 13px; }
+.ct-more a { color: #fff; }
+.ct-edit { display: grid; gap: 12px; max-width: 520px; }
+.ct-edit-field { display: grid; gap: 4px; }
+.ct-edit textarea { resize: vertical; }
+
+/* Live TV (iptv.js): Music's window, channels in a grid, one playing on top. */
+.iptv-app { --mu-accent: #e5384f; }
+.lt-count { margin-left: auto; color: rgb(255 255 255 / 0.4); font-size: 11.5px; }
+.lt-stage { position: relative; max-width: 960px; margin: 0 0 18px; border-radius: 12px; overflow: hidden; background: #000; }
+.lt-video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+.lt-now { display: flex; align-items: baseline; gap: 10px; padding: 10px 14px; background: rgb(255 255 255 / 0.06); font-size: 14px; }
+.lt-say { position: absolute; top: 40%; left: 0; right: 0; margin: 0; padding: 0 30px; color: rgb(255 255 255 / 0.8); text-align: center; pointer-events: none; }
+.lt-say:empty { display: none; }
+.lt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.lt-tile { position: relative; display: grid; gap: 8px; padding: 12px; border-radius: 12px; background: rgb(255 255 255 / 0.06); cursor: pointer; outline: none; }
+.lt-tile:hover, .lt-tile:focus-visible { background: rgb(255 255 255 / 0.12); }
+.lt-tile.on { box-shadow: inset 0 0 0 2px var(--mu-accent); }
+.lt-logo { display: grid; place-items: center; height: 64px; }
+.lt-logo img { max-width: 100%; max-height: 64px; object-fit: contain; }
+.lt-initial { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: rgb(255 255 255 / 0.1); color: #fff; font-weight: 600; text-transform: uppercase; }
+.lt-name { overflow: hidden; font-size: 13px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.lt-fav { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: none; color: rgb(255 255 255 / 0.35); cursor: pointer; }
+.lt-fav svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.lt-fav.on { color: #ffd60a; }
+.lt-fav.on svg path { fill: currentColor; }
+.lt-more { margin: 16px auto; }
+.lt-url { overflow: hidden; color: rgb(255 255 255 / 0.75); text-overflow: ellipsis; white-space: nowrap; }
+.lt-cc { flex: 0 0 70px; text-transform: lowercase; }
+.lt-close { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: rgb(0 0 0 / 0.55); color: #fff; cursor: pointer; }
+.lt-close svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
