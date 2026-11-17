@@ -9,7 +9,10 @@ services:
     ports:
       - "${PORT}:80"
     environment:
-      APP_ENV: production
+      # "production" would make every link https://, which this port isn't;
+      # behind your HTTPS proxy, APP_TRUSTED_PROXIES gets that right anyway.
+      APP_ENV: local
+      APP_DEBUG: "false"
       APP_KEY: ${APP_KEY}
       # Links in its emails; pages use whatever address you reach it at.
       APP_URL: http://localhost
