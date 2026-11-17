@@ -2,22 +2,22 @@
 
 ← [README](README.md)
 
-> Generated from commit `3a0b053` by `scripts/codemap.py`. Regenerate it from the workspace root with `python3 scripts/codemap.py adleros`; don't edit it by hand.
+> Generated from commit `32c2c60` by `scripts/codemap.py`. Regenerate it from the workspace root with `python3 scripts/codemap.py adleros`; don't edit it by hand.
 
 ## Files
 
 Each box is a source file and its function count; an arrow means calls into that file.
 
 ```mermaid
-flowchart LR
-    n_app_server_py["app/server.py · 429"]
+flowchart TB
+    n_app_server_py["app/server.py · 461"]
     n_app_static_music_js["app/static/music.js · 133"]
     n_app_static_luna_js["app/static/luna.js · 114"]
     n_app_static_app_js["app/static/app.js · 103"]
     n_app_static_files_js["app/static/files.js · 79"]
     n_app_static_books_js["app/static/books.js · 79"]
     n_app_static_podcasts_js["app/static/podcasts.js · 77"]
-    n_agent_apps_py["agent/apps.py · 73"]
+    n_agent_apps_py["agent/apps.py · 74"]
     n_app_static_calendar_js["app/static/calendar.js · 73"]
     n_app_static_windows_js["app/static/windows.js · 72"]
     n_app_static_bigui_js["app/static/bigui.js · 66"]
@@ -25,8 +25,8 @@ flowchart LR
     n_app_static_desk_js["app/static/desk.js · 55"]
     n_app_static_tasks_js["app/static/tasks.js · 52"]
     n_app_static_terminal_js["app/static/terminal.js · 49"]
-    n_app_static_settings_js["app/static/settings.js · 45"]
-    n_app_static_store_js["app/static/store.js · 40"]
+    n_app_static_settings_js["app/static/settings.js · 47"]
+    n_app_static_store_js["app/static/store.js · 42"]
     n_app_ical_py["app/ical.py · 38"]
     n_app_static_documents_js["app/static/documents.js · 37"]
     n_app_static_tv_js["app/static/tv.js · 34"]
@@ -44,17 +44,17 @@ flowchart LR
     n_app_static_mdbases_js["app/static/mdbases.js · 21"]
     n_agent_files_py["agent/files.py · 19"]
     n_agent_terminal_py["agent/terminal.py · 19"]
+    n_app_static_iptv_js["app/static/iptv.js · 18"]
+    n_app_static_contacts_js["app/static/contacts.js · 17"]
+    n_app_static_usage_js["app/static/usage.js · 17"]
     n_app_static_mdinsert_js["app/static/mdinsert.js · 16"]
-    n_app_static_keyboard_js["app/static/keyboard.js · 15"]
+    n_app_static_welcome_js["app/static/welcome.js · 15"]
     n_app_static_folders_js["app/static/folders.js · 15"]
-    n_app_static_usage_js["app/static/usage.js · 15"]
-    n_agent_agent_py["agent/agent.py · 15"]
-    n_app_static_welcome_js["app/static/welcome.js · 14"]
     n_app_server_py -->|45| n_app_ical_py
     n_app_server_py -->|7| n_app_musictags_py
 ```
 
-(6 smaller files not drawn.)
+(8 smaller files not drawn.)
 
 ## Hubs
 
@@ -62,29 +62,29 @@ The most connected functions: where a change reaches furthest.
 
 | Function | Where | Called by | Calls |
 |---|---|---|---|
-| `.do_GET()` | `app/server.py:6525` | 1 | 51 |
-| `.send_json()` | `app/server.py:6466` | 35 | 1 |
+| `.do_GET()` | `app/server.py:6940` | 1 | 53 |
+| `.send_json()` | `app/server.py:6881` | 39 | 1 |
 | `muSong()` | `app/static/music.js:58` | 34 | 0 |
-| `.do_POST()` | `app/server.py:6671` | 0 | 31 |
-| `calendar_write()` | `app/server.py:4507` | 1 | 29 |
-| `locate()` | `app/server.py:5619` | 23 | 2 |
+| `.do_POST()` | `app/server.py:7090` | 0 | 33 |
+| `calendar_write()` | `app/server.py:4623` | 1 | 29 |
+| `locate()` | `app/server.py:5735` | 24 | 2 |
 | `muCurrent()` | `app/static/music.js:62` | 25 | 0 |
 | `tkShow()` | `app/static/tasks.js:186` | 18 | 7 |
-| `write_private()` | `app/server.py:174` | 23 | 0 |
-| `.send()` | `app/server.py:6452` | 22 | 0 |
+| `write_private()` | `app/server.py:174` | 25 | 0 |
+| `.send()` | `app/server.py:6867` | 24 | 0 |
+| `installed_apps()` | `app/server.py:272` | 20 | 3 |
 | `calEditor()` | `app/static/calendar.js:1122` | 2 | 20 |
 | `calShowEvent()` | `app/static/calendar.js:692` | 4 | 17 |
 | `calTimeGrid()` | `app/static/calendar.js:556` | 1 | 20 |
-| `installed_apps()` | `app/server.py:272` | 18 | 3 |
 | `mdFolderOf()` | `app/static/luna.js:27` | 21 | 0 |
 | `mdOpen()` | `app/static/luna.js:520` | 15 | 6 |
+| `install_setting()` | `app/server.py:574` | 19 | 1 |
 | `mdNoteName()` | `app/static/luna.js:26` | 20 | 0 |
-| `renderFiles()` | `app/static/files.js:281` | 4 | 16 |
-| `wireFiles()` | `app/static/files.js:914` | 1 | 19 |
-| `.music_get()` | `app/server.py:7052` | 1 | 18 |
+| `renderFiles()` | `app/static/files.js:287` | 4 | 16 |
+| `wireFiles()` | `app/static/files.js:920` | 1 | 19 |
 
 ```mermaid
-flowchart LR
+flowchart TB
     n_app_server_handler_do_get[".do_GET()"]
     n_app_server_handler_send_json[".send_json()"]
     n_app_static_music_musong["muSong()"]
@@ -95,28 +95,24 @@ flowchart LR
     n_app_static_tasks_tkshow["tkShow()"]
     n_app_server_write_private["write_private()"]
     n_app_server_handler_send[".send()"]
+    n_app_server_installed_apps["installed_apps()"]
     n_app_static_calendar_caleditor["calEditor()"]
     n_app_static_calendar_calshowevent["calShowEvent()"]
     n_app_static_calendar_caltimegrid["calTimeGrid()"]
-    n_app_server_installed_apps["installed_apps()"]
     n_app_static_luna_mdfolderof["mdFolderOf()"]
     n_app_static_luna_mdopen["mdOpen()"]
+    n_app_server_install_setting["install_setting()"]
     n_app_static_luna_mdnotename["mdNoteName()"]
     n_app_static_files_renderfiles["renderFiles()"]
     n_app_static_files_wirefiles["wireFiles()"]
-    n_app_server_handler_music_get[".music_get()"]
     n_app_server_handler_do_get --> n_app_server_handler_send
     n_app_server_handler_do_get --> n_app_server_handler_send_json
     n_app_server_handler_do_get --> n_app_server_installed_apps
-    n_app_server_handler_do_get --> n_app_server_handler_music_get
     n_app_server_handler_send_json --> n_app_server_handler_send
     n_app_server_handler_do_post --> n_app_server_handler_send_json
     n_app_server_handler_do_post --> n_app_server_handler_send
     n_app_static_calendar_caltimegrid --> n_app_static_calendar_calshowevent
     n_app_static_files_wirefiles --> n_app_static_files_renderfiles
-    n_app_server_handler_music_get --> n_app_server_handler_send_json
-    n_app_server_handler_music_get --> n_app_server_handler_send
-    n_app_server_handler_music_get --> n_app_server_locate
 ```
 
 ## Functions
@@ -177,31 +173,31 @@ flowchart LR
 - `image_path()` L570
 - `known_apps()` L580
 - `classify()` L598 → `image_path()`, `known_apps()`
-- `backing()` L610
 - `host_address()` L626 → `setting()`
 - `new_app_id()` L648 → `slug()`, `catalog()`
-- `store_install()` L701 → `apps_dir()`, `registry_apps()`, `free_port()`, `setting()`, `render_env()`, `rewrite()`, `make_mount_dirs()`, `say()`, `host_address()`, `compose()`, +1
-- `plan_file()` L743 → `classify()`, `backing()`
-- `record_for()` L785 → `backing()`, `web_port()`, `image_path()`, `new_app_id()`, `host_address()`
-- `discover()` L811 → `setting()`, `say()`, `every_app()`, `known_apps()`, `web_writable()`, `find_compose_files()`, `services()`, `plan_file()`, `record_for()`, `write_record()`, +1
-- `proxy_hosts()` L856 → `host_address()`, `registry_apps()`
-- `use_proxy_addresses()` L883 → `proxy_hosts()`, `registry_apps()`, `host_address()`, `services()`, `write_record()`, `say()`
-- `first_failure()` L916
-- `web_writable()` L929 → `setting()`
-- `untrusted()` L941 → `web_writable()`
-- `importable()` L946 → `untrusted()`
-- `services()` L960 → `docker_env()`
-- `find_compose_files()` L994 → `compose_file()`
-- `scan()` L1013 → `every_app()`, `find_compose_files()`, `importable()`, `taken_services()`, `services()`
-- `import_app()` L1051 → `importable()`, `services()`, `every_app()`, `taken_services()`, `new_app_id()`, `classify()`, `write_record()`, `say()`
-- `add_site()` L1097 → `every_app()`, `new_app_id()`, `write_record()`, `say()`
-- `forget()` L1127 → `registry_app()`, `say()`
-- `firefox_container()` L1143 → `docker_env()`
-- `firefox_prefs()` L1179 → `rewrite()`
-- `firefox_quit()` L1199 → `registry_apps()`, `firefox_container()`, `firefox_prefs()`, `docker_env()`
-- `firefox_url()` L1213 → `registry_apps()`, `firefox_container()`, `firefox_prefs()`, `docker_env()`
-- `main()` L1256 → `firefox_url()`, `firefox_quit()`, `discover()`, `scan()`, `set_roots()`, `import_app()`, `add_site()`, `forget()`, `all_apps()`, `usage()`, +3
-- … and 13 less-connected functions
+- `store_install()` L704 → `apps_dir()`, `registry_apps()`, `free_port()`, `setting()`, `render_env()`, `rewrite()`, `make_mount_dirs()`, `say()`, `host_address()`, `compose()`, +1
+- `plan_file()` L746 → `classify()`, `backing()`
+- `record_for()` L788 → `backing()`, `web_port()`, `image_path()`, `new_app_id()`, `host_address()`
+- `discover()` L814 → `setting()`, `say()`, `every_app()`, `known_apps()`, `web_writable()`, `find_compose_files()`, `services()`, `plan_file()`, `record_for()`, `write_record()`, +1
+- `proxy_hosts()` L859 → `host_address()`, `registry_apps()`
+- `use_proxy_addresses()` L886 → `proxy_hosts()`, `registry_apps()`, `host_address()`, `services()`, `write_record()`, `say()`
+- `first_failure()` L919
+- `web_writable()` L932 → `setting()`
+- `untrusted()` L944 → `web_writable()`
+- `importable()` L949 → `untrusted()`
+- `services()` L963 → `docker_env()`
+- `find_compose_files()` L997 → `compose_file()`
+- `scan()` L1016 → `every_app()`, `find_compose_files()`, `importable()`, `taken_services()`, `services()`
+- `import_app()` L1054 → `importable()`, `services()`, `every_app()`, `taken_services()`, `new_app_id()`, `classify()`, `write_record()`, `say()`
+- `add_site()` L1100 → `every_app()`, `new_app_id()`, `write_record()`, `say()`
+- `forget()` L1130 → `registry_app()`, `say()`
+- `set_url()` L1144 → `registry_app()`, `host_address()`, `say()`, `write_record()`
+- `firefox_container()` L1168 → `docker_env()`
+- `firefox_prefs()` L1204 → `rewrite()`
+- `firefox_quit()` L1224 → `registry_apps()`, `firefox_container()`, `firefox_prefs()`, `docker_env()`
+- `firefox_url()` L1238 → `registry_apps()`, `firefox_container()`, `firefox_prefs()`, `docker_env()`
+- `main()` L1281 → `firefox_url()`, `firefox_quit()`, `discover()`, `scan()`, `set_roots()`, `import_app()`, `add_site()`, `forget()`, `set_url()`, `all_apps()`, +4
+- … and 14 less-connected functions
 
 ### `agent/connect.py`
 
@@ -257,12 +253,12 @@ flowchart LR
 
 ### `agent/tailscale.py`
 
-- `settings()` L19
-- `ts()` L32
-- `status()` L36 → `ts()`
-- `get()` L54 → `settings()`, `ts()`
-- `host_path()` L68 → `settings()`
-- `send()` L81 → `host_path()`, `ts()`
+- `settings()` L20
+- `ts()` L33
+- `status()` L37 → `ts()`
+- `get()` L55 → `settings()`, `host_path()`, `ts()`
+- `host_path()` L73 → `settings()`
+- `send()` L86 → `host_path()`, `ts()`
 
 ### `agent/terminal.py`
 
@@ -367,59 +363,59 @@ flowchart LR
 - `save_settings()` L401 → `load_settings()`, `write_private()`
 - `admin_on()` L424 → `admin_until()`
 - `install_setting()` L574 → `read_env_file()`
-- `queue_action()` L858 → `unfinished_jobs()`, `busy_job()`, `stamp()`, `write_private()`
-- `local_address()` L939 → `install_setting()`
-- `app_icon()` L1258 → `read_catalog()`, `registry_apps()`, `store_apps()`, `dashboard_icon()`, `site_icon()`
-- `place_on()` L1447 → `place_host()`
-- `places_on()` L1452 → `place_on()`
-- `radio_stations()` L1812
-- `radio_logo_find()` L2127 → `_logo_core()`, `_logo_words()`, `_logo_stream()`, `radio_open()`, `_radio_browser()`, `_logo_stem()`, `_logo_site()`, `_logo_named()`, `_web_get()`, `_StationPage`, +1
-- `music_dir()` L2368 → `install_setting()`, `locate()`, `place_path()`
-- `music_item()` L2474 → `locate()`, `music_dir()`, `place_path()`
-- `navidrome_bring()` L2827 → `navidrome_matcher()`, `navidrome_songs()`, `match()`, `navidrome_call()`, `music_favorites()`, `save_favorites()`, `navidrome_id()`
-- `abs_conn()` L3547 → `install_setting()`, `installed_apps()`
-- `abs_json()` L3573 → `abs_open()`
-- `pods_local()` L3917 → `pods_scan()`
-- `calendar_state()` L4318 → `caldav()`, `caldav_home()`, `caldav_calendars()`, `caldav_events()`
-- `calendar_write()` L4507 → `caldav()`, `calendar_state()`, `calendar_fields()`, `cal_times()`, `cal_text()`, `add()`, `cal_rule()`, `put()`, `cal_stamp()`, `cal_zones_used()`, +19
-- `cal_split()` L4728 → `prop()`, `events()`, `rrule()`, `starts()`, `put()`, `props()`, `values_of()`, `cal_wall()`, `remove()`, `add()`, +2
-- `vk()` L4839 → `vikunja()`
-- `tasks_move_in()` L5008 → `tasks_local()`, `vk_projects()`, `vk_all()`, `vk()`, `vk_body()`, `tasks_local_save()`
-- `tasks_read()` L5132 → `tasks_connected()`, `tasks_read_local()`, `vk_projects()`, `vk_all()`, `vk_id()`, `vk()`, `vk_task()`, `vk_date()`
-- `tasks_write()` L5204 → `tasks_connected()`, `tasks_local()`, `tasks_write_local()`, `tasks_local_save()`, `vk_id()`, `task_fields()`, `vk()`, `vk_body()`, `vk_projects()`, `vk_task()`
-- `locate()` L5619 → `place_on()`, `nested()`
-- `place_path()` L5641
-- `jf_json()` L6116 → `jf_open()`
-- `.client()` L6400 → `._from_proxy()`
-- `.send()` L6452
-- `.send_json()` L6466 → `.send()`
-- `.settings_payload()` L6495 → `read_env_file()`, `display_name()`, `search_url()`, `selected_wallpaper_id()`, `wallpaper_options()`, `installed_apps()`, `device_info()`, `backups_info()`, `action_summary()`, `load_actions()`, +4
-- `.do_GET()` L6525 → `.send()`, `.serve_static()`, `.logged_in()`, `selected_wallpaper_id()`, `.send_json()`, `wallpaper_path()`, `.serve_file()`, `dock_icon_path()`, `installed_apps()`, `placed()`, +41
-- `.do_POST()` L6671 → `.cross_site()`, `.send_json()`, `.login()`, `.session_token()`, `revoke()`, `.cookie_header()`, `.send()`, `.logged_in()`, `.read_json()`, `.update_settings()`, +21
-- `.login()` L6753 → `.client()`, `lockout_remaining()`, `.send_json()`, `.read_json()`, `password_ok()`, `record_failure()`, `.cookie_header()`, `new_session()`
-- `.update_settings()` L6770 → `.send_json()`, `installed_apps()`, `collection_choices()`, `app_folders()`, `app_order()`, `widget_catalog()`, `valid_search_url()`, `wallpaper_path()`, `placements()`, `save_settings()`
-- `.change_password()` L6863 → `.client()`, `lockout_remaining()`, `.send_json()`, `password_ok()`, `record_failure()`, `hash_password()`, `save_settings()`, `.cookie_header()`, `new_session()`
-- `.files_get()` L6883 → `places_on()`, `.send_json()`, `trash_items()`, `search_files()`, `admin_on()`, `locate()`, `list_folder()`, `place_path()`, `root_writes()`, `terminal_enabled()`, +2
-- `.notes_get()` L6992 → `places_on()`, `.send_json()`, `load_settings()`, `vault_list()`, `default_vault()`, `vault_index()`, `vault_search()`
-- `.notes_post()` L7009 → `places_on()`, `.send_json()`, `vault_rename()`, `load_settings()`, `locate()`, `good_name()`, `place_path()`, `save_settings()`, `vault_list()`
-- `.music_get()` L7052 → `radio_logos_soon()`, `.send_json()`, `radio_listed()`, `.radio_get()`, `places_on()`, `navidrome_sync()`, `music_counts()`, `music_favorites()`, `music_plays()`, `music_library()`, +8
-- `.radio_get()` L7104 → `radio_stations()`, `.send_json()`, `radio_logo_file()`, `.send()`, `radio_open()`, `radio_title()`
-- `.radio_post()` L7182 → `.send_json()`, `radio_stations()`, `radio_save()`, `radio_logo_forget()`, `radio_listed()`, `radio_logos_soon()`, `radio_parse()`, `locate()`, `radio_url()`, `radio_add()`
-- `.music_post()` L7255 → `.radio_post()`, `places_on()`, `.send_json()`, `music_item()`, `music_played()`, `navidrome_scrobble()`, `music_favorite()`, `music_dir()`, `music_library()`, `.music_list_file()`, +4
-- `.books_get()` L7320 → `books_dir()`, `books_list()`, `books_abs_items()`, `books_abs_match()`, `books_state()`, `.send_json()`, `pods_status()`, `abs_open()`, `write_private()`, `.send()`, +7
-- `.books_post()` L7421 → `.send_json()`, `pods_connect()`, `book_path()`, `books_save_state()`, `abs_conn()`, `book_key()`, `write_private()`, `.send()`
-- `.podcasts_get()` L7466 → `.send_json()`, `pods_status()`, `abs_library()`, `abs_error()`, `pods_local_library()`, `abs_item()`, `pods_local_item()`, `pods_cover()`, `.send()`, `pods_local_file()`, +5
-- `.videos_get()` L7561 → `.send_json()`, `videos_status()`, `videos_local()`, `.videos_stream()`, `.videos_image()`, `jf_home()`, `jf_library()`, `jf_detail()`, `jf_search()`, `jf_error()`
-- `.podcasts_post()` L7673 → `.send_json()`, `pods_connect()`, `abs_play()`, `pods_local_play()`, `abs_sync()`, `pods_local()`, `pods_local_file()`, `pods_progress_set()`, `abs_json()`, `abs_subscribe()`, +3
-- `.gallery_get()` L7745 → `gallery_status()`, `.send_json()`, `gallery_query()`, `immich_json()`, `.gallery_local_reply()`, `.gallery_local_thumb()`, `.gallery_album_zip()`, `.gallery_stream()`
-- `.documents_get()` L7825 → `documents_status()`, `.send_json()`, `documents_local()`, `documents_query()`, `paperless_json()`, `paperless_all()`, `.paperless_stream()`
-- `.documents_post()` L7978 → `locate()`, `.send_json()`, `paperless_post_file()`, `good_name()`, `unique_name()`, `paperless_open()`, `place_path()`
-- `.files_post()` L8128 → `places_on()`, `.send_json()`, `locate()`, `is_top()`, `.root_change()`, `place_path()`, `good_name()`, `is_kept()`, `.root_refused()`, `to_trash()`, +5
-- `.do_PUT()` L8256 → `.send()`, `.cross_site()`, `.send_json()`, `.logged_in()`, `.documents_upload()`, `places_on()`, `locate()`, `good_name()`, `unique_name()`, `place_path()`
-- `.open_terminal()` L8303 → `admin_on()`, `.send_json()`, `terminal_enabled()`, `terminal_sessions()`, `close_abandoned()`, `terminal_append()`, `write_private()`
-- `.terminal_request()` L8330 → `admin_on()`, `.send_json()`, `terminal_folder()`, `terminal_append()`, `write_private()`, `.send()`
-- `.set_admin()` L8355 → `.send_json()`, `.client()`, `lockout_remaining()`, `password_ok()`, `record_failure()`, `save_settings()`, `close_terminals()`, `admin_left()`
-- … and 369 less-connected functions
+- `device_info()` L758 → `read_env_file()`, `cpu_usage()`, `beszel_system()`
+- `queue_action()` L971 → `unfinished_jobs()`, `busy_job()`, `stamp()`, `write_private()`
+- `place_on()` L1560 → `place_host()`
+- `places_on()` L1565 → `place_on()`
+- `radio_stations()` L1925
+- `radio_logo_find()` L2240 → `_logo_core()`, `_logo_words()`, `_logo_stream()`, `radio_open()`, `_radio_browser()`, `_logo_stem()`, `_logo_site()`, `_logo_named()`, `_web_get()`, `_StationPage`, +1
+- `music_dir()` L2481 → `install_setting()`, `locate()`, `place_path()`
+- `music_item()` L2587 → `locate()`, `music_dir()`, `place_path()`
+- `navidrome_bring()` L2940 → `navidrome_matcher()`, `navidrome_songs()`, `match()`, `navidrome_call()`, `music_favorites()`, `save_favorites()`, `navidrome_id()`
+- `abs_conn()` L3663 → `install_setting()`, `installed_apps()`
+- `abs_json()` L3689 → `abs_open()`
+- `pods_local()` L4033 → `pods_scan()`
+- `calendar_state()` L4434 → `caldav()`, `caldav_home()`, `caldav_calendars()`, `caldav_events()`
+- `calendar_write()` L4623 → `caldav()`, `calendar_state()`, `calendar_fields()`, `cal_times()`, `cal_text()`, `add()`, `cal_rule()`, `put()`, `cal_stamp()`, `cal_zones_used()`, +19
+- `cal_split()` L4844 → `prop()`, `events()`, `rrule()`, `starts()`, `put()`, `props()`, `values_of()`, `cal_wall()`, `remove()`, `add()`, +2
+- `vk()` L4955 → `vikunja()`
+- `tasks_move_in()` L5124 → `tasks_local()`, `vk_projects()`, `vk_all()`, `vk()`, `vk_body()`, `tasks_local_save()`
+- `tasks_read()` L5248 → `tasks_connected()`, `tasks_read_local()`, `vk_projects()`, `vk_all()`, `vk_id()`, `vk()`, `vk_task()`, `vk_date()`
+- `tasks_write()` L5320 → `tasks_connected()`, `tasks_local()`, `tasks_write_local()`, `tasks_local_save()`, `vk_id()`, `task_fields()`, `vk()`, `vk_body()`, `vk_projects()`, `vk_task()`
+- `locate()` L5735 → `place_on()`, `nested()`
+- `place_path()` L5757
+- `jf_json()` L6531 → `jf_open()`
+- `.client()` L6815 → `._from_proxy()`
+- `.send()` L6867
+- `.send_json()` L6881 → `.send()`
+- `.settings_payload()` L6910 → `read_env_file()`, `display_name()`, `search_url()`, `selected_wallpaper_id()`, `wallpaper_options()`, `installed_apps()`, `device_info()`, `backups_info()`, `action_summary()`, `load_actions()`, +4
+- `.do_GET()` L6940 → `.send()`, `.serve_static()`, `.logged_in()`, `selected_wallpaper_id()`, `.send_json()`, `wallpaper_path()`, `.serve_file()`, `dock_icon_path()`, `installed_apps()`, `placed()`, +43
+- `.do_POST()` L7090 → `.cross_site()`, `.send_json()`, `.login()`, `.session_token()`, `revoke()`, `.cookie_header()`, `.send()`, `.logged_in()`, `.read_json()`, `.update_settings()`, +23
+- `.login()` L7178 → `.client()`, `lockout_remaining()`, `.send_json()`, `.read_json()`, `password_ok()`, `record_failure()`, `.cookie_header()`, `new_session()`
+- `.update_settings()` L7195 → `.send_json()`, `installed_apps()`, `collection_choices()`, `app_folders()`, `app_order()`, `widget_catalog()`, `valid_search_url()`, `wallpaper_path()`, `placements()`, `save_settings()`
+- `.change_password()` L7288 → `.client()`, `lockout_remaining()`, `.send_json()`, `password_ok()`, `record_failure()`, `hash_password()`, `save_settings()`, `.cookie_header()`, `new_session()`
+- `.files_get()` L7308 → `places_on()`, `.send_json()`, `trash_items()`, `search_files()`, `admin_on()`, `locate()`, `list_folder()`, `place_path()`, `root_writes()`, `terminal_enabled()`, +2
+- `.notes_get()` L7417 → `places_on()`, `.send_json()`, `load_settings()`, `vault_list()`, `default_vault()`, `vault_index()`, `vault_search()`
+- `.notes_post()` L7434 → `places_on()`, `.send_json()`, `vault_rename()`, `load_settings()`, `locate()`, `good_name()`, `place_path()`, `save_settings()`, `vault_list()`
+- `.music_get()` L7477 → `radio_logos_soon()`, `.send_json()`, `radio_listed()`, `.radio_get()`, `places_on()`, `navidrome_sync()`, `music_counts()`, `music_favorites()`, `music_plays()`, `music_library()`, +8
+- `.radio_get()` L7529 → `radio_stations()`, `.send_json()`, `radio_logo_file()`, `.send()`, `radio_open()`, `radio_title()`
+- `.radio_post()` L7607 → `.send_json()`, `radio_stations()`, `radio_save()`, `radio_logo_forget()`, `radio_listed()`, `radio_logos_soon()`, `radio_parse()`, `locate()`, `radio_url()`, `radio_add()`
+- `.music_post()` L7680 → `.radio_post()`, `places_on()`, `.send_json()`, `music_item()`, `music_played()`, `navidrome_scrobble()`, `music_favorite()`, `music_dir()`, `music_library()`, `.music_list_file()`, +4
+- `.books_get()` L7745 → `books_dir()`, `books_list()`, `books_abs_items()`, `books_abs_match()`, `books_state()`, `.send_json()`, `pods_status()`, `abs_open()`, `write_private()`, `.send()`, +7
+- `.books_post()` L7846 → `.send_json()`, `pods_connect()`, `book_path()`, `books_save_state()`, `abs_conn()`, `book_key()`, `write_private()`, `.send()`
+- `.podcasts_get()` L7891 → `.send_json()`, `pods_status()`, `abs_library()`, `abs_error()`, `pods_local_library()`, `abs_item()`, `pods_local_item()`, `pods_cover()`, `.send()`, `pods_local_file()`, +5
+- `.iptv_get()` L7986 → `.send_json()`, `iptv_settings()`, `iptv_channels()`, `iptv_via()`, `iptv_sign()`, `.send()`, `.iptv_relay()`
+- `.videos_get()` L8108 → `.send_json()`, `videos_status()`, `videos_local()`, `.videos_stream()`, `.videos_image()`, `jf_home()`, `jf_library()`, `jf_detail()`, `jf_search()`, `jf_error()`
+- `.podcasts_post()` L8220 → `.send_json()`, `pods_connect()`, `abs_play()`, `pods_local_play()`, `abs_sync()`, `pods_local()`, `pods_local_file()`, `pods_progress_set()`, `abs_json()`, `abs_subscribe()`, +3
+- `.gallery_get()` L8292 → `gallery_status()`, `.send_json()`, `gallery_query()`, `immich_json()`, `.gallery_local_reply()`, `.gallery_local_thumb()`, `.gallery_album_zip()`, `.gallery_stream()`
+- `.documents_get()` L8372 → `documents_status()`, `.send_json()`, `documents_local()`, `documents_query()`, `paperless_json()`, `paperless_all()`, `.paperless_stream()`
+- `.documents_post()` L8525 → `locate()`, `.send_json()`, `paperless_post_file()`, `good_name()`, `unique_name()`, `paperless_open()`, `place_path()`
+- `.files_post()` L8675 → `places_on()`, `.send_json()`, `locate()`, `is_top()`, `.root_change()`, `place_path()`, `good_name()`, `is_kept()`, `.root_refused()`, `to_trash()`, +5
+- `.do_PUT()` L8803 → `.send()`, `.cross_site()`, `.send_json()`, `.logged_in()`, `.documents_upload()`, `places_on()`, `locate()`, `good_name()`, `unique_name()`, `place_path()`
+- `.open_terminal()` L8850 → `admin_on()`, `.send_json()`, `terminal_enabled()`, `terminal_sessions()`, `close_abandoned()`, `terminal_append()`, `write_private()`
+- `.terminal_request()` L8877 → `admin_on()`, `.send_json()`, `terminal_folder()`, `terminal_append()`, `write_private()`, `.send()`
+- `.set_admin()` L8902 → `.send_json()`, `.client()`, `lockout_remaining()`, `password_ok()`, `record_failure()`, `save_settings()`, `close_terminals()`, `admin_left()`
+- … and 401 less-connected functions
 
 ### `app/static/app.js`
 
@@ -446,43 +442,43 @@ flowchart LR
 - `onPagesMove()` L537 → `pageRubber()`, `pageShow()`
 - `onPagesUp()` L566 → `pageGlide()`, `phoneLayout()`
 - `appById()` L604
-- `pinFor()` L636 → `appById()`
-- `phoneLayout()` L640
-- `bounce()` L642
-- `fixedDockItem()` L648 → `el()`, `bounce()`, `toast()`
-- `builtinDockItem()` L663 → `el()`, `bounce()`
-- `pinnedDockItem()` L679 → `builtinDockItem()`, `el()`, `plateFor()`, `bounce()`, `opensHere()`, `openApp()`
-- `buildDock()` L698 → `phoneLayout()`, `dockKeyFor()`, `el()`
-- `setPinned()` L736 → `toast()`, `api()`, `showLock()`, `buildDock()`
-- `dockDims()` L758 → `phoneLayout()`
-- `magnify()` L782 → `phoneLayout()`, `dockDims()`
-- `toast()` L796
-- `openMenu()` L811 → `el()`, `closeMenu()`
-- `closeMenu()` L836
-- `opensHere()` L847
-- `openApp()` L854 → `toast()`
-- `menuFor()` L879 → `openWindowFor()`, `closeItem()`, `menuForItem()`
-- `menuForItem()` L891 → `appById()`, `isPinned()`, `setPinned()`, `newWindowItem()`, `openApp()`, `collectionDialog()`, `toast()`
-- `onContextMenu()` L939 → `menuFor()`, `openMenu()`
-- `onPressStart()` L951 → `arranging()`, `menuFor()`, `openMenu()`
-- `onPressMove()` L964 → `sortable()`, `closeMenu()`, `startArranging()`, `beginDrag()`
-- `arranging()` L1003
-- `clearMerge()` L1048
-- `dropOnDock()` L1060 → `pinFor()`, `setPinned()`, `toast()`
-- `onSortMove()` L1074 → `beginDrag()`, `overDock()`, `edgeTurn()`, `holdOver()`, `mergeZone()`, `clearMerge()`, `moveBefore()`
-- `dropAcrossPages()` L1134 → `collectionOrder()`, `appById()`, `placeApp()`
-- `beginDrag()` L1140 → `closeMenu()`
-- `onSortUp()` L1176 → `clearMerge()`, `dropOnDock()`, `overDock()`, `dropAcrossPages()`, `saveArrangement()`
-- `placeApp()` L1209 → `api()`, `showLock()`, `toast()`, `layout()`, `refresh()`, `appById()`, `goToPage()`
-- `collectionDialog()` L1234 → `el()`, `placeApp()`
-- `saveArrangement()` L1267 → `collectionOrder()`, `api()`, `showLock()`, `toast()`, `buildDock()`, `layout()`, `gridKey()`, `homeGroups()`
-- `closeSearch()` L1338
-- `renderResults()` L1355 → `searchFilesSoon()`, `el()`, `plateFor()`, `svg()`, `select()`, `runResult()`
-- `runResult()` L1408 → `closeSearch()`, `openApp()`, `webSearch()`, `confirmLogout()`
-- `showLock()` L1446 → `stopRefresh()`, `stopArranging()`, `closeSearch()`, `closeMenu()`
-- `showDesktop()` L1512 → `refresh()`, `buildDock()`, `startRefresh()`
-- `refresh()` L1541 → `api()`, `showLock()`, `greeting()`, `layout()`, `setStatus()`, `buildDock()`
-- `startRefresh()` L1571 → `stopRefresh()`, `refresh()`
+- `pinFor()` L638 → `appById()`
+- `phoneLayout()` L642
+- `bounce()` L644
+- `fixedDockItem()` L650 → `el()`, `bounce()`, `toast()`
+- `builtinDockItem()` L665 → `el()`, `bounce()`
+- `pinnedDockItem()` L681 → `builtinDockItem()`, `el()`, `plateFor()`, `bounce()`, `opensHere()`, `openApp()`
+- `buildDock()` L700 → `phoneLayout()`, `dockKeyFor()`, `el()`
+- `setPinned()` L740 → `toast()`, `api()`, `showLock()`, `buildDock()`
+- `dockDims()` L762 → `phoneLayout()`
+- `magnify()` L786 → `phoneLayout()`, `dockDims()`
+- `toast()` L800
+- `openMenu()` L815 → `el()`, `closeMenu()`
+- `closeMenu()` L840
+- `opensHere()` L851
+- `openApp()` L858 → `toast()`
+- `menuFor()` L883 → `openWindowFor()`, `closeItem()`, `menuForItem()`
+- `menuForItem()` L895 → `appById()`, `isPinned()`, `setPinned()`, `newWindowItem()`, `openApp()`, `collectionDialog()`, `toast()`
+- `onContextMenu()` L943 → `menuFor()`, `openMenu()`
+- `onPressStart()` L955 → `arranging()`, `menuFor()`, `openMenu()`
+- `onPressMove()` L968 → `sortable()`, `closeMenu()`, `startArranging()`, `beginDrag()`
+- `arranging()` L1007
+- `clearMerge()` L1052
+- `dropOnDock()` L1064 → `pinFor()`, `setPinned()`, `toast()`
+- `onSortMove()` L1078 → `beginDrag()`, `overDock()`, `edgeTurn()`, `holdOver()`, `mergeZone()`, `clearMerge()`, `moveBefore()`
+- `dropAcrossPages()` L1138 → `collectionOrder()`, `appById()`, `placeApp()`
+- `beginDrag()` L1144 → `closeMenu()`
+- `onSortUp()` L1180 → `clearMerge()`, `dropOnDock()`, `overDock()`, `dropAcrossPages()`, `saveArrangement()`
+- `placeApp()` L1213 → `api()`, `showLock()`, `toast()`, `layout()`, `refresh()`, `appById()`, `goToPage()`
+- `collectionDialog()` L1238 → `el()`, `placeApp()`
+- `saveArrangement()` L1271 → `collectionOrder()`, `api()`, `showLock()`, `toast()`, `buildDock()`, `layout()`, `gridKey()`, `homeGroups()`
+- `closeSearch()` L1344
+- `renderResults()` L1361 → `searchFilesSoon()`, `el()`, `plateFor()`, `svg()`, `select()`, `runResult()`
+- `runResult()` L1414 → `closeSearch()`, `openApp()`, `webSearch()`, `confirmLogout()`
+- `showLock()` L1454 → `stopRefresh()`, `stopArranging()`, `closeSearch()`, `closeMenu()`
+- `showDesktop()` L1520 → `refresh()`, `buildDock()`, `startRefresh()`
+- `refresh()` L1549 → `api()`, `showLock()`, `greeting()`, `layout()`, `setStatus()`, `buildDock()`
+- `startRefresh()` L1579 → `stopRefresh()`, `refresh()`
 - … and 43 less-connected functions
 
 ### `app/static/bigui.js`
@@ -714,6 +710,26 @@ flowchart LR
 - `carNavigateDraw()` L495 → `carPlaces()`, `carCorner()`, `carPlacesChange()`, `carGo()`
 - `carNameIt()` L531 → `carPlaces()`, `carPlacesChange()`, `carNavigateDraw()`, `carCorner()`
 
+### `app/static/contacts.js`
+
+- `ctOnline()` L26
+- `ctGet()` L28
+- `ctPost()` L35
+- `openContacts()` L44 → `ctBuild()`, `ctLoad()`
+- `toggleContacts()` L49 → `openContacts()`
+- `closeContacts()` L50
+- `ctBuild()` L52 → `ctLoadList()`, `ctShow()`
+- `ctLoad()` L78 → `ctGet()`, `ctSource()`, `ctList()`, `ctOnline()`, `ctShow()`, `ctLoadList()`, `ctRender()`
+- `ctLoadList()` L86 → `ctList()`, `ctOnline()`, `ctGet()`
+- `ctAvatar()` L105
+- `ctList()` L110 → `ctOnline()`, `ctAvatar()`, `ctShow()`
+- `ctSource()` L134 → `ctOnline()`, `ctShow()`
+- `ctShow()` L141 → `ctRender()`
+- `ctRender()` L148 → `ctConnectPage()`, `ctOnline()`, `ctPersonPage()`, `ctEditPage()`
+- `ctPersonPage()` L164 → `ctGet()`, `ctShow()`, `ctPost()`, `ctLoadList()`, `ctAvatar()`
+- `ctEditPage()` L256 → `ctGet()`, `ctShow()`, `ctPost()`, `ctLoadList()`
+- `ctConnectPage()` L287 → `ctOnline()`, `ctPost()`, `ctLoad()`, `ctShow()`
+
 ### `app/static/desk.js`
 
 - `widgetSize()` L27
@@ -819,10 +835,10 @@ flowchart LR
 - `openDrawer()` L16 → `renderDrawer()`
 - `closeDrawer()` L30 → `drawerOpen()`
 - `drawerMatches()` L38
-- `builtIns()` L67
-- `builtInTile()` L69 → `closeDrawer()`
-- `renderLibrary()` L88 → `builtIns()`, `closeDrawer()`
-- `renderDrawer()` L120 → `renderLibrary()`, `drawerMatches()`, `builtIns()`
+- `builtIns()` L69
+- `builtInTile()` L71 → `closeDrawer()`
+- `renderLibrary()` L90 → `builtIns()`, `closeDrawer()`
+- `renderDrawer()` L122 → `renderLibrary()`, `drawerMatches()`, `builtIns()`
 
 ### `app/static/files.js`
 
@@ -845,47 +861,47 @@ flowchart LR
 - `showFolder()` L133 → `filesHere()`, `filesWent()`, `renderFiles()`
 - `crumbs()` L159 → `showFolder()`
 - `renderPlaces()` L171 → `tsOpen()`, `tsStatus()`, `showFolder()`, `showTrash()`
-- `tsStatus()` L202
-- `tsExplain()` L213
-- `tsReceive()` L227 → `tsStatus()`, `tsExplain()`, `refreshFiles()`
-- `tsOpen()` L238 → `tsStatus()`, `tsExplain()`, `tsReceive()`, `showFolder()`
-- `tsItem()` L244 → `tsReceive()`
-- `tsSendable()` L246
-- `tsSendItem()` L247 → `tsSend()`
-- `tsSend()` L248 → `tsStatus()`, `tsExplain()`
-- `renderFiles()` L281 → `renderPlaces()`, `renderNote()`, `renderTools()`, `renderTrash()`, `crumbs()`, `hiddenShown()`, `sortEntries()`, `join()`, `when()`, `openEntry()`, +6
-- `filesSort()` L328
-- `sortEntries()` L332 → `filesSort()`, `byName()`, `extOf()`
-- `setFilesSort()` L340 → `filesSort()`, `renderFiles()`
-- `renderTools()` L345 → `filesSort()`
-- `entryKeys()` L365 → `pickedPaths()`, `deletePaths()`, `renamePath()`, `clip()`, `clipPaths()`, `pickable()`, `setPicked()`, `entryMenu()`
-- `pickable()` L397
-- `pickedPaths()` L398
-- `setPicked()` L400
-- `pickRow()` L405 → `setPicked()`, `pickable()`
-- `manyMenu()` L424 → `tsSendable()`, `tsSendItem()`, `clipPaths()`, `deletePaths()`
-- `entryMenu()` L495 → `openEntry()`, `newFilesWindow()`, `editFile()`, `downloadFile()`, `tsSendable()`, `tsSendItem()`, `clip()`, `renamePath()`, `deletePaths()`
-- `openEntry()` L518 → `filesOpen()`, `frontFiles()`, `openFiles()`, `showFolder()`, `viewFile()`, `downloadFile()`
-- `downloadFile()` L532 → `fileUrl()`
-- `nameDialog()` L561
-- `rootOk()` L582 → `placeOf()`
-- `filesPost()` L594
-- `newFolder()` L620 → `rootOk()`, `nameDialog()`, `filesPost()`, `refreshFiles()`
-- `newTextFile()` L626 → `rootOk()`, `nameDialog()`, `filesPost()`, `join()`, `refreshFiles()`
-- `renamePath()` L636 → `rootOk()`, `nameDialog()`, `filesPost()`, `refreshFiles()`
-- `deletePaths()` L642 → `rootOk()`, `filesPost()`, `refreshFiles()`
-- `refreshFiles()` L653 → `showFolder()`
-- `clip()` L660 → `renderTools()`
-- `clipPaths()` L666 → `clip()`, `renderTools()`
-- `paste()` L673 → `rootOk()`, `filesPost()`, `watchTask()`, `refreshFiles()`
-- `watchTask()` L686 → `pollTasks()`
-- `copyInto()` L731 → `filesPost()`, `watchTask()`, `refreshFiles()`
-- `uploadFiles()` L739 → `placeOf()`, `showFolder()`
-- `showTrash()` L768 → `filesHere()`, `filesWent()`, `renderFiles()`
-- `renderTrash()` L782 → `rootOk()`, `filesPost()`, `fromLabel()`, `showTrash()`, `when()`
-- `fileDropTarget()` L842 → `fileWinOf()`, `appDropTarget()`
-- `fileUp()` L883 → `fileDropTarget()`, `deletePaths()`, `parentOf()`, `rootOk()`, `filesPost()`, `watchTask()`, `fromLabel()`, `refreshFiles()`
-- `wireFiles()` L914 → `closeFiles()`, `setFilesSort()`, `filesSort()`, `newFolder()`, `newTextFile()`, `paste()`, `copyInto()`, `uploadFrom()`, `tsItem()`, `dragBox()`, +9
+- `tsStatus()` L203
+- `tsExplain()` L214
+- `tsReceive()` L230 → `tsStatus()`, `tsExplain()`, `refreshFiles()`
+- `tsOpen()` L242 → `tsStatus()`, `tsExplain()`, `tsReceive()`, `showFolder()`
+- `tsItem()` L249 → `tsReceive()`
+- `tsSendable()` L252
+- `tsSendItem()` L253 → `tsSend()`
+- `tsSend()` L254 → `tsStatus()`, `tsExplain()`
+- `renderFiles()` L287 → `renderPlaces()`, `renderNote()`, `renderTools()`, `renderTrash()`, `crumbs()`, `hiddenShown()`, `sortEntries()`, `join()`, `when()`, `openEntry()`, +6
+- `filesSort()` L334
+- `sortEntries()` L338 → `filesSort()`, `byName()`, `extOf()`
+- `setFilesSort()` L346 → `filesSort()`, `renderFiles()`
+- `renderTools()` L351 → `filesSort()`
+- `entryKeys()` L371 → `pickedPaths()`, `deletePaths()`, `renamePath()`, `clip()`, `clipPaths()`, `pickable()`, `setPicked()`, `entryMenu()`
+- `pickable()` L403
+- `pickedPaths()` L404
+- `setPicked()` L406
+- `pickRow()` L411 → `setPicked()`, `pickable()`
+- `manyMenu()` L430 → `tsSendable()`, `tsSendItem()`, `clipPaths()`, `deletePaths()`
+- `entryMenu()` L501 → `openEntry()`, `newFilesWindow()`, `editFile()`, `downloadFile()`, `tsSendable()`, `tsSendItem()`, `clip()`, `renamePath()`, `deletePaths()`
+- `openEntry()` L524 → `filesOpen()`, `frontFiles()`, `openFiles()`, `showFolder()`, `viewFile()`, `downloadFile()`
+- `downloadFile()` L538 → `fileUrl()`
+- `nameDialog()` L567
+- `rootOk()` L588 → `placeOf()`
+- `filesPost()` L600
+- `newFolder()` L626 → `rootOk()`, `nameDialog()`, `filesPost()`, `refreshFiles()`
+- `newTextFile()` L632 → `rootOk()`, `nameDialog()`, `filesPost()`, `join()`, `refreshFiles()`
+- `renamePath()` L642 → `rootOk()`, `nameDialog()`, `filesPost()`, `refreshFiles()`
+- `deletePaths()` L648 → `rootOk()`, `filesPost()`, `refreshFiles()`
+- `refreshFiles()` L659 → `showFolder()`
+- `clip()` L666 → `renderTools()`
+- `clipPaths()` L672 → `clip()`, `renderTools()`
+- `paste()` L679 → `rootOk()`, `filesPost()`, `watchTask()`, `refreshFiles()`
+- `watchTask()` L692 → `pollTasks()`
+- `copyInto()` L737 → `filesPost()`, `watchTask()`, `refreshFiles()`
+- `uploadFiles()` L745 → `placeOf()`, `showFolder()`
+- `showTrash()` L774 → `filesHere()`, `filesWent()`, `renderFiles()`
+- `renderTrash()` L788 → `rootOk()`, `filesPost()`, `fromLabel()`, `showTrash()`, `when()`
+- `fileDropTarget()` L848 → `fileWinOf()`, `appDropTarget()`
+- `fileUp()` L889 → `fileDropTarget()`, `deletePaths()`, `parentOf()`, `rootOk()`, `filesPost()`, `watchTask()`, `fromLabel()`, `refreshFiles()`
+- `wireFiles()` L920 → `closeFiles()`, `setFilesSort()`, `filesSort()`, `newFolder()`, `newTextFile()`, `paste()`, `copyInto()`, `uploadFrom()`, `tsItem()`, `dragBox()`, +9
 - … and 19 less-connected functions
 
 ### `app/static/folders.js`
@@ -960,15 +976,36 @@ flowchart LR
 - `gaPlayLive()` L752 → `gaFind()`
 - `gaDownload()` L762
 - `gaViewerKeys()` L771 → `gaCloseViewer()`, `gaStep()`, `gaRenderInfo()`
-- `gaTileUrl()` L785
-- `gaMapView()` L791 → `gaGet()`, `gaMercator()`
-- `draw()` L824 → `gaTileUrl()`, `gaThumb()`, `openCluster()`, `fit()`
-- `fit()` L894
-- `openCluster()` L907 → `fit()`, `gaThumb()`, `gaOpen()`
-- `gaLocalNote()` L1004 → `gaShow()`
-- `gaLocalPhotos()` L1019 → `gaLocalNote()`, `gaEstimate()`, `gaMonthLabel()`, `gaHideBucket()`, `gaShowBucket()`
-- `gaShowFile()` L1053 → `gaDayLabel()`, `gaLocal()`, `gaNeighbor()`
+- `gaTileUrl()` L786
+- `gaMapView()` L793 → `gaGet()`, `gaMercator()`
+- `draw()` L828 → `gaTileUrl()`, `gaThumb()`, `openCluster()`, `fit()`
+- `fit()` L898
+- `openCluster()` L911 → `fit()`, `gaThumb()`, `gaOpen()`
+- `gaLocalNote()` L1008 → `gaShow()`
+- `gaLocalPhotos()` L1023 → `gaLocalNote()`, `gaEstimate()`, `gaMonthLabel()`, `gaHideBucket()`, `gaShowBucket()`
+- `gaShowFile()` L1057 → `gaDayLabel()`, `gaLocal()`, `gaNeighbor()`
 - … and 3 less-connected functions
+
+### `app/static/iptv.js`
+
+- `ltGet()` L28
+- `ltPost()` L34
+- `openIptv()` L43 → `ltBuild()`, `ltLoad()`
+- `toggleIptv()` L48 → `openIptv()`
+- `closeIptv()` L49 → `ltStop()`
+- `ltBuild()` L54 → `ltRender()`
+- `ltLoad()` L80 → `ltGet()`, `ltSide()`, `ltRender()`
+- `ltGroups()` L103
+- `ltSide()` L109 → `ltGroups()`
+- `ltShow()` L127 → `ltSide()`, `ltRender()`
+- `ltVisible()` L135
+- `ltRender()` L143 → `ltPlaylistsPage()`, `ltVisible()`, `ltTile()`
+- `ltTile()` L162 → `ltPost()`, `ltSide()`, `ltPlay()`
+- `ltHls()` L186
+- `ltPlay()` L197 → `ltStop()`, `ltHls()`
+- `ltStop()` L239
+- `ltKeys()` L251 → `ltStop()`, `ltPlay()`
+- `ltPlaylistsPage()` L265 → `ltPost()`, `ltLoad()`
 
 ### `app/static/keyboard.js`
 
@@ -1384,51 +1421,53 @@ flowchart LR
 
 ### `app/static/settings.js`
 
-- `icon()` L56
-- `bytes()` L60
-- `duration()` L69
-- `lookup()` L79
-- `loadCatalog()` L84
-- `openSettings()` L94 → `loadSettings()`, `settingsFilter()`, `renderFilters()`, `renderRows()`, `refreshLive()`, `loadCatalog()`
-- `closeSettings()` L115
-- `markDockOpen()` L123
-- `loadSettings()` L127 → `closeSettings()`, `renderSide()`
-- `refreshLive()` L146 → `loadSettings()`
-- `renderSide()` L153 → `duration()`
-- `forMode()` L216
-- `categoryLabel()` L224
-- `renderFilters()` L228 → `categoryLabel()`, `settingsFilter()`, `renderRows()`
-- `settingsFilter()` L243
-- `matches()` L258 → `forMode()`
-- `renderRows()` L266 → `matches()`, `categoryLabel()`, `updateApplyBar()`
-- `buildRow()` L281 → `renderSide()`, `wallpaperPicker()`, `configInput()`, `adminSwitch()`, `maintSetupRow()`, `maintTaskRow()`, `runAction()`, `lookup()`, `icon()`
-- `wallpaperPicker()` L408 → `renderSide()`
-- `configInput()` L431 → `updateApplyBar()`
-- `configRows()` L458
-- `updateApplyBar()` L462 → `configRows()`
-- `discardPending()` L468 → `renderRows()`
-- `applyPending()` L473 → `configRows()`, `confirmDialog()`, `startAction()`, `renderRows()`
-- `maintLoad()` L515
-- `maintWhen()` L526
-- `maintSetupRow()` L530 → `maintLoad()`
-- `maintTaskRow()` L552 → `maintLogs()`, `maintRun()`, `maintLoad()`, `maintWhen()`
-- `maintRun()` L576 → `confirmDialog()`, `maintLoad()`, `renderRows()`, `startAction()`
-- `maintLogs()` L588 → `maintLoad()`, `openModal()`
-- `runAction()` L612 → `confirmDialog()`, `startAction()`
-- `startAction()` L622 → `jobDialog()`
-- `adminSwitch()` L640 → `adminDialog()`, `setAdmin()`
-- `setAdmin()` L647 → `showAdmin()`, `armAdmin()`
-- `showAdmin()` L664 → `renderRows()`, `renderSide()`
-- `armAdmin()` L683 → `noteAdmin()`
-- `noteAdmin()` L687 → `showAdmin()`
-- `adminDialog()` L695 → `setAdmin()`, `openModal()`
-- `openModal()` L726 → `closeModal()`
-- `closeModal()` L736
-- `confirmDialog()` L746 → `closeModal()`, `openModal()`
-- `passwordDialog()` L761 → `openModal()`
-- `jobDialog()` L796 → `waitForRestart()`, `loadSettings()`, `openModal()`
-- `waitForRestart()` L851
-- `settingsSearchResults()` L870 → `forMode()`
+- `connectionState()` L77
+- `connectionRow()` L89 → `closeSettings()`, `connectionState()`
+- `icon()` L119
+- `bytes()` L123
+- `duration()` L132
+- `lookup()` L142
+- `loadCatalog()` L147
+- `openSettings()` L157 → `loadCatalog()`, `loadSettings()`, `settingsFilter()`, `renderFilters()`, `renderRows()`, `refreshLive()`
+- `closeSettings()` L178
+- `markDockOpen()` L186
+- `loadSettings()` L190 → `closeSettings()`, `renderSide()`
+- `refreshLive()` L209 → `loadSettings()`
+- `renderSide()` L216 → `duration()`
+- `forMode()` L279
+- `categoryLabel()` L287
+- `renderFilters()` L291 → `categoryLabel()`, `settingsFilter()`, `renderRows()`
+- `settingsFilter()` L306
+- `matches()` L321 → `forMode()`
+- `renderRows()` L329 → `matches()`, `categoryLabel()`, `updateApplyBar()`
+- `buildRow()` L344 → `renderSide()`, `wallpaperPicker()`, `configInput()`, `adminSwitch()`, `connectionRow()`, `maintSetupRow()`, `maintTaskRow()`, `runAction()`, `lookup()`, `icon()`
+- `wallpaperPicker()` L473 → `renderSide()`
+- `configInput()` L496 → `updateApplyBar()`
+- `configRows()` L523
+- `updateApplyBar()` L527 → `configRows()`
+- `discardPending()` L533 → `renderRows()`
+- `applyPending()` L538 → `configRows()`, `confirmDialog()`, `startAction()`, `renderRows()`
+- `maintLoad()` L580
+- `maintWhen()` L591
+- `maintSetupRow()` L595 → `maintLoad()`
+- `maintTaskRow()` L617 → `maintLogs()`, `maintRun()`, `maintLoad()`, `maintWhen()`
+- `maintRun()` L641 → `confirmDialog()`, `maintLoad()`, `renderRows()`, `startAction()`
+- `maintLogs()` L653 → `maintLoad()`, `openModal()`
+- `runAction()` L677 → `confirmDialog()`, `startAction()`
+- `startAction()` L687 → `jobDialog()`
+- `adminSwitch()` L705 → `adminDialog()`, `setAdmin()`
+- `setAdmin()` L712 → `showAdmin()`, `armAdmin()`
+- `showAdmin()` L729 → `renderRows()`, `renderSide()`
+- `armAdmin()` L748 → `noteAdmin()`
+- `noteAdmin()` L752 → `showAdmin()`
+- `adminDialog()` L760 → `setAdmin()`, `openModal()`
+- `openModal()` L791 → `closeModal()`
+- `closeModal()` L801
+- `confirmDialog()` L811 → `closeModal()`, `openModal()`
+- `passwordDialog()` L826 → `openModal()`
+- `jobDialog()` L861 → `waitForRestart()`, `loadSettings()`, `openModal()`
+- `waitForRestart()` L916
+- `settingsSearchResults()` L935 → `forMode()`
 
 ### `app/static/store.js`
 
@@ -1441,37 +1480,39 @@ flowchart LR
 - `closeStore()` L87 → `isOpen()`
 - `waitForJob()` L97
 - `postAction()` L120
-- `checkApps()` L133 → `postAction()`, `renderApps()`, `waitForJob()`
-- `appAction()` L162 → `postAction()`, `renderStore()`, `waitForJob()`, `normImage()`, `renderApps()`, `checkApps()`
-- `renderApps()` L237 → `renderStore()`
-- `storeMatches()` L241
-- `renderStore()` L246 → `renderImport()`
-- `button()` L297
-- `siteCard()` L305 → `appAction()`, `button()`
-- `siteDialog()` L320 → `postAction()`, `waitForJob()`, `renderStore()`
-- `storeCard()` L375 → `renderStore()`, `siteCard()`, `hasUpdate()`, `button()`, `appAction()`, `logsDialog()`
-- `logsDialog()` L441 → `postAction()`, `waitForJob()`
-- `availableCard()` L472 → `button()`, `appAction()`
-- `startImport()` L514 → `renderStore()`
-- `leaveImport()` L521 → `renderStore()`
-- `titleCase()` L526
-- `freeServices()` L530
-- `webPort()` L534
-- `appDefaults()` L539 → `webPort()`, `titleCase()`
-- `guessOwner()` L551
-- `reassignOwners()` L566 → `freeServices()`, `guessOwner()`
-- `defaultAnswer()` L576 → `freeServices()`, `appDefaults()`, `reassignOwners()`
-- `scanFolder()` L585 → `renderStore()`, `postAction()`, `waitForJob()`
-- `renderImport()` L616
-- `importHead()` L621
-- `actionsRow()` L625
-- `importPathStep()` L629 → `scanFolder()`, `importHead()`, `actionsRow()`, `button()`
-- `importPickStep()` L644 → `renderStore()`, `button()`, `defaultAnswer()`, `importHead()`, `actionsRow()`
-- `plannedApps()` L675 → `freeServices()`
-- `importFileStep()` L685 → `appDefaults()`, `reassignOwners()`, `renderStore()`, `plannedApps()`, `button()`, `runImports()`, `actionsRow()`
-- `plannedAll()` L792 → `plannedApps()`
-- `runImports()` L796 → `plannedAll()`, `renderStore()`, `webPort()`, `postAction()`, `waitForJob()`, `checkApps()`
-- `importRunStep()` L829 → `plannedAll()`, `importHead()`, `actionsRow()`, `button()`
+- `actionDone()` L134 → `postAction()`, `waitForJob()`
+- `checkApps()` L142 → `postAction()`, `renderApps()`, `waitForJob()`
+- `appAction()` L171 → `postAction()`, `renderStore()`, `waitForJob()`, `normImage()`, `renderApps()`, `checkApps()`
+- `renderApps()` L246 → `renderStore()`
+- `storeMatches()` L250
+- `renderStore()` L255 → `renderImport()`
+- `button()` L306
+- `siteCard()` L314 → `addressDialog()`, `appAction()`, `button()`
+- `addressDialog()` L330 → `actionDone()`, `renderStore()`
+- `siteDialog()` L370 → `postAction()`, `waitForJob()`, `renderStore()`
+- `storeCard()` L425 → `renderStore()`, `siteCard()`, `hasUpdate()`, `button()`, `appAction()`, `logsDialog()`, `addressDialog()`
+- `logsDialog()` L492 → `postAction()`, `waitForJob()`
+- `availableCard()` L523 → `button()`, `appAction()`
+- `startImport()` L565 → `renderStore()`
+- `leaveImport()` L572 → `renderStore()`
+- `titleCase()` L577
+- `freeServices()` L581
+- `webPort()` L585
+- `appDefaults()` L590 → `webPort()`, `titleCase()`
+- `guessOwner()` L602
+- `reassignOwners()` L617 → `freeServices()`, `guessOwner()`
+- `defaultAnswer()` L627 → `freeServices()`, `appDefaults()`, `reassignOwners()`
+- `scanFolder()` L636 → `renderStore()`, `postAction()`, `waitForJob()`
+- `renderImport()` L667
+- `importHead()` L672
+- `actionsRow()` L676
+- `importPathStep()` L680 → `scanFolder()`, `importHead()`, `actionsRow()`, `button()`
+- `importPickStep()` L695 → `renderStore()`, `button()`, `defaultAnswer()`, `importHead()`, `actionsRow()`
+- `plannedApps()` L726 → `freeServices()`
+- `importFileStep()` L736 → `appDefaults()`, `reassignOwners()`, `renderStore()`, `plannedApps()`, `button()`, `runImports()`, `actionsRow()`
+- `plannedAll()` L843 → `plannedApps()`
+- `runImports()` L847 → `plannedAll()`, `renderStore()`, `webPort()`, `postAction()`, `waitForJob()`, `checkApps()`
+- `importRunStep()` L880 → `plannedAll()`, `importHead()`, `actionsRow()`, `button()`
 
 ### `app/static/tasks.js`
 
@@ -1655,21 +1696,23 @@ flowchart LR
 
 ### `app/static/usage.js`
 
-- `toggleUsage()` L29
-- `openUsage()` L31 → `buildUsage()`, `tickUsage()`, `measureApps()`
-- `closeUsage()` L43
-- `percent()` L53
-- `push()` L55
-- `tickUsage()` L62 → `push()`, `percent()`
-- `measureApps()` L79 → `renderByApp()`
-- `svgEl()` L106
-- `lineChart()` L115 → `svgEl()`
-- `usageMeter()` L181
-- `usageTile()` L191
-- `usageLevel()` L202
-- `buildUsage()` L206 → `usageTile()`, `lineChart()`, `usageLevel()`, `usageMeter()`, `percent()`, `renderTabs()`
-- `renderTabs()` L266 → `renderByApp()`
-- `renderByApp()` L281
+- `toggleUsage()` L30
+- `openUsage()` L32 → `buildUsage()`, `tickUsage()`, `measureApps()`
+- `closeUsage()` L44
+- `percent()` L54
+- `push()` L56
+- `tickUsage()` L63 → `push()`, `percent()`, `usageSource()`
+- `measureApps()` L90 → `renderByApp()`
+- `svgEl()` L117
+- `lineChart()` L126 → `svgEl()`, `usageAgo()`
+- `usageAgo()` L189
+- `usageSource()` L195
+- `usageMeter()` L211
+- `usageTile()` L221
+- `usageLevel()` L232
+- `buildUsage()` L236 → `usageTile()`, `lineChart()`, `usageLevel()`, `usageMeter()`, `percent()`, `renderTabs()`
+- `renderTabs()` L296 → `renderByApp()`
+- `renderByApp()` L311
 
 ### `app/static/videos.js`
 
@@ -1709,20 +1752,21 @@ flowchart LR
 
 ### `app/static/welcome.js`
 
-- `welcomeOpen()` L17
-- `openWelcome()` L19 → `welcomeLinks()`, `renderWelcome()`
-- `closeWelcome()` L37 → `welcomeOpen()`, `spotlight()`
-- `goWelcome()` L47 → `renderWelcome()`
-- `welcomeTo()` L53 → `closeWelcome()`
-- `renderWelcome()` L60 → `spotlight()`
-- `spotlight()` L84
-- `welcomeText()` L96
-- `welcomeKnown()` L140
-- `lookForApps()` L149 → `welcomeKnown()`
-- `welcomeLinks()` L276
-- `layeredState()` L286
-- `welcomeChip()` L309 → `welcomeLinks()`, `layeredState()`
-- `welcomeHow()` L341
+- `welcomeOpen()` L18
+- `openWelcome()` L20 → `welcomeLinks()`, `renderWelcome()`
+- `closeWelcome()` L38 → `welcomeOpen()`, `spotlight()`
+- `goWelcome()` L48 → `renderWelcome()`
+- `welcomeTo()` L54 → `closeWelcome()`
+- `renderWelcome()` L61 → `spotlight()`
+- `spotlight()` L85
+- `welcomeText()` L97
+- `welcomeKnown()` L144
+- `lookForApps()` L153 → `welcomeKnown()`, `goWelcome()`, `welcomeOpen()`
+- `welcomeLinks()` L291
+- `layeredState()` L302
+- `welcomeChip()` L331 → `welcomeLinks()`, `layeredState()`
+- `welcomeHow()` L363 → `welcomeMapKey()`
+- `welcomeMapKey()` L432
 
 ### `app/static/widgets.js`
 
@@ -1808,12 +1852,12 @@ flowchart LR
 - `winZoomApply()` L682 → `winZoomable()`, `winZoomOf()`
 - `winZoom()` L695 → `winZoomable()`, `winZoomOf()`, `winLoad()`, `winZoomKind()`, `winSave()`, `winZoomApply()`
 - `winCycle()` L753 → `raiseWindow()`, `deactivateWindows()`
-- `winDock()` L768 → `desktopMode()`, `winDockItem()`
-- `winDockItem()` L797 → `openWindow()`, `toggleWindow()`
-- `openAppWindow()` L824 → `toggleWindow()`, `frameCheck()`, `openInFirefox()`, `raiseWindow()`, `closeWindow()`, `headButton()`, `reloadAppWindow()`, `registerWindow()`, `openWindow()`
-- `openInFirefox()` L880 → `appsInTabs()`, `desktopMode()`
-- `reloadAppWindow()` L898
-- `navWindow()` L918 → `isActive()`
+- `winDock()` L770 → `desktopMode()`, `winDockItem()`
+- `winDockItem()` L806 → `openWindow()`, `toggleWindow()`
+- `openAppWindow()` L833 → `toggleWindow()`, `frameCheck()`, `openInFirefox()`, `raiseWindow()`, `closeWindow()`, `headButton()`, `reloadAppWindow()`, `registerWindow()`, `openWindow()`
+- `openInFirefox()` L889 → `appsInTabs()`, `desktopMode()`
+- `reloadAppWindow()` L907
+- `navWindow()` L927 → `isActive()`
 - … and 12 less-connected functions
 
 ### `install.sh`
