@@ -34,7 +34,7 @@ It asks your name, this machine's address, where your compose files are and your
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
     browser(["browser / phone / TV"]) -->|"password"| web
     subgraph container["adlerOS container: read-only, no capabilities, runs as you"]
         web["app/server.py<br/>(Python stdlib) + app/static/"]
@@ -50,7 +50,7 @@ The web app has **no Docker and no root access**. A compromised home screen can 
 ## How It Sorts Your Apps
 
 ```mermaid
-flowchart LR
+flowchart TB
     compose["your compose files<br/>(COMPOSE_ROOTS)"] -->|"docker compose config<br/>(starts nothing)"| imgs["images"]
     imgs --> known{"in catalog/known-apps.tsv?<br/>(146 apps)"}
     known -->|yes| col["its collection:<br/>Media, Knowledge, Life…"]
