@@ -1,0 +1,8 @@
+{
+  "name": "ViniPlay",
+  "collection": "media",
+  "icon": "",
+  "about": "IPTV player: live TV, a TV guide, recordings",
+  "port": 8998,
+  "firstRun": "Make your admin account on its first page, then add your M3U (or Xtream) link and its EPG in its settings. adlerOS's own Live TV can use the same M3U link."
+}

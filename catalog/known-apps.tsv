@@ -66,6 +66,7 @@ binwiederhier/ntfy|ntfy	ntfy	ntfy	system	di:ntfy	Push notifications over HTTP	-
 immich-app/immich-server|immich-server	immich	Immich	media	di:immich	Photos and videos, with phone backup	-
 photoprism/photoprism	photoprism	PhotoPrism	media	di:photoprism	Photo library with AI tagging	-
 jellyfin/jellyfin|linuxserver/jellyfin	jellyfin	Jellyfin	media	di:jellyfin	Films and TV, streamed to every device	8096
+ardoviniandrea/viniplay	viniplay	ViniPlay	media	-	IPTV player: live TV and a TV guide	8998
 plexinc/pms-docker|linuxserver/plex	plex	Plex	media	di:plex	Films and TV, streamed to every device	32400
 emby/embyserver|linuxserver/emby	emby	Emby	media	di:emby	Films and TV, streamed to every device	8096
 deluan/navidrome|navidrome	navidrome	Navidrome	media	di:navidrome	Music streaming (Subsonic apps work too)	4533

@@ -82,6 +82,27 @@ one, each still shows the files themselves. More in
   week or month, each in its color, every repeat worked out. Drag an event
   to another time or day; edit it (repeats, travel time, its calendar); on
   the server, so your phone has it too.
+- **Videos**: films, series and documentaries from Jellyfin (where you
+  stopped, what's next), its key pasted in Videos; without it, the video
+  files in your Media folders.
+- **Books** and **Podcasts**: your audiobooks, books and podcasts from
+  Audiobookshelf, with where you got to (one key for both); without it,
+  the files in your Media folder.
+- **Contacts**: the people in Monica (a personal CRM, in the store): how
+  to reach them, birthdays, what you know and your notes, changed here and
+  in Monica alike. Its token is pasted once in Contacts.
+- **Live TV**: the channels in your M3U playlists (your provider's link, a
+  .m3u in your storage, or iptv-org's free channels by country), by group,
+  with favorites and search; Up and Down zap. ViniPlay is in the store too,
+  for a TV guide and recordings.
+- **Four modes**, chosen on each device: the Home screen, Desktop, TV (for a
+  remote) and Car (a phone on the dashboard).
+- **Tailscale** in My Computer (admin mode): files sent to this machine land
+  in User/Tailscale, "Get Tailscale files here" takes them into any folder,
+  and "Send to a device" sends yours.
+- **Settings → Connections**: every app adlerOS's own apps sit on, whether
+  it's connected and how to connect it. With your Beszel login, the
+  machine's numbers are Beszel's.
 - **Firefox** in the store: a real browser running on the machine, in your
   browser. With My Computer and the terminal, an old laptop is enough to work on
   your homelab.
@@ -93,7 +114,7 @@ one, each still shows the files themselves. More in
 
 adlerOS reads each compose file with `docker compose config` (which never
 starts anything) and looks at the images. `catalog/known-apps.tsv` knows about
-146 self-hosted apps: Immich and Jellyfin go in **Media**, Paperless-ngx in
+147 self-hosted apps: Immich and Jellyfin go in **Media**, Paperless-ngx in
 **Productivity**, Actual Budget in **Life**, and so on. Databases and caches
 (Postgres, Redis…) are never apps of their own; they belong to the app that
 needs them. One compose file with two apps in it (Ollama and Open WebUI, say)

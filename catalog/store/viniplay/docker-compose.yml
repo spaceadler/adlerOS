@@ -1,0 +1,16 @@
+# ViniPlay, from adlerOS's store: an IPTV player in the browser, with a TV
+# guide (EPG), multi-view and recordings. adlerOS fills in .env when it
+# installs this. (adlerOS's own Live TV plays M3U playlists too, lighter.)
+services:
+  viniplay:
+    image: ghcr.io/ardoviniandrea/viniplay:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT}:8998"
+    environment:
+      NODE_ENV: production
+      SESSION_SECRET: ${SESSION_SECRET}
+      TZ: ${TZ}
+    volumes:
+      - ./data:/data
+      - ./dvr:/dvr
