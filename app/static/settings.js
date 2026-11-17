@@ -26,6 +26,8 @@ const ICONS = {
   search: ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"],
   shield: ["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z", "m9 12 2 2 4-4"],
   terminal: ["m4 17 6-6-6-6", "M12 19h8"],
+  link: ["M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1", "M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"],
+  monitor: ["M3 4h18v12H3z", "M8 20h8", "M12 16v4"],
 };
 
 // What an "open" row opens.
@@ -37,7 +39,68 @@ const OPENERS = { terminal: () => openTerminal(), welcome: () => { closeSettings
 const FORMATTERS = {
   https: (d) => (d.config.URL_SCHEME === "https" ? "On for every app" : "Vaultwarden only, via Tailscale"),
   device: (d) => [d.device.model, d.device.os].filter(Boolean).join("\n") || d.device.hostname, // a line each
+  processor: (d) => [d.device.model, d.device.cpus && `${d.device.cpus} cores`, d.device.arch].filter(Boolean).join(" · ") || "–",
+  system: (d) => [d.device.os, d.device.kernel && `Linux ${d.device.kernel}`].filter(Boolean).join(" · ") || "–",
+  hostname: (d) => d.device.hostname || "–",
+  uptime: (d) => duration(d.device.uptime),
+  load: (d) => (d.device.load == null ? "–" : `${d.device.load.toFixed(2)} (1 min)${d.device.cpus ? `, ${Math.round((100 * d.device.load) / d.device.cpus)}% of the cores` : ""}`),
+  memory: (d) => (d.device.memory ? `${bytes(d.device.memory.used)} of ${bytes(d.device.memory.total)} (${Math.round((100 * d.device.memory.used) / d.device.memory.total)}%)` : "–"),
+  disk: (d) => (d.device.disk ? `${bytes(d.device.disk.total - d.device.disk.used)} free of ${bytes(d.device.disk.total)}` : "–"),
+  temperature: (d) => (d.device.temperature == null ? "–" : `${Math.round(d.device.temperature)} °C`),
+  source: (d) => (d.device.source === "beszel" ? "Beszel" : d.device.beszel?.error === "nologin" ? "adlerOS (Beszel needs its login)" : d.device.beszel?.error ? `adlerOS (Beszel: ${d.device.beszel.error})` : "adlerOS"),
 };
+
+// ------------------------------------------------------------ connections
+
+// The services adlerOS's own apps sit on: each one's state, asked when the
+// row is drawn, and what to do about it. Most read a key from the settings
+// file (settingsFile()); Videos, Books, Podcasts and Contacts take theirs
+// pasted in the app.
+const CONNECTIONS = {
+  navidrome: { path: "/api/music/navidrome", app: "Music", open: () => openMusic(), key: "NAVIDROME_USER and NAVIDROME_PASSWORD (your login)" },
+  immich: { path: "/api/gallery/status", app: "Gallery", open: () => openGallery(), key: "IMMICH_API_KEY (Immich: Account Settings, API Keys)" },
+  carto: { path: "/api/gallery/status", app: "Gallery's map", open: () => openGallery(), key: "CARTO_API_KEY (free: carto.com/basemaps/apikey)",
+    state: (b) => (b.mapKey ? { ok: true, label: "Key set" } : { label: "No key", why: "The map's tiles say \"API key required\" until there's one." }) },
+  paperless: { path: "/api/paperless/status", app: "Documents", open: () => openDocuments(), key: "PAPERLESS_TOKEN (Paperless: My Profile, API Auth Token)" },
+  radicale: { path: "/api/calendar/status", app: "Calendar", open: () => openCalendar(), key: "CALDAV_USER and CALDAV_PASSWORD (your login)" },
+  vikunja: { path: "/api/tasks/status", app: "Tasks", open: () => openTasks(), key: "VIKUNJA_TOKEN, or VIKUNJA_USER and VIKUNJA_PASSWORD" },
+  jellyfin: { path: "/api/videos/status", app: "Videos", open: () => openVideos(), paste: "Videos: Connect Jellyfin (a key from its Dashboard, API Keys)" },
+  audiobookshelf: { path: "/api/books/status", app: "Books and Podcasts", open: () => openBooks(), paste: "Books or Podcasts: Connect Audiobookshelf (a key from its Settings, API Keys)" },
+  monica: { path: "/api/contacts/status", app: "Contacts", open: () => openContacts(), paste: "Contacts: a token from Monica's Settings, API" },
+  beszel: { path: "/api/widgets", app: "Machine numbers", open: () => toggleUsage(), key: "BESZEL_EMAIL and BESZEL_PASSWORD (your Beszel login)",
+    state: (b) => { const s = b.data?.system || {}; return s.source === "beszel" ? { ok: true, label: "Connected" } : { label: { nologin: "Needs your login", refused: "Login refused", unreachable: "Not answering", nobeszel: "No Beszel", nosystem: "Not watching this machine" }[s.beszel?.error] || "Not connected", why: "CPU, memory, storage and temperature are measured by adlerOS meanwhile." }; } },
+  iptv: { path: "/api/iptv/settings", app: "Live TV", open: () => openIptv(), paste: "Live TV: Playlists (an M3U address, a .m3u file, or free channels)",
+    state: (b) => (b.playlists?.length ? { ok: true, label: `${b.playlists.length} playlist${b.playlists.length === 1 ? "" : "s"}` } : { label: "No playlists" }) },
+};
+
+// What most status answers say, in words.
+function connectionState(svc, b) {
+  if (svc.state) return svc.state(b || {});
+  if (!b) return { label: "No answer" };
+  if (b.ok) return { ok: true, label: b.user ? `Connected as ${b.user}` : "Connected" };
+  const e = String(b.error || "");
+  if (/^no(navidrome|immich|paperless|server|vikunja|jellyfin|abs|monica)$/.test(e)) return { label: "Not installed", why: "Install it from the App Store (or give its address in the settings file)." };
+  if (/^no(key|token)$/.test(e) || (!b.configured && !e)) return { label: "Not connected" };
+  if (e === "refused") return { label: "Refused", why: "The key or login it has was refused: make a new one." };
+  if (e === "nocalendars") return { label: "No calendars", why: "Make one (your phone's calendar app can)." };
+  return { label: "Not answering", why: b.url ? `Nothing at ${b.url}: is it running?` : "Is it running?" };
+}
+
+function connectionRow(c, textBlock, control) {
+  const svc = CONNECTIONS[c.service];
+  const chip = el("span", { class: "conn-state" }, "Asking…");
+  const detail = el("div", { class: "row-detail" });
+  const open = el("button", { type: "button", class: "chip-button" }, "Open");
+  open.addEventListener("click", () => { closeSettings(); svc.open(); });
+  textBlock.append(detail);
+  control.append(chip, open);
+  api(svc.path).then(({ status, body }) => (status === 200 ? body : null), () => null).then((b) => {
+    const st = connectionState(svc, b);
+    chip.textContent = st.label;
+    chip.classList.toggle("ok", Boolean(st.ok));
+    detail.textContent = st.ok ? "" : [st.why, svc.paste ? `Connect it in ${svc.paste}.` : `In ${settingsFile()}: ${svc.key}.`].filter(Boolean).join(" ");
+  });
+}
 
 const settings = {
   catalog: null,
@@ -368,6 +431,8 @@ function buildRow(row) {
       textBlock.append(el("div", { class: "row-detail locked" }, "Turn on admin mode (above) to use this."));
     }
     control.append(b);
+  } else if (c.type === "connection") {
+    connectionRow(c, textBlock, control);
   } else if (c.type === "maint-setup") {
     maintSetupRow(textBlock, control);
   } else if (c.type === "maint") {

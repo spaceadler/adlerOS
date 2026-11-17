@@ -11,6 +11,7 @@
     "  action        a button that runs an action from actions.json, after confirm",
     "  info          a read-only value: config.<KEY>, device.<field>, or a named",
     "                formatter from FORMATTERS in settings.js",
+    "  connection    one service adlerOS's apps sit on (service: a key of CONNECTIONS in settings.js): its state, live, and how to connect it",
     "  admin         the admin mode switch (asks for the password to turn on)",
     "  open          a button opening one of adlerOS's windows (target: terminal)",
     "  glass         the window transparency slider (this device's)",
@@ -26,6 +27,18 @@
     {
       "id": "account",
       "label": "Account"
+    },
+    {
+      "id": "appearance",
+      "label": "Appearance"
+    },
+    {
+      "id": "device",
+      "label": "This device"
+    },
+    {
+      "id": "connections",
+      "label": "Connections"
     },
     {
       "id": "homelab",
@@ -69,7 +82,7 @@
     },
     {
       "id": "wallpaper",
-      "category": "account",
+      "category": "appearance",
       "icon": "image",
       "title": "Wallpaper",
       "description": "Add your own: put images in your storage's Other/Wallpapers folder (WALLPAPER_DIR in adlerOS's settings picks another).",
@@ -80,7 +93,7 @@
     },
     {
       "id": "glass",
-      "category": "account",
+      "category": "appearance",
       "icon": "image",
       "title": "Window transparency",
       "description": "How much of the wallpaper shows through adlerOS's own windows, from 0.00 (solid) to 1.00, on the home screen and in desktop mode; your apps' pages stay solid. A window shows the desktop behind it, never another window. Just this device.",
@@ -91,7 +104,7 @@
     },
     {
       "id": "liquid",
-      "category": "account",
+      "category": "appearance",
       "icon": "image",
       "title": "Glass",
       "description": "How much liquid glass the dock, the menu bar, menus, dialogs and widgets get: Max for all of it, lower for less blur and shine, Off for none (solid, and much lighter work for a slow machine like a Raspberry Pi). In Chrome and other Chromium browsers, near Max, the glass also bends what's behind it. Just this device.",
@@ -102,7 +115,7 @@
     },
     {
       "id": "open-apps",
-      "category": "account",
+      "category": "device",
       "icon": "windows",
       "title": "Open apps",
       "description": "On the home screen: in a window here, like the terminal, or in a new tab. In desktop mode apps always get windows of their own; an app that won't be shown inside another page opens in a tab either way. Just this device.",
@@ -113,7 +126,7 @@
     },
     {
       "id": "desktop-mode",
-      "category": "account",
+      "category": "device",
       "icon": "windows",
       "title": "Mode",
       "description": "How adlerOS looks on this device. Home screen: your apps on pages, like a phone's. Desktop: windows side by side that you move and resize, and your Desktop folder (for a computer, or a phone turned sideways). TV: big tiles for a television, worked with a remote or the arrow keys. Car: for a phone on a car mount, what's playing with big controls, and Navigate (Google Maps). Each device keeps its own.",
@@ -124,7 +137,7 @@
     },
     {
       "id": "tiling",
-      "category": "account",
+      "category": "device",
       "device": "computer",
       "icon": "windows",
       "title": "Window layout",
@@ -136,7 +149,7 @@
     },
     {
       "id": "menu-lyrics",
-      "category": "account",
+      "category": "device",
       "device": "computer",
       "icon": "music",
       "title": "Lyrics in the menu bar",
@@ -370,13 +383,109 @@
       "id": "device",
       "category": "system",
       "icon": "cpu",
-      "title": "Device",
-      "description": "This machine.",
-      "keywords": "hardware model os kernel raspberry pi",
+      "title": "Processor",
+      "description": "This machine's processor, its cores and architecture.",
       "control": {
         "type": "info",
-        "value": "device"
-      }
+        "value": "processor"
+      },
+      "keywords": "device cpu model cores arm"
+    },
+    {
+      "id": "device-os",
+      "category": "system",
+      "icon": "terminal",
+      "title": "Operating system",
+      "description": "The host's system and kernel.",
+      "control": {
+        "type": "info",
+        "value": "system"
+      },
+      "keywords": "os linux kernel debian version"
+    },
+    {
+      "id": "device-name",
+      "category": "system",
+      "icon": "network",
+      "title": "Hostname",
+      "description": "This machine's name on your network.",
+      "control": {
+        "type": "info",
+        "value": "hostname"
+      },
+      "keywords": "name host"
+    },
+    {
+      "id": "device-uptime",
+      "category": "system",
+      "icon": "clock",
+      "title": "Up for",
+      "description": "Since the machine last started.",
+      "control": {
+        "type": "info",
+        "value": "uptime"
+      },
+      "keywords": "uptime boot"
+    },
+    {
+      "id": "device-load",
+      "category": "system",
+      "icon": "cpu",
+      "title": "Load",
+      "description": "Processes waiting for the CPU, averaged over a minute.",
+      "control": {
+        "type": "info",
+        "value": "load"
+      },
+      "keywords": "load average busy"
+    },
+    {
+      "id": "device-memory",
+      "category": "system",
+      "icon": "cpu",
+      "title": "Memory",
+      "description": "In use now, of all of it.",
+      "control": {
+        "type": "info",
+        "value": "memory"
+      },
+      "keywords": "ram memory"
+    },
+    {
+      "id": "device-disk",
+      "category": "system",
+      "icon": "drive",
+      "title": "Storage",
+      "description": "Free on the disk your homelab is on.",
+      "control": {
+        "type": "info",
+        "value": "disk"
+      },
+      "keywords": "disk space free"
+    },
+    {
+      "id": "device-temp",
+      "category": "system",
+      "icon": "power",
+      "title": "Temperature",
+      "description": "The processor's. Above 80 °C, a notification says so.",
+      "control": {
+        "type": "info",
+        "value": "temperature"
+      },
+      "keywords": "heat hot temperature"
+    },
+    {
+      "id": "device-source",
+      "category": "system",
+      "icon": "link",
+      "title": "Numbers from",
+      "description": "Who measures CPU, memory, storage and temperature: Beszel when adlerOS has its login (Connections), else adlerOS.",
+      "control": {
+        "type": "info",
+        "value": "source"
+      },
+      "keywords": "beszel stats source"
     },
     {
       "id": "restart",
@@ -509,6 +618,138 @@
         "task": "container-cleanup",
         "volumes": true
       }
+    },
+    {
+      "id": "conn-navidrome",
+      "category": "connections",
+      "icon": "music",
+      "title": "Music: Navidrome",
+      "description": "Your songs, playlists and plays. Without it, Music plays your music folder itself.",
+      "control": {
+        "type": "connection",
+        "service": "navidrome"
+      },
+      "keywords": "connect key token login api navidrome"
+    },
+    {
+      "id": "conn-immich",
+      "category": "connections",
+      "icon": "image",
+      "title": "Gallery: Immich",
+      "description": "Albums, people, places, the map and search. Without it, Gallery shows the photos in your storage.",
+      "control": {
+        "type": "connection",
+        "service": "immich"
+      },
+      "keywords": "connect key token login api immich"
+    },
+    {
+      "id": "conn-carto",
+      "category": "connections",
+      "icon": "compass",
+      "title": "Gallery's map: CARTO",
+      "description": "The map's tiles come from CARTO, which wants a key (free).",
+      "control": {
+        "type": "connection",
+        "service": "carto"
+      },
+      "keywords": "connect key token login api carto"
+    },
+    {
+      "id": "conn-paperless",
+      "category": "connections",
+      "icon": "archive",
+      "title": "Documents: Paperless-ngx",
+      "description": "Titles, tags, correspondents and search inside every page. Without it, Documents shows the files.",
+      "control": {
+        "type": "connection",
+        "service": "paperless"
+      },
+      "keywords": "connect key token login api paperless"
+    },
+    {
+      "id": "conn-radicale",
+      "category": "connections",
+      "icon": "clock",
+      "title": "Calendar: Radicale (CalDAV)",
+      "description": "Your calendars, shared with your phone. Any CalDAV server works (CALDAV_URL).",
+      "control": {
+        "type": "connection",
+        "service": "radicale"
+      },
+      "keywords": "connect key token login api radicale"
+    },
+    {
+      "id": "conn-vikunja",
+      "category": "connections",
+      "icon": "shield",
+      "title": "Tasks: Vikunja",
+      "description": "Projects, lists and boards, the same as on your phone. Without it, Tasks keeps them in adlerOS.",
+      "control": {
+        "type": "connection",
+        "service": "vikunja"
+      },
+      "keywords": "connect key token login api vikunja"
+    },
+    {
+      "id": "conn-jellyfin",
+      "category": "connections",
+      "icon": "monitor",
+      "title": "Videos: Jellyfin",
+      "description": "Films and series with where you stopped. Without it, Videos plays your Media folders.",
+      "control": {
+        "type": "connection",
+        "service": "jellyfin"
+      },
+      "keywords": "connect key token login api jellyfin"
+    },
+    {
+      "id": "conn-audiobookshelf",
+      "category": "connections",
+      "icon": "music",
+      "title": "Books and Podcasts: Audiobookshelf",
+      "description": "Audiobooks, books and podcasts with where you got to; one key for both.",
+      "control": {
+        "type": "connection",
+        "service": "audiobookshelf"
+      },
+      "keywords": "connect key token login api audiobookshelf"
+    },
+    {
+      "id": "conn-monica",
+      "category": "connections",
+      "icon": "user",
+      "title": "Contacts: Monica",
+      "description": "The people in your life: how to reach them, birthdays, notes.",
+      "control": {
+        "type": "connection",
+        "service": "monica"
+      },
+      "keywords": "connect key token login api monica"
+    },
+    {
+      "id": "conn-beszel",
+      "category": "connections",
+      "icon": "cpu",
+      "title": "Machine numbers: Beszel",
+      "description": "CPU, memory, storage and temperature for the widgets, Live Usage and here, as Beszel measures them.",
+      "control": {
+        "type": "connection",
+        "service": "beszel"
+      },
+      "keywords": "connect key token login api beszel"
+    },
+    {
+      "id": "conn-iptv",
+      "category": "connections",
+      "icon": "monitor",
+      "title": "Live TV: playlists",
+      "description": "The channels Live TV shows: M3U playlists from your provider, files, or free channels.",
+      "control": {
+        "type": "connection",
+        "service": "iptv"
+      },
+      "keywords": "connect key token login api iptv"
     }
   ]
 }

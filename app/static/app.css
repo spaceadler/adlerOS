@@ -5046,3 +5046,6 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .lt-cc { flex: 0 0 70px; text-transform: lowercase; }
 .lt-close { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: rgb(0 0 0 / 0.55); color: #fff; cursor: pointer; }
 .lt-close svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+/* Settings → Connections: a service's state beside its Open. */
+.conn-state { padding: 3px 10px; border-radius: 10px; background: rgb(255 255 255 / 0.1); color: rgb(255 255 255 / 0.75); font-size: 12px; white-space: nowrap; }
+.conn-state.ok { background: rgb(52 199 89 / 0.22); color: #7ee2a0; }
