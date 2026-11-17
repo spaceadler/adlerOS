@@ -2,14 +2,14 @@
 
 ← [README](README.md)
 
-> Generated from commit `32c2c60` by `scripts/codemap.py`. Regenerate it from the workspace root with `python3 scripts/codemap.py adleros`; don't edit it by hand.
+> Generated from commit `e158e2a` by `scripts/codemap.py`. Regenerate it from the workspace root with `python3 scripts/codemap.py adleros`; don't edit it by hand.
 
 ## Files
 
 Each box is a source file and its function count; an arrow means calls into that file.
 
 ```mermaid
-flowchart TB
+flowchart LR
     n_app_server_py["app/server.py · 461"]
     n_app_static_music_js["app/static/music.js · 133"]
     n_app_static_luna_js["app/static/luna.js · 114"]
@@ -35,26 +35,10 @@ flowchart TB
     n_app_static_tiling_js["app/static/tiling.js · 33"]
     n_app_static_videos_js["app/static/videos.js · 33"]
     n_install_sh["install.sh · 30"]
-    n_app_musictags_py["app/musictags.py · 27"]
-    n_app_static_mdflow_js["app/static/mdflow.js · 26"]
-    n_app_static_notepad_js["app/static/notepad.js · 26"]
-    n_app_static_markdown_js["app/static/markdown.js · 26"]
-    n_app_static_widgets_js["app/static/widgets.js · 25"]
-    n_agent_connect_py["agent/connect.py · 23"]
-    n_app_static_mdbases_js["app/static/mdbases.js · 21"]
-    n_agent_files_py["agent/files.py · 19"]
-    n_agent_terminal_py["agent/terminal.py · 19"]
-    n_app_static_iptv_js["app/static/iptv.js · 18"]
-    n_app_static_contacts_js["app/static/contacts.js · 17"]
-    n_app_static_usage_js["app/static/usage.js · 17"]
-    n_app_static_mdinsert_js["app/static/mdinsert.js · 16"]
-    n_app_static_welcome_js["app/static/welcome.js · 15"]
-    n_app_static_folders_js["app/static/folders.js · 15"]
     n_app_server_py -->|45| n_app_ical_py
-    n_app_server_py -->|7| n_app_musictags_py
 ```
 
-(8 smaller files not drawn.)
+(23 smaller files not drawn.)
 
 ## Hubs
 
@@ -77,14 +61,9 @@ The most connected functions: where a change reaches furthest.
 | `calShowEvent()` | `app/static/calendar.js:692` | 4 | 17 |
 | `calTimeGrid()` | `app/static/calendar.js:556` | 1 | 20 |
 | `mdFolderOf()` | `app/static/luna.js:27` | 21 | 0 |
-| `mdOpen()` | `app/static/luna.js:520` | 15 | 6 |
-| `install_setting()` | `app/server.py:574` | 19 | 1 |
-| `mdNoteName()` | `app/static/luna.js:26` | 20 | 0 |
-| `renderFiles()` | `app/static/files.js:287` | 4 | 16 |
-| `wireFiles()` | `app/static/files.js:920` | 1 | 19 |
 
 ```mermaid
-flowchart TB
+flowchart LR
     n_app_server_handler_do_get[".do_GET()"]
     n_app_server_handler_send_json[".send_json()"]
     n_app_static_music_musong["muSong()"]
@@ -100,11 +79,6 @@ flowchart TB
     n_app_static_calendar_calshowevent["calShowEvent()"]
     n_app_static_calendar_caltimegrid["calTimeGrid()"]
     n_app_static_luna_mdfolderof["mdFolderOf()"]
-    n_app_static_luna_mdopen["mdOpen()"]
-    n_app_server_install_setting["install_setting()"]
-    n_app_static_luna_mdnotename["mdNoteName()"]
-    n_app_static_files_renderfiles["renderFiles()"]
-    n_app_static_files_wirefiles["wireFiles()"]
     n_app_server_handler_do_get --> n_app_server_handler_send
     n_app_server_handler_do_get --> n_app_server_handler_send_json
     n_app_server_handler_do_get --> n_app_server_installed_apps
@@ -112,7 +86,6 @@ flowchart TB
     n_app_server_handler_do_post --> n_app_server_handler_send_json
     n_app_server_handler_do_post --> n_app_server_handler_send
     n_app_static_calendar_caltimegrid --> n_app_static_calendar_calshowevent
-    n_app_static_files_wirefiles --> n_app_static_files_renderfiles
 ```
 
 ## Functions
