@@ -7,3 +7,4 @@
 /wallpaper/
 /icons/
 __pycache__/
+.env.bak*
