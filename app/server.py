@@ -813,7 +813,7 @@ def backups_info():
 
 # -------------------------------------------------------------- maintenance
 
-# Your homelab's maintenance scripts (dev/scripts: aa-all_in_one.sh and the
+# Your homelab's maintenance scripts (dev/scripts/server: aa-all_in_one.sh and the
 # rest), run as root by the helper through install-maint.sh's launcher.
 # Their logs (backup/logs/<prefix>-YYYY-MM-DD_HHMMSS.log, read through Root)
 # say how each last went: its last INFO/WARN/FATAL line.

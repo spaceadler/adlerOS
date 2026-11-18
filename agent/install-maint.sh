@@ -1,6 +1,6 @@
 #!/bin/bash
 # Lets adlerOS run your homelab maintenance scripts (Settings → Maintenance):
-#   sudo ./install-maint.sh [the folder with your scripts]   (default ~/homelab/dev/scripts)
+#   sudo ./install-maint.sh [the folder with your scripts]   (default ~/homelab/dev/scripts/server)
 # Copies them and homelab-stacks.conf, root-owned, to
 # /usr/local/libexec/adleros/scripts/, installs the launcher (maint) beside
 # them, and a sudo rule letting your user run exactly that launcher.
@@ -9,7 +9,7 @@ set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "Run it with sudo." >&2; exit 1; }
 user=${SUDO_USER:?run it with sudo, as yourself}
 home=$(getent passwd "$user" | cut -d: -f6)
-src=${1:-$home/homelab/dev/scripts}
+src=${1:-$home/homelab/dev/scripts/server}
 here=$(dirname "$(readlink -f "$0")")
 lib=/usr/local/libexec/adleros
 scripts=(aa-all_in_one.sh zz-script_backup.sh zx-system_updater.sh yy-system_cleanup.sh zy-script_updater.sh xz-script_cleanup.sh)
