@@ -22,8 +22,8 @@ Under the hood it reads the folders where your `docker compose` files live and s
 ## Install
 
 ```mermaid
-flowchart LR
-    q{"what do you have?"} -->|"nothing yet"| hl["clone spaceadler/homelab<br/>its install.sh sets up the machine,<br/>~30 apps, and adlerOS"]
+flowchart TB
+    q{"what do you have?"} -->|"nothing yet"| hl["clone spaceadler/homelab:<br/>its install.sh sets up the machine,<br/>~30 apps and adlerOS"]
     q -->|"your own homelab"| sa["clone adlerOS into your<br/>compose folder, ./install.sh"]
     hl -->|"install.sh --homelab"| one(["one adlerOS codebase"])
     sa --> one
