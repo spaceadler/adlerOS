@@ -11,7 +11,13 @@
 
 ## Overview
 
-Point it at the folders where your `docker compose` files live. It finds every app, sorts it into a collection (Media, Knowledge, Files…), and gives you one place to open, start, stop, update, read the logs of and delete them, plus a store of apps to install. It sits **on top of** your homelab, never instead of it: everything keeps working with adlerOS stopped.
+adlerOS makes your homelab feel like a computer of its own. Open it in a browser and you get a desktop styled like macOS: a dock, windows you drag and snap, and every Docker app you run as an app you can open, start, stop and update.
+
+It comes with its own apps, built on the services you already run: **Music** for your Navidrome library (with lyrics, a queue and radio), **Gallery** for Immich, **Documents** for Paperless, **Videos** for Jellyfin, **Live TV** for your channels, **Tasks**, **Calendar**, and **Luna**, an Obsidian-style notes app that opens your vaults from anywhere. A file browser and a real terminal are there when you need them. Without those services, each app shows your own files instead.
+
+It fits whatever screen it's on. Each device picks its mode: **Desktop** like a Mac, the **home screen** like an iPhone or iPad, **TV** for the couch and a remote, and **Car** for a phone on the dashboard, with your music, podcasts, calendar and navigation that hands the route to your phone's maps.
+
+Under the hood it reads the folders where your `docker compose` files live and sorts every app into a collection (Media, Knowledge, Files…). It sits **on top of** your homelab, never instead of it: everything keeps working with adlerOS stopped.
 
 ## Install
 
