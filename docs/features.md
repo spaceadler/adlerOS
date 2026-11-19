@@ -58,7 +58,8 @@ one, each still shows the files themselves. More in
 - **Desktop mode**, for a computer with a mouse (each device chooses):
   windows side by side that you drag, resize and snap to half the screen,
   your apps in windows of their own, and your Desktop folder on the desktop.
-- **My Computer**: your Desktop, your storage folder and (read-only) your
+- **My Computer**, named after you (*Sam's Computer*, from your name in
+  Settings): your Desktop, your storage folder and (read-only) your
   homelab's own folder, in a window. Upload, download, cut, copy and paste
   between them, rename, delete into a Trash you can restore from; photos,
   videos, PDFs and songs open in windows of their own.
