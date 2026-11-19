@@ -531,7 +531,7 @@
       "category": "maintenance",
       "icon": "archive",
       "title": "Maintenance scripts",
-      "description": "Your homelab's own scripts (dev/scripts: aa-all_in_one.sh and the rest), run from here as root: backups, updates and cleanups, each with its logs. They need admin mode, and a one-time setup on the machine.",
+      "description": "Your homelab's own scripts (dev/scripts/server: aa-all_in_one.sh and the rest), run from here as root: backups, updates and cleanups, each with its logs. They need admin mode, and a one-time setup on the machine.",
       "keywords": "maintenance scripts backup update upgrade cleanup clean prune apt docker logs aa zz zx yy zy xz",
       "control": {
         "type": "maint-setup"

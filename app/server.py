@@ -827,7 +827,7 @@ def maint_logs_dir():
 
 
 def maint_scripts_dir():
-    return PLACES["root"] / "dev" / "scripts"
+    return PLACES["root"] / "dev" / "scripts" / "server"  # install-maint.sh's default too
 
 
 MAINT_LOG_LIMIT = 512 * 1024
