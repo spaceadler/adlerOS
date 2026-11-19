@@ -286,6 +286,7 @@ function mdBuild() {
   registerWindow("luna", { title: "Luna", close: closeLuna, hide: () => closeWindow("luna"), dock: "luna", size: [1180, 760] });
   section.addEventListener("keydown", mdKeys);
   section.classList.toggle("md-no-right", !adler.right);
+  if (winLoad(MD_FOCUS_KEY, false) === true) mdFocus(true);
 }
 
 async function closeLuna() {
@@ -295,6 +296,7 @@ async function closeLuna() {
 
 function mdKeys(e) {
   const mod = e.ctrlKey || e.metaKey;
+  if (e.key === "Escape" && $("luna").classList.contains("md-focus") && !e.target.closest("input, textarea, [contenteditable]")) { e.preventDefault(); e.stopPropagation(); return mdFocus(false); }
   // Alt+↑: up, as the ↑ by the note's path goes (its folder's note, the one above).
   if (e.altKey && !mod && e.key === "ArrowUp") {
     const up = $("luna").querySelector(".md-main .md-up:not([disabled])");
@@ -793,8 +795,24 @@ function mdSetMode(tab, mode, line = null) {
   mdRenderMain();
 }
 
+// Focus mode: only the note, for reading on a small screen. The tabs, the
+// path and the view buttons, the ribbon and the side panels go; a button in
+// the corner (or Escape) brings them back. Kept on this device.
+const MD_FOCUS_KEY = "adleros.lunaFocus";
+function mdFocus(on) {
+  $("luna").classList.toggle("md-focus", on);
+  winSave(MD_FOCUS_KEY, on);
+  let out = $("md-focus-out");
+  if (!out) {
+    out = el("button", { type: "button", class: "md-focus-out", id: "md-focus-out", "aria-label": "Leave focus mode", title: "Leave focus mode (Escape)" },
+      svg(["M8 3H5a2 2 0 0 0-2 2v3", "M21 8V5a2 2 0 0 0-2-2h-3", "M3 16v3a2 2 0 0 0 2 2h3", "M16 21h3a2 2 0 0 0 2-2v-3"]));
+    out.addEventListener("click", () => mdFocus(false));
+    $("luna").querySelector(".md-center").append(out);
+  }
+}
+
 function mdNoteMenu(tab) {
-  const items = [];
+  const items = [{ label: $("luna").classList.contains("md-focus") ? "Leave focus mode" : "Focus mode", run: () => mdFocus(!$("luna").classList.contains("md-focus")) }];
   if (tab.writable) {
     items.push({ label: "Rename…", run: () => mdRenameDialog(tab.path) }, { label: "Move to…", run: () => mdMoveDialog(tab.path) });
     const tpl = mdSetting("templates").folder;

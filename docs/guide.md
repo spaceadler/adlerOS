@@ -611,6 +611,9 @@ vault**.
 - **Renaming or moving** a note or folder updates the links to it (and its
   own), as Obsidian's *Automatically update internal links* does; with that
   off, it asks.
+- **Focus mode** (a note's **…** menu): only the note, for reading on a
+  small screen; the tabs, the path and the view buttons, the ribbon and the
+  side panels go until you leave it (its corner button, or Escape).
 - **On the right**: backlinks, outgoing links, the outline and the tags of
   the note you're on.
 - **The graph** (Ctrl+G, or a note's menu for just its part of it), laid
@@ -904,8 +907,9 @@ and **Timers**, down the side (along the top on a phone).
 Alarms and timers belong to the device, like an iPhone's, and ring there
 while adlerOS is open on it (a phone's browser in the background may not:
 keep it in front, StandBy is made for that): the whole screen, over StandBy
-too, with Snooze (or Repeat) and Stop. The sounds are made in the browser;
-the first tap on the page lets it make them.
+too, with Snooze (or Repeat) and Stop. The sounds are made in the page and
+played as media, so a phone on silent still rings; the first tap on the
+page after opening adlerOS lets it play them.
 
 ## StandBy
 
@@ -970,6 +974,7 @@ the notch between them has none: adlerOS's menu and the time (a tap on it:
 Notification Center) at the top, Search and Control Center at the bottom.
 An app fills the room beside them, with close and minimize and nothing to
 drag; the dock steps aside over it. Held upright again, it's the home
-screen.
+screen. **Settings → A phone on its side → Desktop** gives it desktop mode as
+a computer has it instead (the menu bar, windows to drag).
 
 *Share → Add to Home Screen* makes it open full-screen, like an app.
