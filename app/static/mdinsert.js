@@ -227,8 +227,8 @@ function mdInsertMenu(tab, target, area) {
     label: group, items: MD_INSERTS.filter((x) => x[0] === group).map((x) => ({ label: x[1], run: run(x[1]) })),
   }));
   return [
-    ...(picked ? [{ label: "Cut", run: async () => { navigator.clipboard?.writeText(picked); const a = await editor(); if (a) mdPut(a, ""); } },
-      { label: "Copy", run: () => navigator.clipboard?.writeText(picked).then(() => toast("Copied."), () => toast("The browser won't copy from here: Ctrl+C.")) }] : []),
+    ...(picked ? [{ label: "Cut", run: async () => { copyText(picked, "Cut."); const a = await editor(); if (a) mdPut(a, ""); } },
+      { label: "Copy", run: () => copyText(picked) }] : []),
     ...(area && navigator.clipboard?.readText ? [{ label: "Paste", run: () => navigator.clipboard.readText().then(async (t) => { const a = await editor(); if (a) mdPut(a, t); }, () => toast("The browser won't paste from here: Ctrl+V.")) }] : []),
     { label: "New page…", run: run("New page…") },
     { label: "Attach a file…", run: run("Attach a file…") },

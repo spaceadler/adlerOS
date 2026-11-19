@@ -798,6 +798,27 @@ function magnify(event) {
 
 // ------------------------------------------------------- toast and menus
 
+// Text onto the clipboard, saying so. The Clipboard API only exists on a
+// secure page (HTTPS), and adlerOS is often plain HTTP on its Tailscale
+// address: there, the older way (the text picked in a hidden box, and the
+// copy command), which a click allows. If neither works, the text is shown.
+function copyText(text, done = "Copied.") {
+  const old = () => {
+    const was = document.activeElement;
+    const box = el("textarea", { readonly: "", "aria-hidden": "true", style: "position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0;" });
+    box.value = text;
+    document.body.append(box);
+    box.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch { ok = false; }
+    box.remove();
+    was?.focus?.({ preventScroll: true });
+    toast(ok ? done : `Couldn't copy it: ${text}`);
+  };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(() => toast(done), old);
+  else old();
+}
+
 let toastTimer = null;
 function toast(text) {
   const t = $("toast");

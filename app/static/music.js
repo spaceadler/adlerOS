@@ -1873,7 +1873,7 @@ function musicNetMenu(x) {
   return [
     { label: "Play", run: () => musicPlayStation(x) },
     { label: "Rename…", run: () => musicStationRename(x) },
-    { label: "Copy its address", run: () => navigator.clipboard?.writeText(x.url).then(() => toast("Copied."), () => toast(x.url)) },
+    { label: "Copy its address", run: () => copyText(x.url) },
     { label: "Remove", run: () => musicStationRemove(x), destructive: true },
   ];
 }

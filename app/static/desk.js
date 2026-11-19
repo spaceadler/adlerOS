@@ -363,6 +363,7 @@ async function refreshDesk() {
   desk.at = Date.now();
   if (status === 401) return;
   desk.on = status === 200;
+  if (desk.on) filesHosts(body.places);
   // Hidden files (.gitkeep, .stignore) stay in Files, off the desktop.
   desk.entries = desk.on ? body.entries.filter((e) => !e.name.startsWith(".")) : [];
   renderDesk();
@@ -647,7 +648,7 @@ function deskMenu(target) {
     if (!entry.dir) items.push({ label: "Download", run: () => downloadFile(path) });
     if (!entry.dir && docSendable([path])) items.push({ label: "Upload to Documents", run: () => docUploadPaths([path]) });
     if (tsSendable([entry])) items.push(...tsSendItem([path]));
-    items.push({ label: "Copy", run: () => clip(entry, path, true) },
+    items.push({ label: "Copy", run: () => clip(entry, path, true) }, copyLocationItem(path),
       { label: "Cut", run: () => clip(entry, path, false) },
       { label: "Rename…", run: () => renamePath(entry, path) },
       { label: "Delete", run: () => deletePaths([path]), destructive: true });

@@ -801,7 +801,7 @@ function mdNoteMenu(tab) {
     if (tpl) items.push({ label: "Insert a template…", run: () => mdInsertTemplate(tab) });
   }
   items.push({ label: "This note's graph", run: () => mdOpenGraph(tab.path) },
-    { label: "Copy a link to it", run: () => navigator.clipboard?.writeText(mdLinkTo(tab.path, tab.path, mdNoteName(tab.path))).then(() => toast("Copied.")) },
+    { label: "Copy a link to it", run: () => copyText(mdLinkTo(tab.path, tab.path, mdNoteName(tab.path))) },
     { label: "Open in Notepad", run: () => openNotepad(mdFull(tab.path), { markdown: false }) },
     { label: "Show in My Computer", run: () => openFiles(mdFull(mdFolderOf(tab.path)).replace(/\/$/, "")) });
   if (tab.writable) items.push({ label: "Delete", run: () => mdDelete(tab.path), destructive: true });

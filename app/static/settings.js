@@ -600,7 +600,7 @@ function maintSetupRow(textBlock, control) {
     if (!check?.ok) {
       const command = check?.installer || "sudo <adlerOS folder>/agent/install-maint.sh";
       const copy = el("button", { type: "button", class: "chip-button" }, "Copy command");
-      copy.addEventListener("click", () => navigator.clipboard?.writeText(command).then(() => toast("Copied."), () => toast(command)));
+      copy.addEventListener("click", () => copyText(command));
       detail.replaceChildren("Not set up yet. Run this once on the machine (over SSH, or adlerOS's terminal), then come back: ",
         el("code", { class: "maint-command" }, command));
       control.append(copy);

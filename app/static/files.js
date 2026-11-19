@@ -14,7 +14,21 @@
 // What every My Computer window shares: what you cut or copied, copies and
 // moves under way, uploads, Root's warning, the hidden-files choice, and
 // where the desktop's Upload… goes.
-const files = { clip: null, tasks: new Map(), uploads: 0, rootOk: false, showHidden: false, uploadTo: null };
+const files = { clip: null, tasks: new Map(), uploads: 0, rootOk: false, showHidden: false, uploadTo: null, hosts: {} };
+
+// Where each place is on the machine, as the server says with each folder.
+function filesHosts(places) {
+  for (const p of places || []) if (p.host) files.hosts[p.place] = p.host;
+}
+// A Files path (/user/Media/a.mp3) as it is on the machine
+// (/home/…/storage/Media/a.mp3), for Copy location; adlerOS's own, if it
+// doesn't know where that place is.
+function hostPath(path) {
+  const [, place, ...rest] = path.split("/");
+  const host = files.hosts[place];
+  return host ? [host.replace(/\/+$/, ""), ...rest].join("/") : path;
+}
+const copyLocationItem = (path) => ({ label: "Copy location", run: () => copyText(hostPath(path), `Copied: ${hostPath(path)}`) });
 // Hidden files (.env, .gitignore…): shown only in admin mode, and only when
 // you ask (this browser remembers); off to begin with.
 const HIDDEN_KEY = "adleros.showHidden";
@@ -146,6 +160,7 @@ async function showFolder(path, f = frontFiles(), { remember = true } = {}) {
     if (path !== "/user" && path !== "/") return showFolder(f.places.length ? `/${f.places[0].place}` : "/", f, { remember });
     return;
   }
+  filesHosts(body.places);
   if (remember && from && (from.view !== "folder" || from.path !== body.path)) filesWent(f, from);
   f.shown = true;
   Object.assign(f, {
@@ -230,7 +245,7 @@ function tsExplain(st) {
     el("code", { class: "maint-command" }, fix),
     el("p", {}, "It lets your user send and receive Tailscale files without sudo. Then try again."));
   const copy = el("button", { type: "button", class: "button-secondary" }, "Copy command");
-  copy.addEventListener("click", () => navigator.clipboard?.writeText(fix).then(() => toast("Copied."), () => toast(fix)));
+  copy.addEventListener("click", () => copyText(fix));
   const ok = el("button", { type: "button", class: "button-primary" }, "OK");
   ok.addEventListener("click", closeModal);
   openModal(el("div", { class: "dialog material", role: "dialog", "aria-modal": "true" }, el("h2", {}, "Tailscale needs one setting"), body,
@@ -526,7 +541,7 @@ function entryMenu(entry, path, f) {
   if (!entry.dir) items.push({ label: "Download", run: () => downloadFile(path) });
   if (!entry.dir && docSendable([path])) items.push({ label: "Upload to Documents", run: () => docUploadPaths([path]) });
   if (tsSendable([entry])) items.push(...tsSendItem([path]));
-  items.push({ label: "Copy", run: () => clip(entry, path, true) });
+  items.push({ label: "Copy", run: () => clip(entry, path, true) }, copyLocationItem(path));
   if (f.writable) {
     items.push({ label: "Cut", run: () => clip(entry, path, false) });
     items.push({ label: "Rename…", run: () => renamePath(entry, path) });

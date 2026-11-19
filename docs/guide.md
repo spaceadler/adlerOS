@@ -183,8 +183,8 @@ while the laptop uses desktop mode. It's for computers: a phone never has it
 made phone-narrow leaves it until it's wide again.
 
 - **The desktop** shows your Desktop folder (a homelab's `mailbox/`) as icons.
-  Double-click one (Enter, or a tap) to open it; right-click for Copy, Cut,
-  Rename, Delete; right-click the desktop itself for New folder, New text
+  Double-click one (Enter, or a tap) to open it; right-click for Copy, Copy
+  location, Cut, Rename, Delete; right-click the desktop itself for New folder, New text
   file, Paste, Upload. Drag an icon to put it somewhere else on the desktop
   (each computer remembers where; one already there swaps places), onto a
   folder's icon to move it into that folder, or onto the My Computer window to move
@@ -461,7 +461,8 @@ Desktop and User themselves: opening one takes you there.
   keeps its choice.
 - **New folder**, **New text file**, and per file (right-click, `m`, or its
   [keys](keyboard.md#in-my-computer)): Edit as text, Download, Copy, Cut, Rename,
-  Delete.
+  Delete, and **Copy location**: where it is on the machine
+  (`/home/…/storage/Media/…`), for a terminal or ssh.
 - **Drag** a file (with a mouse) onto a folder in the list, onto a place down
   the side, or onto the Trash; in desktop mode, onto the desktop or a folder
   on it. It moves there (from Root, where you can't change things, it's a

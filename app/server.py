@@ -7318,7 +7318,8 @@ class Handler(BaseHTTPRequestHandler):
             with _tasks_lock:
                 return self.send_json(200, {"tasks": list(TASKS.values())})
         rel = query.get("path", ["/"])[0]
-        places = [{"place": p, "name": PLACE_LABELS[p]} for p in on]
+        # Each place, and where it is on the machine (for Copy location): none if unknown.
+        places = [{"place": p, "name": PLACE_LABELS[p], "host": place_host(p) or None} for p in on]
         if path == "/api/files":
             if rel.strip("/") == "":
                 entries = [{"name": PLACE_LABELS[p], "dir": True, "size": None, "mtime": None, "kind": "folder",
