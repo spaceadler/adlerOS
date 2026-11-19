@@ -549,7 +549,8 @@ function bigKeys(e) {
     bigLiveBanner();
     const step = { ArrowUp: -1, PageUp: -1, ChannelDown: -1, ArrowDown: 1, PageDown: 1, ChannelUp: 1 }[e.key];
     if (step) { bigLiveStep(step); return true; }
-    return quiet && (e.key === "Enter" || e.key === " ");
+    const enter = e.key === "Enter" || e.key === " ";
+    return enter && (bigLiveResume() || quiet);
   }
   if (!big.viewer) return false;
   if (e.key === "ArrowLeft" || e.key === "ArrowRight") { bigViewerStep(e.key === "ArrowLeft" ? -1 : 1); return true; }
@@ -942,7 +943,7 @@ async function bigLivePlay(list, i) {
           button("prev", BIG_ICONS.prev, "The channel before", () => bigLiveStep(-1)),
           button("next", BIG_ICONS.next, "The channel after", () => bigLiveStep(1)),
           button("close", BIG_ICONS.close, "Close", bigLiveClose))));
-    v.onpointerdown = (e) => { if (!e.target.closest(".big-live-btn")) bigLiveBanner(); };
+    v.onpointerdown = (e) => { if (!e.target.closest(".big-live-btn")) { bigLiveBanner(); bigLiveResume(); } };
     v.hidden = false;
     $("big-main").inert = true; // the focus and the keys stay with the channel
     if (big.mode === "tv") v.querySelector(".next").focus({ preventScroll: true });
@@ -974,10 +975,23 @@ async function bigLiveTune() {
   say.textContent = `Tuning in to ${c.name}…`;
   const tuned = () => { if (here() && (video.currentTime > 0 || video.readyState >= 3)) say.textContent = ""; };
   for (const ev of ["playing", "timeupdate", "canplay"]) video.addEventListener(ev, tuned);
+  // A slow channel answers after the browser stopped counting the tap that
+  // asked for it, and it may then hold back the sound: a tap (or Enter) plays it.
+  video.addEventListener("canplay", () => {
+    if (here() && video.paused) video.play().catch(() => { if (here()) say.textContent = big.mode === "tv" ? "Press Enter to play." : "Tap to play."; });
+  }, { once: true });
   bigLiveBanner();
   const hls = await ltTune(video, c, (why) => { if (here()) say.textContent = `${c.name} won't play here: ${why}.`; }, here);
   if (here()) live.hls = hls;
   else hls?.destroy();
+}
+
+// Held back (see bigLiveTune): played now, on a tap or Enter. Whether it was.
+function bigLiveResume() {
+  const video = $("big-live-stage")?.querySelector("video");
+  if (!video?.paused || video.readyState < 2) return false;
+  video.play().catch(() => {});
+  return true;
 }
 
 function bigLiveStep(dir) {
