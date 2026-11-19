@@ -447,7 +447,8 @@ function deskDown(e) {
   }
   const icon = e.target.closest(".desk-icon, .desk-widget");
   // Pressing in the search bar's box is for typing; its edge moves it.
-  if (!icon || e.button !== 0 || e.pointerType !== "mouse" || !desktopMode() || e.target.closest("input")) return;
+  // A mouse, or a finger (a phone in desktop mode): touch one and move it.
+  if (!icon || e.button !== 0 || !["mouse", "touch", "pen"].includes(e.pointerType) || !desktopMode() || e.target.closest("input")) return;
   desk.drag = { icon, widget: icon.dataset.deskWidget || null, pointerId: e.pointerId, x: e.clientX, y: e.clientY, active: false, over: null };
 }
 

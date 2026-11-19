@@ -5397,3 +5397,6 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .ct-multi-row input { flex: 1; min-width: 0; width: auto; }
 .ct-more-button { justify-self: start; }
 img.ct-avatar { object-fit: cover; }
+
+/* A finger moves a desktop icon (or widget) instead of panning the page. */
+body.wm .desk > .desk-icon, body.wm .desk > .desk-widget { touch-action: none; }

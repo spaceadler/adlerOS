@@ -185,7 +185,7 @@ made phone-narrow leaves it until it's wide again.
 - **The desktop** shows your Desktop folder (a homelab's `mailbox/`) as icons.
   Double-click one (Enter, or a tap) to open it; right-click for Copy, Copy
   location, Cut, Rename, Delete; right-click the desktop itself for New folder, New text
-  file, Paste, Upload. Drag an icon to put it somewhere else on the desktop
+  file, Paste, Upload. Drag an icon (with a mouse, or a finger on a phone) to put it somewhere else on the desktop
   (each computer remembers where; one already there swaps places), onto a
   folder's icon to move it into that folder, or onto the My Computer window to move
   it to the folder that shows. Drop files from your computer on it to put
