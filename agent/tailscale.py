@@ -1,11 +1,12 @@
 """Taildrop for adlerOS, run by the helper as your user (Tailscale's operator,
 so no sudo): what's possible, files sent to this machine into your storage
 folder's Tailscale/ (or a folder you pick), and files sent to your other
-devices. JSON out.
+devices. JSON out. Files' places (User, the Desktop, Root) are found the way
+files.py finds them, standalone or in a homelab.
 
-  tailscale.py ADLEROS status
-  tailscale.py ADLEROS get FOLDER          (FOLDER: an adlerOS path in User or the Desktop)
-  tailscale.py ADLEROS send DEVICE PATHS   (PATHS: adlerOS paths, one a line)
+  tailscale.py status
+  tailscale.py get FOLDER          (FOLDER: an adlerOS path in User or the Desktop)
+  tailscale.py send DEVICE PATHS   (PATHS: adlerOS paths, one a line)
 """
 import getpass
 import json
@@ -14,20 +15,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # files.py, beside this one
+from files import Refused, locate, places  # noqa: E402
+
 INBOX = "Tailscale"  # in your storage folder (adlerOS's /user/Tailscale)
-
-
-def settings(adleros):
-    """adlerOS's .env, as KEY: value."""
-    found = {}
-    try:
-        for line in Path(adleros, ".env").read_text().splitlines():
-            if "=" in line and not line.lstrip().startswith("#"):
-                key, value = line.split("=", 1)
-                found[key.strip()] = value.strip().strip('"').strip("'")
-    except OSError:
-        pass
-    return found
 
 
 def ts(*args, timeout=120):
@@ -52,14 +43,25 @@ def status():
     return {"ok": True, "operator": True, "user": me, "inbox": f"/user/{INBOX}", "targets": targets}
 
 
-def get(adleros, into=f"/user/{INBOX}"):
+def host_path(path, allowed, want):
+    """An adlerOS path (/user/…, /desktop/…, /root/…) on this machine, in one
+    of the places allowed, or None if it leads out of its place or isn't what's
+    wanted (a file, a folder)."""
+    where = {k: v for k, v in places().items() if k in allowed}
+    try:
+        real = locate(path, where)[1]
+    except Refused:
+        return None
+    return real if want(real) else None
+
+
+def get(into):
     """`tailscale file get` into a folder of User or the Desktop (User/Tailscale
     is made the first time)."""
-    if into.strip("/") == f"user/{INBOX}":
-        storage = settings(adleros).get("STORAGE_DIR")
-        if storage and Path(storage).is_dir():
-            Path(storage, INBOX).mkdir(exist_ok=True)
-    folder = host_path(adleros, into, places=("user", "desktop"), want=Path.is_dir)
+    user = places().get("user")
+    if user and into.strip("/") == f"user/{INBOX}":
+        (user / INBOX).mkdir(exist_ok=True)
+    folder = host_path(into, ("user", "desktop"), Path.is_dir)
     if not folder:
         return {"ok": False, "why": "files can only be got into a folder of User or the Desktop"}
     before = set(os.listdir(folder))
@@ -70,30 +72,17 @@ def get(adleros, into=f"/user/{INBOX}"):
     return {"ok": True, "got": got, "into": into}
 
 
-def host_path(adleros, path, places=("user", "desktop", "root"), want=Path.is_file):
-    """An adlerOS path (/user/…, /desktop/…, /root/…) on this machine, or None
-    if it leads out of its place or isn't what's wanted (a file, a folder)."""
-    env = settings(adleros)
-    tops = {"user": env.get("STORAGE_DIR"), "desktop": env.get("DESKTOP_DIR"), "root": env.get("FILES_ROOT")}
-    parts = [p for p in path.split("/") if p not in ("", ".")]
-    if not parts or ".." in parts or parts[0] not in places or not tops.get(parts[0]):
-        return None
-    top = Path(tops[parts[0]]).resolve()
-    real = top.joinpath(*parts[1:]).resolve()
-    return real if want(real) and real.is_relative_to(top) else None
-
-
-def send(adleros, device, paths):
-    files = [host_path(adleros, p) for p in paths.splitlines() if p.strip()]
-    if not files or None in files:
+def send(device, paths):
+    picked = [host_path(p, ("user", "desktop", "root"), Path.is_file) for p in paths.splitlines() if p.strip()]
+    if not picked or None in picked:
         return {"ok": False, "why": "only files in your places can be sent"}
-    done = ts("file", "cp", *map(str, files), f"{device}:", timeout=3600)
+    done = ts("file", "cp", *map(str, picked), f"{device}:", timeout=3600)
     if done.returncode:
         return {"ok": False, "why": (done.stderr or done.stdout).strip()[-300:] or "tailscale file cp failed"}
-    return {"ok": True, "sent": len(files), "to": device}
+    return {"ok": True, "sent": len(picked), "to": device}
 
 
 if __name__ == "__main__":
-    adleros, what = sys.argv[1], sys.argv[2]
-    reply = status() if what == "status" else get(adleros, sys.argv[3]) if what == "get" else send(adleros, sys.argv[3], sys.argv[4]) if what == "send" else {"ok": False}
+    what = sys.argv[1]
+    reply = status() if what == "status" else get(sys.argv[2]) if what == "get" else send(sys.argv[2], sys.argv[3]) if what == "send" else {"ok": False}
     print(json.dumps(reply))

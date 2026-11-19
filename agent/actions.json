@@ -680,7 +680,6 @@
           "python3",
           "-I",
           "{adleros}/agent/tailscale.py",
-          "{adleros}",
           "status"
         ],
         "result": true
@@ -704,7 +703,6 @@
           "python3",
           "-I",
           "{adleros}/agent/tailscale.py",
-          "{adleros}",
           "get",
           "{param:into}"
         ],
@@ -731,7 +729,6 @@
           "python3",
           "-I",
           "{adleros}/agent/tailscale.py",
-          "{adleros}",
           "send",
           "{param:device}",
           "{param:paths}"
