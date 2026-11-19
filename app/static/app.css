@@ -5389,3 +5389,11 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .cl-time-input { overflow: hidden; -webkit-appearance: none; appearance: none; }
 .cl-time-input::-webkit-date-and-time-value { text-align: center; }
 @media (max-width: 699px) { .cl-time-input { height: 60px; padding: 0 12px; font-size: 28px; line-height: 60px; } }
+
+/* Contacts: a number's (or email's) label and value a row, in the editor. */
+.ct-multi { display: grid; gap: 6px; }
+.ct-multi-row { display: flex; align-items: center; gap: 6px; }
+.ct-multi-row .ct-kind { flex: none; width: 110px; }
+.ct-multi-row input { flex: 1; min-width: 0; width: auto; }
+.ct-more-button { justify-self: start; }
+img.ct-avatar { object-fit: cover; }

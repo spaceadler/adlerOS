@@ -299,11 +299,11 @@ function ltPlaylistsPage(box) {
     name.value = url.value = "";
     draw();
   });
-  const country = el("input", { class: "field-input lt-cc", type: "text", maxlength: "2", placeholder: "jo", "aria-label": "Country code (two letters)" });
+  const country = el("input", { class: "field-input lt-cc", type: "text", maxlength: "2", placeholder: "ch", "aria-label": "Country code (two letters)" });
   const free = el("button", { type: "button", class: "mu-button secondary" }, "Add free channels");
   free.addEventListener("click", () => {
     const cc = country.value.trim().toLowerCase();
-    if (!/^[a-z]{2}$/.test(cc)) return toast("A country's two letters: jo, de, us…");
+    if (!/^[a-z]{2}$/.test(cc)) return toast("A country's two letters: ch, de, us…");
     rows.push({ name: `Free (${cc.toUpperCase()})`, url: `${LT_FREE}${cc}.m3u` });
     draw();
   });

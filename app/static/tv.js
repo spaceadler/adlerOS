@@ -470,6 +470,8 @@ const TV_FOCUSABLE = "button:not([disabled]), a[href], input:not([type=hidden]):
 // Where the keys work now: Control Center, the menu, a dialog, the player,
 // the app in front, else the TV's home.
 function tvScope() {
+  const ringing = document.querySelector(".cl-ringing"); // an alarm or a timer: Snooze and Stop, nothing under it
+  if (ringing) return ringing;
   if ($("tv-cc") && !$("tv-cc").hidden) return $("tv-cc");
   if (!$("menu").hidden) return $("menu");
   if (!$("modal").hidden) return $("modal");

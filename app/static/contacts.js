@@ -1,4 +1,8 @@
-// Contacts: the people in Monica (a personal CRM), through adlerOS's server
+// Contacts: your address book (CardDAV: the one your phone keeps, on
+// Radicale), with Monica (a personal CRM) as its extras: a person's notes
+// and what you know of them, linked by name, made in Monica when you first
+// add a note. Without an address book, the people in Monica alone, as below.
+// Monica: through adlerOS's server
 // (a token pasted once, in Connect; it never reaches the browser). A to Z
 // down the side with a search; a person's page: how to reach them (emails,
 // phones…), their birthday, what you know about them and your notes; new,
@@ -22,8 +26,11 @@ const CT_ICONS = {
 // Monica's kinds of contact field, as Contacts adds them.
 const CT_KINDS = [["email", "Email"], ["phone", "Phone"]];
 
-const ct = { built: false, status: null, list: [], q: "", view: { kind: "home" }, person: null };
-const ctOnline = () => Boolean(ct.status?.ok);
+const ct = { built: false, status: null, dav: null, all: [], list: [], q: "", view: { kind: "home" }, person: null };
+const ctDav = () => Boolean(ct.dav?.ok);
+const ctOnline = () => ctDav() || Boolean(ct.status?.ok);
+const CT_PHONE_TYPES = [["mobile", "Mobile"], ["iphone", "iPhone"], ["home", "Home"], ["work", "Work"], ["main", "Main"], ["other", "Other"]];
+const CT_EMAIL_TYPES = [["home", "Home"], ["work", "Work"], ["other", "Other"]];
 
 async function ctGet(path) {
   const { status, body } = await api(`/api/contacts/${path}`).catch(() => ({ status: 0 }));
@@ -76,14 +83,21 @@ function ctBuild() {
 }
 
 async function ctLoad() {
-  ct.status = await ctGet("status").catch((e) => ({ error: e.message }));
+  [ct.dav, ct.status] = await Promise.all([ctGet("cards-status").catch((e) => ({ error: e.message })), ctGet("status").catch((e) => ({ error: e.message }))]);
   ctSource();
   if (!ctOnline()) { ct.list = []; ctList(); return ctShow({ kind: "connect" }, true); }
   await ctLoadList();
   ctRender();
 }
 
-async function ctLoadList() {
+async function ctLoadList(again = false) {
+  if (ctDav()) {
+    // The whole book at once (a person's is short), searched here.
+    try { ct.all = (await ctGet(`cards${again ? "?again=1" : ""}`)).contacts; } catch (e) { toast(e.message); }
+    const q = ct.q.toLowerCase();
+    ct.list = q ? ct.all.filter((c) => [c.name, c.nickname, c.company, ...c.phones.map((x) => x.value), ...c.emails.map((x) => x.value)].join(" ").toLowerCase().includes(q)) : ct.all;
+    return ctList();
+  }
   if (!ctOnline()) return;
   const all = [];
   try {
@@ -103,6 +117,7 @@ async function ctLoadList() {
 // ------------------------------------------------------------- the side
 
 function ctAvatar(c, size = "") {
+  if (c.photo) return el("img", { class: `ct-avatar${size ? ` ${size}` : ""}`, src: `/api/contacts/card-photo?id=${c.id}`, alt: "", loading: "lazy" });
   return el("span", { class: `ct-avatar${size ? ` ${size}` : ""}`, style: c.color ? `background:${c.color}` : "", "aria-hidden": "true" },
     c.initials || (c.name || "?").slice(0, 1).toUpperCase());
 }
@@ -133,7 +148,7 @@ function ctList() {
 
 function ctSource() {
   const src = el("button", { type: "button", class: "mu-nav vd-source-button" }, svg(CT_ICONS.link),
-    el("span", {}, ctOnline() ? `Monica${ct.status.user ? `: ${ct.status.user}` : ""}` : "Connect Monica"));
+    el("span", {}, ctDav() ? `${ct.dav.book}${ct.status?.ok ? " + Monica" : ""}` : ct.status?.ok ? `Monica${ct.status.user ? `: ${ct.status.user}` : ""}` : "Connect"));
   src.addEventListener("click", () => ctShow({ kind: "connect" }));
   $("ct-source")?.replaceChildren(src);
 }
@@ -153,8 +168,8 @@ async function ctRender() {
   main.replaceChildren(page);
   if (v.kind === "connect") return ctConnectPage(page);
   if (!ctOnline()) return ctConnectPage(page);
-  if (v.kind === "person") return ctPersonPage(page, v.id);
-  if (v.kind === "edit") return ctEditPage(page, v.id);
+  if (v.kind === "person") return ctDav() ? ctCardPage(page, v.id) : ctPersonPage(page, v.id);
+  if (v.kind === "edit") return ctDav() ? ctCardEdit(page, v.id) : ctEditPage(page, v.id);
   page.append(el("div", { class: "mu-empty" }, el("h2", {}, "Contacts"),
     el("p", {}, ct.list.length ? `${ct.list.length} ${ct.list.length === 1 ? "person" : "people"}. Pick one, or search.` : "No one yet: New contact adds the first.")));
 }
@@ -286,6 +301,13 @@ async function ctEditPage(page, id) {
 
 function ctConnectPage(page) {
   const s = ct.status || {};
+  // The address book first: where it is, or why there's none.
+  const d = ct.dav || {};
+  page.append(el("header", { class: "mu-head" }, el("div", {}, el("h1", {}, "Address book"))),
+    el("div", { class: "vd-connect" }, el("p", {}, ctDav() ? `${d.book}: ${d.count} ${d.count === 1 ? "contact" : "contacts"}, the ones your phone has (CardDAV, on the same server as Calendar). What you change here, your phone has too.`
+      : d.error === "nologin" ? "No address book yet: Contacts uses your CalDAV login (CALDAV_USER and CALDAV_PASSWORD in the settings file, as Calendar does), or CARDDAV_URL, CARDDAV_USER and CARDDAV_PASSWORD for another server."
+        : d.error === "nobook" ? "Your CalDAV server has no address book. Make one there (your phone's Contacts can, with a CardDAV account), or set CARDDAV_URL."
+          : d.error === "refused" ? "The address book's server refused the login." : "No address book: Contacts shows Monica's people instead.")));
   page.append(el("header", { class: "mu-head" }, el("div", {}, el("h1", {}, "Monica"))));
   const box = el("div", { class: "vd-connect" });
   page.append(box);
@@ -322,4 +344,135 @@ function ctConnectPage(page) {
       el("li", {}, "Settings (top right), then API, then Create a new token under Personal access tokens. Call it adlerOS."),
       el("li", {}, "Copy the token (it's long) and paste it here.")),
     el("div", { class: "vd-key-row" }, input, go)]));
+}
+
+// ------------------------------------------------------------- a card
+
+const ctTypeName = (list, type) => list.find(([k]) => k === type)?.[1] || type.replace(/^./, (c) => c.toUpperCase());
+
+async function ctCardPage(page, id) {
+  page.append(el("p", { class: "vd-dim" }, "Opening…"));
+  let p;
+  try {
+    p = await ctGet(`card?id=${id}`);
+  } catch (e) {
+    page.replaceChildren(el("div", { class: "mu-empty" }, el("p", {}, e.message)));
+    return;
+  }
+  if (ct.view.kind !== "person" || ct.view.id !== id) return;
+  ct.person = p;
+  const edit = el("button", { type: "button", class: "mu-button secondary" }, svg(CT_ICONS.edit), "Edit");
+  edit.addEventListener("click", () => ctShow({ kind: "edit", id }));
+  const del = el("button", { type: "button", class: "mu-button secondary" }, svg(CT_ICONS.trash), "Delete");
+  del.addEventListener("click", async () => {
+    if (!await confirmDialog({ title: `Delete ${p.name}?`, body: "From your address book, so from your phone too. Their notes in Monica stay.", button: "Delete", destructive: true })) return;
+    const got = await ctPost("card-delete", { id });
+    if (!got?.ok) return toast(got?.error || "That didn't work.");
+    toast(`${p.name}: deleted.`);
+    await ctLoadList();
+    ctShow({ kind: "home" }, true);
+  });
+  const sub = [p.nickname && `“${p.nickname}”`, [p.job, p.company].filter(Boolean).join(" at ")].filter(Boolean).join(" · ");
+  const reach = [
+    ...p.phones.map((f) => el("div", { class: "ct-field" }, el("span", { class: "ct-label" }, ctTypeName(CT_PHONE_TYPES, f.type)),
+      el("a", { href: `tel:${f.value.replace(/[^\d+*#,;]/g, "")}` }, f.value))),
+    ...p.emails.map((f) => el("div", { class: "ct-field" }, el("span", { class: "ct-label" }, ctTypeName(CT_EMAIL_TYPES, f.type)), el("a", { href: `mailto:${f.value}` }, f.value))),
+  ];
+  const about = [];
+  if (p.birthday) {
+    const [y, m, d] = p.birthday.length === 10 ? p.birthday.split("-").map(Number) : [2000, ...p.birthday.split("-").map(Number)];
+    about.push(el("div", { class: "ct-field" }, el("span", { class: "ct-label" }, "Birthday"),
+      el("span", {}, new Date(y, m - 1, d).toLocaleDateString([], { day: "numeric", month: "long", ...(p.birthday.length === 10 ? { year: "numeric" } : {}) }))));
+  }
+  for (const a of p.addresses) about.push(el("div", { class: "ct-field" }, el("span", { class: "ct-label" }, "Address"), el("span", {}, a)));
+  if (p.note) about.push(el("p", { class: "ct-description" }, p.note));
+  // Monica's side: their notes (and what Monica knows of them).
+  const notes = el("section", { class: "ct-section" }, el("h2", {}, "Notes"));
+  if (!p.monicaOn) {
+    const go = el("button", { type: "button", class: "mu-button secondary" }, "Connect Monica");
+    go.addEventListener("click", () => ctShow({ kind: "connect" }));
+    notes.append(el("p", { class: "vd-dim" }, "Notes about people are kept in Monica, a personal CRM."), go);
+  } else {
+    const box = el("textarea", { class: "field-input ct-note-input", rows: "3", placeholder: "A note: what you talked about, what to remember…" });
+    const add = el("button", { type: "button", class: "mu-button primary" }, "Add note");
+    add.addEventListener("click", async () => {
+      if (!box.value.trim()) return box.focus();
+      add.disabled = true;
+      const got = await ctPost("card-note-add", { id, body: box.value.trim() });
+      add.disabled = false;
+      if (!got?.ok) return toast(got?.error || "That didn't work.");
+      ctShow({ kind: "person", id }, true);
+    });
+    if (p.monica?.description) notes.append(el("p", { class: "ct-description" }, p.monica.description));
+    notes.append(box, el("div", { class: "ct-add-row" }, add));
+    if (!p.monica) notes.append(el("p", { class: "vd-dim" }, p.monicaError || "Not in Monica yet: the first note puts them there."));
+    for (const n of p.monica?.notes || []) {
+      const x = el("button", { type: "button", class: "ct-x", "aria-label": "Delete this note" }, svg(CT_ICONS.close));
+      x.addEventListener("click", async () => {
+        if (!await confirmDialog({ title: "Delete this note?", body: n.body.slice(0, 140), button: "Delete", destructive: true })) return;
+        const got = await ctPost("note-delete", { id: String(p.monica.id), noteId: n.id });
+        if (!got?.ok) return toast(got?.error || "That didn't work.");
+        ctShow({ kind: "person", id }, true);
+      });
+      notes.append(el("div", { class: "ct-note" }, el("div", { class: "ct-note-top" }, el("span", { class: "vd-dim" }, n.at), x), el("p", {}, n.body)));
+    }
+    if (p.monica?.url) notes.append(el("p", { class: "vd-dim ct-more" }, "The rest (relationships, reminders, gifts) is in ", el("a", { href: p.monica.url, target: "_blank", rel: "noopener noreferrer" }, "Monica"), "."));
+  }
+  page.replaceChildren(el("header", { class: "mu-head ct-head" }, ctAvatar(p, "big"), el("div", {}, el("h1", {}, p.name), sub ? el("p", { class: "vd-dim" }, sub) : ""),
+    el("div", { class: "ct-actions" }, edit, del)),
+  el("section", { class: "ct-section" }, el("h2", {}, "Reach them"), ...(reach.length ? reach : [el("p", { class: "vd-dim" }, "No number or email yet: Edit adds them.")])),
+  ...(about.length ? [el("section", { class: "ct-section" }, el("h2", {}, "About"), ...about)] : []), notes);
+}
+
+// New or edit: names, company, numbers and emails (with their labels),
+// birthday and a note; the rest of the card is kept as it is.
+async function ctCardEdit(page, id) {
+  const p = id ? (ct.person?.id === id ? ct.person : await ctGet(`card?id=${id}`).catch(() => null)) : null;
+  if (id && !p) { page.append(el("div", { class: "mu-empty" }, el("p", {}, "Couldn't open them."))); return; }
+  const field = (label, input) => el("label", { class: "ct-edit-field" }, el("span", { class: "ct-label" }, label), input);
+  const input = (value = "", attrs = {}) => el("input", { class: "field-input", type: "text", value, ...attrs });
+  const first = input(p?.first || "", { maxlength: "100" }), last = input(p?.last || "", { maxlength: "100" });
+  const nick = input(p?.nickname || "", { maxlength: "100" }), company = input(p?.company || "", { maxlength: "200" }), job = input(p?.job || "", { maxlength: "200" });
+  const bday = input(p?.birthday || "", { placeholder: "YYYY-MM-DD, or MM-DD", inputmode: "numeric" });
+  const note = el("textarea", { class: "field-input", rows: "3", maxlength: "5000" }, p?.note || "");
+  // A list of numbers (or emails): a label and a value a row, + adds one.
+  const rows = (items, types, placeholder, kind) => {
+    const box = el("div", { class: "ct-multi" });
+    const add = (item = { type: types[0][0], value: "" }) => {
+      const known = types.some(([k]) => k === item.type);
+      const type = el("select", { class: "field-input ct-kind" }, ...types.map(([k, label]) => el("option", { value: k }, label)), ...(known ? [] : [el("option", { value: item.type }, item.type)]));
+      type.value = item.type;
+      const value = el("input", { class: "field-input", type: kind, value: item.value, placeholder });
+      const x = el("button", { type: "button", class: "ct-x", "aria-label": "Remove" }, svg(CT_ICONS.close));
+      const row = el("div", { class: "ct-multi-row" }, type, value, x);
+      x.addEventListener("click", () => row.remove());
+      box.insertBefore(row, more);
+    };
+    const more = el("button", { type: "button", class: "mu-button secondary ct-more-button" }, svg(CT_ICONS.plus), kind === "tel" ? "Add a number" : "Add an email");
+    more.addEventListener("click", () => add());
+    box.append(more);
+    for (const item of items) add(item);
+    box.read = () => [...box.querySelectorAll(".ct-multi-row")].map((r) => ({ type: r.querySelector("select").value, value: r.querySelector("input").value.trim() })).filter((x) => x.value);
+    return box;
+  };
+  const phones = rows(p?.phones || [{ type: "mobile", value: "" }], CT_PHONE_TYPES, "+41 79 123 45 67", "tel");
+  const emails = rows(p?.emails || [], CT_EMAIL_TYPES, "name@example.com", "email");
+  const save = el("button", { type: "submit", class: "mu-button primary" }, id ? "Save" : "Add");
+  const cancel = el("button", { type: "button", class: "mu-button secondary" }, "Cancel");
+  cancel.addEventListener("click", () => ctShow(id ? { kind: "person", id } : { kind: "home" }));
+  const form = el("form", { class: "ct-edit" }, field("First name", first), field("Last name", last), field("Nickname", nick), field("Company", company), field("Job title", job),
+    field("Phone", phones), field("Email", emails), field("Birthday", bday), field("Note", note), el("div", { class: "ct-add-row" }, cancel, save));
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    save.disabled = true;
+    const got = await ctPost("card-save", { id, first: first.value, last: last.value, nickname: nick.value, company: company.value, job: job.value,
+      phones: phones.read(), emails: emails.read(), birthday: bday.value.trim(), note: note.value });
+    save.disabled = false;
+    if (!got?.ok) return toast(got?.error || "That didn't work.");
+    toast(id ? "Saved: your phone has it too." : `${(first.value || company.value).trim()}: added.`);
+    await ctLoadList();
+    ctShow({ kind: "person", id: got.id || id });
+  });
+  page.append(el("header", { class: "mu-head" }, el("div", {}, el("h1", {}, id ? `Edit ${p.name}` : "New contact"))), form);
+  first.focus();
 }

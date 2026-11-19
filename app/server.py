@@ -44,6 +44,7 @@ on the host picks it up and runs it from the fixed list in
 scripts/agent/actions.json (see that folder).
 """
 import base64
+import uuid
 import calendar
 import datetime
 import gzip
@@ -6488,6 +6489,429 @@ def contacts_write(what, body):
     raise ValueError("unknown")
 
 
+# Contacts on CardDAV: the address book your phone keeps (Radicale's, at
+# CalDAV's address and with its login unless CARDDAV_URL / CARDDAV_USER /
+# CARDDAV_PASSWORD say otherwise). Names, numbers, emails, birthday, company
+# and a note are read from and written to each vCard; everything else in it
+# (its photo, addresses, your phone's own labels and fields) is kept as it
+# is. Monica, when it's connected, is the extras: a person found there by
+# name is linked (data/contacts-links.json) and its notes shown; a note for
+# someone Monica hasn't met makes them there first; a new name or birthday
+# goes to Monica too.
+CARD_NS = "urn:ietf:params:xml:ns:carddav"
+DAV["card"] = CARD_NS
+CARDDAV_FRESH = 20
+CONTACTS_LINKS = DATA / "contacts-links.json"
+CARD_ID = re.compile(r"[0-9a-f]{16}")
+_carddav = {"key": None, "book": None, "books": None, "tag": None, "cards": [], "at": 0}
+_carddav_lock = threading.Lock()
+CARD_FIELDS = ("FN", "N", "NICKNAME", "ORG", "TITLE", "TEL", "EMAIL", "BDAY", "NOTE", "REV", "PRODID")
+PHONE_TYPES = {"mobile": "CELL", "iphone": "IPHONE,CELL", "home": "HOME", "work": "WORK", "main": "MAIN", "other": "OTHER"}
+EMAIL_TYPES = {"home": "INTERNET,HOME", "work": "INTERNET,WORK", "other": "INTERNET"}
+
+
+def carddav():
+    """(url, (user, password)): the address book's server and login."""
+    url = install_setting("CARDDAV_URL").rstrip("/") or caldav()[0]
+    user, password = install_setting("CARDDAV_USER"), install_setting("CARDDAV_PASSWORD")
+    login = (user, password) if user and password else caldav()[1]
+    return url, login
+
+
+def carddav_books(url, login):
+    """The address books: [{href, name, tag}], from the principal's home."""
+    ask = (f'<d:propfind xmlns:d="DAV:" xmlns:card="{CARD_NS}"><d:prop><d:current-user-principal/>'
+           '<card:addressbook-home-set/></d:prop></d:propfind>')
+    homes = []
+    for start in (url + "/", urllib.parse.urljoin(url + "/", "/.well-known/carddav")):
+        try:
+            at, data = dav("PROPFIND", start, login, ask, "0")
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                raise
+            continue
+        found = (dav_responses(data) or [("", {})])[0][1]
+        home = dav_href(found.get(f"{{{CARD_NS}}}addressbook-home-set"))
+        principal = dav_href(found.get(f"{{{DAV['d']}}}current-user-principal"))
+        if not home and principal:
+            at, data = dav("PROPFIND", urllib.parse.urljoin(at, principal), login, ask, "0")
+            home = dav_href((dav_responses(data) or [("", {})])[0][1].get(f"{{{CARD_NS}}}addressbook-home-set")) or principal
+        if home:
+            homes.append(urllib.parse.urljoin(at, home))
+            break
+    books = []
+    for home in homes:
+        at, data = dav("PROPFIND", home, login, f'<d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/"><d:prop><d:resourcetype/>'
+                       '<d:displayname/><cs:getctag/><d:sync-token/></d:prop></d:propfind>', "1")
+        for href, found in dav_responses(data):
+            kind = found.get(f"{{{DAV['d']}}}resourcetype")
+            if kind is None or kind.find("card:addressbook", DAV) is None:
+                continue
+            name = (found[f"{{{DAV['d']}}}displayname"].text or "").strip() if f"{{{DAV['d']}}}displayname" in found else ""
+            tag = "".join((found[k].text or "") for k in (f"{{{DAV['cs']}}}getctag", f"{{{DAV['d']}}}sync-token") if k in found)
+            full = urllib.parse.urljoin(at, href)
+            books.append({"href": full, "name": name or urllib.parse.unquote(href.rstrip("/").rsplit("/", 1)[-1]), "tag": tag})
+    if not books:
+        raise LookupError("no address book there")
+    return books
+
+
+# vCards: lines unfolded, each split into its group, name, parameters and
+# value; written back folded, the lines we didn't change exactly as they came.
+def vcard_lines(text):
+    out = []
+    for line in re.split(r"\r\n|\n|\r", text):
+        if line[:1] in (" ", "\t") and out:
+            out[-1] += line[1:]
+        elif line.strip():
+            out.append(line)
+    return out
+
+
+def vcard_prop(line):
+    quoted, cut = False, len(line)
+    for i, ch in enumerate(line):
+        if ch == '"':
+            quoted = not quoted
+        elif ch == ":" and not quoted:
+            cut = i
+            break
+    head, value = line[:cut], line[cut + 1:]
+    parts = re.split(r';(?=(?:[^"]*"[^"]*")*[^"]*$)', head)
+    name, group = parts[0], None
+    if "." in name:
+        group, name = name.split(".", 1)
+    params = {}
+    for part in parts[1:]:
+        key, eq, val = part.partition("=")
+        if not eq:
+            key, val = "TYPE", key  # vCard 2.1's bare types
+        params.setdefault(key.upper(), []).extend(v.strip('"') for v in val.split(",") if v)
+    return {"group": group, "name": name.upper(), "params": params, "value": value, "raw": line}
+
+
+def vtext(v):
+    return re.sub(r"\\([\\,;nN:])", lambda m: "\n" if m[1] in "nN" else m[1], v or "")
+
+
+def vesc(s):
+    return str(s).replace("\\", "\\\\").replace("\n", "\\n").replace(",", "\\,").replace(";", "\;")
+
+
+def vfold(line):
+    """Lines of at most 75 octets, continued with a space."""
+    out, cur = [], b""
+    for ch in line:
+        b = ch.encode()
+        if len(cur) + len(b) > (75 if not out else 74):
+            out.append(cur.decode())
+            cur = b""
+        cur += b
+    out.append(cur.decode())
+    return "\r\n ".join(out)
+
+
+def vcard_props(text):
+    lines = vcard_lines(text)
+    inside = [vcard_prop(l) for l in lines]
+    return [p for p in inside if p["name"] not in ("BEGIN", "END")]
+
+
+def vcard_label(p, props):
+    """A number's or email's label: your phone's own (X-ABLabel), else its type."""
+    if p["group"]:
+        own = next((q for q in props if q["group"] == p["group"] and q["name"] == "X-ABLABEL"), None)
+        if own:
+            v = vtext(own["value"])
+            m = re.fullmatch(r"_\$!<(.+)>!\$_", v)
+            return (m[1] if m else v).lower()
+    types = [t.lower() for t in p["params"].get("TYPE", [])]
+    for t, label in (("iphone", "iphone"), ("cell", "mobile"), ("main", "main"), ("work", "work"), ("home", "home")):
+        if t in types:
+            return label
+    return "other"
+
+
+def vcard_bday(v):
+    v = (v or "").strip()
+    m = re.fullmatch(r"(\d{4})-?(\d{2})-?(\d{2})(?:T.*)?", v)
+    if m:
+        return f"{m[2]}-{m[3]}" if m[1] in ("1604", "0000") else f"{m[1]}-{m[2]}-{m[3]}"
+    m = re.fullmatch(r"--(\d{2})-?(\d{2})", v)
+    return f"{m[1]}-{m[2]}" if m else ""
+
+
+def card_id(path):
+    return hashlib.sha1(path.encode()).hexdigest()[:16]
+
+
+def card_info(path, etag, text):
+    props = vcard_props(text)
+    get = lambda n: next((p for p in props if p["name"] == n), None)
+    n = get("N")
+    parts = [vtext(x) for x in re.split(r"(?<!\\);", n["value"])] if n else []
+    last, first = (parts + ["", ""])[0], (parts + ["", ""])[1]
+    org = vtext(re.split(r"(?<!\\);", get("ORG")["value"])[0]) if get("ORG") else ""
+    fn = vtext(get("FN")["value"]).strip() if get("FN") else ""
+    name = fn or " ".join(x for x in (first, last) if x) or org or "?"
+    words = [w for w in re.split(r"\s+", name) if w]
+    return {"id": card_id(path), "path": path, "etag": etag, "uid": vtext(get("UID")["value"]) if get("UID") else "",
+            "name": name, "first": first, "last": last, "nickname": vtext(get("NICKNAME")["value"]) if get("NICKNAME") else "",
+            "company": org, "job": vtext(get("TITLE")["value"]) if get("TITLE") else "",
+            "initials": "".join(w[0] for w in words[:2]).upper(),
+            "phones": [{"type": vcard_label(p, props), "value": vtext(p["value"]).replace("tel:", "")} for p in props if p["name"] == "TEL"],
+            "emails": [{"type": vcard_label(p, props), "value": vtext(p["value"])} for p in props if p["name"] == "EMAIL"],
+            "birthday": vcard_bday(get("BDAY")["value"]) if get("BDAY") else "",
+            "addresses": [", ".join(x for x in (vtext(y).replace("\n", ", ") for y in re.split(r"(?<!\\);", p["value"])) if x.strip())
+                          for p in props if p["name"] == "ADR"],
+            "note": vtext(get("NOTE")["value"]) if get("NOTE") else "",
+            "photo": bool(get("PHOTO"))}
+
+
+def card_text(old_text, f, uid=None):
+    """The vCard with these fields as given, the rest of it as it was."""
+    props = vcard_props(old_text) if old_text else [vcard_prop("VERSION:3.0")]
+    version = next((p["value"] for p in props if p["name"] == "VERSION"), "3.0")
+    gone = {p["group"] for p in props if p["name"] in ("TEL", "EMAIL") and p["group"]}
+    keep = [p["raw"] for p in props if p["name"] not in CARD_FIELDS and not (p["group"] and p["group"] in gone)]
+    if uid and not any(p["name"] == "UID" for p in props):
+        keep.append(f"UID:{vesc(uid)}")
+    first, last = f.get("first", "").strip(), f.get("last", "").strip()
+    name = " ".join(x for x in (first, last) if x) or f.get("company", "").strip() or "?"
+    lines = [f"FN:{vesc(name)}", f"N:{vesc(last)};{vesc(first)};;;"]
+    if f.get("nickname", "").strip():
+        lines.append(f"NICKNAME:{vesc(f['nickname'].strip())}")
+    if f.get("company", "").strip():
+        lines.append(f"ORG:{vesc(f['company'].strip())}")
+    if f.get("job", "").strip():
+        lines.append(f"TITLE:{vesc(f['job'].strip())}")
+    n = 0
+    for kind, items, types in (("TEL", f.get("phones", []), PHONE_TYPES), ("EMAIL", f.get("emails", []), EMAIL_TYPES)):
+        for item in items:
+            value, label = item["value"].strip(), item["type"].strip().lower()
+            if not value:
+                continue
+            if label in types:
+                lines.append(f"{kind};TYPE={types[label]}:{vesc(value) if kind == 'EMAIL' else value}")
+            else:  # your own label, the way phones write one
+                n += 1
+                lines += [f"adler{n}.{kind}:{vesc(value) if kind == 'EMAIL' else value}", f"adler{n}.X-ABLabel:{vesc(label)}"]
+    bday = f.get("birthday", "").strip()
+    if bday:
+        lines.append(f"BDAY:{bday}" if len(bday) == 10 else (f"BDAY:--{bday.replace('-', '')}" if version.startswith("4") else f"BDAY;X-APPLE-OMIT-YEAR=1604:1604-{bday}"))
+    if f.get("note", "").strip():
+        lines.append(f"NOTE:{vesc(f['note'].strip())}")
+    lines += ["PRODID:-//adlerOS//Contacts//EN", "REV:" + time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())]
+    version_line = [f"VERSION:{version}"]
+    rest = [l for l in keep if not l.upper().startswith("VERSION:")]
+    return "\r\n".join(["BEGIN:VCARD", *version_line, *(vfold(l) for l in rest + lines), "END:VCARD"]) + "\r\n"
+
+
+def carddav_state(force=False):
+    """The address book's cards (asked again after CARDDAV_FRESH seconds, read
+    again only when its tag moved)."""
+    url, login = carddav()
+    if not url or not login:
+        raise LookupError("not set up")
+    with _carddav_lock:
+        key = (url, login, install_setting("CARDDAV_BOOK"))
+        if _carddav["key"] != key:
+            _carddav.update(key=key, book=None, books=None, tag=None, cards=[], at=0)
+        if force or not _carddav["book"] or time.time() - _carddav["at"] > CARDDAV_FRESH:
+            books = carddav_books(url, login)
+            want = install_setting("CARDDAV_BOOK")
+            book = next((b for b in books if want and want in (b["name"], b["href"].rstrip("/").rsplit("/", 1)[-1])), books[0])
+            if force or book["href"] != (_carddav["book"] or {}).get("href") or not book["tag"] or book["tag"] != _carddav["tag"]:
+                ask = (f'<card:addressbook-query xmlns:d="DAV:" xmlns:card="{CARD_NS}"><d:prop><d:getetag/>'
+                       '<card:address-data/></d:prop></card:addressbook-query>')
+                at, data = dav("REPORT", book["href"], login, ask, "1", timeout=60)
+                cards = []
+                for href, found in dav_responses(data):
+                    item = found.get(f"{{{CARD_NS}}}address-data")
+                    if item is None or not item.text:
+                        continue
+                    etag = (found[f"{{{DAV['d']}}}getetag"].text or "").strip() if f"{{{DAV['d']}}}getetag" in found else ""
+                    path = urllib.parse.urlsplit(urllib.parse.urljoin(at, href)).path
+                    try:
+                        cards.append({**card_info(path, etag, item.text), "text": item.text})
+                    except (ValueError, IndexError, KeyError):
+                        continue
+                _carddav.update(cards=cards, tag=book["tag"])
+            _carddav.update(book=book, books=books, at=time.time())
+        return _carddav["book"], _carddav["cards"]
+
+
+def carddav_status():
+    url, login = carddav()
+    if not url:
+        return {"ok": False, "error": "noserver"}
+    if not login:
+        return {"ok": False, "error": "nologin"}
+    try:
+        book, cards = carddav_state()
+        return {"ok": True, "book": book["name"], "count": len(cards), "books": [b["name"] for b in _carddav["books"] or []]}
+    except urllib.error.HTTPError as e:
+        return {"ok": False, "error": "refused" if e.code in (401, 403) else f"carddav {e.code}"}
+    except LookupError:
+        return {"ok": False, "error": "nobook"}
+    except (OSError, ValueError, ElementTree.ParseError) as e:
+        return {"ok": False, "error": "unreachable", "why": str(e)[:160]}
+
+
+def card_by_id(cid):
+    _, cards = carddav_state()
+    return next((c for c in cards if c["id"] == cid), None)
+
+
+def card_public(c):
+    return {k: v for k, v in c.items() if k not in ("text", "path", "etag")}
+
+
+# Monica's side of a person: linked by uid once found (or made).
+def contacts_links():
+    try:
+        got = json.loads(CONTACTS_LINKS.read_text())
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def contacts_link(uid, mid):
+    links = contacts_links()
+    if mid is None:
+        links.pop(uid, None)
+    else:
+        links[uid] = mid
+    write_private(CONTACTS_LINKS, json.dumps(links))
+
+
+def monica_for(card, make=False):
+    """The Monica id for a card: linked, else found by name (and linked), else
+    made, if `make`; None without Monica."""
+    url, token = monica_conn()
+    if not url or not token:
+        return None
+    key = card["uid"] or card["id"]
+    mid = contacts_links().get(key)
+    if mid:
+        return mid
+    want = card["name"].casefold()
+    for c in monica_json("contacts", {"query": card["name"][:100], "limit": 20}).get("data") or []:
+        full = (c.get("complete_name") or " ".join(x for x in (c.get("first_name"), c.get("last_name")) if x)).casefold()
+        if full == want and not c.get("is_partial"):
+            contacts_link(key, c["id"])
+            return c["id"]
+    if not make:
+        return None
+    body = contact_fields_body({"first": card["first"] or card["name"], "last": card["last"], "nickname": card["nickname"],
+                                "birthday": card["birthday"]})
+    made = monica_json("contacts", body=body, method="POST").get("data") or {}
+    if made.get("id"):
+        contacts_link(key, made["id"])
+    return made.get("id")
+
+
+def card_detail(cid):
+    c = card_by_id(cid)
+    if not c:
+        raise KeyError("no such contact")
+    out = {**card_public(c), "monica": None, "monicaOn": all(monica_conn())}
+    try:
+        mid = monica_for(c)
+        if mid:
+            m = monica_json(f"contacts/{mid}").get("data") or {}
+            notes = monica_json(f"contacts/{mid}/notes", {"limit": 100}).get("data") or []
+            out["monica"] = {"id": mid, "description": m.get("description") or "",
+                             "notes": [{"id": n.get("id"), "body": n.get("body") or "", "at": (n.get("created_at") or "")[:10]} for n in notes],
+                             "url": f"{monica_conn()[0]}/people/{m.get('hash_id') or mid}"}
+    except urllib.error.HTTPError as e:
+        if e.code == 404:  # gone from Monica: the link goes too
+            contacts_link(c["uid"] or c["id"], None)
+        out["monicaError"] = monica_error(e)
+    except (LookupError, OSError, ValueError) as e:
+        out["monicaError"] = monica_error(e)
+    return out
+
+
+def card_fields(body):
+    """What the page sent for a card, checked."""
+    f = {}
+    for key, limit in (("first", 100), ("last", 100), ("nickname", 100), ("company", 200), ("job", 200), ("note", 5000)):
+        v = body.get(key, "")
+        if not isinstance(v, str) or len(v) > limit:
+            raise ValueError(f"{key}: text, up to {limit}")
+        f[key] = v
+    if not (f["first"].strip() or f["last"].strip() or f["company"].strip()):
+        raise ValueError("A name (or a company), at least.")
+    for key in ("phones", "emails"):
+        items = body.get(key, [])
+        if not isinstance(items, list) or len(items) > 30 or not all(isinstance(i, dict) and isinstance(i.get("value"), str) and isinstance(i.get("type"), str)
+                                                                    and len(i["value"]) <= 200 and len(i["type"]) <= 40 for i in items):
+            raise ValueError(f"{key}: up to 30, each a type and a value")
+        if any(re.search(r"[\r\n]", i["value"] + i["type"]) for i in items):
+            raise ValueError(f"{key}: one line each")
+        f[key] = [{"type": i["type"], "value": i["value"]} for i in items]
+    bday = str(body.get("birthday") or "").strip()
+    if bday and not re.fullmatch(r"(\d{4}-)?\d{2}-\d{2}", bday):
+        raise ValueError("A birthday as YYYY-MM-DD (or MM-DD).")
+    f["birthday"] = bday
+    return f
+
+
+def card_write(what, body):
+    url, login = carddav()
+    if not url or not login:
+        raise LookupError("not set up")
+    if what == "card-save":
+        f = card_fields(body)
+        cid = str(body.get("id") or "")
+        if cid:
+            c = card_by_id(cid) if CARD_ID.fullmatch(cid) else None
+            if not c:
+                raise KeyError("no such contact")
+            target = urllib.parse.urljoin(url + "/", c["path"])
+            status, headers, raw = dav_raw("GET", target, login)
+            text = card_text(raw.decode("utf-8", "replace"), f)
+            dav_raw("PUT", target, login, text.encode(), {"Content-Type": "text/vcard; charset=utf-8", "If-Match": headers.get("ETag") or c["etag"]})
+            # Monica's copy of the name and birthday, when they're linked.
+            try:
+                mid = contacts_links().get(c["uid"] or c["id"])
+                if mid and all(monica_conn()):
+                    m = monica_json(f"contacts/{mid}").get("data") or {}
+                    monica_json(f"contacts/{mid}", body=contact_fields_body({"first": f["first"] or f["company"], "last": f["last"], "nickname": f["nickname"],
+                                "birthday": f["birthday"], "description": m.get("description") or ""}), method="PUT")
+            except (urllib.error.HTTPError, OSError, ValueError, LookupError):
+                pass
+            carddav_state(force=True)
+            return {"ok": True, "id": cid}
+        book, _ = carddav_state()
+        uid = str(uuid.uuid4()).upper()
+        target = book["href"].rstrip("/") + f"/{uid}.vcf"
+        dav_raw("PUT", target, login, card_text("", f, uid=uid).encode(), {"Content-Type": "text/vcard; charset=utf-8", "If-None-Match": "*"})
+        carddav_state(force=True)
+        return {"ok": True, "id": card_id(urllib.parse.urlsplit(target).path)}
+    if what == "card-delete":
+        c = card_by_id(str(body.get("id") or ""))
+        if not c:
+            raise KeyError("no such contact")
+        dav_raw("DELETE", urllib.parse.urljoin(url + "/", c["path"]), login, None, {"If-Match": c["etag"]} if c["etag"] else {})
+        carddav_state(force=True)
+        return {"ok": True}
+    if what == "card-note-add":
+        c = card_by_id(str(body.get("id") or ""))
+        if not c:
+            raise KeyError("no such contact")
+        text = str(body.get("body") or "").strip()[:20000]
+        if not text:
+            raise ValueError("An empty note.")
+        mid = monica_for(c, make=True)
+        if not mid:
+            raise LookupError("Monica isn't connected")
+        monica_json("notes", body={"body": text, "contact_id": int(mid), "is_favorited": False}, method="POST")
+        return {"ok": True}
+    raise ValueError("unknown")
+
+
 # ------------------------------------------------------------- videos
 #
 # Videos: Jellyfin's films, shows and documentaries (online: a key pasted
@@ -8144,6 +8568,39 @@ class Handler(BaseHTTPRequestHandler):
         q = lambda k: query.get(k, [""])[0]
         if what == "status":
             return self.send_json(200, contacts_status())
+        if what in ("cards-status", "cards", "card", "card-photo"):
+            try:
+                if what == "cards-status":
+                    return self.send_json(200, carddav_status())
+                if what == "cards":
+                    book, cards = carddav_state(force=q("again") == "1")
+                    return self.send_json(200, {"book": book["name"], "contacts": sorted((card_public(c) for c in cards), key=lambda c: c["name"].casefold())})
+                if not CARD_ID.fullmatch(q("id")):
+                    return self.send_json(404, {"error": "no such contact"})
+                if what == "card":
+                    return self.send_json(200, card_detail(q("id")))
+                c = card_by_id(q("id"))
+                photo = next((p for p in vcard_props(c["text"]) if p["name"] == "PHOTO"), None) if c else None
+                if not photo:
+                    return self.send(404, b"no photo")
+                value = photo["value"]
+                if value.startswith("data:"):
+                    kind, _, value = value[5:].partition(";base64,")
+                else:
+                    kind = "image/" + (photo["params"].get("TYPE", ["jpeg"])[0].lower() or "jpeg")
+                data = base64.b64decode(re.sub(r"\s", "", value), validate=False)
+                if not data[:4] in (b"\xff\xd8\xff\xe0", b"\xff\xd8\xff\xe1", b"\xff\xd8\xff\xdb", b"\xff\xd8\xff\xee") and not data.startswith((b"\x89PNG", b"GIF8", b"\xff\xd8")):
+                    return self.send(404, b"not a picture")
+                return self.send(200, data, [("Content-Type", "image/png" if data.startswith(b"\x89PNG") else "image/gif" if data.startswith(b"GIF8") else "image/jpeg"),
+                                             ("Cache-Control", "private, max-age=300")])
+            except LookupError:
+                return self.send_json(409, {"error": "No address book: set it up in Contacts."})
+            except KeyError:
+                return self.send_json(404, {"error": "no such contact"})
+            except urllib.error.HTTPError as e:
+                return self.send_json(502, {"error": f"The address book said {e.code}"})
+            except (OSError, ValueError, ElementTree.ParseError) as e:
+                return self.send_json(502, {"error": f"Can't reach the address book ({str(e)[:120]})"})
         try:
             if what == "list":
                 page = int(q("page") or 1) if (q("page") or "1").isdigit() else 1
@@ -8162,6 +8619,19 @@ class Handler(BaseHTTPRequestHandler):
             if len(token) > 4000 or not re.fullmatch(r"[A-Za-z0-9._-]*", token):
                 return self.send_json(400, {"error": "That doesn't look like a Monica token."})
             return self.send_json(200, contacts_connect(token))
+        if what.startswith("card-"):
+            try:
+                return self.send_json(200, card_write(what, body))
+            except KeyError:
+                return self.send_json(404, {"error": "That contact isn't in the address book any more."})
+            except LookupError as e:
+                return self.send_json(409, {"error": str(e) if "Monica" in str(e) else "No address book."})
+            except urllib.error.HTTPError as e:
+                return self.send_json(409 if e.code == 412 else 502, {"error": "It changed on another device meanwhile: open it again." if e.code == 412 else f"The address book said {e.code}"})
+            except ValueError as e:
+                return self.send_json(400, {"error": str(e)})
+            except OSError as e:
+                return self.send_json(502, {"error": f"Can't reach the address book ({str(e)[:120]})"})
         try:
             return self.send_json(200, contacts_write(what, body))
         except LookupError:

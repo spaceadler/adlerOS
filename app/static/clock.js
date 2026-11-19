@@ -712,7 +712,19 @@ function clSoundStop() {
 setInterval(clCheck, 1000);
 setInterval(clSync, 4000);
 clSync();
-document.addEventListener("keydown", (e) => {
+// On window, so it comes before every other key handler (TV mode's too).
+window.addEventListener("keydown", (e) => {
   if (!clock.ringing) return;
-  if (e.key === "Escape" || e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopImmediatePropagation(); document.querySelector(".cl-ringing button")?.click(); }
+  const box = document.querySelector(".cl-ringing");
+  if (!box) return;
+  // Only its own buttons: a remote's arrows go between them, Enter presses
+  // the one picked (Escape: Stop), nothing under it hears a key.
+  const buttons = [...box.querySelectorAll("button")];
+  let at = buttons.indexOf(document.activeElement);
+  if (at < 0) { at = buttons.length - 1; buttons[at]?.focus(); }
+  if (["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(e.key)) buttons[(at + (e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 1) + buttons.length) % buttons.length]?.focus();
+  else if (e.key === "Enter" || e.key === " ") buttons[at]?.click();
+  else if (e.key === "Escape" || e.key === "Backspace" || e.key === "GoBack" || e.key === "BrowserBack") box.querySelector(".cl-ringing-stop")?.click();
+  e.preventDefault();
+  e.stopImmediatePropagation();
 }, true);
