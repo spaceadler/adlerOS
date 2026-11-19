@@ -218,29 +218,29 @@ function renderSide() {
   const wallpaperUrl = `url("/api/wallpaper?id=${encodeURIComponent(d.wallpaper.selected)}")`;
   document.documentElement.style.setProperty("--wallpaper", wallpaperUrl);
 
-  // A small picture of the desktop: wallpaper, greeting, widgets, apps, dock.
+  // A small picture of the home screen's first page as it is: the greeting,
+  // the search bar, your widgets (if you have any), adlerOS's own apps and
+  // the dock (your pins, adlerOS's among them, then All apps).
   const preview = $("settings-preview");
   preview.style.backgroundImage = wallpaperUrl;
-  const apps = el("div", { class: "preview-apps" }, ...(groupApps()[0]?.apps || []).slice(0, 12).map((app) => {
-    const tile = el("span");
-    if (app.hasIcon) tile.style.backgroundImage = `url("/api/icon/${encodeURIComponent(app.id)}?v=${encodeURIComponent(app.icon || "")}")`;
-    return tile;
-  }));
-  const pins = state.dock.map(appById).filter(Boolean).map((app) => {
-    const s = el("span", { class: "pin" });
-    if (app.hasIcon) s.style.backgroundImage = `url("/api/icon/${encodeURIComponent(app.id)}?v=${encodeURIComponent(app.icon || "")}")`;
+  const icon = (src, cls) => {
+    const s = el("span", cls ? { class: cls } : {});
+    if (src) s.style.backgroundImage = `url("${src}")`;
     return s;
-  });
-  const dockIcons = [...pins, ...DOCK_FIXED.map((item) => {
-    const s = el("span");
-    s.style.backgroundImage = `url("/api/dock-icon/${item.id}")`;
-    return s;
-  })];
+  };
+  // adlerOS's own: their own icon; another app: its icon on a plate.
+  const iconOf = (app) => (app.builtin ? icon(`/api/dock-icon/${app.builtin.icon}`)
+    : icon(app.hasIcon ? `/api/icon/${encodeURIComponent(app.id)}?v=${encodeURIComponent(app.icon || "")}` : "", "pin"));
+  const widgetCount = typeof widgets !== "undefined" && widgets.selected
+    ? Math.min(3, widgets.selected.map(widgetDef).filter((w) => w && !w.desk).length) : 0;
+  preview.classList.toggle("has-widgets", widgetCount > 0);
   preview.replaceChildren(
     el("div", { class: "preview-greeting" }, greeting()),
-    el("div", { class: "preview-widgets" }, el("span"), el("span"), el("span")),
-    apps,
-    el("div", { class: "preview-dock" }, ...dockIcons));
+    el("div", { class: "preview-search" }),
+    widgetCount ? el("div", { class: "preview-widgets" }, ...Array.from({ length: widgetCount }, () => el("span"))) : "",
+    el("div", { class: "preview-apps" }, ...ownApps().slice(0, 18).map(iconOf)),
+    el("div", { class: "preview-dock" }, ...state.dock.map(pinFor).filter(Boolean).map(iconOf), el("i"),
+      ...DOCK_FIXED.map((item) => icon(`/api/dock-icon/${item.id}`))));
 
   const first = (d.name || "").split(/\s+/)[0];
   $("owner-name").textContent = first ? `${first}’s` : "";
