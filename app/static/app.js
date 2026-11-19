@@ -111,24 +111,12 @@ function loadWallpaper(id) {
 
 // ------------------------------------------------------------- greeting
 
-// What the desktop says, by the hour. Each part of the day has a few lines;
-// which one is picked by the date, so it holds steady all day.
-const GREETINGS = {
-  night: ["Up late, {name}?", "Still up, {name}?", "Burning the midnight oil, {name}?"], // 22:00-04:59
-  morning: ["Good morning, {name}.", "Morning, {name}.", "Rise and shine, {name}."], // 05:00-11:59
-  afternoon: ["Good afternoon, {name}.", "Afternoon, {name}."], // 12:00-16:59
-  evening: ["Good evening, {name}.", "Evening, {name}."], // 17:00-21:59
-};
-
+// What the desktop says, by the hour: plain, one line per part of the day.
 function greeting(now = new Date()) {
   const hour = now.getHours();
-  const part = hour < 5 || hour >= 22 ? "night" : hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-  const lines = GREETINGS[part];
-  const day = Math.floor((now.getTime() - now.getTimezoneOffset() * 60000) / 86400000); // local date
-  const line = lines[day % lines.length];
+  const part = hour >= 5 && hour < 12 ? "morning" : hour >= 12 && hour < 17 ? "afternoon" : "evening";
   const first = state.name.split(/\s+/)[0];
-  // Without a name: "Good morning." / "Up late?"
-  return first ? line.replace("{name}", first) : line.replace(/, \{name\}/, "");
+  return first ? `Good ${part}, ${first}.` : `Good ${part}.`;
 }
 
 // ------------------------------------------------------------- app tiles
