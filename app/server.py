@@ -6809,6 +6809,36 @@ def standby_where(tz):
     return {"tz": tz, "found": False}
 
 
+# Clock's alarms, timers, stopwatch and cities (clock.js), one copy for every
+# device: each page sends what it changed and asks for others' every few
+# seconds. "at" is when it last changed (the page's clock, ms); the newer wins.
+CLOCK_FILE = DATA / "clock.json"
+_clock_lock = threading.Lock()
+
+
+def clock_get():
+    try:
+        got = json.loads(CLOCK_FILE.read_text())
+        return got if isinstance(got, dict) and isinstance(got.get("data"), dict) else {"at": 0, "data": None}
+    except (OSError, ValueError):
+        return {"at": 0, "data": None}
+
+
+def clock_set(body):
+    data, at = body.get("data"), body.get("at")
+    if not isinstance(data, dict) or not isinstance(at, (int, float)):
+        return None
+    for key in ("cities", "alarms", "recents", "timers"):
+        if key in data and not isinstance(data[key], list):
+            return None
+    with _clock_lock:
+        now = clock_get()
+        if at >= (now.get("at") or 0):  # an older change doesn't undo a newer one
+            now = {"at": at, "data": data}
+            write_private(CLOCK_FILE, json.dumps(now))
+        return now
+
+
 def car_places():
     try:
         return car_places_clean(json.loads(CAR_PLACES.read_text()))
@@ -7055,6 +7085,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.iptv_get(path[len("/api/iptv/"):], query)
         if path == "/api/car/places":
             return self.send_json(200, car_places())
+        if path == "/api/clock":
+            return self.send_json(200, clock_get())
         if path == "/api/standby/where":
             return self.send_json(200, standby_where(query.get("tz", [""])[0]))
         if path.startswith("/api/paperless/"):
@@ -7140,7 +7172,8 @@ class Handler(BaseHTTPRequestHandler):
                               else BOOK_TEXT_LIMIT if path == "/api/books/text"
                               else BOOK_COVER_LIMIT * 2 if path == "/api/books/cover"
                               else 32 * 1024 if path == "/api/car/places"
-                              else 16 * 1024 if path == "/api/gallery/change" else 4096)
+                              else 16 * 1024 if path == "/api/gallery/change"
+                              else 128 * 1024 if path == "/api/clock" else 4096)
         if body is None:
             return self.send_json(400, {"error": "expected a JSON object"})
         if path == "/api/settings":
@@ -7179,6 +7212,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.gallery_search(body)
         if path == "/api/gallery/change":
             return self.gallery_change(body)
+        if path == "/api/clock":
+            got = clock_set(body)
+            return self.send_json(200, got) if got else self.send_json(400, {"error": "data: Clock's, and at: a time"})
         if path == "/api/terminal":
             return self.open_terminal(body)
         if path.startswith("/api/terminal/"):

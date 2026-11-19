@@ -5307,7 +5307,10 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .cl-city-choice { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .cl-city-choice:hover, .cl-city-choice:focus-visible { background: rgb(255 255 255 / 0.1); }
 .cl-city-choice small { color: rgb(255 255 255 / 0.5); }
-.cl-time-input { width: 100%; margin: 6px 0 12px; font-size: 40px; font-weight: 300; text-align: center; }
+.cl-time-input { display: block; box-sizing: border-box; width: 100%; max-width: none; height: auto; padding: 8px 18px; border-radius: 18px; margin: 6px 0 12px; font-size: 40px; font-weight: 300; text-align: center; }
+/* A computer: room for the time and its picker; a phone: as wide as the rows under it. */
+@media (min-width: 700px) { .cl-dialog { width: min(560px, calc(100vw - 32px)); } .cl-time-input { font-size: 44px; } }
+@media (max-width: 699px) { .cl-time-input { font-size: 34px; } }
 .cl-form { display: grid; gap: 2px; margin-bottom: 12px; border-radius: 12px; background: rgb(255 255 255 / 0.06); }
 .cl-form-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 6px 12px; border-bottom: 1px solid rgb(255 255 255 / 0.06); }
 .cl-form-row:last-child { border-bottom: 0; }

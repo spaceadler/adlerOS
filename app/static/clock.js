@@ -10,9 +10,10 @@
 //   Start and Stop; the laps under it, the best in green, the worst in red.
 // - Timers: as many as you like at once, each with its ring, label and sound;
 //   1, 5 and 10 minutes ready, and the ones you used lately.
-// All of it is this device's (like an iPhone's), and rings on it while
-// adlerOS is open there: a full-screen alarm over anything, StandBy too,
-// with Snooze and Stop. The sounds are made here (Web Audio), no files.
+// One Clock for every device: the server keeps it (/api/clock), each page
+// sends what it changes and takes others' every 4 seconds. It rings on every
+// adlerOS that's open: a full-screen alarm over anything, StandBy too, with
+// Snooze and Stop; stopped (or snoozed) on one, it stops on the others. The sounds are made here (Web Audio), no files.
 // clockNextAlarm() tells StandBy the next one.
 // Uses $, el, svg, api, toast, winLoad, winSave, openWindow, closeWindow,
 // registerWindow, toggleWindow, sideToggle, openModal, closeModal, SB_MAP
@@ -20,6 +21,7 @@
 "use strict";
 
 const CL_KEY = "adleros.clock";
+const CL_AT_KEY = "adleros.clockAt"; // when this device's copy last changed (ms)
 const CL_ICONS = {
   world: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M2 12h20", "M12 2a15 15 0 0 1 0 20", "M12 2a15 15 0 0 0 0 20"],
   alarm: ["M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "M12 9v4l2 2", "M5 3 2 6", "m22 6-3-3"],
@@ -39,11 +41,41 @@ const clock = { built: false, tab: "world", editing: false, where: new Map(), sw
 
 function clData() {
   const d = winLoad(CL_KEY, {}) || {};
+  const ended = d.ended && typeof d.ended === "object" ? d.ended : {};
   return { cities: Array.isArray(d.cities) ? d.cities : ["Europe/London", "America/New_York", "Asia/Tokyo"],
     alarms: Array.isArray(d.alarms) ? d.alarms : [], recents: Array.isArray(d.recents) ? d.recents : [],
-    timers: Array.isArray(d.timers) ? d.timers : [], sw: d.sw || { startAt: null, acc: 0, laps: [] }, face: d.face === "analog" ? "analog" : "digital" };
+    timers: Array.isArray(d.timers) ? d.timers : [], sw: d.sw || { startAt: null, acc: 0, laps: [] }, face: d.face === "analog" ? "analog" : "digital", ended };
 }
-function clSave(d) { winSave(CL_KEY, d); }
+function clSave(d, send = true) {
+  winSave(CL_KEY, d);
+  winSave(CL_AT_KEY, Date.now());
+  if (send) clSendSoon();
+}
+
+// --------------------------------------------------------------- syncing
+
+function clSendSoon() {
+  clearTimeout(clock.sendTimer);
+  clock.sendTimer = setTimeout(() => {
+    api("/api/clock", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ at: winLoad(CL_AT_KEY, Date.now()), data: winLoad(CL_KEY, {}) }) }).catch(() => {});
+  }, 300);
+}
+// The server's copy, when it's newer than this one; this one, the first time
+// (the server has none yet).
+async function clSync() {
+  const r = await api("/api/clock").catch(() => null);
+  if (r?.status !== 200) return;
+  const mine = winLoad(CL_AT_KEY, 0);
+  if (!r.body.data) { if (mine || localStorage.getItem(CL_KEY)) clSendSoon(); return; }
+  if (r.body.at <= mine) return;
+  winSave(CL_KEY, r.body.data);
+  winSave(CL_AT_KEY, r.body.at);
+  // Stopped or snoozed somewhere else: here too.
+  if (clock.ringing && r.body.data.ended?.[clock.ringing.key]) clRingEnd(false);
+  // Drawn again, unless you're typing in it (its dialog, a field).
+  if (clock.built && isOpen("clock") && !document.querySelector(".cl-dialog") && !$("clock").contains(document.activeElement?.closest?.("input, select") || null)) clRender();
+}
 
 // The next alarm to ring (a Date), for StandBy, or null.
 function clockNextAlarm() {
@@ -541,7 +573,7 @@ function clCheck() {
       d.timers = d.timers.filter((x) => x.id !== t.id);
       clSave(d);
       if (isOpen("clock") && clock.tab === "timers") clRender();
-      return clRing({ kind: "timer", title: t.label || "Timer", sub: clDuration(t.total), sound: t.sound, timer: t });
+      return clRing({ kind: "timer", key: `timer:${t.id}`, title: t.label || "Timer", sub: clDuration(t.total), sound: t.sound, timer: t });
     }
   }
   for (const a of d.alarms) {
@@ -554,7 +586,7 @@ function clCheck() {
     clSave(d);
     if (isOpen("clock") && clock.tab === "alarms") clRender();
     const { hm, period } = clAlarmTime(a);
-    return clRing({ kind: "alarm", title: a.label || "Alarm", sub: `${hm}${period ? ` ${period}` : ""}`, sound: a.sound, alarm: a });
+    return clRing({ kind: "alarm", key: `alarm:${a.id}:${a.lastRang}`, title: a.label || "Alarm", sub: `${hm}${period ? ` ${period}` : ""}`, sound: a.sound, alarm: a });
   }
 }
 // This minute is the alarm's, on one of its days, and it hasn't rung in it.
@@ -564,6 +596,7 @@ function clDue(a, now) {
 }
 
 function clRing(r) {
+  if (r.key && clData().ended[r.key]) return; // stopped on another device already
   clock.ringing = r;
   const box = el("div", { class: "cl-ringing", role: "alertdialog", "aria-label": r.title },
     el("div", { class: "cl-ringing-sub" }, r.kind === "alarm" ? "Alarm" : "Timer"), el("div", { class: "cl-ringing-time" }, r.sub), el("div", { class: "cl-ringing-title" }, r.title));
@@ -593,7 +626,13 @@ function clRing(r) {
   clock.title = document.title;
   document.title = `⏰ ${r.title}`;
 }
-function clRingEnd() {
+// tell: the other devices stop ringing it too (it's marked ended).
+function clRingEnd(tell = true) {
+  if (tell && clock.ringing?.key) {
+    const d = clData();
+    d.ended = Object.fromEntries([...Object.entries(d.ended || {}), [clock.ringing.key, Date.now()]].slice(-20));
+    clSave(d);
+  }
   clSoundStop();
   document.querySelector(".cl-ringing")?.remove();
   if (clock.title) document.title = clock.title;
@@ -647,6 +686,8 @@ function clSoundPlay(name, loop) {
 function clSoundStop() { clearInterval(clock.loop); clock.loop = null; }
 
 setInterval(clCheck, 1000);
+setInterval(clSync, 4000);
+clSync();
 document.addEventListener("keydown", (e) => {
   if (!clock.ringing) return;
   if (e.key === "Escape" || e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopImmediatePropagation(); document.querySelector(".cl-ringing button")?.click(); }
