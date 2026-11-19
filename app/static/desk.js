@@ -659,7 +659,7 @@ function deskMenu(target) {
       { label: "New text file", run: () => newTextFile("/desktop") });
     if (files.clip) items.push({ label: `Paste ${files.clip.label}`, run: () => paste("/desktop") });
     items.push({ label: "Upload…", run: () => uploadFrom(() => { files.uploadTo = "/desktop"; mainFiles().part("picker").click(); }, (paths) => copyInto(paths, "/desktop")) },
-      ...tsItem(), { label: "Open in My Computer", run: () => openFiles("/desktop") });
+      ...tsItem("/desktop", true), { label: "Open in My Computer", run: () => openFiles("/desktop") });
   }
   const cell = desk.menuAt && deskCellAt(desk.menuAt[0], desk.menuAt[1]);
   items.push({ label: "Add widget…", run: () => deskWidgetPicker(cell) },
