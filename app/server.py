@@ -6621,8 +6621,8 @@ def vcard_label(p, props):
     """A number's or email's label: your phone's own (X-ABLabel), else its type."""
     if p["group"]:
         own = next((q for q in props if q["group"] == p["group"] and q["name"] == "X-ABLABEL"), None)
-        if own:
-            v = vtext(own["value"])
+        v = vtext(own["value"]).strip() if own else ""
+        if v:  # an empty one (as phones write it) says nothing: its type does
             m = re.fullmatch(r"_\$!<(.+)>!\$_", v)
             return (m[1] if m else v).lower()
     types = [t.lower() for t in p["params"].get("TYPE", [])]
@@ -6677,12 +6677,24 @@ def card_text(old_text, f, uid=None):
     if uid and not any(p["name"] == "UID" for p in props):
         keep.append(f"UID:{vesc(uid)}")
     first, last = f.get("first", "").strip(), f.get("last", "").strip()
-    name = " ".join(x for x in (first, last) if x) or f.get("company", "").strip() or "?"
-    lines = [f"FN:{vesc(name)}", f"N:{vesc(last)};{vesc(first)};;;"]
+    # The name's other parts (a middle name, a prefix like "Uncle", a suffix)
+    # as they were, and its full form too unless first or last changed.
+    old_n = next((p for p in props if p["name"] == "N"), None)
+    parts = ([vtext(x) for x in re.split(r"(?<!\\);", old_n["value"])] if old_n else []) + ["", "", "", "", ""]
+    middle, prefix, suffix = parts[2], parts[3], parts[4]
+    old_fn = next((vtext(p["value"]).strip() for p in props if p["name"] == "FN"), "")
+    if old_fn and (parts[1].strip(), parts[0].strip()) == (first, last):
+        name = old_fn
+    else:
+        name = " ".join(x for x in (prefix, first, middle, last, suffix) if x) or f.get("company", "").strip() or "?"
+    lines = [f"FN:{vesc(name)}", f"N:{vesc(last)};{vesc(first)};{vesc(middle)};{vesc(prefix)};{vesc(suffix)}"]
     if f.get("nickname", "").strip():
         lines.append(f"NICKNAME:{vesc(f['nickname'].strip())}")
     if f.get("company", "").strip():
-        lines.append(f"ORG:{vesc(f['company'].strip())}")
+        # Its department (ORG's later parts), as it was.
+        old_org = next((p["value"] for p in props if p["name"] == "ORG"), "")
+        rest = re.split(r"(?<!\\);", old_org)[1:] if old_org else []
+        lines.append("ORG:" + ";".join([vesc(f["company"].strip()), *rest]))
     if f.get("job", "").strip():
         lines.append(f"TITLE:{vesc(f['job'].strip())}")
     n = 0
@@ -6691,7 +6703,9 @@ def card_text(old_text, f, uid=None):
             value, label = item["value"].strip(), item["type"].strip().lower()
             if not value:
                 continue
-            if label in types:
+            if label == "other":  # no type, as the phone had it
+                lines.append(f"{kind}:{vesc(value) if kind == 'EMAIL' else value}")
+            elif label in types:
                 lines.append(f"{kind};TYPE={types[label]}:{vesc(value) if kind == 'EMAIL' else value}")
             else:  # your own label, the way phones write one
                 n += 1
