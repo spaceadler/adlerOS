@@ -219,8 +219,8 @@ function renderSide() {
   const wallpaperUrl = `url("/api/wallpaper?id=${encodeURIComponent(d.wallpaper.selected)}")`;
   document.documentElement.style.setProperty("--wallpaper", wallpaperUrl);
 
-  // A small picture of the home screen's first page as it is: the greeting,
-  // the search bar, your widgets (if you have any), adlerOS's own apps and
+  // A small picture of the home screen's first page as it is: the search
+  // bar, your widgets (if you have any), adlerOS's own apps and
   // the dock (your pins, adlerOS's among them, then All apps).
   const preview = $("settings-preview");
   preview.style.backgroundImage = wallpaperUrl;
@@ -236,7 +236,6 @@ function renderSide() {
     ? Math.min(3, widgets.selected.map(widgetDef).filter((w) => w && !w.desk).length) : 0;
   preview.classList.toggle("has-widgets", widgetCount > 0);
   preview.replaceChildren(
-    el("div", { class: "preview-greeting" }, greeting()),
     el("div", { class: "preview-search" }),
     widgetCount ? el("div", { class: "preview-widgets" }, ...Array.from({ length: widgetCount }, () => el("span"))) : "",
     el("div", { class: "preview-apps" }, ...ownApps().slice(0, 18).map(iconOf)),
@@ -359,7 +358,7 @@ function buildRow(row) {
       settings.data[c.key] = input.value.trim();
       tick.classList.add("show");
       setTimeout(() => tick.classList.remove("show"), 1500);
-      if (c.key === "name") { state.name = settings.data.name; $("greeting").textContent = greeting(); renderSide(); }
+      if (c.key === "name") { state.name = settings.data.name; renderSide(); }
       if (c.key === "searchUrl") state.searchUrl = settings.data.searchUrl;
     };
     input.addEventListener("change", save);

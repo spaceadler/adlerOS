@@ -24,7 +24,7 @@ one, each still shows the files themselves. More in
 
 ## What you get
 
-- **A desktop.** A greeting, up to three widgets (system stats, storage,
+- **A desktop.** Up to three widgets (system stats, storage,
   apps up and down, the clock…), a web search bar, and your apps as icons:
   adlerOS's own on the first page, then one page per collection (Core's
   only in admin mode). An app that stops answering turns dim and says

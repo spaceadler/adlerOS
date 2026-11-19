@@ -42,7 +42,6 @@ body.phone .today {
   color: rgb(255 255 255 / 0.72);
   text-shadow: 0 1px 8px rgb(0 0 0 / 0.35);
 }
-body.phone .greeting { font-size: 30px; line-height: 1.15; letter-spacing: -0.03em; text-align: left; }
 body.phone .bell { top: calc(env(safe-area-inset-top) + 22px); right: 22px; width: 38px; height: 38px; }
 body.phone .web-search { display: none; }
 body.phone .stage { justify-content: flex-start; padding-top: 20px; }

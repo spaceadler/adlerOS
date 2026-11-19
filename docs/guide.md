@@ -89,9 +89,6 @@ The first time anyone logs in, adlerOS welcomes you, in a few steps:
 <!-- screenshot: the desktop -->
 ![The desktop](screenshots/desktop.png)
 
-- **The greeting** changes with the time of day: *Good morning* from 5:00,
-  *afternoon* from 12:00, *evening* from 17:00, and something for night owls
-  from 22:00. Set your name in Settings.
 - **The search bar** searches the web: your own SearXNG or 4get if adlerOS
   finds one, else DuckDuckGo. Change where it goes in Settings → Web search.
 - **Widgets:** up to three. Right-click the desktop (long-press on a phone) →
@@ -401,7 +398,7 @@ and Tailscale address, uptime, apps) and its storage, memory, CPU and
 temperature. On the right, the settings, filtered by the tabs
 or the search box:
 
-- **Account:** your name for the greeting, the password (other browsers are
+- **Account:** your name, the password (other browsers are
   logged out when it changes), the wallpaper, **Desktop mode** (on a
   computer), the **Welcome tour**, and where web searches go.
 - **This machine** (or **Homelab**): its address and compose folders, and
@@ -959,7 +956,7 @@ screen on, which browsers only allow on HTTPS.
 Held upright, a phone gets adlerOS laid out like an iPhone's home screen
 (a computer keeps the Mac-like one; on its side, see the end of this part):
 
-- **The home screen:** the date and your greeting at the top, square widgets
+- **The home screen:** the date at the top, square widgets
   two side by side, then your apps four across, as many rows as fit. Swipe
   between pages; while you do, their dots take the place of the **Search**
   pill over the dock. Pull down anywhere on it to search; search also offers

@@ -38,7 +38,7 @@ It asks nine things, each with a guess you can take by pressing Enter:
 
 | Question | Becomes | Guess |
 | --- | --- | --- |
-| Your first name | `OS_NAME`, for the greeting | none |
+| Your first name | `OS_NAME`, for the welcome | none |
 | This machine's address | `ADLEROS_HOST`: apps get `http://<this>:<port>` | its Tailscale IP, else its first IP |
 | Your compose folders | `COMPOSE_ROOTS`, separated by `:` | whichever of `~/docker`, `~/stacks`, `~/compose`, `~/homelab/containers`, `~/containers`, `/opt/stacks`, `/opt/docker`, `/srv/docker` exist |
 | Timezone | `TZ` | the machine's |

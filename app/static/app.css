@@ -1,5 +1,5 @@
 /* Homelab home screen, after umbrelOS's desktop: a photo wallpaper, a
-   centred greeting, a paged grid of app icons, a search pill and a
+   paged grid of app icons, a search pill and a
    magnifying glass dock. Sizes, materials and motion follow its source
    (packages/ui, umbrelOS 2.0); the code and artwork are our own. */
 
@@ -245,17 +245,8 @@ button { font: inherit; color: inherit; }
   gap: 12px;
   padding: 24px 16px 0;
 }
-.greeting {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  text-align: center;
-  text-shadow: 0 2px 16px rgb(0 0 0 / 0.2);
-}
-
 /* Widgets, the app grid and its page pills, centred together between the
-   greeting and the search pill. app.js sizes the grid to whole rows. */
+   top and the search pill. app.js sizes the grid to whole rows. */
 .stage {
   display: flex;
   flex-direction: column;
@@ -1195,7 +1186,6 @@ body.arranging .app:nth-child(2n) .app-icon { animation-delay: -0.12s; }
 }
 @media (min-width: 768px) {
   .header { gap: 16px; padding-top: 32px; }
-  .greeting { font-size: 48px; }
   .stage { padding-top: 32px; }
   .widget-panel { border-radius: 20px; }
   .pages { max-width: var(--apps-max-w); }
@@ -1307,16 +1297,6 @@ body.sheet-open .desktop { opacity: 0; transition: opacity 0.15s; }
   border-radius: 10px;
   background: #111 center / cover no-repeat;
   box-shadow: 0 10px 30px rgb(0 0 0 / 0.4), 0 0 0 0.5px rgb(255 255 255 / 0.15);
-}
-.preview-greeting {
-  position: absolute;
-  top: 14px;
-  left: 0;
-  right: 0;
-  font-size: 10px;
-  font-weight: 700;
-  text-align: center;
-  text-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
 }
 .preview-search {
   position: absolute;
@@ -2111,7 +2091,7 @@ body:not(.wm) .sheet.viewer-sheet {
 
 .desk, .win-bar, .win-grip, .app-shield { display: none; }
 body.wm .header, body.wm .stage { display: none; }
-/* With the greeting and apps gone, the Search pill is at the top: as far
+/* With the apps gone, the Search pill is at the top: as far
    from it as the bell, and as tall. */
 body.wm .search-pill { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 50%; z-index: 20; height: 40px; padding-block: 0; transform: translateX(-50%); }
 body.wm .search-pill:active { transform: translateX(-50%) scale(0.97); }

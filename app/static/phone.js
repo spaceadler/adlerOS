@@ -3,7 +3,7 @@
 // Here, the touch parts: windows you swipe down to close, swiping past the
 // last page into the App Library and down for search, page dots in place of
 // the Search pill while you swipe, a long press's blurred backdrop, and the
-// date over the greeting and the clock on the lock screen.
+// date at the top and the clock on the lock screen.
 // Uses $, state, phoneLayout, desktopMode, buildDock, layout, wm,
 // openDrawer, drawerOpen, openSearch, topLayer.
 "use strict";

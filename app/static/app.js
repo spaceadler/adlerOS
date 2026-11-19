@@ -109,16 +109,6 @@ function loadWallpaper(id) {
   img.src = url;
 }
 
-// ------------------------------------------------------------- greeting
-
-// What the desktop says, by the hour: plain, one line per part of the day.
-function greeting(now = new Date()) {
-  const hour = now.getHours();
-  const part = hour >= 5 && hour < 12 ? "morning" : hour >= 12 && hour < 17 ? "afternoon" : "evening";
-  const first = state.name.split(/\s+/)[0];
-  return first ? `Good ${part}, ${first}.` : `Good ${part}.`;
-}
-
 // ------------------------------------------------------------- app tiles
 
 // A stable colour per app, for apps without an icon.
@@ -1577,7 +1567,6 @@ async function refresh() {
   if (result.status !== 200 || !result.body) return;
   state.name = result.body.name || "";
   state.searchUrl = result.body.searchUrl || state.searchUrl;
-  $("greeting").textContent = greeting();
   // Alphabetical, like the umbrelOS desktop.
   state.apps = result.body.apps.slice().sort((a, b) => a.name.localeCompare(b.name));
   state.dock = result.body.dock || [];
@@ -1693,7 +1682,6 @@ $("web-search").addEventListener("submit", (e) => {
 
 $("kbd").textContent = platformKey();
 loadWallpaper();
-setInterval(() => { if (!$("desktop").hidden) $("greeting").textContent = greeting(); }, 60000);
 // After every script has run (the desktop needs the windows, Files, the dock…).
 document.addEventListener("DOMContentLoaded", () => {
   api("/api/session")

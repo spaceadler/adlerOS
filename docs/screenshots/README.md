@@ -12,7 +12,7 @@ crop anything private (addresses, names in notifications).
 
 | File | What to show | Used in |
 | --- | --- | --- |
-| `desktop.png` | The desktop: greeting, three widgets, a page of apps, the dock | README, guide |
+| `desktop.png` | The desktop: three widgets, a page of apps, the dock | README, guide |
 | `app-store.png` | The App Store, a few cards, one with its containers expanded | README, guide |
 | `widgets-picker.png` | Right-click → Edit widgets, with two or three chosen | guide |
 | `dock-menu.png` | Right-click on an app → the menu with Keep in Dock | guide |

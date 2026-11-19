@@ -181,7 +181,7 @@ function menuForFocused() {
   const target = node || $("desktop");
   const items = menuFor(target);
   if (!items) return;
-  const r = (node || $("greeting")).getBoundingClientRect();
+  const r = (node || document.querySelector("#desktop .header")).getBoundingClientRect();
   openMenu(r.left + r.width / 2, r.bottom + 6, items);
 }
 

@@ -60,8 +60,8 @@
       "category": "account",
       "icon": "user",
       "title": "Name",
-      "description": "Used in your greeting.",
-      "keywords": "first name greeting hello",
+      "description": "Used in the welcome.",
+      "keywords": "first name",
       "control": {
         "type": "setting-text",
         "key": "name",
