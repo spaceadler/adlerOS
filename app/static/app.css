@@ -2508,7 +2508,7 @@ body.wm .desk > .desk-empty { grid-row: span 2; }
    or its magnifier moves it; inside it, you type. (Its class was "bar",
    which Settings' usage bars style 6px tall.) */
 .desk-search .widget { gap: 0; }
-.desk-search .widget-panel { display: block; width: auto; height: auto; padding: 0; border-radius: 999px; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.desk-search .widget-panel { display: block; width: 100%; height: auto; padding: 0; border-radius: 999px; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .desk-search .widget-label { display: none; }
 .desk-search .web-search { width: min(var(--web-search-w, 870px), 100%); margin: 0; }
 .w-search svg { cursor: grab; }
