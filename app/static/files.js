@@ -184,7 +184,7 @@ function renderPlaces(f) {
     b.removeAttribute("data-path"); // not a drop target: its folder (User/Tailscale) is
     b.classList.toggle("muted", tailscale.status?.ok === false);
     ts.push(b);
-    if (!tailscale.status || Date.now() - tailscale.at > 60000) tsStatus().then(() => { if (isOpen(f.id)) renderPlaces(f); });
+    if (tsStale()) tsStatus().then(() => { if (isOpen(f.id)) renderPlaces(f); });
   }
   f.part("side").replaceChildren(
     ...f.places.map((p) => item(p.place, p.name, f.view === "folder" && f.place === p.place, () => showFolder(`/${p.place}`, f))),
@@ -199,20 +199,30 @@ function renderPlaces(f) {
 // `tailscale file get` into the folder you're in; files you pick go to one
 // of your devices. Until Tailscale lets your user do that, the entries are
 // greyed and say how.
-const tailscale = { status: null, at: 0, loading: null };
-function tsStatus(force = false) {
+// Every ask is a job for the helper, so what Tailscale said is kept for a
+// minute (a helper that didn't answer is asked again after 15 s), and a
+// click while one ask is under way waits for that one.
+const tailscale = { status: null, until: 0, loading: null, receiving: null };
+const tsStale = () => Date.now() >= tailscale.until;
+function tsStatus() {
   if (!state.admin) return Promise.resolve(null);
-  if (tailscale.loading && !force) return tailscale.loading;
-  tailscale.loading = actionDone("tailscale-status").then((job) => {
-    tailscale.status = job?.result || { ok: false, why: job?.error || "the helper didn't answer" };
-    tailscale.at = Date.now();
-    tailscale.loading = null;
-    return tailscale.status;
-  }).catch(() => { tailscale.loading = null; return null; });
+  if (!tsStale()) return Promise.resolve(tailscale.status);
+  if (!tailscale.loading) {
+    tailscale.loading = actionDone("tailscale-status").catch(() => null).then((job) => {
+      tailscale.status = job?.result || { ok: false, why: job?.error || "the helper didn't answer" };
+      tailscale.until = Date.now() + (job?.result ? 60000 : 15000);
+      tailscale.loading = null;
+      return tailscale.status;
+    });
+  }
   return tailscale.loading;
 }
-function tsExplain(st = tailscale.status) {
-  const fix = st?.fix || "sudo tailscale set --operator=$USER";
+// Why Tailscale can't be used: the one setting it needs (your user as its
+// operator), or else what went wrong (it isn't running, the helper didn't
+// answer).
+function tsExplain(st) {
+  if (st?.operator !== false) return toast(`Tailscale: ${st?.why || "it didn't answer"}.`);
+  const fix = st.fix || "sudo tailscale set --operator=$USER";
   const body = el("div", {},
     el("p", {}, `Tailscale can't be used from adlerOS yet: ${st?.why || "it isn't set up"}. Run this once in a terminal on the machine (over SSH, or adlerOS's terminal):`),
     el("code", { class: "maint-command" }, fix),
@@ -226,28 +236,33 @@ function tsExplain(st = tailscale.status) {
 }
 const TS_INBOX = "/user/Tailscale";
 // `tailscale file get` into a folder (User/Tailscale unless one is given);
-// resolves with the names it got.
-async function tsReceive({ into = TS_INBOX, quiet = false } = {}) {
-  const st = await tsStatus();
-  if (!st?.ok) { tsExplain(st); return null; }
-  if (!quiet) toast("Looking for Tailscale files…");
-  const job = await actionDone("tailscale-get", { into }).catch(() => null);
-  const r = job?.result;
-  if (!r?.ok) { toast(`Tailscale: ${r?.why || job?.error || "couldn't receive"}.`); return null; }
-  const where = into.split("/").filter(Boolean).pop();
-  if (r.got.length || !quiet) toast(r.got.length ? `Got ${r.got.length === 1 ? r.got[0] : `${r.got.length} files`} in ${where}.` : "No Tailscale files waiting.");
-  if (r.got.length) refreshFiles();
-  return r.got;
+// resolves with the names it got (null if it couldn't). A click while one
+// runs waits for that one.
+function tsReceive(into = TS_INBOX) {
+  if (!tailscale.receiving) {
+    tailscale.receiving = (async () => {
+      const st = await tsStatus();
+      if (!st?.ok) { tsExplain(st); return null; }
+      toast("Looking for Tailscale files…");
+      const job = await actionDone("tailscale-get", { into }).catch(() => null);
+      const r = job?.result;
+      if (!r?.ok) { toast(`Tailscale: ${r?.why || job?.error || "couldn't receive"}.`); return null; }
+      const where = into.split("/").filter(Boolean).pop();
+      toast(r.got.length ? `Got ${r.got.length === 1 ? r.got[0] : `${r.got.length} files`} in ${where}.` : "No Tailscale files waiting.");
+      if (r.got.length) refreshFiles();
+      return r.got;
+    })().finally(() => { tailscale.receiving = null; });
+  }
+  return tailscale.receiving;
 }
+// The Tailscale place: what's waiting, pulled into User/Tailscale, shown.
 async function tsOpen(f) {
-  const st = await tsStatus();
-  if (!st?.ok) return tsExplain(st);
-  await tsReceive({ quiet: true });
-  showFolder(TS_INBOX, f);
+  await tsReceive();
+  if (tailscale.status?.ok) showFolder(TS_INBOX, f);
 }
 // In a folder of User or the Desktop (Root is read-only).
-const tsItem = (f) => (!state.admin || !f.writable || !/^\/(user|desktop)(\/|$)/.test(f.path) ? []
-  : [{ label: "Get Tailscale files here", muted: tailscale.status?.ok === false, run: () => tsReceive({ into: f.path }) }]);
+const tsItem = (path, writable) => (!state.admin || !writable || !/^\/(user|desktop)(\/|$)/.test(path) ? []
+  : [{ label: "Get Tailscale files here", muted: tailscale.status?.ok === false, run: () => tsReceive(path) }]);
 // Files you can send: files (no folders), ten at most.
 function tsSendable(entries) { return state.admin && entries.length > 0 && entries.length <= 10 && entries.every((e) => !e.dir); }
 const tsSendItem = (paths) => [{ label: paths.length > 1 ? `Send ${paths.length} files to a device…` : "Send to a device…", muted: tailscale.status?.ok === false, run: () => tsSend(paths) }];
@@ -932,7 +947,7 @@ function wireFiles(f) {
     const items = f.writable ? [{ label: "New folder", run: () => newFolder(f.path) }, { label: "New text file", run: () => newTextFile(f.path) },
       ...(files.clip ? [{ label: `Paste ${files.clip.label}`, run: () => paste(f.path) }] : []),
       { label: "Upload…", run: () => uploadFrom(() => { files.uploadTo = f.path; f.part("picker").click(); }, (paths) => copyInto(paths, f.path, f)) }] : [];
-    items.push(...tsItem(f));
+    items.push(...tsItem(f.path, f.writable));
     if (items.length) openMenu(e.clientX, e.clientY, items);
   });
   f.part("list").addEventListener("pointerdown", (e) => {
