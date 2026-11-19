@@ -639,20 +639,12 @@ function clRingEnd(tell = true) {
   clock.ringing = null;
 }
 
-// The sounds, made here: a few notes, again every couple of seconds while
-// it rings. A page may only make sound after a tap, so the first tap
-// anywhere readies it.
-function clAudio() {
-  if (!clock.audio) {
-    const C = window.AudioContext || window.webkitAudioContext;
-    if (!C) return null;
-    clock.audio = new C();
-  }
-  if (clock.audio.state === "suspended") clock.audio.resume().catch(() => {});
-  return clock.audio;
-}
-addEventListener("pointerdown", () => clAudio(), { once: true, capture: true });
-
+// The sounds, made here: a few notes, as a short WAV, looped while it rings.
+// Through an <audio> element, not Web Audio: on an iPhone Web Audio follows
+// the silent switch (an alarm on a phone on silent wouldn't sound), and media
+// plays regardless. A page may only start sound after a tap, so the first tap
+// anywhere unlocks the element (a moment of silence), and later alarms play
+// on it; Safari is told it's playback, where it lets the page say so.
 function clNotes(name) {
   // [frequency, start (s), length (s), wave]
   return { Chime: [[880, 0, 0.5, "sine"], [1109, 0.18, 0.5, "sine"], [1319, 0.36, 0.8, "sine"]],
@@ -661,29 +653,61 @@ function clNotes(name) {
     Pulse: [[523, 0, 0.18, "square"], [523, 0.3, 0.18, "square"], [523, 0.6, 0.18, "square"]],
     Sunrise: [[392, 0, 0.6, "sine"], [494, 0.3, 0.6, "sine"], [587, 0.6, 0.6, "sine"], [784, 0.9, 0.9, "sine"]] }[name] || [];
 }
-function clSoundOnce(name, gainLevel = 0.18) {
-  const ctx = clAudio();
-  if (!ctx) return;
-  const t0 = ctx.currentTime + 0.02;
+// The notes as 16-bit mono PCM in a WAV (2.2 s: the loop's length), a blob URL, made once.
+function clWav(name, seconds = 2.2) {
+  clock.wavs ||= new Map();
+  if (clock.wavs.has(name)) return clock.wavs.get(name);
+  const rate = 22050, n = Math.round(rate * seconds), pcm = new Float32Array(n);
   for (const [f, at, len, type] of clNotes(name)) {
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type;
-    o.frequency.value = f;
-    g.gain.setValueAtTime(0, t0 + at);
-    g.gain.linearRampToValueAtTime(gainLevel, t0 + at + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + len);
-    o.connect(g).connect(ctx.destination);
-    o.start(t0 + at);
-    o.stop(t0 + at + len + 0.05);
+    const s0 = Math.round(at * rate), s1 = Math.min(n, Math.round((at + len) * rate));
+    for (let i = s0; i < s1; i++) {
+      const tt = (i - s0) / rate, ph = 2 * Math.PI * f * tt;
+      const wave = type === "square" ? Math.sign(Math.sin(ph)) * 0.5 : type === "triangle" ? (2 / Math.PI) * Math.asin(Math.sin(ph)) : Math.sin(ph);
+      const env = Math.min(1, tt / 0.02) * Math.exp(-4 * tt / len); // a quick rise, a fall
+      pcm[i] += wave * env * 0.3;
+    }
   }
+  const buf = new DataView(new ArrayBuffer(44 + n * 2));
+  const str = (o, s) => [...s].forEach((ch, k) => buf.setUint8(o + k, ch.charCodeAt(0)));
+  str(0, "RIFF"); buf.setUint32(4, 36 + n * 2, true); str(8, "WAVE"); str(12, "fmt ");
+  buf.setUint32(16, 16, true); buf.setUint16(20, 1, true); buf.setUint16(22, 1, true); buf.setUint32(24, rate, true);
+  buf.setUint32(28, rate * 2, true); buf.setUint16(32, 2, true); buf.setUint16(34, 16, true); str(36, "data"); buf.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) buf.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 0x7fff, true);
+  const url = URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+  clock.wavs.set(name, url);
+  return url;
 }
+function clPlayer() {
+  if (!clock.player) {
+    clock.player = new Audio();
+    clock.player.preload = "auto";
+    clock.player.setAttribute("playsinline", "");
+  }
+  return clock.player;
+}
+// The first tap: a moment of silence, so the element may play later on its own.
+function clUnlock() {
+  if (clock.unlocked) return;
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch { /* not this browser */ }
+  const a = clPlayer();
+  a.src = clWav("None", 0.1);
+  a.play().then(() => { a.pause(); clock.unlocked = true; }).catch(() => {});
+}
+for (const type of ["touchend", "click", "keydown"]) addEventListener(type, clUnlock, { capture: true });
+
 function clSoundPlay(name, loop) {
   clSoundStop();
   if (name === "None") return;
-  clSoundOnce(name);
-  if (loop) clock.loop = setInterval(() => clSoundOnce(name), 2200);
+  const a = clPlayer();
+  a.src = clWav(name);
+  a.loop = loop;
+  a.currentTime = 0;
+  a.play().catch(() => { if (loop) toast("The browser held the alarm's sound back: tap the page once after opening adlerOS so it may ring."); });
 }
-function clSoundStop() { clearInterval(clock.loop); clock.loop = null; }
+function clSoundStop() {
+  const a = clock.player;
+  if (a && !a.paused) a.pause();
+}
 
 setInterval(clCheck, 1000);
 setInterval(clSync, 4000);
