@@ -25,6 +25,7 @@ const GA_ICONS = {
   places: ["M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z", "M12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
   map: ["M1 6v16l7-4 8 4 7-4V2l-7 4-8-4z", "M8 2v16", "M16 6v16"],
   plus: ["M12 5v14", "M5 12h14"], minus: ["M5 12h14"],
+  link: ["M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7", "M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"],
 };
 
 const gallery = {
@@ -370,6 +371,7 @@ function gaTile(a, w, h, source) {
   tile.style.width = `${Math.floor(w)}px`;
   tile.style.height = `${Math.floor(h)}px`;
   tile.addEventListener("click", () => gaOpen(source, a.id));
+  if (!a.local) tile.addEventListener("contextmenu", (e) => { e.preventDefault(); openMenu(e.clientX, e.clientY, gaMenuItems(a)); });
   return tile;
 }
 
@@ -389,7 +391,7 @@ async function gaPhotosView(page) {
         const card = el("button", { type: "button", class: "ga-memory" },
           el("img", { src: gaThumb(m.assets[0].id, "preview"), alt: "", loading: "lazy" }),
           el("span", { class: "ga-memory-text" }, ago ? `${ago} year${ago === 1 ? "" : "s"} ago` : "A memory", el("small", {}, `${m.assets.length} items`)));
-        card.addEventListener("click", () => gaOpen({ list: assets }, assets[0].id));
+        card.addEventListener("click", () => gaOpen(gaMemorySource(gallery.memories.indexOf(m)), assets[0].id));
         return card;
       }))));
   }
@@ -558,9 +560,16 @@ function gaBuildViewer() {
   const live = button("Play the Live Photo", "live", () => gaPlayLive(), "ga-vlive");
   const box = el("div", { class: "ga-viewer", role: "dialog", "aria-label": "Photo", tabindex: "-1" },
     el("div", { class: "ga-vbar" }, title, el("span", { class: "ga-vgap" }), live,
+      button("Show it in Photos", "link", () => gaReveal(gallery.viewer?.id), "ga-vlink"),
       button("Info (i)", "info", () => { gallery.viewer.info = !gallery.viewer.info; gaRenderInfo(); }, "ga-vinfo"),
       button("Download the original", "download", () => gaDownload())),
-    stage, button("Previous (←)", "prev", () => gaStep(-1), "ga-vprev"), button("Next (→)", "next", () => gaStep(1), "ga-vnext"), info);
+    stage, el("div", { class: "ga-segments", hidden: "" }), button("Previous (←)", "prev", () => gaStep(-1), "ga-vprev"), button("Next (→)", "next", () => gaStep(1), "ga-vnext"), info);
+  stage.addEventListener("contextmenu", (e) => {
+    const v = gallery.viewer;
+    if (!v?.id || v.file) return;
+    e.preventDefault();
+    openMenu(e.clientX, e.clientY, gaMenuItems(gaFind(v.source, v.id) || { id: v.id }, v.asset));
+  });
   // A swipe: sideways for the next or the last one, down to close.
   let start = null;
   stage.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") start = { x: e.clientX, y: e.clientY }; });
@@ -576,7 +585,7 @@ function gaBuildViewer() {
   const sheet = gaPhotoWindow();
   sheet.querySelector(".ga-viewer")?.remove(); // the last photo's, kept while its window faded
   sheet.append(box);
-  gallery.viewer = { box, stage, title, infoBox: info, live, info: false, id: null, asset: null, token: 0 };
+  gallery.viewer = { box, stage, title, infoBox: info, live, segments: box.querySelector(".ga-segments"), info: false, id: null, asset: null, token: 0 };
   openWindow("ga-photo");
   box.focus({ preventScroll: true });
   return gallery.viewer;
@@ -596,7 +605,11 @@ function gaCloseViewer() {
 async function gaNeighbor(source, id, dir) {
   if (source.list) {
     const i = source.list.findIndex((a) => a.id === id);
-    return source.list[i + dir] || null;
+    const n = source.list[i + dir];
+    if (n || !source.memory) return n || null;
+    // On this day: past a year's last, the next year's first (and back).
+    const other = source.memory.lists[source.memory.mi + dir];
+    return other?.length ? other[dir > 0 ? 0 : other.length - 1] : null;
   }
   const tl = source;
   let bi = tl.buckets.findIndex((b) => b.assets?.some((a) => a.id === id));
@@ -614,6 +627,7 @@ async function gaNeighbor(source, id, dir) {
 }
 
 function gaFind(source, id) {
+  if (source.memory) return source.memory.lists.flat().find((a) => a.id === id);
   if (source.list) return source.list.find((a) => a.id === id);
   for (const b of source.buckets) { const a = b.assets?.find((x) => x.id === id); if (a) return a; }
   return null;
@@ -629,6 +643,7 @@ async function gaStep(dir) {
 async function gaShowAsset(id) {
   const v = gallery.viewer;
   const a = gaFind(v.source, id) || { id, isImage: true };
+  gaSegments(v, id);
   v.file = a.local ? a : null;
   if (a.local) return gaShowFile(a);
   v.id = id;
@@ -761,8 +776,10 @@ function gaPlayLive() {
 
 function gaDownload() {
   const v = gallery.viewer;
-  if (!v?.id) return;
-  const a = el("a", { href: `/api/gallery/original/${v.id}`, download: v.asset?.originalFileName || "" });
+  if (v?.id) gaDownloadId(v.id, v.asset?.originalFileName);
+}
+function gaDownloadId(id, name = "") {
+  const a = el("a", { href: `/api/gallery/original/${id}`, download: name || "" });
   document.body.append(a);
   a.click();
   a.remove();
@@ -774,6 +791,167 @@ function gaViewerKeys(e) {
   if (e.key === "ArrowLeft") { e.preventDefault(); e.stopPropagation(); return gaStep(-1); }
   if (e.key === "ArrowRight") { e.preventDefault(); e.stopPropagation(); return gaStep(1); }
   if (e.key === "i") { gallery.viewer.info = !gallery.viewer.info; gaRenderInfo(); }
+}
+
+// --------------------------------------------------------- On this day
+
+// A memory's photos for the viewer; past its last (or before its first) the
+// next year's memory (or the year before's), so you go on through them all.
+function gaMemorySource(mi) {
+  const year = new Date().getFullYear();
+  const lists = gallery.memories.map((m) => m.assets.map((a) => ({ ...a, isImage: a.type === "IMAGE" })));
+  const labels = gallery.memories.map((m) => (m.data?.year ? `${year - m.data.year} year${year - m.data.year === 1 ? "" : "s"} ago` : "A memory"));
+  return { list: lists[mi], memory: { lists, labels, mi } };
+}
+
+// Over the photo, a memory's bar: a part for each photo, lit up to the one
+// you're on, and which year it is. Not for anything else.
+function gaSegments(v, id) {
+  const m = v.source.memory;
+  v.segments.hidden = !m;
+  v.box.classList.toggle("memory", Boolean(m));
+  v.box.querySelector(".ga-vlink").hidden = Boolean(gaFind(v.source, id)?.local); // a file, not Immich's: no place in it
+  if (!m) { v.box.querySelector(".ga-vprev").disabled = v.box.querySelector(".ga-vnext").disabled = false; return; }
+  const mi = m.lists.findIndex((l) => l.some((a) => a.id === id));
+  if (mi >= 0 && mi !== m.mi) { m.mi = mi; v.source.list = m.lists[mi]; }
+  const list = m.lists[m.mi];
+  const at = list.findIndex((a) => a.id === id);
+  v.segments.replaceChildren(el("div", { class: "ga-seg-bar" }, ...list.map((_, k) => el("span", { class: k < at ? "seen" : k === at ? "on" : "" }))),
+    el("div", { class: "ga-seg-label" }, `${m.labels[m.mi]} · ${at + 1} of ${list.length}`));
+  // The arrows go on to the next year; at the very ends, they rest.
+  v.box.querySelector(".ga-vprev").disabled = at === 0 && m.mi === 0;
+  v.box.querySelector(".ga-vnext").disabled = at === list.length - 1 && m.mi === m.lists.length - 1;
+}
+
+// The link button: Photos, at that photo's day, with it picked out.
+async function gaReveal(id) {
+  const v = gallery.viewer;
+  if (!id) return;
+  const a = v?.asset || gaFind(v?.source || {}, id) || {};
+  const when = new Date(a.localDateTime || a.fileCreatedAt || NaN);
+  gaCloseViewer();
+  if (Number.isNaN(when.getTime())) return toast("Immich hasn't said when it was taken.");
+  gaShow({ kind: "photos" });
+  const month = `${when.getUTCFullYear()}-${String(when.getUTCMonth() + 1).padStart(2, "0")}`;
+  // The timeline comes after On this day: wait for it, then for its month.
+  for (let tries = 0; tries < 60; tries++) {
+    const tl = gallery.timeline;
+    if (tl && gallery.view.kind === "photos") {
+      const b = tl.buckets.find((x) => x.timeBucket.startsWith(month)) || tl.buckets.find((x) => x.timeBucket < month);
+      if (!b) return toast("It isn't in the timeline (archived, or in the Trash).");
+      b.section.scrollIntoView({ block: "start" });
+      await gaShowBucket(tl, b);
+      const tile = b.body.querySelector(`.ga-tile[data-id="${CSS.escape(id)}"]`);
+      if (!tile) return toast("It isn't in the timeline (archived, or in the Trash).");
+      tile.scrollIntoView({ block: "center" });
+      tile.classList.add("ga-found");
+      tile.focus({ preventScroll: true });
+      setTimeout(() => tile.classList.remove("ga-found"), 2400);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 150));
+  }
+}
+
+// ------------------------------------------------------- a photo's menu
+
+// Right-click a photo, in the grid or open: Download, Favorite, Archive, Add
+// to an album…, Move to Trash. Changes go to Immich (POST /api/gallery/change);
+// a key that may only read is told what it lacks.
+function gaMenuItems(a, full = null) {
+  const fav = full ? full.isFavorite : a.isFavorite;
+  const archived = full ? full.visibility === "archive" || full.isArchived === true : gallery.timeline?.params?.visibility === "archive";
+  return [
+    { label: "Download", run: () => gaDownloadId(a.id, full?.originalFileName) },
+    { label: fav ? "Unfavorite" : "Favorite", run: () => gaFavorite(a, !fav) },
+    { label: archived ? "Unarchive" : "Archive", run: () => gaArchive(a, !archived) },
+    { label: "Add to an album…", run: () => gaAddToAlbum([a.id]) },
+    { label: "Move to Trash", destructive: true, run: () => gaTrash(a) },
+  ];
+}
+
+async function gaChange(action, ids, extra = {}) {
+  const { status, body } = await api("/api/gallery/change", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ids, ...extra }) }).catch(() => ({ status: 0 }));
+  if (status === 401) { showLock(); return null; }
+  if (status !== 200) {
+    toast(status === 403 ? `${body.error}. In Immich, Account Settings → API Keys: give Gallery's key ${body.need} as well.` : body?.error || "Immich didn't answer.");
+    return null;
+  }
+  return body;
+}
+
+async function gaFavorite(a, on) {
+  if (!await gaChange("favorite", [a.id], { on })) return;
+  a.isFavorite = on;
+  if (gallery.viewer?.asset?.id === a.id) gallery.viewer.asset.isFavorite = on;
+  // Its heart, wherever its tile is drawn.
+  for (const tile of document.querySelectorAll(`.ga-tile[data-id="${CSS.escape(a.id)}"]`)) {
+    tile.querySelector(".ga-fav")?.remove();
+    if (on) tile.append(el("span", { class: "ga-fav" }, svg(GA_ICONS.favorites)));
+  }
+  if (!on && gallery.view.kind === "favorites") gaGone(a.id);
+  toast(on ? "Added to Favorites." : "Taken out of Favorites.");
+}
+
+async function gaArchive(a, on) {
+  if (!await gaChange("archive", [a.id], { on })) return;
+  gaGone(a.id);
+  toast(on ? "Archived: it's out of the timeline, still in its albums." : "Back in the timeline.");
+}
+
+async function gaTrash(a) {
+  if (!await gaChange("trash", [a.id])) return;
+  gaGone(a.id);
+  toast("Moved to Immich's Trash (kept 30 days).");
+}
+
+// Gone from what's shown (archived, trashed): out of its month, and if it's
+// the one open, on to the next one (or the viewer closes).
+async function gaGone(id) {
+  const v = gallery.viewer;
+  if (v?.id === id) {
+    const next = (await gaNeighbor(v.source, id, 1)) || (await gaNeighbor(v.source, id, -1));
+    if (v.source.memory) for (const l of v.source.memory.lists) { const i = l.findIndex((x) => x.id === id); if (i >= 0) l.splice(i, 1); }
+    else if (v.source.list) v.source.list = v.source.list.filter((x) => x.id !== id);
+    if (next && gallery.viewer === v) gaShowAsset(next.id);
+    else gaCloseViewer();
+  }
+  const tl = gallery.timeline;
+  for (const b of tl?.buckets || []) {
+    if (!b.assets?.some((x) => x.id === id)) continue;
+    b.assets = b.assets.filter((x) => x.id !== id);
+    b.count = b.assets.length;
+    if (b.shown && !tl.local) gaDrawBucket(tl, b);
+  }
+}
+
+async function gaAddToAlbum(ids) {
+  const albums = gallery.albums || await gaGet("albums").catch(() => []);
+  const done = (text) => { closeModal(); gallery.albums = null; toast(text); };
+  const list = el("div", { class: "ga-album-pick" }, ...[...albums].sort((x, y) => String(y.updatedAt).localeCompare(String(x.updatedAt))).map((al) => {
+    const b = el("button", { type: "button", class: "ga-album-choice" },
+      al.albumThumbnailAssetId ? el("img", { src: gaThumb(al.albumThumbnailAssetId), alt: "", loading: "lazy" }) : el("span", { class: "ga-album-blank" }),
+      el("span", {}, al.albumName), el("small", {}, String(al.assetCount ?? "")));
+    b.addEventListener("click", async () => {
+      const r = await gaChange("album-add", ids, { albumId: al.id });
+      if (r) done(r.added ? `Added to ${al.albumName}.` : `It's in ${al.albumName} already.`);
+    });
+    return b;
+  }));
+  const name = el("input", { class: "field-input", type: "text", placeholder: "A new album's name", maxlength: "200" });
+  const make = el("button", { type: "button", class: "button-secondary" }, "New album");
+  make.addEventListener("click", async () => {
+    const v = name.value.trim();
+    if (!v) return name.focus();
+    if (await gaChange("album-new", ids, { albumName: v })) done(`Made ${v}, with it in.`);
+  });
+  name.addEventListener("keydown", (e) => { if (e.key === "Enter") make.click(); });
+  const cancel = el("button", { type: "button", class: "button-secondary" }, "Cancel");
+  cancel.addEventListener("click", closeModal);
+  openModal(el("div", { class: "dialog material ga-album-dialog", role: "dialog", "aria-modal": "true" }, el("h2", {}, "Add to an album"),
+    albums.length ? list : el("p", { class: "ga-dim" }, "No albums yet: make one."), el("div", { class: "ga-album-new" }, name, make),
+    el("div", { class: "dialog-actions" }, cancel)));
 }
 
 // ---------------------------------------------------------------- the map

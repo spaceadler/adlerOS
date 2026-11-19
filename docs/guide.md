@@ -692,6 +692,8 @@ or Alt+Space "gallery". It needs a key from Immich (Immich → Account
 Settings → API Keys → New API Key) that may read: `asset.read`,
 `asset.view`, `asset.download`, `album.read`, `person.read`, `memory.read`,
 `face.read` and `map.read`. Put it in the settings file as `IMMICH_API_KEY`.
+For a photo's menu to change things too, give it `asset.update`,
+`asset.delete`, `albumAsset.create` and `album.create` as well.
 
 Until then (or while Immich isn't answering), Gallery shows **the photos
 themselves**: the ones in your Gallery folder (`GALLERY_DIR` in your
@@ -722,6 +724,12 @@ saying how to connect; a note above the photos says what connecting adds.
   file, the camera and its settings, where, who's in it, its albums), with
   each face boxed on the photo (pointing at a name lights its face up),
   and the download button gets the original. Escape, or a swipe down, closes it.
+- **Right-click a photo** (in the grid, or open): Download, Favorite,
+  Archive, Add to an album… (or a new one), Move to Trash (Immich keeps it
+  30 days). The link button, open, shows where it is in Photos.
+- **On this day** goes through a year's photos with the arrows (or a
+  swipe), then on into the next year's; a bar over the photo has a part
+  for each, lit up to the one you're on.
 - The mouse's side buttons go back and forward (in a photo: the one before
   and after). **Open Immich** in the side opens Immich itself, for
   anything Gallery doesn't do (uploading, sharing, editing).

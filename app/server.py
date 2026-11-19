@@ -3043,6 +3043,9 @@ def music_lyrics(real):
 # this machine's Tailscale address (TS_IP, ADLEROS_HOST) and its port.
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 GALLERY_PERMISSIONS = ("asset.read", "asset.view", "asset.download", "album.read", "person.read", "memory.read", "face.read", "map.read")
+# What a photo's menu changes needs as well (favorite, archive, trash, add to
+# an album, a new album). Without them Gallery reads, and the menu says why.
+GALLERY_CHANGE = ("asset.update", "asset.delete", "albumAsset.create", "album.create")
 
 
 def immich():
@@ -3112,6 +3115,7 @@ def gallery_status():
         me = immich_json("api-keys/me")
         has = set(me.get("permissions") or [])
         out["missing"] = [] if "all" in has else [p for p in GALLERY_PERMISSIONS if p not in has]
+        out["changeMissing"] = [] if "all" in has else [p for p in GALLERY_CHANGE if p not in has]
         out["ok"] = True
     except urllib.error.HTTPError as e:
         out["error"] = "refused" if e.code in (401, 403) else f"immich {e.code}"
@@ -7111,7 +7115,8 @@ class Handler(BaseHTTPRequestHandler):
                               else 64 * 1024 if path.startswith("/api/iptv/")
                               else BOOK_TEXT_LIMIT if path == "/api/books/text"
                               else BOOK_COVER_LIMIT * 2 if path == "/api/books/cover"
-                              else 32 * 1024 if path == "/api/car/places" else 4096)
+                              else 32 * 1024 if path == "/api/car/places"
+                              else 16 * 1024 if path == "/api/gallery/change" else 4096)
         if body is None:
             return self.send_json(400, {"error": "expected a JSON object"})
         if path == "/api/settings":
@@ -7148,6 +7153,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.tasks_post(body)
         if path == "/api/gallery/search":
             return self.gallery_search(body)
+        if path == "/api/gallery/change":
+            return self.gallery_change(body)
         if path == "/api/terminal":
             return self.open_terminal(body)
         if path.startswith("/api/terminal/"):
@@ -8289,6 +8296,52 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as e:
             return self.send_json(502, {"error": abs_error(e)})
         return self.send(404, b"not found")
+
+    def gallery_change(self, body):
+        """A photo's menu (or several): favorite or not, archive or not, to the
+        Trash, into an album, into a new one. Each through Immich's own API,
+        with ids checked; Immich's Trash keeps them 30 days."""
+        ids = body.get("ids")
+        action = body.get("action")
+        if not isinstance(ids, list) or not 0 < len(ids) <= 200 or not all(isinstance(i, str) and UUID_RE.match(i) for i in ids):
+            return self.send_json(400, {"error": "ids: up to 200 Immich ids"})
+        need = {"favorite": "asset.update", "archive": "asset.update", "trash": "asset.delete",
+                "album-add": "albumAsset.create", "album-new": "album.create"}.get(action)
+        if not need:
+            return self.send_json(400, {"error": "action: favorite, archive, trash, album-add or album-new"})
+        try:
+            if action in ("favorite", "archive"):
+                on = body.get("on")
+                if not isinstance(on, bool):
+                    return self.send_json(400, {"error": "on: true or false"})
+                change = {"isFavorite": on} if action == "favorite" else {"visibility": "archive" if on else "timeline"}
+                with immich_open("assets", body={"ids": ids, **change}, method="PUT"):
+                    pass
+            elif action == "trash":
+                with immich_open("assets", body={"ids": ids, "force": False}, method="DELETE"):
+                    pass
+            elif action == "album-add":
+                album = body.get("albumId")
+                if not isinstance(album, str) or not UUID_RE.match(album):
+                    return self.send_json(400, {"error": "albumId: an album's id"})
+                got = immich_json(f"albums/{album}/assets", body={"ids": ids}, method="PUT")
+                added = sum(1 for r in got if r.get("success")) if isinstance(got, list) else len(ids)
+                return self.send_json(200, {"ok": True, "added": added})
+            else:
+                name = body.get("albumName")
+                if not isinstance(name, str) or not name.strip() or len(name) > 200:
+                    return self.send_json(400, {"error": "albumName: up to 200 characters"})
+                got = immich_json("albums", body={"albumName": name.strip(), "assetIds": ids}, method="POST")
+                return self.send_json(200, {"ok": True, "album": {"id": got.get("id"), "albumName": got.get("albumName")}})
+        except LookupError:
+            return self.send_json(409, {"error": "Gallery isn't connected to Immich"})
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                return self.send_json(403, {"error": f"Gallery's Immich key may not do that: it needs {need}", "need": need})
+            return self.send_json(502, {"error": f"Immich said {e.code}"})
+        except (OSError, ValueError) as e:
+            return self.send_json(502, {"error": f"can't reach Immich ({e})"})
+        return self.send_json(200, {"ok": True})
 
     def gallery_get(self, what, query):
         try:

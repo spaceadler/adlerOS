@@ -144,7 +144,10 @@ do more than play.
 the page asks adlerOS, and adlerOS asks Immich only for the timeline,
 albums, people, places, the map's points, memories, one photo's details
 and faces, search, thumbnails, videos, originals and album zips, each id
-checked. A key that may only read is enough, and that's all Gallery needs.
+checked. A key that may only read is enough for that. A photo's menu can
+also favorite, archive, trash (Immich's Trash, kept 30 days) and add to
+albums, if the key may (`asset.update`, `asset.delete`, `albumAsset.create`,
+`album.create`); without those, Gallery only reads, and the menu says why.
 The map's tiles come from CARTO (OpenStreetMap's map): your browser asks
 them for the part of the world you're looking at; no photo goes to them.
 
