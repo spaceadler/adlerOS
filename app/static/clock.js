@@ -341,7 +341,7 @@ function clAlarms(main) {
     return row;
   });
   main.replaceChildren(el("div", { class: "mu-page cl-page" }, clHead("Alarms", { edit: d.alarms.length > 0, add: () => clAlarmEditor(null) }),
-    ...(rows.length ? rows : [el("p", { class: "vd-dim" }, "No alarms: + sets one. They ring on this device, while adlerOS is open on it.")])));
+    ...(rows.length ? rows : [el("p", { class: "vd-dim" }, "No alarms: + sets one. They ring on every device where adlerOS is open.")])));
 }
 
 function clSaysWhen(a) {

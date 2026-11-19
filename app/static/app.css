@@ -5370,3 +5370,4 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .cl-ringing-snooze { background: #ff9f0a; color: #000; }
 .cl-ringing-stop { background: rgb(255 255 255 / 0.18); color: #fff; }
 .cl-new-timer .cl-rounds { justify-content: center; }
+@media (max-width: 699px) { .cl-form-row:has(.cl-days) { flex-wrap: wrap; } .cl-days { gap: 3px; margin-left: auto; } .cl-day { width: 27px; height: 27px; font-size: 12px; } }
