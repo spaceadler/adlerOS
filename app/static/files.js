@@ -177,17 +177,19 @@ function renderPlaces(f) {
     return b;
   };
   // Admin mode: Tailscale, above the Trash (greyed until Tailscale lets
-  // adlerOS use it; then a click says how).
+  // adlerOS use it; then a click says how). In its folder (User/Tailscale, or
+  // one in it) it's the place you're in, not User.
+  const inTs = state.admin && f.view === "folder" && (f.path === TS_INBOX || f.path.startsWith(`${TS_INBOX}/`));
   const ts = [];
   if (state.admin) {
-    const b = item("tailscale", "Tailscale", f.view === "folder" && f.path === "/user/Tailscale", () => tsOpen(f));
+    const b = item("tailscale", "Tailscale", inTs, () => tsOpen(f));
     b.removeAttribute("data-path"); // not a drop target: its folder (User/Tailscale) is
     b.classList.toggle("muted", tailscale.status?.ok === false);
     ts.push(b);
     if (tsStale()) tsStatus().then(() => { if (isOpen(f.id)) renderPlaces(f); });
   }
   f.part("side").replaceChildren(
-    ...f.places.map((p) => item(p.place, p.name, f.view === "folder" && f.place === p.place, () => showFolder(`/${p.place}`, f))),
+    ...f.places.map((p) => item(p.place, p.name, f.view === "folder" && f.place === p.place && !(inTs && p.place === "user"), () => showFolder(`/${p.place}`, f))),
     ...ts, item("trash", "Trash", f.view === "trash", () => showTrash(f)));
 }
 
