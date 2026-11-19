@@ -5278,3 +5278,92 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .sb-ph-open { display: inline-flex; align-items: center; gap: 8px; margin-top: 1vh; padding: 8px 14px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 0.18); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
 .sb-ph-open svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 .sb-ph-empty { display: grid; place-items: center; padding: 0 10vw; text-align: center; font-size: clamp(16px, 6vh, 32px); color: rgb(255 255 255 / 0.6); }
+
+/* -------------------------------------------------------------- Clock */
+.cl-page { max-width: 760px; margin: 0 auto; }
+.cl-head { display: flex; align-items: center; justify-content: space-between; }
+.cl-head-buttons { display: flex; align-items: center; gap: 8px; }
+.cl-text-button { padding: 6px 10px; border: 0; border-radius: 8px; background: none; color: #ff9f0a; font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
+.cl-icon-button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: none; color: #ff9f0a; cursor: pointer; }
+.cl-icon-button:disabled { opacity: 0.3; cursor: default; }
+.cl-icon-button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.cl-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 4px; border-bottom: 1px solid rgb(255 255 255 / 0.1); }
+.cl-row-text { display: grid; gap: 2px; min-width: 0; }
+.cl-sub { font-size: 14px; color: rgb(255 255 255 / 0.55); }
+.cl-city { overflow: hidden; font-size: 24px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+.cl-big-time { font-size: 52px; font-weight: 250; line-height: 1.05; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.cl-big-time small { margin-left: 4px; font-size: 26px; font-weight: 300; }
+.cl-alarm { cursor: pointer; }
+.cl-alarm.off .cl-row-text { opacity: 0.45; }
+.cl-edit { display: flex; align-items: center; gap: 4px; }
+.cl-remove { padding: 8px 12px; border: 0; border-radius: 8px; background: #ff453a; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.cl-switch { position: relative; flex: none; width: 51px; height: 31px; padding: 0; border: 0; border-radius: 16px; background: rgb(255 255 255 / 0.18); cursor: pointer; transition: background 0.2s; }
+.cl-switch span { position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgb(0 0 0 / 0.3); transition: translate 0.2s; }
+.cl-switch.on { background: #30d158; }
+.cl-switch.on span { translate: 20px 0; }
+.cl-map { display: block; width: 100%; aspect-ratio: 120 / 50; margin: 4px 0 8px; }
+.cl-dialog { width: min(440px, calc(100vw - 32px)); }
+.cl-city-list { display: grid; gap: 2px; max-height: min(50vh, 420px); margin: 10px 0; overflow-y: auto; }
+.cl-city-choice { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.cl-city-choice:hover, .cl-city-choice:focus-visible { background: rgb(255 255 255 / 0.1); }
+.cl-city-choice small { color: rgb(255 255 255 / 0.5); }
+.cl-time-input { width: 100%; margin: 6px 0 12px; font-size: 40px; font-weight: 300; text-align: center; }
+.cl-form { display: grid; gap: 2px; margin-bottom: 12px; border-radius: 12px; background: rgb(255 255 255 / 0.06); }
+.cl-form-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 6px 12px; border-bottom: 1px solid rgb(255 255 255 / 0.06); }
+.cl-form-row:last-child { border-bottom: 0; }
+.cl-form-row > .field-input { width: auto; min-width: 0; max-width: 60%; }
+.cl-days { display: flex; gap: 4px; }
+.cl-day { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: rgb(255 255 255 / 0.1); color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.cl-day.on { background: #ff9f0a; color: #000; }
+.cl-snooze-min { margin-left: 8px; }
+/* Stopwatch and timers: the round buttons. */
+.cl-sw { display: flex; flex-direction: column; align-items: center; }
+.cl-sw-face { display: grid; place-items: center; width: 100%; min-height: 220px; margin: 24px 0 8px; padding: 0; border: 0; background: none; color: #fff; cursor: pointer; }
+.cl-sw-digits { font-size: clamp(56px, 12vw, 104px); font-weight: 200; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.cl-dial { width: min(320px, 70vw); height: auto; }
+.cl-tick { stroke: rgb(255 255 255 / 0.35); stroke-width: 0.8; }
+.cl-tick.long { stroke: #fff; stroke-width: 1.4; }
+.cl-dial-num { fill: #fff; font-size: 11px; text-anchor: middle; }
+.cl-subdial { fill: none; stroke: rgb(255 255 255 / 0.3); stroke-width: 0.8; }
+.cl-hand-m { stroke: #ff9f0a; stroke-width: 2; stroke-linecap: round; }
+.cl-hand-s { stroke: #ff9f0a; stroke-width: 1.4; stroke-linecap: round; }
+.cl-dial-pin { fill: #ff9f0a; }
+.cl-dial-text { fill: #fff; font-size: 14px; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.cl-rounds { display: flex; justify-content: space-between; gap: 16px; width: 100%; max-width: 420px; margin: 8px auto 16px; }
+.cl-round { display: grid; place-items: center; width: 84px; height: 84px; padding: 0; border: 0; border-radius: 50%; color: #fff; font: inherit; font-size: 17px; font-weight: 500; cursor: pointer;
+  background: rgb(255 255 255 / 0.16); box-shadow: 0 0 0 2px rgb(0 0 0 / 0.6) inset, 0 0 0 3px rgb(255 255 255 / 0.16); }
+.cl-round:disabled { opacity: 0.4; cursor: default; }
+.cl-round.green { background: rgb(48 209 88 / 0.25); color: #30d158; box-shadow: 0 0 0 2px rgb(0 0 0 / 0.6) inset, 0 0 0 3px rgb(48 209 88 / 0.25); }
+.cl-round.red { background: rgb(255 69 58 / 0.25); color: #ff453a; box-shadow: 0 0 0 2px rgb(0 0 0 / 0.6) inset, 0 0 0 3px rgb(255 69 58 / 0.25); }
+.cl-round.orange { background: rgb(255 159 10 / 0.25); color: #ff9f0a; box-shadow: 0 0 0 2px rgb(0 0 0 / 0.6) inset, 0 0 0 3px rgb(255 159 10 / 0.25); }
+.cl-round.small { width: 64px; height: 64px; font-size: 14px; }
+.cl-round.small svg { width: 22px; height: 22px; fill: currentColor; }
+.cl-laps { width: 100%; max-width: 560px; }
+.cl-lap { display: flex; justify-content: space-between; padding: 10px 4px; border-bottom: 1px solid rgb(255 255 255 / 0.1); font-size: 17px; font-variant-numeric: tabular-nums; }
+.cl-lap.best { color: #30d158; }
+.cl-lap.worst { color: #ff453a; }
+.cl-timer-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; margin: 8px 0 24px; }
+.cl-timer { display: grid; justify-items: center; gap: 4px; }
+.cl-ring { display: grid; place-items: center; width: 200px; height: 200px; border-radius: 50%; background: conic-gradient(rgb(255 255 255 / 0.12) var(--done, 0deg), #ff9f0a var(--done, 0deg)); }
+.cl-ring-in { display: grid; place-items: center; align-content: center; width: 188px; height: 188px; border-radius: 50%; background: #111; }
+.cl-ring-time { font-size: 40px; font-weight: 250; font-variant-numeric: tabular-nums; }
+.cl-ring-in span { max-width: 150px; overflow: hidden; font-size: 13px; color: rgb(255 255 255 / 0.55); white-space: nowrap; text-overflow: ellipsis; }
+.cl-new-timer { margin-bottom: 8px; }
+.cl-picks { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px 0; font-size: 15px; color: rgb(255 255 255 / 0.6); }
+.cl-pick { width: auto; font-size: 28px; font-weight: 300; text-align: center; }
+.cl-section { margin: 20px 0 8px; font-size: 15px; color: rgb(255 255 255 / 0.55); }
+.cl-presets { display: flex; gap: 14px; }
+.cl-preset { display: grid; place-items: center; align-content: center; width: 76px; height: 76px; padding: 0; border: 0; border-radius: 50%; background: rgb(255 255 255 / 0.12); color: #fff; font: inherit; cursor: pointer; }
+.cl-preset strong { font-size: 24px; font-weight: 500; line-height: 1; }
+.cl-preset span { font-size: 12px; color: rgb(255 255 255 / 0.6); }
+/* An alarm or a timer ringing: over everything, StandBy too (not the lock screen). */
+.cl-ringing { position: fixed; inset: 0; z-index: 99; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px;
+  background: rgb(10 10 12 / 0.9); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); color: #fff; text-align: center; }
+.cl-ringing-sub { font-size: 18px; font-weight: 600; color: #ff9f0a; text-transform: uppercase; letter-spacing: 0.06em; }
+.cl-ringing-time { font-size: clamp(64px, 18vw, 160px); font-weight: 200; line-height: 1; font-variant-numeric: tabular-nums; }
+.cl-ringing-title { font-size: 24px; font-weight: 600; }
+.cl-ringing-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 28px; }
+.cl-ringing-buttons button { min-width: 160px; padding: 16px 26px; border: 0; border-radius: 999px; font: inherit; font-size: 19px; font-weight: 600; cursor: pointer; }
+.cl-ringing-snooze { background: #ff9f0a; color: #000; }
+.cl-ringing-stop { background: rgb(255 255 255 / 0.18); color: #fff; }
+.cl-new-timer .cl-rounds { justify-content: center; }

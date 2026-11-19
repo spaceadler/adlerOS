@@ -97,6 +97,8 @@ one, each still shows the files themselves. More in
   drawn big like Videos: favorites, all channels and groups, a channel the
   whole screen, Up and Down (or its buttons) to the next. ViniPlay is in the
   store too, for a TV guide and recordings.
+- **Clock**: world clock (on a map), alarms with snooze, a stopwatch with laps,
+  and timers, several at once; they ring on the device, StandBy too.
 - **Five modes**, chosen on each device: the Home screen, Desktop, TV (for a
   remote), Car (a phone on the dashboard) and StandBy (a bedside clock and
   photo frame, over whichever of the others you were in).

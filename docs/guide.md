@@ -883,6 +883,30 @@ was. Shells no page is showing are closed when a fourth is wanted. A session als
 minutes without typing, or when admin mode is switched off. Up to three at
 once.
 
+## Clock
+
+After the iPhone's and the Mac's: **World Clock**, **Alarms**, **Stopwatch**
+and **Timers**, down the side (along the top on a phone).
+
+- **World Clock**: the map (the half in daylight lit) with your cities on it,
+  then a row each: "Today, +2HRS", the city, its time. **+** finds a city by
+  name; **Edit** moves or removes them.
+- **Alarms**: each with its time, label and days, and a switch. A tap opens
+  it: **Repeat** (its days), **Label**, **Sound**, **Snooze** and how long
+  (9 minutes unless you say). One that doesn't repeat turns itself off once
+  it's rung. StandBy shows the next one.
+- **Stopwatch**: to the hundredth, digital or analog (tap the face); Lap and
+  Reset, Start and Stop; the best lap green, the worst red.
+- **Timers**: as many as you like at once, each with its ring, label and
+  sound (**When Timer Ends**); 1, 5 and 10 minutes ready, and your recent
+  ones.
+
+Alarms and timers belong to the device, like an iPhone's, and ring there
+while adlerOS is open on it (a phone's browser in the background may not:
+keep it in front, StandBy is made for that): the whole screen, over StandBy
+too, with Snooze (or Repeat) and Stop. The sounds are made in the browser;
+the first tap on the page lets it make them.
+
 ## StandBy
 
 After the iPhone's: a bedside clock, a photo frame and a glance at your day,
