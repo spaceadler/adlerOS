@@ -4,6 +4,12 @@
 Description=Homelab helper: runs what the home screen asks for
 After=docker.service network-online.target
 Wants=network-online.target
+# agent.py waits 5 s for more requests before it exits, so a run is never
+# shorter: 30 starts in a minute means it crashes as it starts. (systemd's
+# default, 5 in 10 s, was reached by a few quick clicks, and then the .path
+# stopped starting it at all.)
+StartLimitIntervalSec=60
+StartLimitBurst=30
 
 [Service]
 Type=oneshot

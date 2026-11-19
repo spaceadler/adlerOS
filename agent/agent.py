@@ -20,7 +20,8 @@ Two ways to run, set by the systemd unit:
                  data is in containers/core/os/data there, and the homelab's
                  own scripts/agent/actions.json adds to these actions
 
-    python3 agent/agent.py     process the queue, then exit
+    python3 agent/agent.py     process the queue, wait LINGER seconds for
+                               more, then exit
 """
 import json
 import os
@@ -53,6 +54,7 @@ LOG_TAIL_LINES = 200
 KEEP_JOBS = 50
 STEP_TIMEOUT = 3600
 MAX_RESULT_BYTES = 1024 * 1024
+LINGER = 5  # seconds the queue stays empty before the helper exits
 
 
 def stamp():
@@ -305,13 +307,24 @@ def main():
     QUEUE.mkdir(parents=True, exist_ok=True)
     JOBS.mkdir(parents=True, exist_ok=True)
     actions = load_actions()
-    # Keep going until the queue is empty: requests can arrive while one runs.
+    # Keep going until the queue has been empty for LINGER seconds. Requests
+    # come in runs (one click in Files asks two or three things), and one
+    # start for them all is quicker than a start each. It also keeps every run
+    # at least LINGER seconds long, so systemd's start limit is only reached
+    # by a helper that crashes as it starts: before this, five quick requests
+    # in ten seconds hit systemd's default limit and stopped the helper until
+    # someone reset it by hand.
+    idle_since = time.monotonic()
     while True:
         pending = sorted((p for p in QUEUE.glob("*.json") if not p.name.startswith(".")),
                          key=lambda p: p.lstat().st_mtime)
-        if not pending:
+        if pending:
+            process(pending[0], actions)
+            idle_since = time.monotonic()
+        elif time.monotonic() - idle_since >= LINGER:
             break
-        process(pending[0], actions)
+        else:
+            time.sleep(0.2)
     prune_jobs()
 
 
