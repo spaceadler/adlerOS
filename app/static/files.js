@@ -248,10 +248,10 @@ function tsReceive(into = TS_INBOX) {
       toast("Looking for Tailscale files…");
       const job = await actionDone("tailscale-get", { into }).catch(() => null);
       const r = job?.result;
+      if (r?.got?.length) refreshFiles();
       if (!r?.ok) { toast(`Tailscale: ${r?.why || job?.error || "couldn't receive"}.`); return null; }
       const where = into.split("/").filter(Boolean).pop();
       toast(r.got.length ? `Got ${r.got.length === 1 ? r.got[0] : `${r.got.length} files`} in ${where}.` : "No Tailscale files waiting.");
-      if (r.got.length) refreshFiles();
       return r.got;
     })().finally(() => { tailscale.receiving = null; });
   }

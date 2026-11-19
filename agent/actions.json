@@ -740,7 +740,7 @@
   },
   "tailscale-get": {
     "label": "Receiving from Tailscale",
-    "description": "Files sent to this machine with Taildrop (tailscale file get), into a folder of your storage or Desktop: Tailscale/ in your storage folder, unless you pick one.",
+    "description": "Files sent to this machine with Taildrop (tailscale file get), into a folder of your storage or Desktop: Tailscale/ in your storage folder, unless you pick one, and then what's waiting in Tailscale/ is moved there too.",
     "quiet": true,
     "admin": true,
     "params": {

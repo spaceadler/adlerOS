@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # files.py, beside this one
-from files import Refused, locate, places  # noqa: E402
+from files import Refused, locate, move, places, unique_name  # noqa: E402
 
 INBOX = "Tailscale"  # in your storage folder (adlerOS's /user/Tailscale)
 
@@ -56,17 +56,33 @@ def host_path(path, allowed, want):
 
 
 def get(into):
-    """`tailscale file get` into a folder of User or the Desktop (User/Tailscale
-    is made the first time)."""
+    """Files sent to this machine, into a folder of User or the Desktop: what
+    Taildrop holds (`tailscale file get`), and what's waiting in
+    User/Tailscale, moved in (opening the Tailscale place gets them there,
+    so a later get anywhere else would otherwise find nothing). User/Tailscale
+    is made the first time."""
     user = places().get("user")
-    if user and into.strip("/") == f"user/{INBOX}":
-        (user / INBOX).mkdir(exist_ok=True)
+    inbox = user / INBOX if user else None
+    if inbox:
+        inbox.mkdir(exist_ok=True)
     folder = host_path(into, ("user", "desktop"), Path.is_dir)
     if not folder:
         return {"ok": False, "why": "files can only be got into a folder of User or the Desktop"}
     before = set(os.listdir(folder))
     done = ts("file", "get", "--conflict=rename", str(folder))
+    stuck = []
+    if inbox and not folder.is_relative_to(inbox.resolve()):
+        for entry in sorted(inbox.iterdir()):
+            if entry.name.startswith("."):
+                continue
+            try:
+                move(entry, unique_name(folder, entry.name))
+            except OSError:
+                stuck.append(entry.name)
     got = sorted(set(os.listdir(folder)) - before)
+    if stuck:
+        return {"ok": False, "got": got, "into": into,
+                "why": f"{', '.join(stuck)} couldn't be moved here from User/Tailscale"}
     if done.returncode and not got:
         return {"ok": False, "why": (done.stderr or done.stdout).strip()[-300:] or "tailscale file get failed"}
     return {"ok": True, "got": got, "into": into}
