@@ -47,7 +47,7 @@ function drawerMatches() {
 // adlerOS's own, here like any app: pinned to the dock or put on the desktop
 // from here (their menus), opened from here.
 const BUILT_IN = [
-  { id: "files", name: "My Computer", about: "Your files: Desktop, User and Root", open: () => openFiles(), keywords: "files folders storage documents computer finder explorer" },
+  { id: "files", get name() { return computerName(); }, about: "Your files: Desktop, User and Root", open: () => openFiles(), keywords: "files folders storage documents computer finder explorer" },
   { id: "app-store", name: "App Store", about: "Your apps, and more to install", open: () => openStore(), keywords: "store apps install" },
   { id: "settings", name: "Settings", about: "adlerOS and this machine", open: () => openSettings(), keywords: "settings preferences" },
   { id: "live-usage", name: "Live Usage", about: "CPU, memory, storage, temperature", open: () => openUsage(), keywords: "usage cpu memory stats" },

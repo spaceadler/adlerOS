@@ -145,7 +145,7 @@ function tvColumns() { return innerWidth >= 1100 ? 5 : innerWidth >= 700 ? 4 : 3
 
 // adlerOS's own apps only: the TV's are the ones made for it.
 function tvAppList() {
-  return TV_OWN.map(([id, icon, name, open, about]) => ({ id, name, open, about, own: icon }));
+  return TV_OWN.map(([id, icon, name, open, about]) => ({ id, name: id === "adleros:files" ? computerName() : name, open, about, own: icon }));
 }
 
 function tvTiles() {

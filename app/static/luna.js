@@ -237,7 +237,7 @@ function mdVaultMenu(x, y) {
         adler.vault = null;
         openLuna();
       } }] : []),
-    { label: "Show the vault in My Computer", run: () => openFiles(adler.vault) },
+    { label: `Show the vault in ${computerName()}`, run: () => openFiles(adler.vault) },
   ]);
 }
 
@@ -438,7 +438,7 @@ function mdFileMenu(path) {
       { label: "Delete", run: () => mdDelete(path), destructive: true });
   }
   if (mdIsNote(path)) items.push({ label: "Open in Notepad", run: () => openNotepad(mdFull(path), { markdown: false }) });
-  items.push({ label: "Show in My Computer", run: () => openFiles(mdFull(mdFolderOf(path) ? mdFolderOf(path) : "").replace(/\/$/, "")) });
+  items.push({ label: `Show in ${computerName()}`, run: () => openFiles(mdFull(mdFolderOf(path) ? mdFolderOf(path) : "").replace(/\/$/, "")) });
   return items;
 }
 
@@ -447,7 +447,7 @@ function mdFolderMenu(path) {
     { label: "Open", run: () => mdOpenFolder(path) }, { label: "Open in a new tab", run: () => mdOpenFolder(path, { newTab: true }) },
     ...(adler.index.writable ? [{ label: "New note here", run: () => mdNewNote(path) }, { label: "New folder here", run: () => mdNewFolder(path) },
       { label: "Rename…", run: () => mdRenameDialog(path) }, { label: "Delete", run: () => mdDelete(path), destructive: true }] : []),
-    { label: "Show in My Computer", run: () => openFiles(mdFull(path)) },
+    { label: `Show in ${computerName()}`, run: () => openFiles(mdFull(path)) },
   ];
 }
 
@@ -821,7 +821,7 @@ function mdNoteMenu(tab) {
   items.push({ label: "This note's graph", run: () => mdOpenGraph(tab.path) },
     { label: "Copy a link to it", run: () => copyText(mdLinkTo(tab.path, tab.path, mdNoteName(tab.path))) },
     { label: "Open in Notepad", run: () => openNotepad(mdFull(tab.path), { markdown: false }) },
-    { label: "Show in My Computer", run: () => openFiles(mdFull(mdFolderOf(tab.path)).replace(/\/$/, "")) });
+    { label: `Show in ${computerName()}`, run: () => openFiles(mdFull(mdFolderOf(tab.path)).replace(/\/$/, "")) });
   if (tab.writable) items.push({ label: "Delete", run: () => mdDelete(tab.path), destructive: true });
   return items;
 }
@@ -1241,7 +1241,7 @@ function mdFolderView(tab) {
     const r = more.getBoundingClientRect();
     openMenu(r.left, r.bottom + 4, path ? mdFolderMenu(path).slice(2) : [
       ...(adler.index.writable ? [{ label: "New note here", run: () => mdNewNote("") }, { label: "New folder here", run: () => mdNewFolder("") }] : []),
-      { label: "Show in My Computer", run: () => openFiles(adler.vault) },
+      { label: `Show in ${computerName()}`, run: () => openFiles(adler.vault) },
     ]);
   });
   const make = el("button", { type: "button", class: "chip-button" }, "New note");
@@ -1670,7 +1670,7 @@ async function mdMoveDialog(path) {
 }
 
 async function mdDelete(path) {
-  const ok = await confirmDialog({ title: `Delete ${path.split("/").pop()}?`, body: "It goes to the Trash (in My Computer), where you can bring it back.", button: "Delete", destructive: true });
+  const ok = await confirmDialog({ title: `Delete ${path.split("/").pop()}?`, body: `It goes to the Trash (in ${computerName()}), where you can bring it back.`, button: "Delete", destructive: true });
   if (!ok || !(await filesPost("delete", { paths: [mdFull(path)] }))) return;
   adler.tabs = adler.tabs.filter((t) => t.path !== path && !t.path?.startsWith(`${path}/`));
   adler.active = Math.min(adler.active, adler.tabs.length - 1);

@@ -127,10 +127,10 @@ function newFilesWindow(path) {
   Object.assign(section, { id, hidden: true });
   section.classList.remove("active", "minimized", "closing", "off-ws", "win-genie", "dropping");
   section.removeAttribute("style");
-  section.setAttribute("aria-label", `My Computer ${n}`);
+  section.setAttribute("aria-label", `${computerName()} ${n}`);
   document.body.insertBefore(section, $("files").nextSibling);
   const f = makeFileWin(id, section);
-  registerWindow(id, { title: `My Computer ${n}`, close: () => closeFiles(f), icon: "files", size: [980, 640], copy: true });
+  registerWindow(id, { title: `${computerName()} ${n}`, close: () => closeFiles(f), icon: "files", size: [980, 640], copy: true });
   return openFiles(path || filesHome(), f);
 }
 
@@ -180,7 +180,7 @@ function crumbs(f) {
     if (i) nodes.push(el("span", { class: "crumb-sep", "aria-hidden": "true" }, "/"));
     nodes.push(b);
   });
-  return nodes.length ? nodes : [el("span", { class: "crumb current" }, "My Computer")];
+  return nodes.length ? nodes : [el("span", { class: "crumb current" }, computerName())];
 }
 
 function renderPlaces(f) {
@@ -1038,7 +1038,21 @@ function wireFiles(f) {
 }
 
 const firstFiles = makeFileWin("files", $("files"));
-registerWindow("files", { title: "My Computer", close: () => closeFiles(firstFiles), dock: "files", size: [980, 640] });
+registerWindow("files", { title: computerName(), close: () => closeFiles(firstFiles), dock: "files", size: [980, 640] });
+
+// Named after you: every My Computer window's title, when your name comes in
+// or changes.
+function retitleFiles() {
+  for (const id of wm.windows.keys()) {
+    const m = /^files(?:-(\d+))?$/.exec(id);
+    if (!m) continue;
+    const title = m[1] ? `${computerName()} ${m[1]}` : computerName();
+    titleWindow(id, title);
+    $(id).setAttribute("aria-label", title);
+    const close = $(id).querySelector(":scope > .sheet-close");
+    if (close) close.setAttribute("aria-label", `Close ${title}`);
+  }
+}
 registerWindow("viewer", { title: "Viewer", close: closeViewer, size: [980, 680], float: true });
 $("viewer-close").addEventListener("click", closeViewer);
 $("viewer-download").addEventListener("click", () => downloadFile($("viewer").dataset.path));

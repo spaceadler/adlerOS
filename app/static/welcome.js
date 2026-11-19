@@ -232,13 +232,13 @@ const welcomeAccounts = {
 
 const welcomeStorage = {
   view() {
-    const open = el("button", { type: "button", class: "button-secondary" }, "Open My Computer");
+    const open = el("button", { type: "button", class: "button-secondary" }, `Open ${computerName()}`);
     open.addEventListener("click", () => welcomeTo(() => openFiles()));
     return {
       title: "Your storage, as a desktop",
       body: [
         welcomeText("Next to the containers is your storage folder: the photos Immich keeps, the music Navidrome plays, Paperless's documents, your notes, and the rest. On its own it's a folder on a server, reached with File Browser or ssh."),
-        welcomeText("My Computer makes it a desktop to work from: open and edit what's in it, move it, upload to it, keep things on the Desktop, and every app reads the same folders. Luna writes your notes in it, as the Markdown files they are."),
+        welcomeText(`${computerName()} makes it a desktop to work from: open and edit what's in it, move it, upload to it, keep things on the Desktop, and every app reads the same folders. Luna writes your notes in it, as the Markdown files they are.`),
       ],
       extra: [open],
     };
@@ -456,7 +456,7 @@ const TOUR = [
     view: () => ({
       title: "Four ways to use it",
       body: [welcomeText("Each device picks its mode (right-click the desktop, or Settings → Mode): the Home screen, as here; Desktop, for a computer, with windows side by side that you drag and snap; TV, big and made for a remote or arrow keys; and Car, for a phone on the dashboard, with music and the road."),
-        welcomeText("My Computer, Notepad, Luna, Music, Videos, Books, Podcasts, Gallery, Documents, Calendar, Tasks and Contacts are in All apps. Press ? for every key; it all works without a mouse."),
+        welcomeText(`${computerName()}, Notepad, Luna, Music, Videos, Books, Podcasts, Gallery, Documents, Calendar, Tasks and Contacts are in All apps. Press ? for every key; it all works without a mouse.`),
         welcomeText("This tour is in Settings, if you want it again.")],
     }),
   },

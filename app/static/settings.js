@@ -358,7 +358,7 @@ function buildRow(row) {
       settings.data[c.key] = input.value.trim();
       tick.classList.add("show");
       setTimeout(() => tick.classList.remove("show"), 1500);
-      if (c.key === "name") { state.name = settings.data.name; renderSide(); }
+      if (c.key === "name") { state.name = settings.data.name; renderSide(); nameChanged(); }
       if (c.key === "searchUrl") state.searchUrl = settings.data.searchUrl;
     };
     input.addEventListener("change", save);

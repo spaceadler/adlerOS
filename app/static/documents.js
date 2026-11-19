@@ -583,7 +583,7 @@ function docLocalDoc(page, path) {
     : picture ? el("img", { class: "doc-preview doc-preview-img", src: fileUrl(x.path, true), alt: "" })
       : el("div", { class: "doc-empty" }, el("p", {}, `A .${x.suffix} file: download it to open it.`));
   const row = (label, value) => el("div", { class: "doc-irow" }, el("span", { class: "doc-ilabel" }, label), el("span", {}, value));
-  const where = el("button", { type: "button", class: "doc-link" }, "Show in My Computer");
+  const where = el("button", { type: "button", class: "doc-link" }, `Show in ${computerName()}`);
   where.addEventListener("click", () => openFiles(x.path.split("/").slice(0, -1).join("/")));
   page.append(docLocalNote(), el("header", { class: "doc-head doc-head-doc" }, back, el("div", { class: "doc-head-title" }, el("h1", {}, docLocalName(x)),
     el("p", { class: "doc-dim" }, x.name)), download),

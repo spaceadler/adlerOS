@@ -593,11 +593,23 @@ const DOCK_FIXED = [
 const DOCK_MAX_PINS = 16;
 // adlerOS's own windows: pinned (and unpinned, moved about, put on the
 // desktop) like any app.
+// My Computer, named after you: "Sam's Computer" (Settings → Name).
+function computerName() {
+  const first = (state.name || "").trim().split(/\s+/)[0];
+  return first ? `${first}'s Computer` : "My Computer";
+}
+// The name changed (or came in): everything that shows it.
+function nameChanged() {
+  if (typeof retitleFiles === "function") retitleFiles();
+  layout(true);
+  buildDock();
+}
+
 const BUILTIN_PINS = {
   "adleros:app-store": { name: "App Store", icon: "app-store", dock: "app-store", open: () => toggleStore() },
   "adleros:settings": { name: "Settings", icon: "settings", dock: "settings", open: () => toggleWindow("settings", () => openSettings()) },
   "adleros:live-usage": { name: "Live Usage", icon: "live-usage", dock: "live-usage", open: () => toggleUsage() },
-  "adleros:files": { name: "My Computer", icon: "files", dock: "files", open: () => toggleFiles() },
+  "adleros:files": { get name() { return computerName(); }, icon: "files", dock: "files", open: () => toggleFiles() },
   "adleros:terminal": { name: "Terminal", icon: "terminal", dock: "terminal", open: () => toggleTerminal() },
   "adleros:notepad": { name: "Notepad", icon: "notepad", dock: "notepad", open: () => openNotepad() },
   "adleros:luna": { name: "Luna", icon: "luna", dock: "luna", open: () => toggleLuna() },
@@ -1320,7 +1332,7 @@ const ACTIONS = [
   { id: "usage", name: "Live Usage", keywords: "live usage cpu memory ram storage disk temperature stats monitor" },
   { id: "drawer", name: "All apps", keywords: "all apps drawer launchpad list every app alphabetical" },
   { id: "terminal", name: "Terminal", keywords: "terminal shell console ssh bash command line admin" },
-  { id: "files", name: "My Computer", keywords: "files folders storage documents upload download trash desktop mailbox root computer finder explorer" },
+  { id: "files", get name() { return computerName(); }, keywords: "files folders storage documents upload download trash desktop mailbox root computer finder explorer" },
   { id: "notepad", name: "Notepad", keywords: "notepad text editor edit write txt plain" },
   { id: "luna", name: "Luna", keywords: "luna notes markdown md obsidian vault wiki journal daily graph" },
   { id: "music", name: "Music", keywords: "music songs albums artists playlists radio player play listen lyrics spotify mp3" },
@@ -1402,7 +1414,7 @@ function renderResults(keepSelection = false) {
       : r.type === "web" ? `Search the web for “${r.query}”` : r.type === "note" ? r.text : r.action.name;
     // A file: where it is (its folder, from its place's name).
     const hint = r.type === "app" ? (r.app.up ? "Open" : "Offline") : r.type === "setting" ? "Settings"
-      : r.type === "file" ? fromLabel(r.file.path) || "My Computer"
+      : r.type === "file" ? fromLabel(r.file.path) || computerName()
       : r.type === "web" ? "Web" : r.type === "note" ? "Files" : "Action";
     const li = el("li", { role: "option", id: `result-${i}` }, icon, el("span", {}, name), el("span", { class: "hint" }, hint));
     li.addEventListener("pointermove", () => select(i));
@@ -1566,6 +1578,7 @@ async function refresh() {
   if (result.status === 401) return showLock();
   if (result.status !== 200 || !result.body) return;
   state.name = result.body.name || "";
+  if (typeof retitleFiles === "function") retitleFiles();
   state.searchUrl = result.body.searchUrl || state.searchUrl;
   // Alphabetical, like the umbrelOS desktop.
   state.apps = result.body.apps.slice().sort((a, b) => a.name.localeCompare(b.name));

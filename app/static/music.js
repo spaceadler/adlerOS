@@ -862,7 +862,7 @@ function musicListMenu(p) {
     { label: "Play next", run: () => musicPlayNext(p.items) }, { label: "Add to queue", run: () => musicAddToQueue(p.items) },
     { label: "Start radio", run: () => musicRadio({ kind: "playlist", key: p.id, label: p.name }) },
     ...(p.writable ? [{ label: "Rename…", run: () => musicRenameList(p) }, { label: "Delete", run: () => musicDeleteList(p), destructive: true }] : []),
-    ...(p.path ? [{ label: "Show in My Computer", run: () => openFiles(p.path.split("/").slice(0, -1).join("/")) }] : []),
+    ...(p.path ? [{ label: `Show in ${computerName()}`, run: () => openFiles(p.path.split("/").slice(0, -1).join("/")) }] : []),
   ];
 }
 
@@ -940,7 +940,7 @@ function musicIdsMenu(ids, ctx = {}) {
       if (music.artists.has(muNorm(name))) items.push({ label: `Go to ${name}`, run: () => musicGo("artist", muNorm(name)) });
     }
     const path = ids[0].startsWith("/") ? ids[0] : `${music.dir}/${ids[0]}`;
-    items.push({ label: "Show in My Computer", run: () => openFiles(path.split("/").slice(0, -1).join("/")) });
+    items.push({ label: `Show in ${computerName()}`, run: () => openFiles(path.split("/").slice(0, -1).join("/")) });
   }
   return items;
 }
@@ -2078,7 +2078,7 @@ async function playSong(entry, path) {
   } else {
     if (!music.dir && body.dir) music.dir = body.dir;
     if (!music.songs.has(body.id)) music.extra.set(body.id, body);
-    musicPlayList([body.id], 0, { from: "My Computer", shuffle: false });
+    musicPlayList([body.id], 0, { from: computerName(), shuffle: false });
   }
   musicLoad();
 }

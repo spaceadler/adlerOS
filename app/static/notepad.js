@@ -144,7 +144,7 @@ function padFileMenu(pad) {
     { label: "Save", run: () => savePad(pad) },
     { label: "Save as…", run: () => savePadAs(pad) },
     ...(pad.markdown ? [{ label: "Load vault", run: () => padLoadVault(pad) }] : []),
-    ...(pad.path ? [{ label: "Show in My Computer", run: () => openFiles(parentOf(pad.path)) }] : []),
+    ...(pad.path ? [{ label: `Show in ${computerName()}`, run: () => openFiles(parentOf(pad.path)) }] : []),
     { label: "Close", run: () => closePad(pad) },
   ];
 }
@@ -410,7 +410,7 @@ function filePicker({ title, save = false, folder = false, many = false, start =
       here = body.path;
       chosen = null;
       const parts = here.split("/").filter(Boolean);
-      crumbs.replaceChildren(...[["My Computer", "/"], ...parts.map((p, i) => [i === 0 ? ({ user: "User", desktop: "Desktop", root: "Root" })[p] || p : p, `/${parts.slice(0, i + 1).join("/")}`])]
+      crumbs.replaceChildren(...[[computerName(), "/"], ...parts.map((p, i) => [i === 0 ? ({ user: "User", desktop: "Desktop", root: "Root" })[p] || p : p, `/${parts.slice(0, i + 1).join("/")}`])]
         .map(([label, to]) => {
           const b = el("button", { type: "button", class: "crumb" }, label);
           b.addEventListener("click", () => go(to));
