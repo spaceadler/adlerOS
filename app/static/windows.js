@@ -43,14 +43,26 @@ function dockAway() { return desktopMode() && smallTouch(); }
 // upright again, back to what you'd chosen, which it never changes. Not in
 // TV or car mode.
 const LAND = { gap: 8, rail: 56 }; // the bars' margin and width (app.css --land-rail)
-function landPhone() {
+// Settings → On its side: "assisted" (this) or "desktop" (desktop mode as a
+// computer has it: the menu bar, windows to drag). Each phone its own.
+const LAND_STYLE_KEY = "adleros.landStyle";
+function sidewaysPhone() {
   const c = document.body.classList;
   return smallTouch() && innerWidth > innerHeight && computerScreen() && !c.contains("tv") && !c.contains("car")
     && winLoad("adleros.tvMode", false) !== true && winLoad("adleros.carMode", false) !== true;
 }
+function landPhone() { return sidewaysPhone() && winLoad(LAND_STYLE_KEY, "assisted") !== "desktop"; }
+function setLandStyle(style) {
+  winSave(LAND_STYLE_KEY, style);
+  landSync();
+  if (desktopMode()) {
+    for (const id of wm.order) if (isOpen(id)) winApply(id);
+    if (typeof sizeDock === "function") sizeDock();
+  }
+}
 function landOn() { return document.body.classList.contains("land") && desktopMode(); }
 // Desktop mode or not: a phone on its side always; else what you chose, on a computer's screen.
-function wantDesktop() { return landPhone() || (computerScreen() && winLoad(DESKTOP_MODE_KEY, false) === true); }
+function wantDesktop() { return sidewaysPhone() || (computerScreen() && winLoad(DESKTOP_MODE_KEY, false) === true); }
 // Turned (or the screen changed): the right one of the two, and its windows in their places.
 function landSync() {
   const c = document.body.classList;
@@ -158,7 +170,7 @@ function liquidFilter() {
 
 function setDesktopMode(on) {
   if (on && !computerScreen()) return toast("Desktop mode is for a computer: a wider screen and a mouse.");
-  if (landPhone()) {
+  if (sidewaysPhone()) {
     // On its side a phone keeps its own desktop; upright, it's what you chose.
     winSave(DESKTOP_MODE_KEY, on);
     if (!desktopMode()) landSync();
@@ -545,7 +557,7 @@ function winApply(id) {
   // desktop behind it, never the windows in between.
   sheet.style.setProperty("--win-x", `${left}px`);
   sheet.style.setProperty("--win-y", `${top}px`);
-  sheet.dataset.mode = g.mode;
+  sheet.dataset.mode = landOn() ? "land" : g.mode; // on a phone on its side, never "max" (its corners stay round)
   const max = sheet.querySelector(":scope > .win-bar .win-button.max");
   if (max) max.setAttribute("aria-label", g.mode === "max" ? "Restore" : "Maximize");
 }

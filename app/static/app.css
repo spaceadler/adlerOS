@@ -4329,6 +4329,10 @@ body.wm.land .sheet > .win-grip, body.wm.land .win-button.max { display: none; }
 body.wm.land .sheet > .win-bar { cursor: default; }
 body.wm.land .cc:not([hidden]) { top: auto; right: auto; bottom: var(--land-gap); left: calc(var(--land-gap) * 2 + var(--land-rail)); max-height: calc(100dvh - 2 * var(--land-gap)); overflow-y: auto; }
 body.wm.land .nc { top: var(--land-gap); right: max(var(--land-gap), env(safe-area-inset-right)); }
+/* Out of sight all the way, notch or not. */
+body.wm.land .nc:not(.shown) { transform: translateX(calc(100% + 24px + env(safe-area-inset-right, 0px))); visibility: hidden; transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s 0.38s; }
+/* Control Center's button on the rail: a line (drawn, not an icon). */
+.land-line-mark { display: block; width: 22px; height: 4px; border-radius: 2px; background: currentColor; }
 .mb-left, .mb-right { display: flex; align-items: center; gap: 2px; min-width: 0; }
 .mb-item { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; font-weight: 500; white-space: nowrap; cursor: default; }
 .mb-item:hover, .mb-item.open { background: rgb(255 255 255 / 0.18); }
@@ -5371,3 +5375,17 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .cl-ringing-stop { background: rgb(255 255 255 / 0.18); color: #fff; }
 .cl-new-timer .cl-rounds { justify-content: center; }
 @media (max-width: 699px) { .cl-form-row:has(.cl-days) { flex-wrap: wrap; } .cl-days { gap: 3px; margin-left: auto; } .cl-day { width: 27px; height: 27px; font-size: 12px; } }
+
+/* Luna's focus mode: only the note. */
+#luna.md-focus .md-ribbon, #luna.md-focus .md-side, #luna.md-focus .md-right, #luna.md-focus .md-tabs, #luna.md-focus .md-note-head, #luna.md-focus .side-toggle { display: none !important; }
+#luna.md-focus .md-center { position: relative; }
+.md-focus-out { display: none; }
+#luna.md-focus .md-focus-out { position: absolute; top: 8px; right: 10px; z-index: 5; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%;
+  background: rgb(255 255 255 / 0.1); color: rgb(255 255 255 / 0.7); cursor: pointer; opacity: 0.6; }
+#luna.md-focus .md-focus-out:hover, #luna.md-focus .md-focus-out:focus-visible { opacity: 1; }
+#luna.md-focus .md-focus-out svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+/* The alarm's time on a phone: inside its box (Safari's time field keeps its own padding). */
+.cl-time-input { overflow: hidden; -webkit-appearance: none; appearance: none; }
+.cl-time-input::-webkit-date-and-time-value { text-align: center; }
+@media (max-width: 699px) { .cl-time-input { height: 60px; padding: 0 12px; font-size: 28px; line-height: 60px; } }

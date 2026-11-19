@@ -124,7 +124,7 @@ function landRail() {
       () => { closeMenu(); ccClose(); ncToggle(); }));
   const bottom = el("div", { class: "land-bar bottom" },
     button("", "Search", [svg(MB_ICONS.search)], () => { mbCloseAll(); toggleSearch(); }),
-    button("mb-cc-button", "Control Center", [svg(MB_ICONS.control)], () => ccToggle()));
+    button("mb-cc-button land-line", "Control Center", [el("span", { class: "land-line-mark", "aria-hidden": "true" })], () => { ncClose(); ccToggle(); }));
   document.body.append(el("nav", { id: "land-rail", class: "land-rail", "aria-label": "Menu" }, top, bottom));
   mbTick();
   mbUpdate();
@@ -515,7 +515,7 @@ function mbWidgetsUpdate(data) {
 // --------------------------------------------------------------- wiring
 
 document.addEventListener("pointerdown", (e) => {
-  if (e.target.closest?.("#menubar, #menu")) return;
+  if (e.target.closest?.("#menubar, #menu, #land-rail")) return; // their own buttons open and close them
   ccClose();
   ncClose();
 });
