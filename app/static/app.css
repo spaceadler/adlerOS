@@ -3791,6 +3791,7 @@ body:not(.wm) .tk-detail { padding-top: 56px; }
   .tk-shell, .tk-shell.with-detail { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .tk-side { flex-direction: row; align-items: center; gap: 6px; overflow-x: auto; padding: 10px 12px; border-right: 0; border-bottom: 1px solid rgb(255 255 255 / 0.07); }
   body:not(.wm) .tk-side { padding-top: 14px; padding-right: 56px; }
+  body:not(.wm) .tk-side { -webkit-mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; } /* nothing scrolls under the X, as in Music */
   .tk-search-box { flex: 0 0 130px; margin: 0; }
   .tk-nav { flex-direction: row; gap: 2px; }
   .tk-side-title { display: none; }
@@ -4019,6 +4020,7 @@ body:not(.wm) .pc-panel-head { padding-top: 58px; }
   .pc-shell, .pc-shell.with-panel { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; }
   .pc-side { grid-row: 1; flex-direction: row; align-items: center; gap: 6px; overflow-x: auto; padding: 10px 12px; border-right: 0; border-bottom: 1px solid rgb(255 255 255 / 0.07); }
   body:not(.wm) .pc-side { padding-top: 14px; padding-right: 56px; }
+  body:not(.wm) .pc-side { -webkit-mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; } /* nothing scrolls under the X, as in Music */
   .pc-search-box { flex: 0 0 130px; margin: 0; }
   .pc-nav { flex-direction: row; gap: 2px; }
   .pc-side-title, .pc-nav-count, .pc-source-text .pc-dim { display: none; }
@@ -4190,6 +4192,7 @@ body:not(.wm) .bk-top { padding-top: 12px; }
   .bk-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .bk-side { flex-direction: row; align-items: center; gap: 6px; overflow-x: auto; padding: 10px 12px; border-right: 0; border-bottom: 1px solid rgb(255 255 255 / 0.07); }
   body:not(.wm) .bk-side { padding-top: 14px; padding-right: 56px; }
+  body:not(.wm) .bk-side { -webkit-mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; mask: linear-gradient(to left, transparent 52px, #000 62px), linear-gradient(#000, #000) bottom / 100% 1px no-repeat; } /* nothing scrolls under the X, as in Music */
   .bk-search-box { flex: 0 0 120px; margin: 0; }
   .bk-nav { flex-direction: row; gap: 2px; }
   .bk-side-title, .bk-nav-count { display: none; }

@@ -147,8 +147,10 @@ body.phone .dock-item.open::after { bottom: -9px; width: 4px; height: 4px; }
 
 /* ------------------------------------------------- windows: page sheets */
 
+/* Clear of the status bar, notch and Dynamic Island, even where the browser
+   reports no inset: the X never lands on the battery or Wi-Fi. */
 body.phone .sheet {
-  height: calc(100dvh - env(safe-area-inset-top) - 10px);
+  height: calc(100dvh - max(env(safe-area-inset-top) + 10px, 44px));
   border-radius: 14px 14px 0 0;
 }
 /* The grabber: pull it (or a list that's at its top) down to close. */
@@ -175,6 +177,8 @@ body.phone .sheet.swiping { transition: none; }
 }
 body.phone .sheet-close { top: 16px; right: 14px; width: 30px; height: 30px; background: rgb(118 118 128 / 0.24); }
 body.phone .sheet-close svg { width: 14px; height: 14px; }
+/* Notepad's X sits in its 44px bar, centred on it. */
+body.phone .pad-close { top: 7px; }
 body.phone .store-title { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
 
 /* Settings: grouped lists, coloured icons, separators that start after them. */
