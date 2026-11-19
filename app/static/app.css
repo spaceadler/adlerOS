@@ -4670,8 +4670,11 @@ body.car #desktop, body.car #dock, body.car .dock-edge { display: none !importan
 .car-tile.pods { background: linear-gradient(135deg, #b46cff, #7a3fd1); }
 .car-tile.photos { background: linear-gradient(135deg, #ff9f0a, #d0650a); }
 .car-tile.videos { background: linear-gradient(135deg, #5e5ce6, #3532b0); }
+.car-tile.livetv { background: linear-gradient(135deg, #30b0c7, #1b7a8c); }
 .car-tile.exit { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: center; gap: 14px;
   background: linear-gradient(to bottom, rgb(255 255 255 / 0.1), rgb(12 14 18 / 0.34)); box-shadow: var(--shine), 0 10px 24px rgb(0 0 0 / 0.25); }
+/* A row of its own, or the other half of the last one when it's half empty. */
+.car-track > .car-tile.exit:nth-child(even) { grid-column: auto; }
 @media (orientation: portrait) {
   .car-home { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "clock" "now" "tiles"; }
   .car-clock { justify-content: center; padding: 4px 0 0; font-size: clamp(30px, 6vh, 52px); }
@@ -4720,6 +4723,7 @@ section.big { --big-accent: #fa2d48; position: fixed; inset: 0; z-index: 15; dis
 section.big[hidden] { display: none; }
 section.big[data-app="podcasts"] { --big-accent: #b46cff; }
 section.big[data-app="videos"] { --big-accent: #8b5cf6; }
+section.big[data-app="livetv"] { --big-accent: #30b0c7; }
 section.big[data-app="photos"] { --big-accent: #ff9f0a; }
 section.big[data-app="calendar"] { --big-accent: #ff453a; }
 section.big[data-app="books"] { --big-accent: #ff9f0a; }
@@ -4802,6 +4806,38 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .big-viewer-btn.next { right: max(14px, env(safe-area-inset-right)); top: 50%; translate: 0 -50%; }
 .big-viewer-count { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%; translate: -50% 0; padding: 6px 14px; border-radius: 999px;
   background: rgb(0 0 0 / 0.5); font-size: 15px; font-weight: 600; }
+
+/* Live TV: a channel, the whole screen; what's on along the bottom, for a
+   few seconds (then it fades: it's still there for the keys). */
+.big-live { position: absolute; inset: 0; z-index: 5; background: #000; }
+.big-live[hidden] { display: none; }
+.big-live.quiet { cursor: none; }
+.big-live-stage { position: absolute; inset: 0; }
+.big-live-stage > video { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.big-live-say { position: absolute; left: 50%; top: 45%; translate: -50% -50%; max-width: min(80vw, 640px); margin: 0; text-align: center;
+  font-size: clamp(16px, 2.4vh, 22px); color: rgb(255 255 255 / 0.85); }
+.big-live-say:empty { display: none; }
+.big-live-bar { position: absolute; left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom));
+  display: flex; align-items: center; gap: 16px; padding: 12px 14px; border-radius: 22px;
+  background: linear-gradient(to bottom, rgb(255 255 255 / 0.14), rgb(12 14 18 / 0.5)); box-shadow: var(--shine); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  transition: opacity 0.4s, translate 0.4s; }
+.big-live.quiet .big-live-bar { opacity: 0; translate: 0 12px; }
+.big-live-logo { flex: none; width: clamp(84px, 9vw, 140px); aspect-ratio: 16 / 9; overflow: hidden; border-radius: 10px; }
+.big-live-logo > .big-channel { width: 100%; height: 100%; }
+.big-live-text { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.big-live-text strong { overflow: hidden; font-size: clamp(18px, 2.6vh, 28px); white-space: nowrap; text-overflow: ellipsis; }
+.big-live-text span { overflow: hidden; font-size: clamp(14px, 1.9vh, 19px); color: rgb(255 255 255 / 0.7); white-space: nowrap; text-overflow: ellipsis; }
+.big-live-ctls { display: flex; flex: none; gap: 10px; }
+.big-live-btn { display: grid; place-items: center; width: 56px; height: 56px; border: 0; border-radius: 50%; cursor: pointer; background: rgb(255 255 255 / 0.14); }
+.big-live-btn svg { width: 26px; height: 26px; stroke-width: 2.4; }
+.big-car .big-live-btn { width: 64px; height: 64px; }
+.big-car .big-live-btn:active { transform: scale(0.94); }
+.big-tv .big-live-btn:focus { outline: none; background: #fff; color: #000; }
+/* A channel's logo on its tile: all of it, on a plate (logos come in every
+   shape); no logo, its first letters. */
+.big-channel { display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.04)); }
+.big-channel > img { max-width: 72%; max-height: 64%; object-fit: contain; }
+.big-channel-initial { font-size: clamp(20px, 3vh, 34px); font-weight: 700; text-transform: uppercase; color: rgb(255 255 255 / 0.85); }
 
 /* In the car (CarPlay's way): a rail down the left (along the bottom,
    upright), nothing under 52px to press, what's playing along the bottom. */

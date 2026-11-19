@@ -2,8 +2,8 @@
 // Only big things you can hit without looking twice: what's playing (Music
 // or Podcasts) with large controls, and big tiles, two to a row, scrolled
 // up and down: Navigate and Calendar, Music and Podcasts, then Photos and
-// Videos (a film for the passengers) and the way out, back to the mode you
-// came from. Navigate hands the drive to the phone's Google Maps (it has
+// Videos (a film for the passengers), Live TV (the same) and the way out,
+// back to the mode you came from. Navigate hands the drive to the phone's Google Maps (it has
 // the traffic and the voice), to a place you saved (Home, Work, ones you
 // named) or typed, and remembers the last few; the places are kept on the
 // server, so every device has the same ones. One of the modes (windows.js
@@ -26,6 +26,7 @@ const CAR_ICONS = {
   pods: ["M12 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2z", "M8.5 15a5 5 0 1 1 7 0", "M6 18a8.5 8.5 0 1 1 12 0", "M12 13v8"],
   photos: ["M4 5h16v14H4z", "M4 16l5-5 4 4 2-2 5 5", "M15.5 9.5a1.5 1.5 0 1 0 0-.01"],
   videos: ["M3 6h13v12H3z", "M16 10l5-3v10l-5-3"],
+  livetv: ["M3 8h18v12H3z", "M8 3l4 5 4-5"],
   exit: ["M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4", "M10 17l-5-5 5-5", "M5 12h12"],
   play: ["M7 4l13 8-13 8z"], pause: ["M7 4h3v16H7z", "M14 4h3v16h-3z"],
   next: ["M5 4l10 8-10 8z", "M19 5v14"], prev: ["M19 20 9 12l10-8z", "M5 19V5"],
@@ -42,6 +43,7 @@ function setCar(on, quiet = false) {
   if (on === carOn()) return;
   if (on) {
     winSave(CAR_BEFORE_KEY, currentMode()); // where "Leave car mode" goes back to
+    bigClose(); // the TV's app drawn big (a channel playing in it) goes with the TV
     if (tvOn()) { document.body.classList.remove("tv"); winSave(TV_KEY, false); $("tv")?.setAttribute("hidden", ""); }
     if (desktopMode()) { switchDesktopMode(false); winSave(DESKTOP_MODE_KEY, false); }
   }
@@ -93,6 +95,7 @@ function carBuild() {
       tile("pods", CAR_ICONS.pods, "Podcasts", () => bigOpen("podcasts", "car")),
       tile("photos", CAR_ICONS.photos, "Photos", () => bigOpen("photos", "car")),
       tile("videos", CAR_ICONS.videos, "Videos", () => bigOpen("videos", "car")),
+      tile("livetv", CAR_ICONS.livetv, "Live TV", () => bigOpen("livetv", "car")),
       tile("exit", CAR_ICONS.exit, "Leave car mode", () => carLeave()))),
     el("div", { class: "car-dots", id: "car-dots", "aria-hidden": "true" }));
   $("desktop").after(node);

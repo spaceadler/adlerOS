@@ -93,8 +93,10 @@ one, each still shows the files themselves. More in
   in Monica alike. Its token is pasted once in Contacts.
 - **Live TV**: the channels in your M3U playlists (your provider's link, a
   .m3u in your storage, or iptv-org's free channels by country), by group,
-  with favorites and search; Up and Down zap. ViniPlay is in the store too,
-  for a TV guide and recordings.
+  with favorites and search; Up and Down zap. In TV mode and in the car it's
+  drawn big like Videos: favorites, all channels and groups, a channel the
+  whole screen, Up and Down (or its buttons) to the next. ViniPlay is in the
+  store too, for a TV guide and recordings.
 - **Four modes**, chosen on each device: the Home screen, Desktop, TV (for a
   remote) and Car (a phone on the dashboard).
 - **Tailscale** in My Computer (admin mode): files sent to this machine land

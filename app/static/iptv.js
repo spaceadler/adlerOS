@@ -91,11 +91,19 @@ async function ltLoad(again = false) {
       iptv.channels = got.channels;
       iptv.errors = got.errors;
     }
+    iptv.at = Date.now(); // when it was read: the TV's and car's Live TV read it again after a while
   } catch (e) {
     iptv.errors = [e.message];
   }
   ltSide();
   ltRender();
+}
+
+// What the TV's and car's Live TV need (bigui.js): the playlists, the
+// channels and the favorites, read again after ten minutes. ltLoad draws
+// only what's there, so no window is needed for it.
+async function ltReady() {
+  if (!iptv.at || Date.now() - iptv.at > 600000) await ltLoad();
 }
 
 // ------------------------------------------------------------- the side
@@ -194,8 +202,40 @@ function ltHls() {
   return iptv.hlsLoading;
 }
 
+const LT_WONT = "the stream isn't one a browser can play (an MPEG-TS stream, say: a TV app or VLC plays those)";
+
+// A channel into a <video>: natively where the browser plays HLS (Safari),
+// else with hls.js. `fail(why)` hears why it won't play; `still()` says
+// whether it's still wanted (another channel may have been picked while
+// hls.js loaded). Resolves with the hls.js player, to destroy when done, or
+// null. The window and the TV's and car's Live TV (bigui.js) both use it.
+async function ltTune(video, c, fail, still) {
+  video.addEventListener("error", () => fail(LT_WONT));
+  if (video.canPlayType("application/vnd.apple.mpegurl")) { video.src = c.play; return null; }
+  let Hls;
+  try {
+    Hls = await ltHls();
+  } catch (e) {
+    fail(e.message);
+    return null;
+  }
+  if (!still()) return null;
+  if (!Hls?.isSupported()) { video.src = c.play; return null; }
+  const hls = new Hls({ enableWorker: false, lowLatencyMode: false, backBufferLength: 30 });
+  hls.on(Hls.Events.ERROR, (_, d) => {
+    if (!d.fatal) return;
+    if (d.type === Hls.ErrorTypes.MEDIA_ERROR) return hls.recoverMediaError();
+    fail(d.type === Hls.ErrorTypes.NETWORK_ERROR ? "its stream didn't answer (offline, or only for some countries)" : LT_WONT);
+    hls.destroy();
+  });
+  hls.loadSource(c.play);
+  hls.attachMedia(video);
+  return hls;
+}
+
 async function ltPlay(c, list = ltVisible()) {
   ltStop(false);
+  if (typeof bigLiveClose === "function") bigLiveClose(); // one channel at a time
   const stage = $("lt-stage");
   const video = el("video", { class: "lt-video", controls: "", autoplay: "", playsinline: "" });
   const say = el("p", { class: "lt-say" }, `Tuning in to ${c.name}…`);
@@ -210,30 +250,9 @@ async function ltPlay(c, list = ltVisible()) {
   const fail = (why) => { if (iptv.playing?.c === c) say.textContent = `${c.name} won't play here: ${why}.`; };
   const tuned = () => { if (video.currentTime > 0 || video.readyState >= 3) say.textContent = ""; };
   for (const ev of ["playing", "timeupdate", "canplay"]) video.addEventListener(ev, tuned);
-  video.addEventListener("error", () => fail("the stream isn't one a browser can play (an MPEG-TS stream, say: a TV app or VLC plays those)"));
-  if (video.canPlayType("application/vnd.apple.mpegurl")) {
-    video.src = c.play;
-    return;
-  }
-  let Hls;
-  try {
-    Hls = await ltHls();
-  } catch (e) {
-    return fail(e.message);
-  }
-  if (iptv.playing?.c !== c) return;
-  if (!Hls?.isSupported()) { video.src = c.play; return; }
-  const hls = new Hls({ enableWorker: false, lowLatencyMode: false, backBufferLength: 30 });
-  iptv.hls = hls;
-  hls.on(Hls.Events.ERROR, (_, d) => {
-    if (!d.fatal) return;
-    if (d.type === Hls.ErrorTypes.MEDIA_ERROR) return hls.recoverMediaError();
-    fail(d.type === Hls.ErrorTypes.NETWORK_ERROR ? "its stream didn't answer (offline, or only for some countries)"
-      : "the stream isn't one a browser can play (an MPEG-TS stream, say: a TV app or VLC plays those)");
-    hls.destroy();
-  });
-  hls.loadSource(c.play);
-  hls.attachMedia(video);
+  const hls = await ltTune(video, c, fail, () => iptv.playing?.c === c);
+  if (iptv.playing?.c === c) iptv.hls = hls;
+  else hls?.destroy();
 }
 
 function ltStop(all = true) {

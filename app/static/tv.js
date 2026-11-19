@@ -4,8 +4,8 @@
 // The home screen, as on an Apple TV: a top row of apps on a glass dock,
 // and above it the "top shelf", the whole screen behind it given over to
 // what the focused app has for you (Videos: what you were watching, what's
-// next, what's new; Photos: this day years ago; Music and Podcasts: what's
-// playing). Under the dock, every other app in a grid of big landscape
+// next, what's new; Live TV: your channels; Photos: this day years ago;
+// Music and Podcasts: what's playing). Under the dock, every other app in a grid of big landscape
 // icons. The focused icon lifts towards you and catches the light (it
 // tilts with the mouse); its name shows under it. Going down into the grid
 // slides the shelf away and blurs the picture behind. Top right, the time:
@@ -32,6 +32,7 @@ const tv = { built: false, focus: null, lastTile: null, tick: null, shelfTimer: 
 // The media apps open drawn for the TV (bigui.js).
 const TV_OWN = [
   ["adleros:videos", "videos", "Videos", () => bigOpen("videos", "tv"), "Films, shows and documentaries."],
+  ["adleros:iptv", "iptv", "Live TV", () => bigOpen("livetv", "tv"), "Your channels, live: Up and Down zap."],
   ["adleros:music", "music", "Music", () => bigOpen("music", "tv"), "Your songs, albums, playlists and radio."],
   ["adleros:podcasts", "podcasts", "Podcasts", () => bigOpen("podcasts", "tv"), "Your audiobooks and podcasts."],
   ["adleros:gallery", "gallery", "Photos", () => bigOpen("photos", "tv"), "Your photos and videos."],
@@ -45,6 +46,12 @@ const TV_OWN = [
 // apps' order. [app id, its row's title, the big app, its items (bigui.js)].
 const TV_FEED = [
   ["adleros:videos", "Continue Watching", "videos", async () => (await tvVideoList()).map((i) => bigVideoItem(i, "wide")), "wide"],
+  ["adleros:iptv", "Your Channels", "livetv", async () => {
+    await ltReady();
+    const favorites = iptv.channels.filter((c) => iptv.favorites.has(c.id));
+    const list = (favorites.length ? favorites : iptv.channels).slice(0, 18);
+    return list.map((c) => bigChannelItem(c, list));
+  }, "wide"],
   ["adleros:music", "Recently Played", "music", async () => { await bigMusicReady(); return bigMusicRecent().slice(0, 18); }, "square"],
   ["adleros:podcasts", "Continue Listening", "podcasts", async () => { await bigPodsReady(); return bigPodContinue().map((it) => ({ ...it, side: "" })); }, "square"],
   ["adleros:gallery", "On This Day", "photos", async () => {
@@ -75,6 +82,7 @@ function tvOn() { return document.body.classList.contains("tv"); }
 
 function setTv(on) {
   if (on === tvOn()) return;
+  bigClose(); // an app drawn big (a channel playing in it) goes with the mode
   if (on && desktopMode()) { switchDesktopMode(false); winSave(DESKTOP_MODE_KEY, false); }
   if (on && carOn()) { document.body.classList.remove("car"); winSave(CAR_KEY, false); $("car")?.setAttribute("hidden", ""); clearInterval(car.timer); }
   for (const [id, w] of wm.windows) if (isOpen(id)) (w.hide || w.close)();
@@ -344,7 +352,7 @@ async function tvShelf(t) {
     tvBackdrop(v.picture);
     return show(tvHead("On This Day", v.caption || "Photos", v.note || ""));
   }
-  if (["adleros:books", "adleros:calendar"].includes(t.id) || (t.id === "adleros:podcasts" && !(typeof pcNow === "function" && pcNow()))) return tvFeedShelf(t, here, show, plain);
+  if (["adleros:books", "adleros:calendar", "adleros:iptv"].includes(t.id) || (t.id === "adleros:podcasts" && !(typeof pcNow === "function" && pcNow()))) return tvFeedShelf(t, here, show, plain);
   if (t.id === "adleros:music") {
     const id = typeof muCurrent === "function" ? muCurrent() : null;
     const s = id ? muSong(id) : null;

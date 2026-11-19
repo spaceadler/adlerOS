@@ -1,8 +1,8 @@
 // Big screens: adlerOS's own apps drawn big, for the car (a finger on a
 // phone on a mount: CarPlay) and the TV (a remote from the sofa: tvOS).
 //
-// Each app (Music, Podcasts, Videos, Photos, Books, Calendar) says what it
-// has as pages: a page has tabs (Music: Recently Played, Playlists,
+// Each app (Music, Podcasts, Videos, Live TV, Photos, Books, Calendar) says
+// what it has as pages: a page has tabs (Music: Recently Played, Playlists,
 // Albums, Artists), or a hero (an album: its cover, Play and Shuffle) and
 // sections of items in a list, a grid or a shelf (a row across). An item
 // plays, opens its own page, or shows (a photo). One drawing for both, the
@@ -12,13 +12,13 @@
 // car's Now Playing; on the TV tabs along the top, everything reached with
 // the arrows (tv.js), Back to go back, and a Now Playing of its own.
 // Uses $, el, svg, api, toast, winLoad, winSave, openWindow, closeWindow,
-// Music's, Podcasts', Videos', Photos' (gaGet, gaThumb), Books' and
-// Calendar's own parts, carOn/carShow/carGo (car.js) and tvOn/tvFocusSoon
-// (tv.js).
+// Music's, Podcasts', Videos', Live TV's (iptv, ltReady, ltGroups, ltTune,
+// ltStop), Photos' (gaGet, gaThumb), Books' and Calendar's own parts,
+// carOn/carShow/carGo (car.js) and tvOn/tvFocusSoon (tv.js).
 "use strict";
 
 const BIG_RECENT_KEY = "adleros.bigRecent"; // the albums and playlists you played, newest first
-const big = { built: false, mode: "", app: "", stack: [], gen: 0, timer: null, viewer: null, videoWatch: null };
+const big = { built: false, mode: "", app: "", stack: [], gen: 0, timer: null, viewer: null, live: null, videoWatch: null };
 
 const BIG_ICONS = {
   back: ["m15 18-6-6 6-6"], home: ["M3 11l9-8 9 8", "M5 10v10h14V10"],
@@ -34,11 +34,12 @@ const BIG_APPS = {
   music: { name: "Music", icon: "music", root: () => bigMusicRoot() },
   podcasts: { name: "Podcasts", icon: "podcasts", root: () => bigPodsRoot() },
   videos: { name: "Videos", icon: "videos", root: () => bigVideosRoot() },
+  livetv: { name: "Live TV", icon: "iptv", root: () => bigLiveRoot() },
   photos: { name: "Photos", icon: "gallery", root: () => bigPhotosRoot() },
   books: { name: "Books", icon: "books", root: () => bigBooksRoot() },
   calendar: { name: "Calendar", icon: "calendar", root: () => bigCalendarRoot() },
 };
-const BIG_CAR_APPS = ["music", "podcasts", "calendar", "photos", "videos"];
+const BIG_CAR_APPS = ["music", "podcasts", "calendar", "photos", "videos", "livetv"];
 
 function bigOn() { return big.built && !$("big").hidden; }
 
@@ -54,7 +55,8 @@ function bigBuild() {
       el("div", { class: "big-tabs", id: "big-tabs", role: "tablist" }),
       el("div", { class: "big-body", id: "big-body" }),
       el("div", { class: "big-mini", id: "big-mini", hidden: "" })),
-    el("div", { class: "big-viewer", id: "big-viewer", hidden: "" }));
+    el("div", { class: "big-viewer", id: "big-viewer", hidden: "" }),
+    el("div", { class: "big-live", id: "big-live", hidden: "" }));
   $("desktop").after(node);
 }
 
@@ -69,6 +71,7 @@ async function bigOpen(app, mode, { tab = 0 } = {}) {
   root.dataset.app = app;
   root.hidden = false;
   bigViewerClose();
+  bigLiveClose();
   bigRail();
   big.stack = [{ page: null, load: BIG_APPS[app].root, tab, cache: new Map() }];
   clearInterval(big.timer);
@@ -87,6 +90,7 @@ function bigClose() {
   if (!big.built) return;
   $("big").hidden = true;
   bigViewerClose();
+  bigLiveClose();
   clearInterval(big.timer);
   big.stack = [];
   big.app = "";
@@ -96,6 +100,7 @@ function bigClose() {
 // Back: the page before, else out of the app.
 function bigBack() {
   if (!bigOn()) return false;
+  if (big.live) { bigLiveClose(); return true; }
   if (big.viewer) { bigViewerClose(); return true; }
   if (big.stack.length > 1) { big.stack.pop(); bigDraw(true); return true; }
   bigClose();
@@ -535,8 +540,17 @@ function bigViewerClose() {
   v.replaceChildren();
 }
 
-// The TV's keys in the viewer: left and right are the photos.
+// The TV's keys in the viewer: left and right are the photos. On a channel:
+// up and down (Page Up and Down, a remote's channel keys) zap, and any key
+// shows what's on (the first Enter only that).
 function bigKeys(e) {
+  if (big.live) {
+    const quiet = $("big-live").classList.contains("quiet");
+    bigLiveBanner();
+    const step = { ArrowUp: -1, PageUp: -1, ChannelDown: -1, ArrowDown: 1, PageDown: 1, ChannelUp: 1 }[e.key];
+    if (step) { bigLiveStep(step); return true; }
+    return quiet && (e.key === "Enter" || e.key === " ");
+  }
   if (!big.viewer) return false;
   if (e.key === "ArrowLeft" || e.key === "ArrowRight") { bigViewerStep(e.key === "ArrowLeft" ? -1 : 1); return true; }
   return false;
@@ -864,4 +878,134 @@ async function bigCalendarRoot() {
     { label: "Today", page: () => ({ sections: [{ layout: "list", items: today.map(bigEventItem) }], empty: "Nothing else today." }) },
     { label: "Coming Up", page: () => ({ sections: [...byDay].map(([day, list]) => ({ title: day, layout: "list", items: list.map(bigEventItem) })), empty: "Nothing in the next two weeks." }) },
   ] };
+}
+
+// ------------------------------------------------------------- Live TV
+
+// Your channels (iptv.js reads them): Favorites, All Channels, and the
+// playlists' groups. A channel plays the whole screen, over the page it was
+// picked on: on the TV, Up and Down (Page Up and Down, a remote's channel
+// keys) go to the one before or after it in that list; in the car, its
+// buttons do (for the passengers). What's on shows along the bottom for a
+// few seconds, and again with a key or a tap; Back, or the X, closes it.
+
+function bigChannelArt(c) {
+  const initial = () => el("span", { class: "big-channel-initial" }, c.name.slice(0, 2));
+  if (!c.logo) return el("span", { class: "big-channel" }, initial());
+  const img = el("img", { src: c.logo, alt: "", loading: "lazy", decoding: "async", draggable: "false" });
+  img.addEventListener("error", () => img.replaceWith(initial()));
+  return el("span", { class: "big-channel" }, img);
+}
+
+function bigChannelItem(c, list) {
+  return { title: c.name, sub: c.group, art: () => bigChannelArt(c), shape: "wide", run: () => bigLivePlay(list, list.indexOf(c)) };
+}
+
+async function bigLiveRoot() {
+  await ltReady();
+  if (!iptv.at) throw new Error(iptv.errors[0] || "Live TV didn't load.");
+  if (!iptv.playlists.length) throw new Error("No channels yet: add a playlist in Live TV, on the home screen or a computer.");
+  if (!iptv.channels.length) throw new Error(iptv.errors.length ? `Couldn't read ${iptv.errors[0]}.` : "Your playlists have no channels.");
+  const grid = (list) => ({ sections: [{ layout: "grid", shape: "wide", items: list.map((c) => bigChannelItem(c, list)) }] });
+  const favorites = iptv.channels.filter((c) => iptv.favorites.has(c.id));
+  const groups = ltGroups();
+  return { title: "Live TV", tabs: [
+    ...(favorites.length ? [{ label: "Favorites", page: () => grid(favorites) }] : []),
+    { label: "All Channels", page: () => grid(iptv.channels) },
+    ...(groups.length > 1 ? [{ label: "Groups", page: () => ({ sections: [{ layout: "list", items: groups.map(([g, n]) => ({ title: g, sub: bigCount(n, "channel"),
+      page: () => ({ title: g, ...grid(iptv.channels.filter((c) => c.group === g)) }) })) }] }) }] : []),
+  ] };
+}
+
+// The channel `list[i]`, the whole screen (Live TV opened first, from the
+// TV's home). Music and podcasts pause for it, and the Live TV window stops.
+async function bigLivePlay(list, i) {
+  if (!bigOn()) await bigOpen("livetv", carOn() ? "car" : "tv");
+  if (typeof ltStop === "function") ltStop();
+  if (typeof music !== "undefined" && !music.audio.paused) music.audio.pause();
+  if (typeof pc !== "undefined" && pc.audio && !pc.audio.paused) pc.audio.pause();
+  if (!big.live) {
+    // What had the focus, to come back to: a tile of this app (not the TV's home behind it).
+    const from = $("big-main").contains(document.activeElement) ? document.activeElement : null;
+    big.live = { list, i, gen: 0, hls: null, timer: null, from };
+    const button = (cls, icon, label, run) => {
+      const b = el("button", { type: "button", class: `big-live-btn ${cls}`, "aria-label": label }, svg(icon));
+      b.addEventListener("click", (e) => { e.stopPropagation(); run(); });
+      return b;
+    };
+    const v = $("big-live");
+    v.replaceChildren(el("div", { class: "big-live-stage", id: "big-live-stage" }), el("p", { class: "big-live-say", id: "big-live-say" }),
+      el("div", { class: "big-live-bar" },
+        el("span", { class: "big-live-logo", id: "big-live-logo" }),
+        el("div", { class: "big-live-text" }, el("strong", { id: "big-live-name" }), el("span", { id: "big-live-sub" })),
+        el("div", { class: "big-live-ctls" },
+          button("prev", BIG_ICONS.prev, "The channel before", () => bigLiveStep(-1)),
+          button("next", BIG_ICONS.next, "The channel after", () => bigLiveStep(1)),
+          button("close", BIG_ICONS.close, "Close", bigLiveClose))));
+    v.onpointerdown = (e) => { if (!e.target.closest(".big-live-btn")) bigLiveBanner(); };
+    v.hidden = false;
+    $("big-main").inert = true; // the focus and the keys stay with the channel
+    if (big.mode === "tv") v.querySelector(".next").focus({ preventScroll: true });
+  } else Object.assign(big.live, { list, i });
+  bigLiveTune();
+}
+
+// The playing one, stopped and let go (its stream too).
+function bigLiveDrop() {
+  big.live?.hls?.destroy();
+  if (big.live) big.live.hls = null;
+  const old = $("big-live-stage")?.querySelector("video");
+  if (old) { old.pause(); old.removeAttribute("src"); old.load(); }
+}
+
+async function bigLiveTune() {
+  const live = big.live;
+  if (!live) return;
+  bigLiveDrop();
+  const gen = ++live.gen;
+  const here = () => big.live === live && live.gen === gen;
+  const c = live.list[live.i];
+  const video = el("video", { class: "big-live-video", autoplay: "", playsinline: "", inert: "" });
+  $("big-live-stage").replaceChildren(video);
+  $("big-live-logo").replaceChildren(bigChannelArt(c));
+  $("big-live-name").textContent = c.name;
+  $("big-live-sub").textContent = [c.group, live.list.length > 1 ? `${live.i + 1} of ${live.list.length}` : ""].filter(Boolean).join(" · ");
+  const say = $("big-live-say");
+  say.textContent = `Tuning in to ${c.name}…`;
+  const tuned = () => { if (here() && (video.currentTime > 0 || video.readyState >= 3)) say.textContent = ""; };
+  for (const ev of ["playing", "timeupdate", "canplay"]) video.addEventListener(ev, tuned);
+  bigLiveBanner();
+  const hls = await ltTune(video, c, (why) => { if (here()) say.textContent = `${c.name} won't play here: ${why}.`; }, here);
+  if (here()) live.hls = hls;
+  else hls?.destroy();
+}
+
+function bigLiveStep(dir) {
+  const live = big.live;
+  if (!live || live.list.length < 2) return;
+  live.i = (live.i + dir + live.list.length) % live.list.length;
+  bigLiveTune();
+}
+
+// What's on, along the bottom: for a few seconds after a change, a key or a tap.
+function bigLiveBanner() {
+  const v = $("big-live");
+  if (!big.live || !v) return;
+  v.classList.remove("quiet");
+  clearTimeout(big.live.timer);
+  big.live.timer = setTimeout(() => v.classList.add("quiet"), 4000);
+}
+
+function bigLiveClose() {
+  if (!big.live) return;
+  bigLiveDrop();
+  clearTimeout(big.live.timer);
+  const from = big.live.from;
+  big.live = null;
+  const v = $("big-live");
+  v.hidden = true;
+  v.classList.remove("quiet");
+  v.replaceChildren();
+  $("big-main").inert = false;
+  if (big.mode === "tv") (from?.isConnected ? from : $("big-body").querySelector("button"))?.focus({ preventScroll: true });
 }
