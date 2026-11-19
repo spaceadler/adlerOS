@@ -2502,18 +2502,19 @@ body.wm.small-touch:has(.sheet:not([hidden]):not(.minimized)):not(.dock-peek) .d
 body.wm .desk > .desk-icon { grid-row: span 2; }
 body.wm .desk > .desk-empty { grid-row: span 2; }
 
-/* The search bar widget (desktop mode): four icons wide and a row tall (two
-   half rows), the home screen's search bar's glass (.web-search). */
-.w-search { display: flex; flex: 1; align-items: center; gap: 14px; min-width: 0; padding: 0 16px 0 22px; }
-.w-search svg { width: 22px; height: 22px; flex-shrink: 0; fill: none; stroke: rgb(255 255 255 / 0.7); stroke-width: 2.2; stroke-linecap: round; cursor: grab; }
-.w-search-input { flex: 1; min-width: 0; border: 0; background: none; color: #fff; font: inherit; font-size: 18px; font-weight: 500; letter-spacing: -0.01em; outline: none; }
-.w-search kbd { flex-shrink: 0; padding: 2px 7px; border-radius: 6px; background: rgb(255 255 255 / 0.1); font: inherit; font-size: 12px; color: rgb(255 255 255 / 0.5); opacity: 0; transition: opacity 0.2s; }
-.w-search:focus-within kbd { opacity: 1; }
-span.w-search-input { color: rgb(255 255 255 / 0.55); }
-.w-search-input::placeholder { color: rgb(255 255 255 / 0.55); }
-.w-search-input::-webkit-search-cancel-button { filter: invert(1); opacity: 0.6; }
-.desk-widget.bar .widget { gap: 0; }
-.desk-widget.bar .widget-label { display: none; }
+/* The search bar widget (desktop mode, desk.js): the home screen's search
+   bar itself (.web-search: its width, height, glass and type), on the
+   desktop's grid; the widget's own glass and name stay out of it. Its edge
+   or its magnifier moves it; inside it, you type. (Its class was "bar",
+   which Settings' usage bars style 6px tall.) */
+.desk-search .widget { gap: 0; }
+.desk-search .widget-panel { display: block; width: auto; height: auto; padding: 0; border-radius: 999px; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.desk-search .widget-label { display: none; }
+.desk-search .web-search { width: min(var(--web-search-w, 870px), 100%); margin: 0; }
+.w-search svg { cursor: grab; }
+/* In the picker: its look, inside the picker's tile. */
+.picker-option .web-search { width: 100%; margin: 0; }
+span.w-search-input { font-size: 14px; font-weight: 500; color: rgb(255 255 255 / 0.55); }
 .desk-widget.bar .widget-panel {
   flex: 1 1 auto;
   height: 100%;

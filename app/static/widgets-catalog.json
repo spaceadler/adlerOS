@@ -124,12 +124,12 @@
     {
       "id": "web-search",
       "label": "Search the web",
-      "description": "A search bar: your search engine, in a new tab",
+      "description": "The home screen's search bar: your search engine, in a new tab",
       "type": "search",
       "desk": true,
       "size": [
-        4,
-        2
+        9,
+        1
       ]
     },
     {

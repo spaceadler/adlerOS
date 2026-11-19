@@ -194,7 +194,7 @@ function deskWidgetNodes() {
     if (!made) {
       const widget = widgetNode(def);
       if (!widget) return null;
-      made = { node: el("div", { class: `desk-widget${def.type === "search" ? " bar" : ""}`, "data-desk-widget": w.key }, widget.node), update: widget.update };
+      made = { node: el("div", { class: `desk-widget${def.type === "search" ? " desk-search" : ""}`, "data-desk-widget": w.key }, widget.node), update: widget.update };
       desk.widgets.set(w.key, made);
     }
     const z = widgetSize(w.id);

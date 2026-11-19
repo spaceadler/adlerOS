@@ -186,13 +186,14 @@ const TYPES = {
       },
     };
   },
-  // A web search bar (the desktop's, in desktop mode): your search engine,
-  // in a new tab. In the picker, just its look.
+  // A web search bar (the desktop's, in desktop mode): the home screen's
+  // own (.web-search), your search engine in a new tab. In the picker, just
+  // its look.
   search: (w, preview) => {
     const input = el(preview ? "span" : "input", preview ? { class: "w-search-input" }
       : { class: "w-search-input", type: "search", placeholder: "Search the web", "aria-label": "Search the web", autocomplete: "off", enterkeyhint: "search" },
     preview ? "Search the web" : "");
-    const form = el(preview ? "div" : "form", { class: "w-search", ...(preview ? {} : { role: "search" }) },
+    const form = el(preview ? "div" : "form", { class: "web-search w-search", ...(preview ? {} : { role: "search" }) },
       svg(["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3"]), input, el("kbd", { "aria-hidden": "true" }, "↵"));
     if (!preview) {
       form.addEventListener("submit", (e) => {

@@ -201,8 +201,8 @@ made phone-narrow leaves it until it's wide again.
   pick one (the same ones as the home screen's). It's three icons wide and a
   row and a half tall; drag it where you want it (icons make room), right-click it →
   **Remove widget**. One is only for the desktop: **Search the web**, the
-  home screen's search bar, eight icons wide (drag it by its edge; inside
-  it, you type). Each computer
+  home screen's search bar itself, as wide and as tall (drag it by its
+  edge or its magnifier; inside it, you type). Each computer
   keeps its own desktop: where things are, which apps and widgets. Files that arrive
   some other way (Syncthing) show up within 15 seconds.
 - **Windows:** Settings, the App Store, Live Usage, My Computer and the Terminal
