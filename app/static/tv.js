@@ -83,13 +83,13 @@ function tvOn() { return document.body.classList.contains("tv"); }
 function setTv(on) {
   if (on === tvOn()) return;
   bigClose(); // an app drawn big (a channel playing in it) goes with the mode
-  if (on && desktopMode()) { switchDesktopMode(false); winSave(DESKTOP_MODE_KEY, false); }
+  if (on && desktopMode()) { if (!landOn()) winSave(DESKTOP_MODE_KEY, false); switchDesktopMode(false); } // a phone on its side's isn't a choice
   if (on && carOn()) { document.body.classList.remove("car"); winSave(CAR_KEY, false); $("car")?.setAttribute("hidden", ""); clearInterval(car.timer); }
   for (const [id, w] of wm.windows) if (isOpen(id)) (w.hide || w.close)();
   document.body.classList.toggle("tv", on);
   winSave(TV_KEY, on);
   if (on) tvShow();
-  else { tvControlCenterClose(false); $("tv")?.setAttribute("hidden", ""); clearInterval(tv.tick); layout(true); }
+  else { tvControlCenterClose(false); $("tv")?.setAttribute("hidden", ""); clearInterval(tv.tick); layout(true); landSync(); }
   toast(on ? "TV mode: the arrows (or a remote) move, Enter opens, Back or Escape goes back." : "Back to the home screen.");
 }
 

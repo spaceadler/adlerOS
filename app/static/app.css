@@ -4278,6 +4278,36 @@ body.wm .menubar { position: fixed; top: 0; left: 0; right: 0; z-index: 55; disp
 .lock:not([hidden]) ~ .menubar { display: none !important; }
 body.wm .bell, body.wm .search-pill, body.wm #notes { display: none; }
 body.wm .desk { top: 46px; }
+/* A phone on its side (windows.js landOn): no menu bar, but two floating
+   bars down the left, one in each corner, clear of the notch between them
+   (menubar.js landRail); the desktop, the dock and the windows beside them.
+   A window fills that room: no grips, no maximize, nothing to drag. */
+:root { --land-rail: 56px; --land-gap: 8px; }
+#land-probe { position: fixed; top: 0; left: 0; width: 0; height: 0; padding-right: env(safe-area-inset-right, 0px); visibility: hidden; pointer-events: none; }
+.land-rail { display: none; }
+body.wm.land .menubar { display: none; }
+body.wm.land .land-rail { display: block; }
+.lock:not([hidden]) ~ .land-rail { display: none !important; }
+.land-bar { position: fixed; left: var(--land-gap); z-index: 55; display: flex; flex-direction: column; align-items: center; gap: 2px; width: var(--land-rail); padding: 6px 0;
+  border-radius: 28px; color: #fff; background: linear-gradient(to bottom, rgb(255 255 255 / 0.14), rgb(12 14 18 / 0.4)); box-shadow: var(--shine), 0 10px 26px rgb(0 0 0 / 0.4);
+  -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); }
+.land-bar.top { top: var(--land-gap); }
+.land-bar.bottom { bottom: var(--land-gap); }
+.land-button { position: relative; display: grid; place-items: center; width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 22px; background: none; color: inherit;
+  font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.land-button:active, .land-button.open { background: rgb(255 255 255 / 0.16); }
+.land-button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.land-logo img { width: 26px; height: 26px; }
+.land-clock { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.land-time { font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.land-period { font-size: 10px; font-weight: 600; color: rgb(255 255 255 / 0.65); }
+.land-button .mb-dot { top: 5px; right: 4px; }
+body.wm.land .desk { top: var(--land-gap); left: calc(var(--land-gap) * 2 + var(--land-rail) + 4px); right: max(var(--land-gap), env(safe-area-inset-right)); }
+body.wm.land .dock { left: calc(50% + var(--land-rail) / 2 + var(--land-gap)); }
+body.wm.land .sheet > .win-grip, body.wm.land .win-button.max { display: none; }
+body.wm.land .sheet > .win-bar { cursor: default; }
+body.wm.land .cc:not([hidden]) { top: auto; right: auto; bottom: var(--land-gap); left: calc(var(--land-gap) * 2 + var(--land-rail)); max-height: calc(100dvh - 2 * var(--land-gap)); overflow-y: auto; }
+body.wm.land .nc { top: var(--land-gap); right: max(var(--land-gap), env(safe-area-inset-right)); }
 .mb-left, .mb-right { display: flex; align-items: center; gap: 2px; min-width: 0; }
 .mb-item { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; font-weight: 500; white-space: nowrap; cursor: default; }
 .mb-item:hover, .mb-item.open { background: rgb(255 255 255 / 0.18); }

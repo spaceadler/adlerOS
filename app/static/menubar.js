@@ -82,6 +82,14 @@ function mbTick() {
   const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const clock = $("mb-clock");
   if (clock) clock.textContent = `${day}  ${time}`;
+  // The rail's (a phone on its side): the time, and under it AM or PM if the clock has one.
+  const land = $("land-clock");
+  if (land) {
+    const parts = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" }).formatToParts(now);
+    const period = parts.find((p) => p.type === "dayPeriod")?.value || "";
+    land.replaceChildren(el("span", { class: "land-time" }, parts.filter((p) => p.type !== "dayPeriod").map((p) => p.value).join("").trim()),
+      period ? el("span", { class: "land-period" }, period) : "");
+  }
 }
 
 // The name of the window in front (or adlerOS, on the desktop), and the
@@ -93,6 +101,43 @@ function mbUpdate() {
   name.textContent = w?.title || "adlerOS";
   const unread = notes.items.some((n) => !n.read);
   $("mb-dot").hidden = !unread || ncOpen();
+  if ($("land-dot")) $("land-dot").hidden = !unread || ncOpen();
+}
+
+// ------------------------------------------------- a phone on its side
+
+// The menu bar on a phone held sideways (windows.js landOn): two floating
+// bars down the left, one in each corner, so the notch between them has
+// none. The top one: adlerOS's menu, and the time (Notification Center, with
+// the dot for what you haven't seen). The bottom one: Search and Control
+// Center, which opens beside it.
+function landRail() {
+  if ($("land-rail")) { mbTick(); mbUpdate(); return; }
+  const button = (cls, label, content, run) => {
+    const b = el("button", { type: "button", class: `land-button ${cls}`, "aria-label": label, title: label }, ...content);
+    b.addEventListener("click", (e) => { e.stopPropagation(); run(b); });
+    return b;
+  };
+  const top = el("div", { class: "land-bar top" },
+    button("land-logo", "adlerOS", [el("img", { src: "/static/mark.png", alt: "" })], (b) => landMenu(b, mbLogoItems())),
+    button("land-clock", "Notification Center", [el("span", { class: "land-clock", id: "land-clock" }), el("span", { class: "mb-dot", id: "land-dot", hidden: "" })],
+      () => { closeMenu(); ccClose(); ncToggle(); }));
+  const bottom = el("div", { class: "land-bar bottom" },
+    button("", "Search", [svg(MB_ICONS.search)], () => { mbCloseAll(); toggleSearch(); }),
+    button("mb-cc-button", "Control Center", [svg(MB_ICONS.control)], () => ccToggle()));
+  document.body.append(el("nav", { id: "land-rail", class: "land-rail", "aria-label": "Menu" }, top, bottom));
+  mbTick();
+  mbUpdate();
+}
+
+// A rail button's menu, beside it.
+function landMenu(button, items) {
+  ccClose();
+  ncClose();
+  if (mb.open === button && !$("menu").hidden) return closeMenu();
+  const r = button.getBoundingClientRect();
+  openMenu(r.right + 10, r.top, items);
+  mb.open = button;
 }
 
 // ------------------------------------------------- lyrics in the bar
@@ -222,7 +267,7 @@ function ccOpen() { return Boolean($("cc")) && !$("cc").hidden; }
 function ccClose() {
   if (!ccOpen()) return;
   $("cc").hidden = true;
-  document.querySelector(".mb-cc-button")?.classList.remove("open");
+  document.querySelectorAll(".mb-cc-button").forEach((b) => b.classList.remove("open"));
 }
 function ccToggle() {
   if (ccOpen()) return ccClose();
@@ -235,7 +280,7 @@ function ccToggle() {
     document.body.append(cc);
   }
   cc.hidden = false;
-  document.querySelector(".mb-cc-button")?.classList.add("open");
+  document.querySelectorAll(".mb-cc-button").forEach((b) => b.classList.add("open"));
   ccRender();
   if (!settings.data) loadSettings().then(() => ccOpen() && ccRender()).catch(() => {});
 }
@@ -490,3 +535,4 @@ new MutationObserver(() => {
 for (const type of ["play", "pause", "volumechange", "loadedmetadata"]) music.audio.addEventListener(type, () => ccOpen() && ccRender());
 document.addEventListener("fullscreenchange", () => ccOpen() && ccRender());
 mbBuild();
+landRail(); // shown only on a phone on its side (app.css body.land)

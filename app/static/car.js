@@ -45,13 +45,13 @@ function setCar(on, quiet = false) {
     winSave(CAR_BEFORE_KEY, currentMode()); // where "Leave car mode" goes back to
     bigClose(); // the TV's app drawn big (a channel playing in it) goes with the TV
     if (tvOn()) { document.body.classList.remove("tv"); winSave(TV_KEY, false); $("tv")?.setAttribute("hidden", ""); }
-    if (desktopMode()) { switchDesktopMode(false); winSave(DESKTOP_MODE_KEY, false); }
+    if (desktopMode()) { if (!landOn()) winSave(DESKTOP_MODE_KEY, false); switchDesktopMode(false); } // a phone on its side's isn't a choice
   }
   for (const [id, w] of wm.windows) if (isOpen(id)) (w.hide || w.close)();
   document.body.classList.toggle("car", on);
   winSave(CAR_KEY, on);
   if (on) carShow();
-  else { bigClose(); $("car")?.setAttribute("hidden", ""); clearInterval(car.timer); layout(true); }
+  else { bigClose(); $("car")?.setAttribute("hidden", ""); clearInterval(car.timer); layout(true); landSync(); }
   if (!quiet) toast(on ? "Car mode. Eyes on the road." : "Car mode off.");
 }
 

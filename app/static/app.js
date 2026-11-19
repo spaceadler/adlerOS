@@ -767,7 +767,9 @@ function dockDims() {
   const items = $("dock").querySelectorAll(".dock-item").length;
   const gap = window.innerWidth < 768 ? 8 : 10;
   const divider = $("dock").querySelector(".dock-divider") ? 5 + gap : 0;
-  const room = window.innerWidth - 16 - 24 - divider - gap * Math.max(0, items - 1);
+  // (A phone on its side: beside the bars down the left, windows.js LAND.)
+  const rail = typeof landOn === "function" && landOn() ? LAND.rail + LAND.gap * 2 : 0;
+  const room = window.innerWidth - rail - 16 - 24 - divider - gap * Math.max(0, items - 1);
   const size = Math.max(24, Math.min(base.size, Math.floor(room / Math.max(1, items))));
   return { size, zoomed: size + (base.zoomed - base.size) * (size / base.size), pad: base.pad, gap };
 }

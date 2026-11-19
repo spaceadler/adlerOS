@@ -34,6 +34,38 @@ function smallTouch() { return TOUCH_ONLY.matches && Math.min(screen.width, scre
 function markSmallTouch() { document.body.classList.toggle("small-touch", smallTouch()); }
 function dockAway() { return desktopMode() && smallTouch(); }
 
+// A phone held sideways: desktop mode, made for a short, wide screen
+// (app.css body.land). No menu bar: what it holds is on two floating bars
+// down the left, one in each corner, clear of the notch between them
+// (menubar.js landRail). A window fills the room beside them, with close and
+// minimize only: no dragging, resizing or tiling. It comes by itself when
+// the phone turns sideways (from the home screen too) and goes when it's
+// upright again, back to what you'd chosen, which it never changes. Not in
+// TV or car mode.
+const LAND = { gap: 8, rail: 56 }; // the bars' margin and width (app.css --land-rail)
+function landPhone() {
+  const c = document.body.classList;
+  return smallTouch() && innerWidth > innerHeight && computerScreen() && !c.contains("tv") && !c.contains("car")
+    && winLoad("adleros.tvMode", false) !== true && winLoad("adleros.carMode", false) !== true;
+}
+function landOn() { return document.body.classList.contains("land") && desktopMode(); }
+// Desktop mode or not: a phone on its side always; else what you chose, on a computer's screen.
+function wantDesktop() { return landPhone() || (computerScreen() && winLoad(DESKTOP_MODE_KEY, false) === true); }
+// Turned (or the screen changed): the right one of the two, and its windows in their places.
+function landSync() {
+  const c = document.body.classList;
+  if (c.contains("tv") || c.contains("car")) return;
+  c.toggle("land", landPhone());
+  if (wantDesktop() !== desktopMode()) switchDesktopMode(wantDesktop());
+  if (landOn() && typeof landRail === "function") landRail();
+}
+// The room on the right a window leaves: the notch's, when it's that side.
+function landRight() {
+  let probe = $("land-probe");
+  if (!probe) { probe = el("div", { id: "land-probe", "aria-hidden": "true" }); document.body.append(probe); }
+  return Math.max(LAND.gap, parseFloat(getComputedStyle(probe).paddingRight) || 0);
+}
+
 function winLoad(key, fallback) {
   try {
     const value = localStorage.getItem(key);
@@ -126,6 +158,12 @@ function liquidFilter() {
 
 function setDesktopMode(on) {
   if (on && !computerScreen()) return toast("Desktop mode is for a computer: a wider screen and a mouse.");
+  if (landPhone()) {
+    // On its side a phone keeps its own desktop; upright, it's what you chose.
+    winSave(DESKTOP_MODE_KEY, on);
+    if (!desktopMode()) landSync();
+    return toast(on ? "Desktop mode on: on its side, this phone keeps this layout anyway." : "The home screen comes back when you hold the phone upright.");
+  }
   if (on === desktopMode()) return;
   switchDesktopMode(on);
   winSave(DESKTOP_MODE_KEY, on);
@@ -387,7 +425,7 @@ const WIN_GENIE_ROWS = 8; // points down each side, for the curve
 // Its icon in the dock: its own, its pin, or the one it shows while open.
 function winGenieIcon(id) {
   const dock = $("dock"), w = wm.windows.get(id);
-  if (!dock || dock.hidden || !w || !desktopMode() || matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
+  if (!dock || dock.hidden || !w || !desktopMode() || landOn() || matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
   const icon = (w.dock && dock.querySelector(`[data-dock="${w.dock}"]:not(.dock-run)`))
     || (w.app && dock.querySelector(`.dock-app[data-app="${CSS.escape(w.app.id)}"]`))
     || dock.querySelector(`[data-window="${CSS.escape(id)}"]`);
@@ -450,8 +488,11 @@ function winFocusNext() {
 // Where windows may go: the whole screen under the menu bar (menubar.js)
 // and above the dock. Their places count from under the bar: winTop.
 const MENUBAR_H = 28;
-function winTop() { return desktopMode() ? MENUBAR_H : 0; }
+function winTop() { return landOn() ? LAND.gap : desktopMode() ? MENUBAR_H : 0; }
+// A phone on its side: windows start right of the bars down the left.
+function winLeft() { return landOn() ? LAND.gap * 2 + LAND.rail : 0; }
 function winArea() {
+  if (landOn()) return { w: innerWidth - winLeft() - landRight(), h: innerHeight - 2 * LAND.gap };
   const dock = $("dock");
   const bottom = dock && !dock.hidden && !dockAway() ? dock.getBoundingClientRect().top - 8 : innerHeight;
   return { w: innerWidth, h: Math.max(240, bottom - winTop()) };
@@ -478,10 +519,11 @@ function winApply(id) {
   const g = wm.geometry[id];
   if (!sheet || !g) return;
   const area = winArea();
-  const tile = g.mode !== "max" && tileBox(id);
+  const tile = !landOn() && g.mode !== "max" && tileBox(id);
   sheet.dataset.tiled = tile ? "1" : "";
   let box;
-  if (tile) box = tile;
+  if (landOn()) box = { x: 0, y: 0, w: area.w, h: area.h }; // a phone on its side: all the room there is
+  else if (tile) box = tile;
   else if (g.mode === "col") { g.mode = g.side || "normal"; return winApply(id); } // kept from the old Panorama layout
   else if (g.mode === "max") box = { x: 0, y: 0, w: area.w, h: area.h };
   else if (g.mode === "left") box = { x: 0, y: 0, w: Math.round(area.w / 2), h: area.h };
@@ -494,11 +536,11 @@ function winApply(id) {
     g.y = Math.min(Math.max(g.y, 0), area.h - 40);
     box = g;
   }
-  const top = box.y + winTop();
-  Object.assign(sheet.style, { left: `${box.x}px`, top: `${top}px`, width: `${box.w}px`, height: `${box.h}px` });
+  const top = box.y + winTop(), left = box.x + winLeft();
+  Object.assign(sheet.style, { left: `${left}px`, top: `${top}px`, width: `${box.w}px`, height: `${box.h}px` });
   // Its blurred wallpaper lines up with the real one: a window shows the
   // desktop behind it, never the windows in between.
-  sheet.style.setProperty("--win-x", `${box.x}px`);
+  sheet.style.setProperty("--win-x", `${left}px`);
   sheet.style.setProperty("--win-y", `${top}px`);
   sheet.dataset.mode = g.mode;
   const max = sheet.querySelector(":scope > .win-bar .win-button.max");
@@ -520,13 +562,13 @@ function winSnap(id, mode) {
 }
 
 function toggleMaximize(id) {
-  if (desktopMode()) winSnap(id, "max");
+  if (desktopMode() && !landOn()) winSnap(id, "max"); // on a phone on its side, it fills the room already
 }
 
 // ------------------------------------------------- moving and resizing
 
 function winPointerDown(e, id, kind) {
-  if (!desktopMode() || e.button !== 0 || (kind === "move" && e.target.closest("button"))) return;
+  if (!desktopMode() || landOn() || e.button !== 0 || (kind === "move" && e.target.closest("button"))) return;
   winDragStart(e, id, kind, e.currentTarget);
 }
 
@@ -989,11 +1031,14 @@ $("dock").addEventListener("pointerleave", () => {
   dockPeek.over = false;
   dockAwaySoon(500);
 });
-if (winLoad(DESKTOP_MODE_KEY, false) === true && computerScreen()) document.body.classList.add("wm");
+markSmallTouch();
+document.body.classList.toggle("land", landPhone());
+if (wantDesktop()) document.body.classList.add("wm");
 // The screen got narrow (or wide again): off, or back on if you'd chosen it.
 NARROW_SCREEN.addEventListener("change", () => {
-  const want = computerScreen() && winLoad(DESKTOP_MODE_KEY, false) === true;
-  if (want !== desktopMode()) switchDesktopMode(want);
+  if (document.body.classList.contains("tv") || document.body.classList.contains("car")) return;
+  document.body.classList.toggle("land", landPhone());
+  if (wantDesktop() !== desktopMode()) switchDesktopMode(wantDesktop());
 });
 
 document.addEventListener("pointermove", winPointerMove);
@@ -1045,7 +1090,11 @@ document.addEventListener("keydown", (e) => {
 }, true);
 window.addEventListener("resize", () => {
   markSmallTouch();
-  if (desktopMode()) winLayout();
+  landSync(); // a phone turned
+  if (desktopMode()) {
+    winLayout();
+    if (landOn()) for (const id of wm.order) if (isOpen(id)) winApply(id); // the room changed
+  }
 });
 markSmallTouch();
 TOUCH_ONLY.addEventListener("change", () => { markSmallTouch(); if (desktopMode()) winLayout(); });

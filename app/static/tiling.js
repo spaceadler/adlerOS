@@ -17,7 +17,7 @@ const WS_COUNT = 10;
 const WS_SLIDE = { duration: 500, easing: "cubic-bezier(0.05, 0.9, 0.1, 1.05)" }; // workspaces, 1, 5, wind
 const tiles = { trees: {}, boxes: {}, floating: new Set(), ws: {}, current: 1, previous: 1, osdTimer: null, mapOver: false };
 
-function tilingOn() { return desktopMode() && winLoad(TILING_KEY, false) === true; }
+function tilingOn() { return desktopMode() && !landOn() && winLoad(TILING_KEY, false) === true; } // not on a phone on its side
 // Floating or tiling (kept as false or true; "panorama", from a layout
 // adlerOS had for a while, is floating).
 function windowLayout() { return winLoad(TILING_KEY, false) === true ? "tiling" : "floating"; }

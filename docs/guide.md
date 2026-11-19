@@ -883,7 +883,7 @@ once.
 ![The App Library](screenshots/phone-library.png)
 
 Held upright, a phone gets adlerOS laid out like an iPhone's home screen
-(a computer, or a phone on its side, keeps the Mac-like one):
+(a computer keeps the Mac-like one; on its side, see the end of this part):
 
 - **The home screen:** the date and your greeting at the top, square widgets
   two side by side, then your apps four across, as many rows as fit. Swipe
@@ -904,5 +904,14 @@ Held upright, a phone gets adlerOS laid out like an iPhone's home screen
   pull down a list that's at its top, to close one. Settings is grouped
   lists, like an iPhone's.
 - Messages drop in from the top, and the lock screen shows the time.
+
+**On its side**, a phone gets desktop mode made for a short, wide screen,
+whichever mode you'd picked: your Desktop folder and the dock, with no bar
+across the top. Down the left are two floating bars, one in each corner so
+the notch between them has none: adlerOS's menu and the time (a tap on it:
+Notification Center) at the top, Search and Control Center at the bottom.
+An app fills the room beside them, with close and minimize and nothing to
+drag; the dock steps aside over it. Held upright again, it's the home
+screen.
 
 *Share → Add to Home Screen* makes it open full-screen, like an app.
