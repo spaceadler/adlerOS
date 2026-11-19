@@ -40,7 +40,7 @@ const FORMATTERS = {
   https: (d) => (d.config.URL_SCHEME === "https" ? "On for every app" : "Vaultwarden only, via Tailscale"),
   device: (d) => [d.device.model, d.device.os].filter(Boolean).join("\n") || d.device.hostname, // a line each
   processor: (d) => [d.device.model, d.device.cpus && `${d.device.cpus} cores`, d.device.arch].filter(Boolean).join(" · ") || "–",
-  system: (d) => [d.device.os, d.device.kernel && `Linux ${d.device.kernel}`].filter(Boolean).join(" · ") || "–",
+  system: (d) => [d.device.os, d.device.kernel && `Linux ${d.device.kernel}`].filter(Boolean).join("\n") || "–", // a line each
   hostname: (d) => d.device.hostname || "–",
   uptime: (d) => duration(d.device.uptime),
   load: (d) => (d.device.load == null ? "–" : `${d.device.load.toFixed(2)} (1 min)${d.device.cpus ? `, ${Math.round((100 * d.device.load) / d.device.cpus)}% of the cores` : ""}`),
