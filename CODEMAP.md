@@ -2,7 +2,7 @@
 
 ← [README](README.md)
 
-> Generated from commit `e158e2a` by `scripts/codemap.py`. Regenerate it from the workspace root with `python3 scripts/codemap.py adleros`; don't edit it by hand.
+> Generated from commit `9c153b0` by `scripts/codemap.py`. Regenerate it from the workspace root with `python3 scripts/codemap.py adleros`; don't edit it by hand.
 
 ## Files
 
@@ -14,7 +14,7 @@ flowchart LR
     n_app_static_music_js["app/static/music.js · 133"]
     n_app_static_luna_js["app/static/luna.js · 114"]
     n_app_static_app_js["app/static/app.js · 103"]
-    n_app_static_files_js["app/static/files.js · 79"]
+    n_app_static_files_js["app/static/files.js · 80"]
     n_app_static_books_js["app/static/books.js · 79"]
     n_app_static_podcasts_js["app/static/podcasts.js · 77"]
     n_agent_apps_py["agent/apps.py · 74"]
@@ -92,21 +92,21 @@ flowchart LR
 
 ### `agent/agent.py`
 
-- `stamp()` L58
-- `log()` L62
-- `write_private()` L68
-- `rewrite()` L77
-- `save_job()` L87 → `write_private()`
-- `prune_jobs()` L91
-- `read_request()` L100
-- `load_actions()` L117
-- `validate_params()` L129
-- `set_config()` L157 → `rewrite()`
-- `expand()` L174
-- `run()` L190 → `save_job()`
-- `run_for_result()` L215
-- `process()` L234 → `read_request()`, `log()`, `stamp()`, `validate_params()`, `save_job()`, `set_config()`, `expand()`, `run_for_result()`, `run()`
-- `main()` L302 → `load_actions()`, `process()`, `prune_jobs()`
+- `stamp()` L60
+- `log()` L64
+- `write_private()` L70
+- `rewrite()` L79
+- `save_job()` L89 → `write_private()`
+- `prune_jobs()` L93
+- `read_request()` L102
+- `load_actions()` L119
+- `validate_params()` L131
+- `set_config()` L159 → `rewrite()`
+- `expand()` L176
+- `run()` L192 → `save_job()`
+- `run_for_result()` L217
+- `process()` L236 → `read_request()`, `log()`, `stamp()`, `validate_params()`, `save_job()`, `set_config()`, `expand()`, `run_for_result()`, `run()`
+- `main()` L304 → `load_actions()`, `process()`, `prune_jobs()`
 
 ### `agent/apps.py`
 
@@ -226,12 +226,11 @@ flowchart LR
 
 ### `agent/tailscale.py`
 
-- `settings()` L20
-- `ts()` L33
-- `status()` L37 → `ts()`
-- `get()` L55 → `settings()`, `host_path()`, `ts()`
-- `host_path()` L73 → `settings()`
-- `send()` L86 → `host_path()`, `ts()`
+- `ts()` L24
+- `status()` L28 → `ts()`
+- `host_path()` L46 → `places()`, `locate()`
+- `get()` L58 → `places()`, `host_path()`, `ts()`
+- `send()` L75 → `host_path()`, `ts()`
 
 ### `agent/terminal.py`
 
@@ -833,49 +832,49 @@ flowchart LR
 - `closeFiles()` L123
 - `showFolder()` L133 → `filesHere()`, `filesWent()`, `renderFiles()`
 - `crumbs()` L159 → `showFolder()`
-- `renderPlaces()` L171 → `tsOpen()`, `tsStatus()`, `showFolder()`, `showTrash()`
-- `tsStatus()` L203
-- `tsExplain()` L214
-- `tsReceive()` L230 → `tsStatus()`, `tsExplain()`, `refreshFiles()`
-- `tsOpen()` L242 → `tsStatus()`, `tsExplain()`, `tsReceive()`, `showFolder()`
-- `tsItem()` L249 → `tsReceive()`
-- `tsSendable()` L252
-- `tsSendItem()` L253 → `tsSend()`
-- `tsSend()` L254 → `tsStatus()`, `tsExplain()`
-- `renderFiles()` L287 → `renderPlaces()`, `renderNote()`, `renderTools()`, `renderTrash()`, `crumbs()`, `hiddenShown()`, `sortEntries()`, `join()`, `when()`, `openEntry()`, +6
-- `filesSort()` L334
-- `sortEntries()` L338 → `filesSort()`, `byName()`, `extOf()`
-- `setFilesSort()` L346 → `filesSort()`, `renderFiles()`
-- `renderTools()` L351 → `filesSort()`
-- `entryKeys()` L371 → `pickedPaths()`, `deletePaths()`, `renamePath()`, `clip()`, `clipPaths()`, `pickable()`, `setPicked()`, `entryMenu()`
-- `pickable()` L403
-- `pickedPaths()` L404
-- `setPicked()` L406
-- `pickRow()` L411 → `setPicked()`, `pickable()`
-- `manyMenu()` L430 → `tsSendable()`, `tsSendItem()`, `clipPaths()`, `deletePaths()`
-- `entryMenu()` L501 → `openEntry()`, `newFilesWindow()`, `editFile()`, `downloadFile()`, `tsSendable()`, `tsSendItem()`, `clip()`, `renamePath()`, `deletePaths()`
-- `openEntry()` L524 → `filesOpen()`, `frontFiles()`, `openFiles()`, `showFolder()`, `viewFile()`, `downloadFile()`
-- `downloadFile()` L538 → `fileUrl()`
-- `nameDialog()` L567
-- `rootOk()` L588 → `placeOf()`
-- `filesPost()` L600
-- `newFolder()` L626 → `rootOk()`, `nameDialog()`, `filesPost()`, `refreshFiles()`
-- `newTextFile()` L632 → `rootOk()`, `nameDialog()`, `filesPost()`, `join()`, `refreshFiles()`
-- `renamePath()` L642 → `rootOk()`, `nameDialog()`, `filesPost()`, `refreshFiles()`
-- `deletePaths()` L648 → `rootOk()`, `filesPost()`, `refreshFiles()`
-- `refreshFiles()` L659 → `showFolder()`
-- `clip()` L666 → `renderTools()`
-- `clipPaths()` L672 → `clip()`, `renderTools()`
-- `paste()` L679 → `rootOk()`, `filesPost()`, `watchTask()`, `refreshFiles()`
-- `watchTask()` L692 → `pollTasks()`
-- `copyInto()` L737 → `filesPost()`, `watchTask()`, `refreshFiles()`
-- `uploadFiles()` L745 → `placeOf()`, `showFolder()`
-- `showTrash()` L774 → `filesHere()`, `filesWent()`, `renderFiles()`
-- `renderTrash()` L788 → `rootOk()`, `filesPost()`, `fromLabel()`, `showTrash()`, `when()`
-- `fileDropTarget()` L848 → `fileWinOf()`, `appDropTarget()`
-- `fileUp()` L889 → `fileDropTarget()`, `deletePaths()`, `parentOf()`, `rootOk()`, `filesPost()`, `watchTask()`, `fromLabel()`, `refreshFiles()`
-- `wireFiles()` L920 → `closeFiles()`, `setFilesSort()`, `filesSort()`, `newFolder()`, `newTextFile()`, `paste()`, `copyInto()`, `uploadFrom()`, `tsItem()`, `dragBox()`, +9
-- … and 19 less-connected functions
+- `renderPlaces()` L171 → `tsOpen()`, `tsStale()`, `tsStatus()`, `showFolder()`, `showTrash()`
+- `tsStale()` L206
+- `tsStatus()` L207 → `tsStale()`
+- `tsExplain()` L223
+- `tsReceive()` L241 → `tsStatus()`, `tsExplain()`, `refreshFiles()`
+- `tsOpen()` L259 → `tsReceive()`, `showFolder()`
+- `tsItem()` L264 → `tsReceive()`
+- `tsSendItem()` L268 → `tsSend()`
+- `tsSend()` L269 → `tsStatus()`, `tsExplain()`
+- `renderFiles()` L302 → `renderPlaces()`, `renderNote()`, `renderTools()`, `renderTrash()`, `crumbs()`, `hiddenShown()`, `sortEntries()`, `join()`, `when()`, `openEntry()`, +6
+- `filesSort()` L349
+- `sortEntries()` L353 → `filesSort()`, `byName()`, `extOf()`
+- `setFilesSort()` L361 → `filesSort()`, `renderFiles()`
+- `renderTools()` L366 → `filesSort()`
+- `entryKeys()` L386 → `pickedPaths()`, `deletePaths()`, `renamePath()`, `clip()`, `clipPaths()`, `pickable()`, `setPicked()`, `entryMenu()`
+- `pickable()` L418
+- `pickedPaths()` L419
+- `setPicked()` L421
+- `pickRow()` L426 → `setPicked()`, `pickable()`
+- `manyMenu()` L445 → `tsSendable()`, `tsSendItem()`, `clipPaths()`, `deletePaths()`
+- `entryMenu()` L516 → `openEntry()`, `newFilesWindow()`, `editFile()`, `downloadFile()`, `tsSendable()`, `tsSendItem()`, `clip()`, `renamePath()`, `deletePaths()`
+- `openEntry()` L539 → `filesOpen()`, `frontFiles()`, `openFiles()`, `showFolder()`, `viewFile()`, `downloadFile()`
+- `downloadFile()` L553 → `fileUrl()`
+- `nameDialog()` L582
+- `rootOk()` L603 → `placeOf()`
+- `filesPost()` L615
+- `newFolder()` L641 → `rootOk()`, `nameDialog()`, `filesPost()`, `refreshFiles()`
+- `newTextFile()` L647 → `rootOk()`, `nameDialog()`, `filesPost()`, `join()`, `refreshFiles()`
+- `renamePath()` L657 → `rootOk()`, `nameDialog()`, `filesPost()`, `refreshFiles()`
+- `deletePaths()` L663 → `rootOk()`, `filesPost()`, `refreshFiles()`
+- `refreshFiles()` L674 → `showFolder()`
+- `clip()` L681 → `renderTools()`
+- `clipPaths()` L687 → `clip()`, `renderTools()`
+- `paste()` L694 → `rootOk()`, `filesPost()`, `watchTask()`, `refreshFiles()`
+- `watchTask()` L707 → `pollTasks()`
+- `copyInto()` L752 → `filesPost()`, `watchTask()`, `refreshFiles()`
+- `uploadFiles()` L760 → `placeOf()`, `showFolder()`
+- `showTrash()` L789 → `filesHere()`, `filesWent()`, `renderFiles()`
+- `renderTrash()` L803 → `rootOk()`, `filesPost()`, `fromLabel()`, `showTrash()`, `when()`
+- `fileDropTarget()` L863 → `fileWinOf()`, `appDropTarget()`
+- `fileUp()` L904 → `fileDropTarget()`, `deletePaths()`, `parentOf()`, `rootOk()`, `filesPost()`, `watchTask()`, `fromLabel()`, `refreshFiles()`
+- `wireFiles()` L935 → `pickedPaths()`, `deletePaths()`, `clipPaths()`, `closeFiles()`, `setFilesSort()`, `filesSort()`, `newFolder()`, `newTextFile()`, `paste()`, `copyInto()`, +9
+- … and 20 less-connected functions
 
 ### `app/static/folders.js`
 
@@ -1438,9 +1437,9 @@ flowchart LR
 - `closeModal()` L801
 - `confirmDialog()` L811 → `closeModal()`, `openModal()`
 - `passwordDialog()` L826 → `openModal()`
-- `jobDialog()` L861 → `waitForRestart()`, `loadSettings()`, `openModal()`
-- `waitForRestart()` L916
-- `settingsSearchResults()` L935 → `forMode()`
+- `jobDialog()` L867 → `waitForRestart()`, `loadSettings()`, `openModal()`
+- `waitForRestart()` L922
+- `settingsSearchResults()` L941 → `forMode()`
 
 ### `app/static/store.js`
 
