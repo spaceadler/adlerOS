@@ -809,6 +809,7 @@ function copyText(text, done = "Copied.") {
     box.value = text;
     document.body.append(box);
     box.select();
+    box.setSelectionRange(0, text.length); // what Safari on an iPhone needs to pick it
     let ok = false;
     try { ok = document.execCommand("copy"); } catch { ok = false; }
     box.remove();
