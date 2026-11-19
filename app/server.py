@@ -6787,6 +6787,28 @@ def car_places_clean(got):
             "named": named[:20], "recent": recent[:6], "at": int(got.get("at") or 0)}
 
 
+def standby_where(tz):
+    """Where a time zone's city is (zone1970.tab, as tzdata has it): for
+    StandBy's World clock, which marks it on the map. The browser can't be
+    asked over plain HTTP, and a time zone is close enough for a map."""
+    if not re.fullmatch(r"[A-Za-z_+-]+(/[A-Za-z0-9_+-]+){0,2}", tz or ""):
+        return {"tz": tz, "found": False}
+    try:
+        for line in Path("/usr/share/zoneinfo/zone1970.tab").read_text().splitlines():
+            parts = line.split("\t")
+            if line.startswith("#") or len(parts) < 3 or tz not in parts[2].split(","):
+                continue
+            m = re.fullmatch(r"([+-])(\d{2})(\d{2})(\d{2})?([+-])(\d{3})(\d{2})(\d{2})?", parts[1])
+            if not m:
+                break
+            lat = (int(m[2]) + int(m[3]) / 60 + int(m[4] or 0) / 3600) * (1 if m[1] == "+" else -1)
+            lon = (int(m[6]) + int(m[7]) / 60 + int(m[8] or 0) / 3600) * (1 if m[5] == "+" else -1)
+            return {"tz": tz, "found": True, "lat": round(lat, 2), "lon": round(lon, 2), "city": tz.split("/")[-1].replace("_", " ")}
+    except OSError:
+        pass
+    return {"tz": tz, "found": False}
+
+
 def car_places():
     try:
         return car_places_clean(json.loads(CAR_PLACES.read_text()))
@@ -7033,6 +7055,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.iptv_get(path[len("/api/iptv/"):], query)
         if path == "/api/car/places":
             return self.send_json(200, car_places())
+        if path == "/api/standby/where":
+            return self.send_json(200, standby_where(query.get("tz", [""])[0]))
         if path.startswith("/api/paperless/"):
             return self.documents_get(path[len("/api/paperless/"):], query)
         if path == "/api/maintenance":

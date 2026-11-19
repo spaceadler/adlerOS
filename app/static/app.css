@@ -5154,3 +5154,127 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 /* Settings → Connections: a service's state beside its Open. */
 .conn-state { padding: 3px 10px; border-radius: 10px; background: rgb(255 255 255 / 0.1); color: rgb(255 255 255 / 0.75); font-size: 12px; white-space: nowrap; }
 .conn-state.ok { background: rgb(52 199 89 / 0.22); color: #7ee2a0; }
+
+/* ------------------------------------------------------------ StandBy */
+/* standby.js: over every mode, under the lock screen. Pages across and the
+   views in each snap into place; sizes follow the screen's height, since
+   it's on its side. */
+#standby { position: fixed; inset: 0; z-index: 95; overflow: hidden; background: #000; color: #fff; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+#standby[hidden] { display: none; }
+.lock:not([hidden]) ~ #standby { display: none; }
+.sb-pages { display: flex; width: 100%; height: 100%; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior: contain; }
+.sb-pages::-webkit-scrollbar, .sb-vert::-webkit-scrollbar { display: none; }
+.sb-page { flex: 0 0 100%; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; }
+.sb-vert { height: 100%; overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; overscroll-behavior: contain; }
+.sb-vert > * { height: 100%; scroll-snap-align: start; scroll-snap-stop: always; }
+/* The dots, the way out and Night Mode: after a tap, a few seconds. */
+.sb-dots { position: absolute; bottom: max(10px, env(safe-area-inset-bottom)); left: 50%; display: flex; gap: 7px; translate: -50% 0; opacity: 0; transition: opacity 0.4s; pointer-events: none; }
+.sb-dots span { width: 7px; height: 7px; border-radius: 50%; background: rgb(255 255 255 / 0.35); }
+.sb-dots span.on { background: #fff; }
+.sb-chrome { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); z-index: 2; display: flex; gap: 8px; opacity: 0; transition: opacity 0.4s; pointer-events: none; }
+#standby.chrome .sb-dots, #standby.chrome .sb-chrome { opacity: 1; }
+#standby.chrome .sb-chrome { pointer-events: auto; }
+.sb-chrome-button { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 20px; background: rgb(255 255 255 / 0.14); color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.sb-chrome-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.sb-exit { width: 40px; padding: 0; justify-content: center; }
+/* Night Mode: everything a dim red, as on the iPhone in a dark room. */
+.sb-tint { position: absolute; inset: 0; z-index: 3; display: none; background: #ff1f0f; mix-blend-mode: multiply; pointer-events: none; }
+#standby.sb-night .sb-tint { display: block; }
+#standby.sb-night .sb-pages { filter: grayscale(1) brightness(0.62) contrast(1.15); }
+/* A clock's colours. */
+.sb-palette { position: absolute; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); z-index: 4; display: grid; gap: 10px; justify-items: center; padding: 14px 18px; border-radius: 24px; translate: -50% 0;
+  background: rgb(40 40 44 / 0.92); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.sb-palette[hidden] { display: none; }
+.sb-palette p { margin: 0; font-size: 14px; font-weight: 600; color: rgb(255 255 255 / 0.7); }
+.sb-swatches { display: flex; gap: 10px; }
+.sb-swatch { width: 34px; height: 34px; border: 0; border-radius: 50%; cursor: pointer; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2); }
+.sb-swatch.on { box-shadow: 0 0 0 3px #000, 0 0 0 5px #fff; }
+
+/* The clocks. */
+.sb-face { --sb-c: #fff; --sb-c2: #fff; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.sb-digital { flex-direction: column; }
+.sb-dig-top { display: flex; gap: 18px; align-items: center; font-size: clamp(16px, 6.5vh, 40px); font-weight: 600; color: var(--sb-c); opacity: 0.85; }
+.sb-dig-top svg, .sb-analog-alarm svg, .sb-float-alarm svg { width: 0.9em; height: 0.9em; margin-right: 0.25em; vertical-align: -0.1em; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.sb-dig-time { font-size: min(64vh, 30vw); font-weight: 800; line-height: 0.95; letter-spacing: -0.04em; color: var(--sb-c); font-variant-numeric: tabular-nums; }
+.sb-dig-period { position: absolute; right: 4vw; bottom: 10vh; font-size: clamp(14px, 6vh, 36px); font-weight: 700; color: var(--sb-c); opacity: 0.7; }
+.sb-analog { gap: 6vw; }
+.sb-dial { width: 86vh; height: 86vh; }
+.sb-tick { stroke: rgb(255 255 255 / 0.35); stroke-width: 1; }
+.sb-tick.hour { stroke: rgb(255 255 255 / 0.8); stroke-width: 2.4; }
+.sb-num { fill: #fff; font-size: 17px; font-weight: 600; text-anchor: middle; }
+.sb-hand { stroke-linecap: round; }
+.sb-hand.hour { stroke: #fff; stroke-width: 6; }
+.sb-hand.minute { stroke: #fff; stroke-width: 4; }
+.sb-hand.second { stroke: var(--sb-c); stroke-width: 1.6; }
+.sb-pin { fill: #fff; }
+.sb-pin-in { fill: var(--sb-c); }
+.sb-analog-side { display: grid; gap: 1vh; }
+.sb-analog-day { font-size: clamp(18px, 9vh, 56px); font-weight: 700; color: var(--sb-c); }
+.sb-analog-date { font-size: clamp(16px, 7vh, 44px); font-weight: 500; color: rgb(255 255 255 / 0.75); }
+.sb-analog-alarm { font-size: clamp(14px, 5vh, 30px); color: rgb(255 255 255 / 0.6); }
+.sb-world { flex-direction: column; justify-content: flex-start; padding: 5vh 4vw 4vh; }
+.sb-map { flex: 1; width: 100%; min-height: 0; }
+.sb-world-text { display: flex; justify-content: space-between; align-items: baseline; width: 100%; }
+.sb-world-time { font-size: min(22vh, 12vw); font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.sb-world-place { font-size: clamp(14px, 6vh, 34px); font-weight: 600; color: rgb(255 255 255 / 0.7); }
+.sb-sun { position: absolute; width: 90vh; height: 90vh; border-radius: 50%; translate: -50% -50%; filter: blur(4vh);
+  background: radial-gradient(circle, var(--sb-c) 0%, var(--sb-c) 14%, color-mix(in srgb, var(--sb-c2) 70%, transparent) 38%, transparent 68%); opacity: 0.9; transition: left 60s linear, top 60s linear; }
+.sb-solar-text { position: relative; display: grid; justify-items: center; }
+.sb-solar-time { font-size: min(52vh, 26vw); font-weight: 300; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; text-shadow: 0 0 6vh rgb(0 0 0 / 0.35); }
+.sb-solar-date { font-size: clamp(14px, 6vh, 34px); font-weight: 500; color: rgb(255 255 255 / 0.85); }
+.sb-float-time { display: flex; align-items: center; font-family: ui-rounded, "SF Pro Rounded", "Nunito", "Arial Rounded MT Bold", "Varela Round", system-ui, sans-serif; font-size: min(70vh, 30vw); font-weight: 900; line-height: 1; }
+.sb-fl { display: inline-block; color: var(--sb-c); text-shadow: 0 0.03em 0 var(--sb-c2), 0 0.06em 0 var(--sb-c2), 0 0.1em 0.06em rgb(0 0 0 / 0.5); }
+.sb-fl.sep { margin: 0 -0.04em; font-size: 0.8em; translate: 0 -0.06em; }
+.sb-float-alarm { position: absolute; right: 4vw; bottom: 6vh; font-size: clamp(14px, 6vh, 34px); font-weight: 700; color: var(--sb-c); }
+
+/* The widgets: the iPhone's dark cards, two stacks side by side. */
+.sb-widgets { display: grid; grid-template-columns: 1fr 1fr; gap: 3vw; padding: 4vh 4vw; box-sizing: border-box; }
+.sb-stack { border-radius: 9vh; }
+.sb-widget { position: relative; display: flex; flex-direction: column; gap: 2vh; padding: 6vh 4vw; overflow: hidden; border-radius: 9vh; background: #1c1c1e; box-sizing: border-box; }
+.sb-w-head { font-size: clamp(14px, 5vh, 26px); font-weight: 700; color: rgb(255 255 255 / 0.55); text-transform: uppercase; letter-spacing: 0.04em; }
+.sb-big-note { margin: auto 0; font-size: clamp(16px, 7vh, 36px); font-weight: 600; color: rgb(255 255 255 / 0.6); }
+.sb-cal-day { display: flex; flex-direction: column; line-height: 1; }
+.sb-cal-day span { font-size: clamp(13px, 5vh, 26px); font-weight: 700; color: #ff453a; }
+.sb-cal-day strong { font-size: clamp(40px, 22vh, 120px); font-weight: 400; letter-spacing: -0.03em; }
+.sb-list { display: grid; gap: 1.6vh; min-height: 0; overflow: hidden; }
+.sb-item { display: grid; padding-left: 1.6vh; border-left: 0.6vh solid #ff453a; }
+.sb-w-tasks .sb-item { border-color: #0a84ff; }
+.sb-item-title { overflow: hidden; font-size: clamp(14px, 5.6vh, 30px); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.sb-item-sub { font-size: clamp(12px, 4.4vh, 24px); color: rgb(255 255 255 / 0.55); }
+.sb-w-now { justify-content: center; align-items: flex-start; }
+.sb-now-art { width: 28vh; height: 28vh; overflow: hidden; border-radius: 3vh; background: rgb(255 255 255 / 0.08); }
+.sb-now-art > * { width: 100%; height: 100%; border-radius: 0; }
+.sb-now-text { display: grid; min-width: 0; max-width: 100%; }
+.sb-now-text strong { overflow: hidden; font-size: clamp(16px, 6.4vh, 34px); white-space: nowrap; text-overflow: ellipsis; }
+.sb-now-text span { overflow: hidden; font-size: clamp(13px, 5vh, 26px); color: rgb(255 255 255 / 0.6); white-space: nowrap; text-overflow: ellipsis; }
+.sb-now-ctls { display: flex; gap: 2vh; }
+.sb-ctl { display: grid; place-items: center; width: 13vh; height: 13vh; min-width: 44px; min-height: 44px; border: 0; border-radius: 50%; background: rgb(255 255 255 / 0.12); color: #fff; cursor: pointer; }
+.sb-ctl svg { width: 45%; height: 45%; fill: currentColor; stroke: none; }
+.sb-rings { display: flex; justify-content: space-around; align-items: center; flex: 1; }
+.sb-ring-box { display: grid; justify-items: center; gap: 1.5vh; }
+.sb-ring-box small { font-size: clamp(12px, 4.4vh, 24px); color: rgb(255 255 255 / 0.6); }
+.sb-ring { display: grid; place-items: center; width: 22vh; height: 22vh; border-radius: 50%; }
+.sb-ring span { display: grid; place-items: center; width: 78%; height: 78%; border-radius: 50%; background: #1c1c1e; font-size: clamp(13px, 5.4vh, 28px); font-weight: 700; }
+.sb-w-pic { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sb-w-pic + .sb-w-caption { position: absolute; left: 4vw; bottom: 5vh; display: grid; text-shadow: 0 1px 6px rgb(0 0 0 / 0.6); }
+.sb-w-caption span { font-size: clamp(12px, 4.4vh, 24px); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.85; }
+.sb-w-caption strong { font-size: clamp(16px, 7vh, 38px); }
+.sb-w-clock { display: flex; align-items: baseline; gap: 1vh; margin-top: auto; }
+.sb-w-clock strong { font-size: clamp(36px, 26vh, 140px); font-weight: 700; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.sb-w-clock span { font-size: clamp(14px, 6vh, 32px); font-weight: 700; color: rgb(255 255 255 / 0.6); }
+
+/* Photos: one at a time, the whole screen, fading over. */
+.sb-photo-set { position: relative; overflow: hidden; background: #000; }
+.sb-ph { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 1.4s ease; }
+.sb-photo-set:not(.flip) .sb-ph.b, .sb-photo-set.flip .sb-ph.a { opacity: 1; }
+.sb-ph[src=""], .sb-ph:not([src]) { visibility: hidden; }
+.sb-ph-name { position: absolute; left: 4vw; top: 5vh; font-size: clamp(16px, 7vh, 38px); font-weight: 700; text-shadow: 0 1px 8px rgb(0 0 0 / 0.6); opacity: 0; transition: opacity 0.5s; }
+.sb-photo-set.named .sb-ph-name { opacity: 1; }
+.sb-ph-info { position: absolute; left: 4vw; bottom: 6vh; display: grid; gap: 0.6vh; justify-items: start; padding: 2vh 2.4vw; border-radius: 3vh; background: rgb(0 0 0 / 0.5);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+.sb-ph-info[hidden] { display: none; }
+.sb-ph-info strong { font-size: clamp(16px, 6.4vh, 34px); }
+.sb-ph-info span { font-size: clamp(13px, 5vh, 26px); color: rgb(255 255 255 / 0.75); }
+.sb-ph-open { display: inline-flex; align-items: center; gap: 8px; margin-top: 1vh; padding: 8px 14px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 0.18); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.sb-ph-open svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.sb-ph-empty { display: grid; place-items: center; padding: 0 10vw; text-align: center; font-size: clamp(16px, 6vh, 32px); color: rgb(255 255 255 / 0.6); }

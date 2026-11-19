@@ -441,7 +441,7 @@ function tvControlCenter() {
         button("round", pods ? TV_ICONS.fwd30 : TV_ICONS.next, pods ? "On 30 s" : "Next", () => { pods ? pcSkip(30) : musicNext(); redo(); }))));
   }
   kids.push(el("div", { class: "tv-cc-label" }, "Mode"));
-  const modeIcon = { home: TV_ICONS.home, desktop: TV_ICONS.desktop, tv: TV_ICONS.tv, car: TV_ICONS.car };
+  const modeIcon = { home: TV_ICONS.home, desktop: TV_ICONS.desktop, tv: TV_ICONS.tv, car: TV_ICONS.car, standby: ["M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "M12 9v4l2 2"] };
   kids.push(el("div", { class: "tv-cc-modes" }, ...MODES.map(([m, label]) => button(`mode${currentMode() === m ? " on" : ""}`, modeIcon[m] || TV_ICONS.tv, label,
     () => { if (m === "tv") return tvControlCenterClose(); tvControlCenterClose(false); setMode(m); },
     m === "desktop" && !computerScreen() ? { disabled: "" } : {}))));

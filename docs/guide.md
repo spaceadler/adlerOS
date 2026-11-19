@@ -883,6 +883,31 @@ was. Shells no page is showing are closed when a fourth is wanted. A session als
 minutes without typing, or when admin mode is switched off. Up to three at
 once.
 
+## StandBy
+
+After the iPhone's: a bedside clock, a photo frame and a glance at your day,
+for a screen on its side (a phone on a stand, an old tablet). Pick it from
+any **Mode** menu (or Settings); it goes over the mode you were in, and
+leaving brings that back. Three pages across, swiped (or the arrow keys):
+
+- **Widgets**: two stacks side by side, each swiped up and down on its own:
+  your next events, what's playing (play, pause, next), this machine's CPU,
+  memory and temperature; On This Day, what's due, the time.
+- **Photos**: one at a time, the whole screen, a new one every 20 seconds;
+  swipe up and down through On This Day, Favorites and your albums (from
+  Immich). A tap says when and where it was taken, with **Show in
+  Gallery**.
+- **Clock**: swipe up and down through Digital, Analog, World (the map with
+  the half in daylight lit, and your time zone's city marked), Solar (a sun
+  that crosses the sky with the day) and Float (big round numbers that float
+  in as they change). Touch and hold one (or right-click) for its colours.
+
+Each page remembers where you left it, on that device. A tap shows the page
+dots, **Night Mode** and the way out (Escape too) for a few seconds. Night
+Mode turns it all a dim red: Auto is 21:00 to 07:00 (a web page can't see
+how dark the room is), or On, or Off. It asks the browser to keep the
+screen on, which browsers only allow on HTTPS.
+
 ## On a phone
 
 <!-- screenshot: the home screen on a phone held upright -->

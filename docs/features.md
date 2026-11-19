@@ -97,8 +97,9 @@ one, each still shows the files themselves. More in
   drawn big like Videos: favorites, all channels and groups, a channel the
   whole screen, Up and Down (or its buttons) to the next. ViniPlay is in the
   store too, for a TV guide and recordings.
-- **Four modes**, chosen on each device: the Home screen, Desktop, TV (for a
-  remote) and Car (a phone on the dashboard).
+- **Five modes**, chosen on each device: the Home screen, Desktop, TV (for a
+  remote), Car (a phone on the dashboard) and StandBy (a bedside clock and
+  photo frame, over whichever of the others you were in).
 - **Tailscale** in My Computer (admin mode): files sent to this machine land
   in User/Tailscale, "Get Tailscale files here" takes them into any folder,
   and "Send to a device" sends yours.

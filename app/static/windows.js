@@ -173,12 +173,15 @@ function setDesktopMode(on) {
 // The ways adlerOS can look, each device its own: the home screen, desktop
 // mode, TV (tv.js) and Car (car.js). One list for Settings, Control
 // Center and the menus.
-const MODES = [["home", "Home screen"], ["desktop", "Desktop"], ["tv", "TV"], ["car", "Car"]];
+const MODES = [["home", "Home screen"], ["desktop", "Desktop"], ["tv", "TV"], ["car", "Car"], ["standby", "StandBy"]];
 const MODES_SOON = new Set();
-function currentMode() { return tvOn() ? "tv" : carOn() ? "car" : desktopMode() ? "desktop" : "home"; }
+function currentMode() { return typeof sbOn === "function" && sbOn() ? "standby" : tvOn() ? "tv" : carOn() ? "car" : desktopMode() ? "desktop" : "home"; }
 function modeName(mode) { return MODES.find(([m]) => m === mode)?.[1] || mode; }
 function setMode(mode) {
   if (MODES_SOON.has(mode)) return toast(`${modeName(mode)} mode isn't here yet; it's on the list.`);
+  // StandBy (standby.js) goes over the mode you're in, and leaves it as it was.
+  if (mode === "standby") return setStandby(true);
+  if (typeof sbOn === "function" && sbOn()) setStandby(false);
   if (mode === "tv") return setTv(true);
   if (mode === "car") return setCar(true);
   if (tvOn()) setTv(false);
