@@ -148,6 +148,19 @@
       }
     },
     {
+      "id": "land-style",
+      "category": "device",
+      "icon": "monitor",
+      "title": "A phone on its side",
+      "description": "Assisted: no menu bar, two floating bars down the left, and an app fills the screen beside them. Desktop: desktop mode as a computer has it, with the menu bar and windows to drag. Just this phone.",
+      "keywords": "phone landscape sideways sideway rotate turned desktop mode windows assisted layout menu bar",
+      "control": {
+        "type": "device-choice",
+        "key": "adleros.landStyle",
+        "options": [["assisted", "Assisted"], ["desktop", "Desktop"]]
+      }
+    },
+    {
       "id": "menu-lyrics",
       "category": "device",
       "device": "computer",

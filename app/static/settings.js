@@ -33,6 +33,7 @@ const ICONS = {
 // What an "open" row opens.
 // What turning a device-switch row on or off does, beyond keeping it.
 const SWITCHES = { "adleros.menuLyrics": (on) => setMenuLyrics(on) };
+const CHOICES = { "adleros.landStyle": (v) => setLandStyle(v) };
 const OPENERS = { terminal: () => openTerminal(), welcome: () => { closeSettings(); openWelcome(); } };
 
 // Named read-only values for "info" rows.
@@ -390,6 +391,12 @@ function buildRow(row) {
       value.textContent = Number(range.value).toFixed(2);
     });
     control.append(range, value);
+  } else if (c.type === "device-choice") {
+    // A choice kept in this browser (c.key; c.options: [value, label]); CHOICES says what changing it does.
+    const select = el("select", { class: "field-input", "aria-label": row.title }, ...c.options.map(([v, label]) => el("option", { value: v }, label)));
+    select.value = winLoad(c.key, c.options[0][0]);
+    select.addEventListener("change", () => (CHOICES[c.key] || ((v) => winSave(c.key, v)))(select.value));
+    control.append(select);
   } else if (c.type === "device-switch") {
     // A switch kept in this browser (c.key), on unless c.off; SWITCHES says what changing it does.
     const on = () => winLoad(c.key, !c.off) !== false;
