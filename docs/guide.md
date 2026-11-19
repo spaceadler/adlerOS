@@ -408,7 +408,9 @@ or the search box:
   *Look for new apps* (standalone); the domain, timezone, HTTPS and storage
   folder (homelab).
 - **System:** **Admin mode**, updating, the **Terminal**, the device,
-  **Restart** and **Shut down**.
+  **Restart adlerOS** (adlerOS alone: your apps keep running, and the page
+  reloads when it's back), and **Restart** and **Shut down** for the
+  machine.
 
 **Admin mode** is off until you switch it on, which asks for your password:
 

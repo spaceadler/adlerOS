@@ -156,7 +156,7 @@ To add your own, see [customizing](customizing.md#store-apps).
 | `ADLEROS_TRUSTED_PROXIES` | your reverse proxy's address or network, when adlerOS is behind one ([HTTPS](#https-behind-a-reverse-proxy)) |
 | `TZ`, `PUID`, `PGID` | timezone, and the user adlerOS and store apps run as |
 
-After editing: `docker compose up -d` in this folder.
+After editing: **Settings → Restart adlerOS**, or `docker compose up -d` in this folder.
 
 ## HTTPS, behind a reverse proxy
 

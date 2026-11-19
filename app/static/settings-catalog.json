@@ -488,6 +488,44 @@
       "keywords": "beszel stats source"
     },
     {
+      "id": "restart-adleros",
+      "category": "system",
+      "icon": "restart",
+      "title": "Restart adlerOS",
+      "mode": "standalone",
+      "description": "Restarts adlerOS itself, not the machine: your apps keep running. It comes back with its .env as it is now.",
+      "keywords": "reload restart adleros home screen container env",
+      "control": {
+        "type": "action",
+        "action": "restart-adleros",
+        "label": "Restart",
+        "confirm": {
+          "title": "Restart adlerOS?",
+          "body": "adlerOS is away for a few seconds; your apps keep running. The page reloads when it's back.",
+          "button": "Restart"
+        }
+      }
+    },
+    {
+      "id": "restart-adleros-homelab",
+      "category": "system",
+      "icon": "restart",
+      "title": "Restart adlerOS",
+      "mode": "homelab",
+      "description": "Restarts adlerOS itself, not the machine: your apps keep running.",
+      "keywords": "reload restart adleros home screen container",
+      "control": {
+        "type": "action",
+        "action": "restart-adleros-homelab",
+        "label": "Restart",
+        "confirm": {
+          "title": "Restart adlerOS?",
+          "body": "adlerOS is away for a few seconds; your apps keep running. The page reloads when it's back.",
+          "button": "Restart"
+        }
+      }
+    },
+    {
       "id": "restart",
       "category": "system",
       "icon": "restart",

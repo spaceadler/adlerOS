@@ -858,6 +858,12 @@ function passwordDialog() {
 
 const STATUS_TEXT = { queued: "Waiting", running: "Running", done: "Done", failed: "Failed" };
 
+// Actions that bring adlerOS back afresh: the page reloads after them, for
+// the new version (its job is only done once the container is back).
+const UPDATED = "Updated. Reloading adlerOS to show the new version…";
+const RESTARTED = "Restarted. Reloading adlerOS…";
+const RELOAD_AFTER = { update: UPDATED, "update-adleros": UPDATED, "restart-adleros": RESTARTED, "restart-adleros-homelab": RESTARTED };
+
 function jobDialog(job, { onDone } = {}) {
   const title = el("h2", {}, job.label || job.action);
   const status = el("span", { class: "job-status" });
@@ -890,8 +896,8 @@ function jobDialog(job, { onDone } = {}) {
       finished = true;
       if (j.action === "reboot") return waitForRestart(note);
       if (j.action === "shutdown") return (note.textContent = "Shutting down. Your homelab is offline until it's switched back on.");
-      if (j.action === "update") {
-        note.textContent = "Updated. Reloading adlerOS to show the new version…";
+      if (RELOAD_AFTER[j.action]) {
+        note.textContent = RELOAD_AFTER[j.action];
         return setTimeout(() => location.reload(), 2500);
       }
       note.textContent = (onDone && onDone(j)) || "Done.";

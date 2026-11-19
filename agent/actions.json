@@ -525,6 +525,58 @@
       }
     ]
   },
+  "restart-adleros": {
+    "label": "Restarting adlerOS",
+    "description": "Restarts adlerOS itself (its container), not the machine, with its .env as it is now. Your apps keep running.",
+    "mode": "standalone",
+    "steps": [
+      {
+        "run": [
+          "docker",
+          "compose",
+          "-f",
+          "{adleros}/docker-compose.yml",
+          "up",
+          "-d"
+        ]
+      },
+      {
+        "run": [
+          "docker",
+          "compose",
+          "-f",
+          "{adleros}/docker-compose.yml",
+          "restart"
+        ]
+      }
+    ]
+  },
+  "restart-adleros-homelab": {
+    "label": "Restarting adlerOS",
+    "description": "Restarts adlerOS itself (containers/core/os), not the machine. Your apps keep running.",
+    "mode": "homelab",
+    "steps": [
+      {
+        "run": [
+          "docker",
+          "compose",
+          "-f",
+          "{homelab}/containers/core/os/docker-compose.yml",
+          "up",
+          "-d"
+        ]
+      },
+      {
+        "run": [
+          "docker",
+          "compose",
+          "-f",
+          "{homelab}/containers/core/os/docker-compose.yml",
+          "restart"
+        ]
+      }
+    ]
+  },
   "maint-check": {
     "label": "Checking maintenance",
     "description": "Whether the maintenance launcher is installed (install-maint.sh), and its scripts' checksums.",

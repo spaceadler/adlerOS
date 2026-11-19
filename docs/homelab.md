@@ -81,4 +81,4 @@ checkout: `git -C containers/core/os/adleros diff`), then send it upstream to
 adlerOS. The homelab's `install.sh` won't overwrite local changes; it says it
 kept your copy. A change to `homelab/` here reaches `containers/core/os/` on
 the next `./install.sh` (adlerOS's installer writes it again). Static files (`app/static/`) show up on a reload; `app/server.py` needs
-`docker compose restart` in `containers/core/os`.
+**Settings → Restart adlerOS** (or `docker compose restart` in `containers/core/os`).
