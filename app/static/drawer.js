@@ -59,6 +59,7 @@ const BUILT_IN = [
   { id: "books", name: "Books", about: "Your PDFs and EPUBs, read like a book", open: () => openBooks(), keywords: "books read pdf epub ebook" },
   { id: "videos", name: "Videos", about: "Films, shows and documentaries, from Jellyfin or your Media folders", open: () => openVideos(), keywords: "videos films movies shows tv documentaries jellyfin" },
   { id: "iptv", name: "Live TV", about: "TV channels, from your IPTV playlists", open: () => openIptv(), keywords: "live tv iptv channels television m3u" },
+  { id: "phone", name: "Phone", about: "Call the people in your contacts, or a number", open: () => openPhone(), keywords: "phone call dial keypad" },
   { id: "clock", name: "Clock", about: "World clock, alarms, a stopwatch and timers", open: () => openClock(), keywords: "clock alarm timer stopwatch world time" },
   { id: "contacts", name: "Contacts", about: "The people in your life, from Monica", open: () => openContacts(), keywords: "contacts people friends phone email birthday monica" },
   { id: "gallery", name: "Gallery", about: "Your photos and videos, from Immich", open: () => openGallery(), keywords: "gallery photos pictures albums people immich" },

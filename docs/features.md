@@ -97,6 +97,8 @@ one, each still shows the files themselves. More in
   drawn big like Videos: favorites, all channels and groups, a channel the
   whole screen, Up and Down (or its buttons) to the next. ViniPlay is in the
   store too, for a TV guide and recordings.
+- **Phone**: your contacts' numbers, favorites, recents and a keypad; a call
+  goes to the device's own phone (an iPhone asks to call).
 - **Clock**: world clock (on a map), alarms with snooze, a stopwatch with laps,
   and timers, several at once; they ring on the device, StandBy too.
 - **Five modes**, chosen on each device: the Home screen, Desktop, TV (for a

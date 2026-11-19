@@ -911,6 +911,18 @@ too, with Snooze (or Repeat) and Stop. The sounds are made in the page and
 played as media, so a phone on silent still rings; the first tap on the
 page after opening adlerOS lets it play them.
 
+## Phone
+
+Calls the people in your contacts, or any number: **Favorites**, **Recents**,
+**Contacts** and **Keypad**, down the side. A call goes to the device's own
+phone (a `tel:` link): an iPhone asks *Call …?*; a computer offers its phone
+app, if it has one. **Contacts** are your address book's people with a number
+(see Contacts): a tap on a number calls it, its star makes it a favorite.
+The **Keypad** says whose number you're typing; hold 0 for +, hold ⌫ to clear,
+and your keyboard (or a paste) types too. Favorites and Recents (the calls
+made from adlerOS: a page can't read the phone's own list) are the same on
+every device.
+
 ## StandBy
 
 After the iPhone's: a bedside clock, a photo frame and a glance at your day,

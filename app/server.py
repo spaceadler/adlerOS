@@ -109,7 +109,7 @@ JOBS = DATA / "agent" / "jobs"
 ICON_OVERRIDES = Path(os.environ.get("OS_ICON_DIR", "/icons"))
 # adlerOS's own dock icons (./icons can replace each): All apps, and the ones
 # you pin like any app.
-DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "luna", "music", "podcasts", "books", "videos", "gallery", "documents", "calendar", "tasks", "contacts", "iptv", "clock")
+DOCK_ICONS = ("app-drawer", "app-store", "settings", "live-usage", "files", "terminal", "notepad", "luna", "music", "podcasts", "books", "videos", "gallery", "documents", "calendar", "tasks", "contacts", "iptv", "clock", "phone")
 DOCK_MAX_PINS = 16
 # The widgets you can put on the desktop, with the defaults and the limit.
 WIDGET_CATALOG = STATIC / "widgets-catalog.json"
@@ -462,7 +462,7 @@ def search_url():
 # from the start, in this order, until you take them out.
 BUILTIN_PINS = ("adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:files", "adleros:terminal",
                 "adleros:notepad", "adleros:luna", "adleros:music", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:tasks",
-                "adleros:podcasts", "adleros:books", "adleros:videos", "adleros:contacts", "adleros:iptv", "adleros:clock")
+                "adleros:podcasts", "adleros:books", "adleros:videos", "adleros:contacts", "adleros:iptv", "adleros:clock", "adleros:phone")
 DOCK_FIRST = BUILTIN_PINS[:5]  # a new dock's (Notepad, Luna and Music: in All apps, for you to pin)
 DOCK_SEED = 2  # 1: My Computer and the Terminal pinned; 2: the App Store, Settings and Live Usage too
 
@@ -7254,26 +7254,30 @@ CLOCK_FILE = DATA / "clock.json"
 _clock_lock = threading.Lock()
 
 
-def clock_get():
+# The same for Phone's favorites and recents (phone.js).
+SYNCED = {"clock": CLOCK_FILE, "phone": DATA / "phone.json"}
+
+
+def clock_get(file=CLOCK_FILE):
     try:
-        got = json.loads(CLOCK_FILE.read_text())
+        got = json.loads(file.read_text())
         return got if isinstance(got, dict) and isinstance(got.get("data"), dict) else {"at": 0, "data": None}
     except (OSError, ValueError):
         return {"at": 0, "data": None}
 
 
-def clock_set(body):
+def clock_set(body, file=CLOCK_FILE):
     data, at = body.get("data"), body.get("at")
     if not isinstance(data, dict) or not isinstance(at, (int, float)):
         return None
-    for key in ("cities", "alarms", "recents", "timers"):
+    for key in ("cities", "alarms", "recents", "timers", "favorites"):
         if key in data and not isinstance(data[key], list):
             return None
     with _clock_lock:
-        now = clock_get()
+        now = clock_get(file)
         if at >= (now.get("at") or 0):  # an older change doesn't undo a newer one
             now = {"at": at, "data": data}
-            write_private(CLOCK_FILE, json.dumps(now))
+            write_private(file, json.dumps(now))
         return now
 
 
@@ -7523,8 +7527,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.iptv_get(path[len("/api/iptv/"):], query)
         if path == "/api/car/places":
             return self.send_json(200, car_places())
-        if path == "/api/clock":
-            return self.send_json(200, clock_get())
+        if path in ("/api/clock", "/api/phone"):
+            return self.send_json(200, clock_get(SYNCED[path[5:]]))
         if path == "/api/standby/where":
             return self.send_json(200, standby_where(query.get("tz", [""])[0]))
         if path.startswith("/api/paperless/"):
@@ -7611,7 +7615,7 @@ class Handler(BaseHTTPRequestHandler):
                               else BOOK_COVER_LIMIT * 2 if path == "/api/books/cover"
                               else 32 * 1024 if path == "/api/car/places"
                               else 16 * 1024 if path == "/api/gallery/change"
-                              else 128 * 1024 if path == "/api/clock" else 4096)
+                              else 128 * 1024 if path in ("/api/clock", "/api/phone") else 4096)
         if body is None:
             return self.send_json(400, {"error": "expected a JSON object"})
         if path == "/api/settings":
@@ -7650,8 +7654,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.gallery_search(body)
         if path == "/api/gallery/change":
             return self.gallery_change(body)
-        if path == "/api/clock":
-            got = clock_set(body)
+        if path in ("/api/clock", "/api/phone"):
+            got = clock_set(body, SYNCED[path[5:]])
             return self.send_json(200, got) if got else self.send_json(400, {"error": "data: Clock's, and at: a time"})
         if path == "/api/terminal":
             return self.open_terminal(body)
