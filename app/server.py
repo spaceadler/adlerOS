@@ -8312,8 +8312,10 @@ class Handler(BaseHTTPRequestHandler):
                         break
                 return self.send_json(200, {"people": people})
             if what == "memories":
-                try:  # today's (On this day), not every one there's been
-                    return self.send_json(200, immich_json("memories", {"for": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())}))
+                # Today's (On this day), not every one there's been. A date:
+                # Immich 3 refuses a time with it (400), older ones read either.
+                try:
+                    return self.send_json(200, immich_json("memories", {"for": time.strftime("%Y-%m-%d")}))
                 except urllib.error.HTTPError as e:
                     if e.code == 403:
                         return self.send_json(200, [])  # the key may not read them: none
