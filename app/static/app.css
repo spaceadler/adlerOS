@@ -5452,3 +5452,15 @@ body.wm .desk > .desk-icon, body.wm .desk > .desk-widget { touch-action: none; }
   :is(.tk-side, .cal-side, .mu-side, .doc-side, .ga-side, .md-side, .pc-side, .bk-side, .doc-info) { transition: none !important; }
   .mu-shell.with-panel .mu-panel, .pc-shell.with-panel .pc-panel, .tk-shell.with-detail .tk-detail, .md-right { animation: none; }
 }
+
+/* The blurred cover behind what's playing (Music's and Podcasts' full
+   screen, the TV's Now Playing, the car): drifting, slowly, as if it were
+   breathing. Only its transform moves, so the blur isn't drawn again. */
+:is(.mu-mini-bg, .pc-mini-bg, .big-now-bg, .car-bgart) { animation: cover-drift 90s ease-in-out infinite; will-change: transform; }
+@keyframes cover-drift {
+  0%, 100% { transform: scale(1.18) translate(0, 0) rotate(0deg); }
+  25% { transform: scale(1.32) translate(3%, -2.5%) rotate(7deg); }
+  50% { transform: scale(1.22) translate(-2.5%, 2%) rotate(-5deg); }
+  75% { transform: scale(1.36) translate(2%, 3%) rotate(4deg); }
+}
+@media (prefers-reduced-motion: reduce) { :is(.mu-mini-bg, .pc-mini-bg, .big-now-bg, .car-bgart) { animation: none; } }
