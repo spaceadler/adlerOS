@@ -70,7 +70,8 @@ one, each still shows the files themselves. More in
   callouts, backlinks, the graph and Bases.
 - **Music**: your songs by album, artist and playlist (your `.m3u8` files,
   spotdl's included), a queue, shuffle and repeat, lyrics that follow the
-  song, and radio made from your own library. With your Navidrome login,
+  song (on the TV, full screen in the cover's colour, as Spotify's), and
+  radio made from your own library. With your Navidrome login,
   what you play counts there too.
 - **Gallery**: your photos from Immich, by month and day, albums, people,
   places and the map, favorites, On this day and search, each photo big
