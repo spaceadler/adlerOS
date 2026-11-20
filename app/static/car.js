@@ -60,8 +60,10 @@ function setCar(on, quiet = false) {
 function carLeave() {
   const before = winLoad(CAR_BEFORE_KEY, "home");
   const back = ["home", "desktop", "tv"].includes(before) ? before : "home";
-  setCar(false, back !== "home");
-  if (back !== "home") setMode(back);
+  modeDip(() => {
+    setCar(false, back !== "home");
+    if (back !== "home") setModeNow(back);
+  });
 }
 
 // ------------------------------------------------------------- the screen
@@ -269,7 +271,7 @@ function carUpdate() {
     $("car-art").replaceChildren(art || svg(CAR_ICONS.music));
     // The cover, big and soft, behind the full screen player.
     const pic = art?.querySelector?.("img")?.src || "";
-    $("car-bgart").style.backgroundImage = pic ? `url("${pic}")` : "";
+    fadeBackground($("car-bgart"), pic || "");
     carLyricsLoad();
     $("car-title").textContent = title;
     $("car-sub").textContent = sub;

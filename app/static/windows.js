@@ -189,8 +189,32 @@ const MODES = [["home", "Home screen"], ["desktop", "Desktop"], ["tv", "TV"], ["
 const MODES_SOON = new Set();
 function currentMode() { return typeof sbOn === "function" && sbOn() ? "standby" : tvOn() ? "tv" : carOn() ? "car" : desktopMode() ? "desktop" : "home"; }
 function modeName(mode) { return MODES.find(([m]) => m === mode)?.[1] || mode; }
+// From one mode to another through a moment of black, as a TV changing
+// its input: the switch itself on a timer, so it happens even where nothing
+// is drawn (a hidden tab). A promise, done once it has.
+function modeDip(change) {
+  if (!motionOK()) { change(); return Promise.resolve(); }
+  let veil = $("mode-veil");
+  if (!veil) {
+    veil = el("div", { id: "mode-veil", class: "mode-veil", "aria-hidden": "true" });
+    document.body.append(veil);
+  }
+  for (const a of veil.getAnimations()) a.cancel();
+  veil.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 170, easing: "ease-in", fill: "forwards" });
+  return new Promise((done) => setTimeout(() => {
+    try { change(); } finally {
+      for (const a of veil.getAnimations()) a.cancel();
+      veil.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 380, easing: "ease-out", fill: "forwards" });
+      done();
+    }
+  }, 180));
+}
 function setMode(mode) {
-  if (MODES_SOON.has(mode)) return toast(`${modeName(mode)} mode isn't here yet; it's on the list.`);
+  if (MODES_SOON.has(mode)) { toast(`${modeName(mode)} mode isn't here yet; it's on the list.`); return Promise.resolve(); }
+  if (mode === currentMode()) { setModeNow(mode); return Promise.resolve(); }
+  return modeDip(() => setModeNow(mode));
+}
+function setModeNow(mode) {
   // StandBy (standby.js) goes over the mode you're in, and leaves it as it was.
   if (mode === "standby") return setStandby(true);
   if (typeof sbOn === "function" && sbOn()) setStandby(false);
