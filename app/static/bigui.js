@@ -382,7 +382,7 @@ function bigNowPage() {
   return el("div", { class: "big-now", id: "big-now" }, el("div", { class: "big-now-bg", id: "big-now-bg", "aria-hidden": "true" }),
     el("div", { class: "big-now-art", id: "big-now-art" }),
     el("div", { class: "big-now-text" }, el("div", { class: "big-now-title", id: "big-now-title" }), el("div", { class: "big-now-sub", id: "big-now-sub" }),
-      el("div", { class: "big-now-bar" }, el("span", { id: "big-now-bar" })), el("div", { class: "big-now-times" }, el("span", { id: "big-now-at" }), el("span", { id: "big-now-left" })),
+      bigNowSeekBar(), el("div", { class: "big-now-times" }, el("span", { id: "big-now-at" }), el("span", { id: "big-now-left" })),
       el("div", { class: "big-now-ctls" },
         ctl("big-now-prev", BIG_ICONS.prev, "Back", () => (pods() ? pcSkip(-30) : musicPrev())),
         ctl("big-now-play", BIG_ICONS.play, "Play", () => (pods() ? pcToggle() : musicToggle()), true),
@@ -390,6 +390,49 @@ function bigNowPage() {
         // The song a favorite (or not), as in Music.
         bigNowFav())),
     el("div", { class: "big-now-lyrics", id: "big-now-lyrics" }));
+}
+
+// Where in the song: a bar to seek through. The remote: on it, left and
+// right go back and on 10 s (up and down leave it); a pointer: a press or a
+// drag anywhere along it.
+function bigNowSeekBar() {
+  const bar = el("div", { class: "big-now-bar", id: "big-now-seek", role: "slider", tabindex: "0", "aria-label": "Where in it", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": "0" },
+    el("span", { id: "big-now-bar" }), el("i", { class: "big-now-knob", "aria-hidden": "true" }));
+  const frac = (e) => { const r = bar.getBoundingClientRect(); return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); };
+  bar.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    bar.setPointerCapture(e.pointerId);
+    bar.classList.add("seeking");
+    bigNowSeek(frac(e));
+  });
+  bar.addEventListener("pointermove", (e) => { if (bar.hasPointerCapture(e.pointerId)) bigNowSeek(frac(e)); });
+  const up = () => bar.classList.remove("seeking");
+  bar.addEventListener("pointerup", up);
+  bar.addEventListener("pointercancel", up);
+  return bar;
+}
+// What's playing and how long it is: a podcast's (in the car), else the song's.
+function bigNowLength() {
+  const pods = typeof carPods === "function" && carPods();
+  if (pods) return { pods, dur: pc.np?.duration || 0, at: pcPos() };
+  const d = music.audio.duration;
+  return { pods, dur: Number.isFinite(d) ? d : 0, at: music.audio.currentTime || 0 };
+}
+function bigNowSeek(f) {
+  const { pods, dur } = bigNowLength();
+  if (!dur) return; // a station: nowhere to go
+  if (pods) pcSeek(f * dur); else music.audio.currentTime = f * dur;
+  bigNowUpdate();
+}
+function bigNowSkip(by) {
+  const { pods, dur, at } = bigNowLength();
+  if (!dur) return;
+  const bar = $("big-now-seek");
+  bar?.classList.add("seeking");
+  clearTimeout(bigNowSkip.timer);
+  bigNowSkip.timer = setTimeout(() => bar?.classList.remove("seeking"), 400);
+  if (pods) pcSkip(by); else music.audio.currentTime = Math.max(0, Math.min(dur - 0.5, at + by));
+  bigNowUpdate();
 }
 
 function bigNowFav() {
@@ -487,7 +530,14 @@ function bigNowUpdate() {
   }
   $("big-now-title").textContent = title;
   $("big-now-sub").textContent = sub;
-  $("big-now-bar").style.width = `${dur ? Math.min(100, (at / dur) * 100) : 0}%`;
+  const pct = dur ? Math.min(100, (at / dur) * 100) : 0;
+  $("big-now-bar").style.width = `${pct}%`;
+  const seek = $("big-now-seek");
+  if (seek) {
+    seek.style.setProperty("--at", `${pct}%`);
+    seek.setAttribute("aria-valuenow", String(Math.round(pct)));
+    seek.classList.toggle("fixed", !dur);
+  }
   const clock = (t) => { t = Math.max(0, Math.round(t)); const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = String(t % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`; };
   $("big-now-at").textContent = dur ? clock(at) : "";
   $("big-now-left").textContent = dur ? `-${clock(dur - at)}` : "";
@@ -617,6 +667,8 @@ function bigKeys(e) {
     const enter = e.key === "Enter" || e.key === " ";
     return enter && (bigLiveResume() || quiet);
   }
+  // On Now Playing's bar: left and right seek.
+  if (document.activeElement?.id === "big-now-seek" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { bigNowSkip(e.key === "ArrowLeft" ? -10 : 10); return true; }
   if (!big.viewer) return false;
   if (e.key === "ArrowLeft" || e.key === "ArrowRight") { bigViewerStep(e.key === "ArrowLeft" ? -1 : 1); return true; }
   return false;

@@ -144,6 +144,7 @@ function fadeBackground(node, url, ms = 900) {
 // stretches (so it costs next to nothing); a new song's colours flow in.
 const COVER_BGS = ".mu-mini-bg, .pc-mini-bg, .big-now-bg, .car-bgart";
 const lavas = new Set();
+const LAVA_PACE = 0.6; // slower than the paths' own periods (20-45 s): calm
 let lavaFrame = 0, lavaLast = 0;
 
 // The cover's colours: its most common ones, the colourful counting most,
@@ -237,7 +238,7 @@ function lavaDraw(st, now) {
   const e = k * k * (3 - 2 * k);
   st.colors = st.target.map((c, i) => c.map((v, j) => st.from[i][j] + (v - st.from[i][j]) * e));
   const col = (c, a) => `rgba(${c[0] | 0}, ${c[1] | 0}, ${c[2] | 0}, ${a})`;
-  const t = motionOK() ? (now / 1000) + st.seed : st.seed;
+  const t = motionOK() ? (now / 1000) * LAVA_PACE + st.seed : st.seed;
   const base = st.colors[st.colors.length - 1];
   g.fillStyle = col(base.map((v) => v * 0.45), 1);
   g.fillRect(0, 0, cw, ch);
