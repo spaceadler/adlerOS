@@ -5365,6 +5365,8 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .md-focus-out { display: none; }
 #luna.md-focus .md-focus-out { position: absolute; top: 8px; right: 10px; z-index: 5; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%;
   background: rgb(255 255 255 / 0.1); color: rgb(255 255 255 / 0.7); cursor: pointer; opacity: 0.6; }
+/* On the home screen the window's X is up there too: this goes to its left. */
+body:not(.wm) #luna.md-focus .md-focus-out { top: 7px; right: 56px; }
 #luna.md-focus .md-focus-out:hover, #luna.md-focus .md-focus-out:focus-visible { opacity: 1; }
 #luna.md-focus .md-focus-out svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 

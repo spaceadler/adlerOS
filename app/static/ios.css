@@ -178,6 +178,9 @@ body.phone .sheet-close { top: 16px; right: 14px; width: 30px; height: 30px; bac
 body.phone .sheet-close svg { width: 14px; height: 14px; }
 /* Notepad's X sits in its 44px bar, centred on it. */
 body.phone .pad-close { top: 7px; }
+/* Luna's, on its tab strip's middle; in focus mode, Leave focus mode to its left. */
+body.phone .md-close { top: 7px; }
+body.phone #luna.md-focus .md-focus-out { top: 7px; right: 52px; width: 30px; height: 30px; }
 body.phone .store-title { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
 
 /* Settings: grouped lists, coloured icons, separators that start after them. */
