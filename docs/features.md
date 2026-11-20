@@ -62,7 +62,9 @@ one, each still shows the files themselves. More in
   Settings): your Desktop, your storage folder and (read-only) your
   homelab's own folder, in a window. Upload, download, cut, copy and paste
   between them, rename, delete into a Trash you can restore from; photos,
-  videos, PDFs and songs open in windows of their own.
+  videos, PDFs and songs open in windows of their own. Type a path into
+  its path bar (a click beside it, or Ctrl+L), and, in admin mode, **Open
+  in Terminal** starts a shell in the folder you're in.
 - **Notepad** for text files, and **Luna** for notes: Markdown in vaults,
   Obsidian's way (an Obsidian vault works in both), with links, embeds,
   callouts, backlinks, the graph and Bases.
