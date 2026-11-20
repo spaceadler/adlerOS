@@ -143,17 +143,39 @@ function openInFor(app) {
   const how = (winLoad(OPEN_IN_KEY, {}) || {})[app.id];
   return how === "tab" || (how === "firefox" && app.known !== "firefox" && firefoxApp()) ? how : "window";
 }
+// Its own window: on a computer, the browser's own app-like window (no tabs,
+// no address bar to speak of) the size of one here, over adlerOS; on a
+// phone, what the phone does (adlerOS on the Home Screen: a sheet over it,
+// Done to come back). Your browser draws it, on your device: logins stick,
+// videos play. A blocked pop-up: a tab.
+function openOwnWindow(app) {
+  if (!smallTouch()) {
+    const w = Math.round(Math.min(screen.availWidth * 0.85, 1400)), h = Math.round(Math.min(screen.availHeight * 0.85, 900));
+    const x = Math.round((screen.availLeft || 0) + (screen.availWidth - w) / 2), y = Math.round((screen.availTop || 0) + (screen.availHeight - h) / 2);
+    // Opened blank, cut loose from adlerOS (it can't reach back into this
+    // tab), then sent there; open already: brought forward.
+    const win = window.open("", `adleros-${app.id}`, `popup,width=${w},height=${h},left=${x},top=${y}`);
+    if (win) {
+      try {
+        if (win.location.href === "about:blank") { win.opener = null; win.location.href = app.url; }
+      } catch { /* already there (another site's page): just bring it forward */ }
+      win.focus?.();
+      return;
+    }
+  }
+  window.open(app.url, "_blank", "noopener,noreferrer");
+}
 function setOpenIn(app, how) {
   const all = { ...(winLoad(OPEN_IN_KEY, {}) || {}) };
   if (how === "window") delete all[app.id]; else all[app.id] = how;
   winSave(OPEN_IN_KEY, all);
-  toast(`${app.name} opens ${{ window: "in a window here", tab: "in a tab of its own", firefox: "in Firefox" }[how]} on this device.`);
+  toast(`${app.name} opens ${{ window: "in a window here", tab: "in a window of its own", firefox: "in Firefox" }[how]} on this device.`);
 }
 function openInItems(app) {
   const now = openInFor(app);
   return [
     { label: "A window here", checked: now === "window", run: () => setOpenIn(app, "window") },
-    { label: "A tab of its own", checked: now === "tab", run: () => setOpenIn(app, "tab") },
+    { label: "Its own window (logins work)", checked: now === "tab", run: () => setOpenIn(app, "tab") },
     ...(firefoxApp() && app.known !== "firefox" ? [{ label: "Firefox (on the machine)", checked: now === "firefox", run: () => setOpenIn(app, "firefox") }] : []),
   ];
 }

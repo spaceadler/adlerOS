@@ -331,7 +331,7 @@ function siteOpenIn(app) {
     ...openInItems(app).map((it, i) => el("option", { value: ["window", "tab", "firefox"][i], ...(it.checked ? { selected: "" } : {}) }, it.label)));
   select.addEventListener("change", () => setOpenIn(app, select.value));
   return el("div", { class: "site-open" }, el("label", { class: "site-open-row" }, el("span", {}, "Opens in"), select),
-    el("p", { class: "row-description" }, "Logging in won't stick in a window here: a website inside another site's page has its login kept out by the browser. If it sends you back to its home page logged out, open it in a tab of its own (or Firefox)."));
+    el("p", { class: "row-description" }, "Logging in won't stick in a window here: a website inside another site's page has its login kept out by the browser. If it sends you back to its home page logged out, give it its own window: your browser's, over adlerOS (on an iPhone with adlerOS on the Home Screen, a sheet over it)."));
 }
 
 // Where an app's page is: what its icon and window open. Changed when your

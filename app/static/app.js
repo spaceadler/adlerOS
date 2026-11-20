@@ -1148,7 +1148,7 @@ function openApp(app) {
   }
   // Where you asked this one to open (a site you log in to: a tab, Firefox).
   const how = openInFor(app);
-  if (how === "tab") return void window.open(app.url, "_blank", "noopener,noreferrer");
+  if (how === "tab") return openOwnWindow(app);
   if (how === "firefox") return void openInFirefox(app.url, app.name).then((ok) => ok || window.open(app.url, "_blank", "noopener,noreferrer"));
   // In a window, unless this device wants tabs (on the home screen) or the
   // app won't be shown inside another page.
