@@ -60,8 +60,12 @@ function bigBuild() {
   $("desktop").after(node);
 }
 
-// Opens an app big: `mode` "car" or "tv"; `tab`: on that tab.
-async function bigOpen(app, mode, { tab = 0 } = {}) {
+// Opens an app big: `mode` "car" or "tv"; `tab`: on that tab. Music on
+// the TV with a song loaded opens at its Now Playing (Back: the library),
+// unless `now` is false (a page of it was asked for).
+const bigNowEntry = () => ({ page: { title: "Now Playing", nowPlaying: true }, load: null, tab: 0, cache: new Map() });
+const bigHasSong = () => typeof muCurrent === "function" && Boolean(muCurrent());
+async function bigOpen(app, mode, { tab = 0, now = true } = {}) {
   if (!BIG_APPS[app]) return;
   bigBuild();
   big.mode = mode;
@@ -74,6 +78,7 @@ async function bigOpen(app, mode, { tab = 0 } = {}) {
   bigLiveClose();
   bigRail();
   big.stack = [{ page: null, load: BIG_APPS[app].root, tab, cache: new Map() }];
+  if (now && app === "music" && mode === "tv" && bigHasSong()) big.stack.push(bigNowEntry());
   clearInterval(big.timer);
   big.timer = setInterval(bigTick, 1000);
   await bigDraw();
@@ -82,7 +87,7 @@ async function bigOpen(app, mode, { tab = 0 } = {}) {
 // An app opened at one of its pages (from the TV's feed): Back goes to the
 // app's first page.
 async function bigOpenPage(app, mode, load) {
-  await bigOpen(app, mode);
+  await bigOpen(app, mode, { now: false });
   if (bigOn() && big.app === app) bigPush(load);
 }
 
@@ -156,6 +161,7 @@ async function bigDraw(restore = false) {
   const body = $("big-body");
   const tabsBox = $("big-tabs");
   if (!top.page) {
+    $("big").classList.remove("big-np");
     $("big-head").replaceChildren(bigHeadBack(), el("h1", { class: "big-title" }, top.title || BIG_APPS[big.app].name));
     tabsBox.replaceChildren();
     tabsBox.bigPage = null;
@@ -165,6 +171,7 @@ async function bigDraw(restore = false) {
   }
   const page = top.page;
   top.title = page.title;
+  $("big").classList.toggle("big-np", Boolean(page.nowPlaying));
   $("big-head").replaceChildren(bigHeadBack(), el("div", { class: "big-titles" },
     page.kicker ? el("div", { class: "big-kicker" }, page.kicker) : "", el("h1", { class: "big-title" }, page.title || "")));
   // Tabs: their own pages, each drawn once and kept while you're here.
@@ -195,12 +202,14 @@ async function bigDraw(restore = false) {
   body.replaceChildren(...bigContent(content));
   body.scrollTop = restore || top.scroll ? top.scroll || 0 : 0;
   bigMini();
+  if (page.nowPlaying) bigNowUpdate();
   if (big.mode === "tv") {
     const keep = document.activeElement;
     const back = restore && top.focus >= 0 ? body.querySelectorAll("button")[top.focus] : null;
     if (back) back.focus({ preventScroll: true });
     else if (!$("big").contains(keep) || !keep.isConnected) {
-      (tabsBox.querySelector(".big-tab.on") && !top.scroll ? tabsBox.querySelector(".big-tab.on") : body.querySelector("button, [tabindex='0']"))?.focus({ preventScroll: true });
+      (tabsBox.querySelector(".big-tab.on") && !top.scroll ? tabsBox.querySelector(".big-tab.on")
+        : body.querySelector(".big-now-ctl.primary") || body.querySelector("button, [tabindex='0']"))?.focus({ preventScroll: true });
     }
   }
 }
@@ -323,7 +332,8 @@ function bigMini() {
 // home); on the TV, a Now Playing page.
 function bigListen() {
   if (carOn()) { bigClose(); return; }
-  const page = { page: { title: "Now Playing", nowPlaying: true }, load: null, tab: 0, cache: new Map() };
+  const page = bigNowEntry();
+  if (bigOn() && big.stack.at(-1)?.page?.nowPlaying) return bigNowUpdate(); // already there
   if (!bigOn()) {
     // From the TV's home: Now Playing on its own; Back goes home.
     bigBuild();
@@ -405,6 +415,41 @@ function bigLyricsFollow(jump = false) {
 }
 if (typeof music !== "undefined") music.audio.addEventListener("timeupdate", () => { if ($("big-now-lyrics") && bigOn()) bigLyricsFollow(); });
 
+// As Spotify's full screen: the page in the cover's own colour (its most
+// colourful part, kept mid-dark so white words and dark ones both read).
+function bigNowTint(img) {
+  const now = $("big-now");
+  const set = (c) => { now.style.setProperty("--now-tint", c || "transparent"); now.classList.toggle("tinted", Boolean(c)); };
+  set("");
+  if (!img) return;
+  const go = () => {
+    try {
+      const c = document.createElement("canvas");
+      c.width = c.height = 24;
+      const x = c.getContext("2d", { willReadFrequently: true });
+      x.drawImage(img, 0, 0, 24, 24);
+      const d = x.getImageData(0, 0, 24, 24).data;
+      let r = 0, g = 0, b = 0, w = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
+        const k = 0.04 + ((mx - mn) / 255) ** 2 * (mx / 255); // the colourful and bright count most
+        r += d[i] * k; g += d[i + 1] * k; b += d[i + 2] * k; w += k;
+      }
+      [r, g, b] = [r / w / 255, g / w / 255, b / w / 255];
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, dd = mx - mn;
+      let h = 0, s = 0;
+      if (dd) {
+        s = dd / (1 - Math.abs(2 * l - 1));
+        h = mx === r ? ((g - b) / dd) % 6 : mx === g ? (b - r) / dd + 2 : (r - g) / dd + 4;
+        h = (h * 60 + 360) % 360;
+      }
+      if (now.isConnected) set(`hsl(${Math.round(h)} ${Math.round(Math.min(0.72, Math.max(s ? 0.32 : 0, s)) * 100)}% ${Math.round(Math.min(0.4, Math.max(0.27, l)) * 100)}%)`);
+    } catch { /* a cover from elsewhere can't be read: the blurred one stays */ }
+  };
+  if (img.complete && img.naturalWidth) go();
+  else img.addEventListener("load", go, { once: true });
+}
+
 function bigNowUpdate() {
   if (!$("big-now-title")) return;
   const pods = typeof carPods === "function" && carPods();
@@ -428,6 +473,7 @@ function bigNowUpdate() {
     // The cover, blurred, behind it all; the words for a song.
     const img = $("big-now-art").querySelector("img");
     $("big-now-bg").style.backgroundImage = img?.src ? `url("${img.src}")` : "";
+    bigNowTint(img);
     if (!pods && id) bigLyricsLoad(id);
     else { big.lyrics = null; bigLyricsDraw(); }
   }
@@ -605,7 +651,8 @@ async function bigMusicRoot() {
   return { title: "Music", tabs: [
     { label: "Recently Played", page: () => ({
       hero: { title: "Your library", sub: bigCount(music.all.length, "song"), shape: "none",
-        actions: [{ label: "Shuffle all", icon: BIG_ICONS.shuffle, primary: true, run: () => { musicRadio({ kind: "all", label: "Your library" }); bigListen(); } }] },
+        actions: [...(big.mode === "tv" && bigHasSong() ? [{ label: "Now Playing", icon: BIG_ICONS.play, primary: true, run: () => bigListen() }] : []),
+          { label: "Shuffle all", icon: BIG_ICONS.shuffle, primary: !(big.mode === "tv" && bigHasSong()), run: () => { musicRadio({ kind: "all", label: "Your library" }); bigListen(); } }] },
       sections: [{ layout: big.mode === "tv" ? "shelf" : "grid", items: bigMusicRecent() }], empty: "Play an album or a playlist and it's here." }) },
     { label: "Playlists", page: () => ({ sections: [{ layout: "list", items: [...music.playlists].sort((a, b) => (b.mtime || 0) - (a.mtime || 0)).map(bigListItem) }], empty: "No playlists yet." }) },
     { label: "Albums", page: () => ({ sections: [{ layout: "grid", items: [...music.albums.values()].sort((a, b) => muCollator.compare(a.title, b.title)).map(bigAlbumItem) }] }) },
