@@ -5110,6 +5110,21 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 /* Contacts (contacts.js): Music's window, the people down the side. */
 .contacts-app { --mu-accent: #6d8cc0; }
 .ct-list { overflow-y: auto; }
+/* A phone (a narrow window): no side; the first page is everyone, a person
+   a page of their own with Contacts (back) at the top. */
+.ct-phone-home, .ct-back { display: none; }
+@container sheet (max-width: 640px) {
+  #ct-side { display: none; }
+  .ct-pick { display: none; }
+  .ct-phone-home { display: block; }
+  .ct-phone-title { margin: 4px 0 12px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .ct-phone-search { display: flex; margin: 0 0 8px; }
+  .ct-home-list { overflow: visible; }
+  .ct-home-list .ct-row { width: 100%; gap: 12px; min-height: 48px; padding: 8px 6px; border-radius: 10px; font-size: 16px; }
+  .ct-home-list .ct-avatar { width: 34px; height: 34px; font-size: 13px; }
+  .ct-back { display: inline-flex; align-items: center; gap: 4px; margin: 12px 0 0 12px; }
+  .ct-back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+}
 .ct-letter { margin: 12px 10px 4px; color: rgb(255 255 255 / 0.45); font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .ct-row { gap: 9px; }
 .ct-new { margin: 2px 0 6px; }
@@ -5474,7 +5489,7 @@ body.wm .desk > .desk-icon, body.wm .desk > .desk-widget { touch-action: none; }
 /* The blurred cover behind what's playing (Music's and Podcasts' full
    screen, the TV's Now Playing, the car): drifting, slowly, as if it were
    breathing. Only its transform moves, so the blur isn't drawn again. */
-:is(.mu-mini-bg, .pc-mini-bg, .big-now-bg, .car-bgart) { animation: cover-drift 60s ease-in-out infinite; will-change: transform; }
+:is(.mu-mini-bg, .pc-mini-bg, .big-now-bg, .car-bgart) { animation: cover-drift 30s ease-in-out infinite; will-change: transform; }
 @keyframes cover-drift {
   0%, 100% { transform: scale(1.18) translate(0, 0) rotate(0deg); }
   25% { transform: scale(1.32) translate(3%, -2.5%) rotate(7deg); }

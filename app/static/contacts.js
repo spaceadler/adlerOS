@@ -16,6 +16,7 @@
 const CT_ICONS = {
   person: ["M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2", "M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"],
   plus: ["M12 5v14", "M5 12h14"],
+  back: ["m15 18-6-6 6-6"],
   link: ["M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1", "M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"],
   star: ["M12 3l2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.4l-5.6 2.9 1.1-6.2L3 9.7l6.2-.9z"],
   close: ["M18 6 6 18", "M6 6l12 12"],
@@ -122,11 +123,17 @@ function ctAvatar(c, size = "") {
     c.initials || (c.name || "?").slice(0, 1).toUpperCase());
 }
 
+// The people: in the side (a wide window), and on a phone the first page
+// itself (ct-home-list), as an iPhone's Contacts.
 function ctList() {
   const nav = $("ct-list");
   if (!nav) return;
-  if (!ctOnline()) return nav.replaceChildren();
-  if (!ct.list.length) return nav.replaceChildren(el("p", { class: "vd-dim ct-none" }, ct.q ? "No one by that name." : "No one yet."));
+  nav.replaceChildren(...ctRows());
+  $("ct-home-list")?.replaceChildren(...ctRows());
+}
+function ctRows() {
+  if (!ctOnline()) return [];
+  if (!ct.list.length) return [el("p", { class: "vd-dim ct-none" }, ct.q ? "No one by that name." : "No one yet.")];
   const starred = ct.list.filter((c) => c.starred);
   const rows = [];
   const row = (c) => {
@@ -143,7 +150,7 @@ function ctList() {
     if (l !== letter) { letter = l; rows.push(el("h3", { class: "ct-letter" }, l)); }
     rows.push(row(c));
   }
-  nav.replaceChildren(...rows);
+  return rows;
 }
 
 function ctSource() {
@@ -166,13 +173,28 @@ async function ctRender() {
   if (!main) return;
   const page = el("div", { class: "mu-page ct-page" });
   const v = ct.view;
-  main.replaceChildren(page);
+  // On a phone, a person (or the edit) is a page of its own: back to the list.
+  const back = el("button", { type: "button", class: "mu-button secondary ct-back" }, svg(CT_ICONS.back), "Contacts");
+  back.addEventListener("click", () => { ctShow({ kind: "home" }); viewBack($("ct-main")); });
+  main.replaceChildren(...(["person", "edit"].includes(v.kind) ? [back] : []), page);
   if (v.kind === "connect") return ctConnectPage(page);
   if (!ctOnline()) return ctConnectPage(page);
   if (v.kind === "person") return ctDav() ? ctCardPage(page, v.id) : ctPersonPage(page, v.id);
   if (v.kind === "edit") return ctDav() ? ctCardEdit(page, v.id) : ctEditPage(page, v.id);
-  page.append(el("div", { class: "mu-empty" }, el("h2", {}, "Contacts"),
+  page.append(el("div", { class: "mu-empty ct-pick" }, el("h2", {}, "Contacts"),
     el("p", {}, ct.list.length ? `${ct.list.length} ${ct.list.length === 1 ? "person" : "people"}. Pick one, or search.` : "No one yet: New contact adds the first.")));
+  // A phone's first page: the search, New contact and everyone.
+  const search = el("input", { class: "field-input mu-search", type: "search", placeholder: "Search", value: ct.q, spellcheck: "false", autocomplete: "off" });
+  let timer = null;
+  search.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { ct.q = search.value.trim(); if ($("ct-search")) $("ct-search").value = ct.q; ctLoadList(); }, 250);
+  });
+  const add = el("button", { type: "button", class: "mu-nav ct-new" }, svg(CT_ICONS.plus), el("span", {}, "New contact"));
+  add.addEventListener("click", () => ctShow({ kind: "edit", id: null }));
+  page.append(el("div", { class: "ct-phone-home" }, el("h1", { class: "ct-phone-title" }, "Contacts"),
+    el("label", { class: "mu-search-box ct-phone-search" }, svg(CT_ICONS.search), search), add,
+    el("nav", { class: "ct-list ct-home-list", id: "ct-home-list", "aria-label": "People" }, ...ctRows())));
 }
 
 // ------------------------------------------------------------- a person
