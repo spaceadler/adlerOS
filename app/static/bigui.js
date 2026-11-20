@@ -161,7 +161,6 @@ async function bigDraw(restore = false) {
   const body = $("big-body");
   const tabsBox = $("big-tabs");
   if (!top.page) {
-    $("big").classList.remove("big-np");
     $("big-head").replaceChildren(bigHeadBack(), el("h1", { class: "big-title" }, top.title || BIG_APPS[big.app].name));
     tabsBox.replaceChildren();
     tabsBox.bigPage = null;
@@ -171,7 +170,6 @@ async function bigDraw(restore = false) {
   }
   const page = top.page;
   top.title = page.title;
-  $("big").classList.toggle("big-np", Boolean(page.nowPlaying));
   $("big-head").replaceChildren(bigHeadBack(), el("div", { class: "big-titles" },
     page.kicker ? el("div", { class: "big-kicker" }, page.kicker) : "", el("h1", { class: "big-title" }, page.title || "")));
   // Tabs: their own pages, each drawn once and kept while you're here.
@@ -415,41 +413,6 @@ function bigLyricsFollow(jump = false) {
 }
 if (typeof music !== "undefined") music.audio.addEventListener("timeupdate", () => { if ($("big-now-lyrics") && bigOn()) bigLyricsFollow(); });
 
-// As Spotify's full screen: the page in the cover's own colour (its most
-// colourful part, kept mid-dark so white words and dark ones both read).
-function bigNowTint(img) {
-  const now = $("big-now");
-  const set = (c) => { now.style.setProperty("--now-tint", c || "transparent"); now.classList.toggle("tinted", Boolean(c)); };
-  set("");
-  if (!img) return;
-  const go = () => {
-    try {
-      const c = document.createElement("canvas");
-      c.width = c.height = 24;
-      const x = c.getContext("2d", { willReadFrequently: true });
-      x.drawImage(img, 0, 0, 24, 24);
-      const d = x.getImageData(0, 0, 24, 24).data;
-      let r = 0, g = 0, b = 0, w = 0;
-      for (let i = 0; i < d.length; i += 4) {
-        const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
-        const k = 0.04 + ((mx - mn) / 255) ** 2 * (mx / 255); // the colourful and bright count most
-        r += d[i] * k; g += d[i + 1] * k; b += d[i + 2] * k; w += k;
-      }
-      [r, g, b] = [r / w / 255, g / w / 255, b / w / 255];
-      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, dd = mx - mn;
-      let h = 0, s = 0;
-      if (dd) {
-        s = dd / (1 - Math.abs(2 * l - 1));
-        h = mx === r ? ((g - b) / dd) % 6 : mx === g ? (b - r) / dd + 2 : (r - g) / dd + 4;
-        h = (h * 60 + 360) % 360;
-      }
-      if (now.isConnected) set(`hsl(${Math.round(h)} ${Math.round(Math.min(0.72, Math.max(s ? 0.32 : 0, s)) * 100)}% ${Math.round(Math.min(0.4, Math.max(0.27, l)) * 100)}%)`);
-    } catch { /* a cover from elsewhere can't be read: the blurred one stays */ }
-  };
-  if (img.complete && img.naturalWidth) go();
-  else img.addEventListener("load", go, { once: true });
-}
-
 function bigNowUpdate() {
   if (!$("big-now-title")) return;
   const pods = typeof carPods === "function" && carPods();
@@ -473,7 +436,6 @@ function bigNowUpdate() {
     // The cover, blurred, behind it all; the words for a song.
     const img = $("big-now-art").querySelector("img");
     $("big-now-bg").style.backgroundImage = img?.src ? `url("${img.src}")` : "";
-    bigNowTint(img);
     if (!pods && id) bigLyricsLoad(id);
     else { big.lyrics = null; bigLyricsDraw(); }
   }

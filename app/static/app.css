@@ -5066,38 +5066,6 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .big-now-lyrics.synced .big-now-line { color: rgb(255 255 255 / 0.32); transition: color 0.3s, transform 0.3s; transform-origin: left center; cursor: pointer; }
 .big-now-lyrics.synced .big-now-line.past { color: rgb(255 255 255 / 0.22); }
 .big-now-lyrics.synced .big-now-line.now { color: #fff; transform: scale(1.03); }
-/* The TV's Now Playing with words, as Spotify's full screen: the cover's
-   colour, the words big across it (the line being sung white, the ones to
-   come dark), the song, its controls and where it's at along the bottom. */
-.big-tv.big-np .big-main { gap: 0; padding-top: 0; }
-.big-tv.big-np .big-tabs { display: none; }
-.big-tv.big-np .big-head { position: absolute; top: max(16px, 3.4vh); left: 0; z-index: 3; }
-.big-tv.big-np .big-titles { display: none; }
-.big-tv.big-np .big-back { background: rgb(0 0 0 / 0.2); }
-.big-tv.big-np .big-back:focus { background: #fff; color: #000; }
-.big-tv.big-np .big-body { padding: 0; overflow: hidden; }
-.big-tv .big-now.with-lyrics { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) auto auto auto auto;
-  grid-template-areas: "lyr lyr lyr" "art title ctls" "art sub ctls" "bar bar bar" "times times times";
-  gap: 0 max(18px, 1.6vw); height: 100%; padding: max(64px, 10vh) var(--big-pad) max(26px, 4.6vh); box-sizing: border-box; }
-.big-tv .big-now.with-lyrics .big-now-text { display: contents; }
-.big-tv .big-now.with-lyrics .big-now-lyrics { grid-area: lyr; margin-bottom: max(18px, 3vh); }
-.big-tv .big-now.with-lyrics .big-now-art { grid-area: art; align-self: center; width: max(64px, 5.4vw); border-radius: max(6px, 0.5vw); box-shadow: 0 10px 30px rgb(0 0 0 / 0.35); }
-.big-tv .big-now.with-lyrics .big-now-title { grid-area: title; align-self: end; font-size: max(18px, 1.5vw); -webkit-line-clamp: 1; }
-.big-tv .big-now.with-lyrics .big-now-sub { grid-area: sub; align-self: start; font-size: max(14px, 1.1vw); color: rgb(255 255 255 / 0.75); }
-.big-tv .big-now.with-lyrics .big-now-ctls { grid-area: ctls; align-self: center; align-items: center; gap: max(10px, 1vw); margin: 0; }
-.big-tv .big-now.with-lyrics .big-now-ctl { width: max(48px, 3.6vw); height: max(48px, 3.6vw); background: rgb(0 0 0 / 0.18); }
-.big-tv .big-now.with-lyrics .big-now-ctl.primary { width: max(58px, 4.4vw); height: max(58px, 4.4vw); background: #fff; color: #000; }
-.big-tv .big-now.with-lyrics .big-now-ctl:focus { background: #fff; color: #000; }
-.big-tv .big-now.with-lyrics .big-now-ctl.primary:focus { box-shadow: 0 0 0 4px rgb(255 255 255 / 0.35); }
-.big-tv .big-now.with-lyrics .big-now-bar { grid-area: bar; height: 5px; margin-top: max(14px, 2.2vh); background: rgb(255 255 255 / 0.25); }
-.big-tv .big-now.with-lyrics .big-now-times { grid-area: times; margin-top: 6px; color: rgb(255 255 255 / 0.7); }
-.big-tv .big-now.with-lyrics.tinted .big-now-bg { inset: 0; background: linear-gradient(to bottom, var(--now-tint), color-mix(in srgb, var(--now-tint) 78%, #000)) !important; filter: none; transform: none; transition: background 0.6s; }
-.big-tv .big-now.with-lyrics .big-now-line { margin-bottom: max(10px, 1.5vh); color: rgb(255 255 255 / 0.95); font-size: max(30px, 3.3vw); line-height: 1.2; letter-spacing: -0.02em; }
-.big-tv .big-now.with-lyrics .big-now-lyrics.synced .big-now-line { color: rgb(255 255 255 / 0.3); transform: none; }
-.big-tv .big-now.with-lyrics.tinted .big-now-lyrics.synced .big-now-line { color: rgb(0 0 0 / 0.62); }
-.big-tv .big-now.with-lyrics .big-now-lyrics.synced .big-now-line.past { color: rgb(255 255 255 / 0.62); }
-.big-tv .big-now.with-lyrics .big-now-lyrics.synced .big-now-line.now { color: #fff; }
-.big-tv .big-now.with-lyrics .big-now-lyrics.synced .big-now-line:hover { color: rgb(255 255 255 / 0.85); }
 .big-tv .big-viewer-btn:focus { background: #fff; color: #000; }
 /* The TV's home uses the big screens' cards (bigui.js) for its feed and its
    shelf, without their glass behind. */
