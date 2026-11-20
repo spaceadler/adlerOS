@@ -515,7 +515,8 @@ const WIN_GENIE_ROWS = 8; // points down each side, for the curve
 // Its icon in the dock: its own, its pin, or the one it shows while open.
 function winGenieIcon(id) {
   const dock = $("dock"), w = wm.windows.get(id);
-  if (!dock || dock.hidden || !w || !desktopMode() || landOn() || matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
+  // A phone on its side too: its windows go into the dock and come out of it, as a Mac's.
+  if (!dock || dock.hidden || !w || !desktopMode() || matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
   const icon = (w.dock && dock.querySelector(`[data-dock="${w.dock}"]:not(.dock-run)`))
     || (w.app && dock.querySelector(`.dock-app[data-app="${CSS.escape(w.app.id)}"]`))
     || dock.querySelector(`[data-window="${CSS.escape(id)}"]`);
