@@ -41,7 +41,26 @@ const BIG_APPS = {
 };
 const BIG_CAR_APPS = ["music", "podcasts", "calendar", "photos", "videos", "livetv"];
 
-function bigOn() { return big.built && !$("big").hidden; }
+function bigOn() { return big.built && !$("big").hidden && !$("big").dataset.closing; }
+
+// The big app coming up over the TV's (or the car's) home, and going.
+function bigShow() {
+  const node = $("big");
+  delete node.dataset.closing;
+  for (const a of node.getAnimations()) a.cancel();
+  const was = node.hidden;
+  node.hidden = false;
+  if (was && motionOK()) node.animate([{ opacity: 0, transform: "scale(0.985)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+}
+function bigHide() {
+  const node = $("big");
+  if (node.hidden) return;
+  if (!motionOK()) { node.hidden = true; return; }
+  node.dataset.closing = "1";
+  const done = () => { if (node.dataset.closing) { node.hidden = true; delete node.dataset.closing; } };
+  node.animate([{ opacity: 1 }, { opacity: 0, transform: "scale(1.012)" }], { duration: 220, easing: "ease-in", fill: "forwards" });
+  setTimeout(() => { done(); for (const a of node.getAnimations()) a.cancel(); }, 230); // on a timer: even where nothing is drawn
+}
 
 // ------------------------------------------------------------- the frame
 
@@ -73,7 +92,7 @@ async function bigOpen(app, mode, { tab = 0, now = true } = {}) {
   const root = $("big");
   root.className = `big big-${mode}`;
   root.dataset.app = app;
-  root.hidden = false;
+  bigShow();
   bigViewerClose();
   bigLiveClose();
   bigRail();
@@ -93,7 +112,7 @@ async function bigOpenPage(app, mode, load) {
 
 function bigClose() {
   if (!big.built) return;
-  $("big").hidden = true;
+  bigHide();
   bigViewerClose();
   bigLiveClose();
   clearInterval(big.timer);
@@ -199,6 +218,8 @@ async function bigDraw(restore = false) {
   } else { tabsBox.replaceChildren(); tabsBox.bigPage = null; }
   body.replaceChildren(...bigContent(content));
   body.scrollTop = restore || top.scroll ? top.scroll || 0 : 0;
+  if (!page.nowPlaying) (restore ? viewBack : viewFwd)(body);
+  else viewIn(body, { dy: 0, ms: 360 });
   bigMini();
   if (page.nowPlaying) bigNowUpdate();
   if (big.mode === "tv") {
@@ -339,7 +360,7 @@ function bigListen() {
     big.app = "music";
     $("big").className = "big big-tv";
     $("big").dataset.app = "music";
-    $("big").hidden = false;
+    bigShow();
     bigRail();
     big.stack = [page];
     clearInterval(big.timer);
@@ -383,15 +404,29 @@ function bigLyricsDraw() {
   const box = $("big-now-lyrics");
   if (!box) return;
   const l = big.lyrics;
-  const has = Boolean(l && !l.loading && l.lines.length);
-  $("big-now").classList.toggle("with-lyrics", has);
+  const now = $("big-now");
+  requestAnimationFrame(() => { if (now.isConnected) now.dataset.settled = "1"; });
+  // The next song's words on their way: the layout stays as it is (no
+  // flicker between two songs with words), the old ones go.
+  if (l?.loading) { box.replaceChildren(); return; }
+  const has = Boolean(l && l.lines.length);
   box.classList.toggle("synced", Boolean(has && l.synced));
   box.replaceChildren(...(has ? l.lines.map((line, i) => {
     const p = el("p", { class: "big-now-line", "data-i": String(i) }, line.text || "♪");
     if (l.synced) p.addEventListener("click", () => { music.audio.currentTime = Math.max(0, line.t); });
     return p;
   }) : []));
-  if (has) { l.at = null; bigLyricsFollow(true); }
+  // With words and without are two layouts: the cover and the song glide
+  // from one to the other (not on the page's first drawing).
+  const change = () => now.classList.toggle("with-lyrics", has);
+  if (now.classList.contains("with-lyrics") === has) change();
+  else if (!now.dataset.settled) change();
+  else flip([$("big-now-art"), [now.querySelector(".big-now-text"), false]], change);
+  if (has) {
+    l.at = null;
+    bigLyricsFollow(true);
+    viewIn(box, { dx: 30, dy: 0, ms: 480 });
+  }
 }
 
 function bigLyricsFollow(jump = false) {
@@ -435,7 +470,7 @@ function bigNowUpdate() {
     $("big-now-art").replaceChildren(art || "");
     // The cover, blurred, behind it all; the words for a song.
     const img = $("big-now-art").querySelector("img");
-    $("big-now-bg").style.backgroundImage = img?.src ? `url("${img.src}")` : "";
+    fadeBackground($("big-now-bg"), img?.src || "");
     if (!pods && id) bigLyricsLoad(id);
     else { big.lyrics = null; bigLyricsDraw(); }
   }
