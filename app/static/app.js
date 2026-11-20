@@ -123,19 +123,139 @@ function fadeBackground(node, url, ms = 900) {
     old.removeAttribute("id");
     old.setAttribute("aria-hidden", "true");
     old.style.backgroundImage = before;
-    // A cover that drifts (app.css cover-drift): the old one goes on from
-    // where it had drifted to, not from the start.
-    const at = (name) => Math.round(node.getAnimations().find((a) => a.animationName === name)?.currentTime || 0);
-    if (node.getAnimations().length) old.style.animationDelay = `-${at("cover-spin")}ms, -${at("cover-drift")}ms`;
     old.style.pointerEvents = "none";
     node.after(old);
     old.animate([{ opacity: getComputedStyle(node).opacity }, { opacity: 0 }], { duration: ms, easing: "ease-in-out", fill: "forwards" });
     setTimeout(() => old.remove(), ms + 50); // on a timer: never left behind
   };
-  if (!url) return swap();
+  const done = () => { swap(); if (node.bgToken === token && node.matches?.(COVER_BGS)) coverLava(node, url ? img : null); };
+  if (!url) return done();
   const img = new Image();
-  img.onload = img.onerror = swap;
+  img.onload = img.onerror = done;
   img.src = url;
+}
+
+// ------------------------------------------------------------ lava lamp
+
+// Behind what's playing (the full-screen players, the TV's Now Playing, the
+// car): not the cover turning round, but its colours as soft blobs, each
+// wandering on its own slow path, swelling and shrinking and melting into
+// the others, as a lava lamp's. Drawn small on a canvas the browser
+// stretches (so it costs next to nothing); a new song's colours flow in.
+const COVER_BGS = ".mu-mini-bg, .pc-mini-bg, .big-now-bg, .car-bgart";
+const lavas = new Set();
+let lavaFrame = 0, lavaLast = 0;
+
+// The cover's colours: its most common ones, the colourful counting most,
+// kept apart from each other, and brought to a lamp's glow (not too dark,
+// never washed out).
+function coverPalette(img) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 28;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.drawImage(img, 0, 0, 28, 28);
+  const d = g.getImageData(0, 0, 28, 28).data;
+  const boxes = new Map();
+  for (let i = 0; i < d.length; i += 4) {
+    const k = (d[i] >> 5) * 64 + (d[i + 1] >> 5) * 8 + (d[i + 2] >> 5);
+    const b = boxes.get(k) || { n: 0, r: 0, g: 0, b: 0 };
+    b.n++; b.r += d[i]; b.g += d[i + 1]; b.b += d[i + 2];
+    boxes.set(k, b);
+  }
+  const sat = ([r, g, b]) => (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
+  const found = [...boxes.values()].map((b) => [b.r / b.n, b.g / b.n, b.b / b.n, b.n])
+    .sort((a, b) => b[3] * (0.25 + sat(b)) - a[3] * (0.25 + sat(a)));
+  const picked = [];
+  for (const f of found) {
+    if (picked.length >= 5) break;
+    if (picked.every((p) => Math.hypot(p[0] - f[0], p[1] - f[1], p[2] - f[2]) > 70)) picked.push(f.slice(0, 3));
+  }
+  while (picked.length < 3) picked.push((picked[0] || [90, 90, 110]).map((v, i) => Math.min(255, v * (picked.length === 1 ? 0.6 : 1.4) + i * 4)));
+  return picked.map(lavaTone);
+}
+// A colour at a lamp's brightness: lightness 30-55%, a little more colour.
+function lavaTone([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  let h = 0, s = 0;
+  if (d) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  }
+  s = Math.min(0.85, s * 1.25);
+  const L = Math.min(0.55, Math.max(0.3, l));
+  // Back to red, green and blue (h in sixths of the circle).
+  const a = s * Math.min(L, 1 - L);
+  const ch = (n) => { const k = (n + (h + 6) * 2) % 12; return L - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+  return [ch(0) * 255, ch(8) * 255, ch(4) * 255];
+}
+
+function coverLava(node, img) {
+  let st = node.lava;
+  if (!st) {
+    const canvas = el("canvas", { class: "cover-lava", "aria-hidden": "true", width: "96", height: "96" });
+    st = node.lava = { node, canvas, colors: null, target: null, from: null, at: 0, seed: Math.random() * 1000 };
+    node.after(canvas);
+  }
+  let pal = null;
+  try { pal = img?.naturalWidth ? coverPalette(img) : null; } catch { pal = null; } // a cover from elsewhere can't be read
+  if (!pal) { st.canvas.hidden = true; lavas.delete(st); return; }
+  st.canvas.hidden = false;
+  while (pal.length < 5) pal.push(pal[pal.length % 3]);
+  st.from = st.colors || pal;
+  st.target = pal;
+  st.at = performance.now();
+  lavas.add(st);
+  if (!lavaFrame) lavaFrame = requestAnimationFrame(lavaTick);
+}
+
+function lavaTick(now) {
+  lavaFrame = 0;
+  if (!lavas.size) return;
+  if (now - lavaLast > 33) { // about 30 a second: it's slow anyway
+    lavaLast = now;
+    for (const st of lavas) {
+      if (!st.node.isConnected) { st.canvas.remove(); lavas.delete(st); continue; }
+      lavaDraw(st, now);
+    }
+  }
+  if (motionOK() || [...lavas].some((st) => !st.drawn)) lavaFrame = requestAnimationFrame(lavaTick);
+}
+
+function lavaDraw(st, now) {
+  const { node, canvas } = st;
+  const cs = getComputedStyle(node);
+  if (cs.display === "none" || document.hidden) { canvas.style.display = "none"; return; }
+  // Where the cover is, the lamp is: same place, same layer, just over it.
+  Object.assign(canvas.style, { display: "", position: cs.position === "fixed" ? "fixed" : "absolute", inset: "0", width: "100%", height: "100%", zIndex: cs.zIndex, pointerEvents: "none" });
+  const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
+  const cw = 96, ch = Math.max(24, Math.min(240, Math.round(96 * h / w)));
+  if (canvas.height !== ch) canvas.height = ch;
+  const g = canvas.getContext("2d");
+  // The colours: from the last song's to this one's, over two seconds.
+  const k = Math.min(1, (now - st.at) / 2000);
+  const e = k * k * (3 - 2 * k);
+  st.colors = st.target.map((c, i) => c.map((v, j) => st.from[i][j] + (v - st.from[i][j]) * e));
+  const col = (c, a) => `rgba(${c[0] | 0}, ${c[1] | 0}, ${c[2] | 0}, ${a})`;
+  const t = motionOK() ? (now / 1000) + st.seed : st.seed;
+  const base = st.colors[st.colors.length - 1];
+  g.fillStyle = col(base.map((v) => v * 0.45), 1);
+  g.fillRect(0, 0, cw, ch);
+  const big = Math.max(cw, ch);
+  st.colors.forEach((c, i) => {
+    // Each its own path: two slow waves on top of each other, never the same twice.
+    const p = [23, 31, 37, 29, 43][i], q = [41, 27, 33, 47, 35][i];
+    const x = cw * (0.5 + 0.36 * Math.sin((t / p) * 2 * Math.PI + i * 1.7) + 0.12 * Math.sin((t / q) * 2 * Math.PI + i * 2.9));
+    const y = ch * (0.5 + 0.36 * Math.cos((t / q) * 2 * Math.PI + i * 2.3) + 0.12 * Math.sin((t / p) * 2 * Math.PI + i * 0.7));
+    const r = big * (0.42 + 0.12 * Math.sin((t / (p * 0.7)) * 2 * Math.PI + i));
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, col(c, 0.95));
+    grad.addColorStop(0.45, col(c, 0.6));
+    grad.addColorStop(1, col(c, 0));
+    g.fillStyle = grad;
+    g.fillRect(0, 0, cw, ch);
+  });
+  st.drawn = true;
 }
 
 // What a view shows, coming in: a short fade and glide (from the right
