@@ -324,6 +324,49 @@ function isActive(id) {
   return isOpen(id) && !$(id).classList.contains("minimized") && (!desktopMode() || wm.active === id);
 }
 
+// The home screen's icon an app was opened from (a tap a moment ago): its
+// window grows out of it, and goes back into it, as an iPhone's apps do.
+let launchedFrom = null;
+document.addEventListener("click", (e) => {
+  const tile = e.target.closest?.("#desktop .app");
+  if (tile) launchedFrom = { app: tile.dataset.app, at: performance.now() };
+}, true);
+const homeIcon = (app) => app && !document.body.classList.contains("wm") && !document.body.matches(".tv, .car") && !$("desktop").hidden
+  ? $("desktop").querySelector(`.app[data-app="${CSS.escape(app)}"] .app-icon`) : null;
+// Where the sheet is drawn as it is, and the transform that puts it on `r`.
+function sheetToRect(sheet, r) {
+  const f = sheet.getBoundingClientRect();
+  const base = getComputedStyle(sheet).transform;
+  const t = base && base !== "none" ? base : "";
+  return {
+    from: `translate(${r.left - f.left}px, ${r.top - f.top}px) ${t} scale(${r.width / f.width}, ${r.height / f.height})`,
+    to: `translate(0px, 0px) ${t} scale(1, 1)`,
+  };
+}
+function zoomFromIcon(sheet, app) {
+  const icon = homeIcon(app);
+  const r = icon?.getBoundingClientRect();
+  if (!r?.width || !motionOK()) return false;
+  sheet.style.animation = "none";
+  const { from, to } = sheetToRect(sheet, r);
+  sheet.animate([{ transformOrigin: "0 0", transform: from, opacity: 0, borderRadius: "40px" }, { opacity: 1, offset: 0.3 },
+    { transformOrigin: "0 0", transform: to, opacity: 1 }], { duration: 520, easing: "cubic-bezier(0.32, 0.72, 0, 1)" }).id = "zoom";
+  sheet.dataset.fromApp = app;
+  return true;
+}
+function zoomToIcon(sheet, ms) {
+  const app = sheet.dataset.fromApp;
+  delete sheet.dataset.fromApp;
+  const icon = homeIcon(app);
+  const r = icon?.getBoundingClientRect();
+  if (!r?.width || !motionOK() || sheet.style.transform) { sheet.style.animation = ""; return false; } // a swipe: it slides on down
+  sheet.style.animation = "none";
+  const { from, to } = sheetToRect(sheet, r);
+  sheet.animate([{ transformOrigin: "0 0", transform: to, opacity: 1 }, { opacity: 1, offset: 0.65 },
+    { transformOrigin: "0 0", transform: from, opacity: 0, borderRadius: "40px" }], { duration: ms, easing: "cubic-bezier(0.4, 0, 0.2, 1)", fill: "forwards" }).id = "zoom";
+  return true;
+}
+
 function openWindow(id) {
   closeSearch();
   closeMenu();
@@ -335,8 +378,13 @@ function openWindow(id) {
   }
   const sheet = $(id);
   const fresh = sheet.hidden || sheet.classList.contains("closing");
+  for (const a of sheet.getAnimations()) if (a.id === "zoom") a.cancel();
+  if (fresh) { sheet.style.animation = ""; delete sheet.dataset.fromApp; }
   sheet.classList.remove("closing", "minimized");
   sheet.hidden = false;
+  // From a home screen icon just tapped: out of it.
+  const from = launchedFrom && performance.now() - launchedFrom.at < 2000 ? launchedFrom.app : null;
+  if (fresh && from && !desktopMode() && !w?.float) { launchedFrom = null; zoomFromIcon(sheet, from); }
   if (!w?.float) document.body.classList.add("sheet-open");
   if (w?.dock) markDockOpen(w.dock, true);
   if (!wm.order.includes(id)) wm.order.push(id);
@@ -362,6 +410,7 @@ function closeWindow(id) {
   const hadFocus = sheet.contains(document.activeElement);
   // Before winDock takes a running one away; minimized, it's in there already.
   const icon = sheet.classList.contains("minimized") ? null : winGenieIcon(id);
+  if (!desktopMode() && sheet.dataset.fromApp) zoomToIcon(sheet, 280);
   sheet.classList.add("closing");
   sheet.classList.remove("active");
   if (desktopMode()) winOnTop(sheet);
@@ -376,6 +425,8 @@ function closeWindow(id) {
   setTimeout(() => {
     if (!sheet.classList.contains("closing")) return; // opened again meanwhile
     sheet.hidden = true;
+    for (const a of sheet.getAnimations()) if (a.id === "zoom") a.cancel();
+    sheet.style.animation = "";
     sheet.classList.remove("closing", "minimized");
     winGenieStop(sheet);
     if (w?.app || w?.copy) {
