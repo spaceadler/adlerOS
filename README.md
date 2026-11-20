@@ -5,6 +5,7 @@
 ![Runtime](https://img.shields.io/badge/Runtime-Python_stdlib_%2B_plain_JS-blue)
 ![Platform](https://img.shields.io/badge/Platform-any_Docker_host-green)
 ![License](https://img.shields.io/badge/License-BSD--3--Clause-orange)
+![Status](https://img.shields.io/badge/Status-v1.0-brightgreen)
 
 <!-- screenshot: the desktop, at 1440×900 or larger, see docs/screenshots/README.md -->
 ![adlerOS desktop](docs/screenshots/desktop.png)

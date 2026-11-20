@@ -81,6 +81,8 @@ import ical
 import musictags
 
 STATIC = Path(__file__).resolve().parent / "static"
+# The release this is (git tag v<it>); shown in Settings.
+ADLEROS_VERSION = "1.0"
 # standalone: adlerOS on any Docker host (apps from the registry and the store);
 # homelab: part of a homelab built from its catalog (containers/catalog.tsv).
 MODE = "standalone" if os.environ.get("ADLEROS_MODE") == "standalone" else "homelab"
@@ -7416,6 +7418,7 @@ class Handler(BaseHTTPRequestHandler):
             config = {k: env.get(k, "") for k in ("ADLEROS_HOST", "COMPOSE_ROOTS", "APPS_DIR", "TZ", "STORAGE_DIR")}
         return {
             "mode": MODE,
+            "version": ADLEROS_VERSION,
             "name": display_name(),
             "searchUrl": search_url(),
             "wallpaper": {"selected": selected_wallpaper_id(), "options": wallpaper_options()},

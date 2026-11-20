@@ -268,6 +268,7 @@ function renderSide() {
       : [["Domain", d.config.DOMAIN || "–"], ["Tailscale", d.config.TS_IP || "–"]]),
     ["Uptime", duration(d.device.uptime)],
     ["Apps", String(d.appCount)],
+    ...(d.version ? [["Version", d.version]] : []),
   ];
   $("settings-summary").replaceChildren(...summary.flatMap(([k, v]) => [el("dt", {}, k), el("dd", { title: v }, v)]));
 
