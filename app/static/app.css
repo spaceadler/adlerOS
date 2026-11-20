@@ -5464,3 +5464,19 @@ body.wm .desk > .desk-icon, body.wm .desk > .desk-widget { touch-action: none; }
   75% { transform: scale(1.36) translate(2%, 3%) rotate(4deg); }
 }
 @media (prefers-reduced-motion: reduce) { :is(.mu-mini-bg, .pc-mini-bg, .big-now-bg, .car-bgart) { animation: none; } }
+
+/* A favorite being saved breathes; saved, it fills with a burst (favPop,
+   app.js): a ring and sparks, drawn over everything where the button is. */
+.fav-busy svg { animation: fav-busy 0.8s ease-in-out infinite; }
+@keyframes fav-busy { 50% { transform: scale(0.8); opacity: 0.5; } }
+.fav-burst { position: fixed; z-index: 2147482000; width: 0; height: 0; pointer-events: none; }
+.fav-ring, .fav-spark { position: absolute; left: 0; top: 0; border-radius: 50%; }
+.fav-ring { box-sizing: border-box; border: 2px solid; }
+/* The TV's: a heart beside the song's controls, a star on a channel. */
+.big-now-fav[hidden] { display: none; }
+.big-now-ctl.big-now-fav svg { fill: none; stroke: currentColor; stroke-width: 2; }
+.big-now-ctl.big-now-fav.on { color: #ff375f; }
+.big-now-ctl.big-now-fav.on svg, .big-live-btn.fav.on svg { fill: currentColor; }
+.big-now-ctl.big-now-fav.on:focus { background: #fff; color: #ff375f; }
+.big-live-btn.fav.on { color: #ffd60a; }
+@media (prefers-reduced-motion: reduce) { .fav-busy svg { animation: none; opacity: 0.6; } }

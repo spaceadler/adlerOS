@@ -163,6 +163,60 @@ function ghostOut(node, { to = { opacity: 0, transform: "scale(0.97)" }, ms = 17
   ghost.animate([{ opacity: 1, transform: "none" }, to], { duration: ms, easing: "ease-in", fill: "forwards" });
   setTimeout(() => ghost.remove(), ms + 40);
 }
+// A favorite, as Apple Music's: pressed, the heart (or star) breathes while
+// it's being saved, a beat at least; then it fills with a spring, a ring
+// opens round it and a burst of sparks flies off. Taken off, it just settles.
+function favBusy(button, on) { button?.classList.toggle("fav-busy", on); }
+async function favPress(buttons, save, on) {
+  const all = () => buttons().filter(Boolean);
+  all().forEach((b) => favBusy(b, true));
+  const started = performance.now();
+  let ok = false;
+  try { ok = await save(); } finally {
+    const wait = motionOK() && on ? Math.max(0, 550 - (performance.now() - started)) : 0;
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    all().forEach((b) => favBusy(b, false));
+  }
+  if (ok) all().forEach((b) => favPop(b, on));
+  return ok;
+}
+function favPop(button, on) {
+  if (!button?.isConnected || !motionOK()) return;
+  const icon = button.querySelector("svg");
+  if (!on) {
+    icon?.animate([{ transform: "scale(0.72)" }, { transform: "scale(1)" }], { duration: 280, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+    return;
+  }
+  icon?.animate([{ transform: "scale(0.3)" }, { transform: "scale(1.38)", offset: 0.42 }, { transform: "scale(0.88)", offset: 0.68 }, { transform: "scale(1.06)", offset: 0.84 }, { transform: "scale(1)" }],
+    { duration: 700, easing: "ease-out" });
+  const r = (icon || button).getBoundingClientRect();
+  if (!r.width) return;
+  const color = getComputedStyle(button).color;
+  const burst = el("span", { class: "fav-burst", "aria-hidden": "true" });
+  burst.style.left = `${r.left + r.width / 2}px`;
+  burst.style.top = `${r.top + r.height / 2}px`;
+  const size = Math.max(r.width, r.height);
+  const ring = el("span", { class: "fav-ring" });
+  Object.assign(ring.style, { width: `${size * 1.3}px`, height: `${size * 1.3}px`, borderColor: color });
+  burst.append(ring);
+  ring.animate([{ transform: "translate(-50%, -50%) scale(0.3)", opacity: 0.9, borderWidth: `${size * 0.22}px` },
+    { transform: "translate(-50%, -50%) scale(1.5)", opacity: 0, borderWidth: "1px" }], { duration: 560, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "forwards" });
+  const n = 12;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + (i % 2 ? 0.26 : 0);
+    const far = size * (i % 2 ? 1.05 : 1.45);
+    const dot = el("span", { class: "fav-spark" });
+    const s = size * (i % 2 ? 0.11 : 0.15);
+    Object.assign(dot.style, { width: `${s}px`, height: `${s}px`, background: i % 3 === 2 ? "#fff" : color });
+    burst.append(dot);
+    dot.animate([{ transform: "translate(-50%, -50%) translate(0, 0) scale(0.4)", opacity: 0 },
+      { opacity: 1, offset: 0.2 },
+      { transform: `translate(-50%, -50%) translate(${Math.cos(a) * far}px, ${Math.sin(a) * far}px) scale(0)`, opacity: 0 }],
+      { duration: 680, delay: 90, easing: "cubic-bezier(0.15, 0.7, 0.3, 1)", fill: "both" });
+  }
+  document.body.append(burst);
+  setTimeout(() => burst.remove(), 900);
+}
 const viewBack = (node) => viewIn(node, { dx: -24, dy: 0 });
 const viewFwd = (node) => viewIn(node, { dx: 24, dy: 0 });
 

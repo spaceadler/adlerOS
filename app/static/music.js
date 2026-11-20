@@ -599,25 +599,38 @@ function musicFavButton(id) {
 function musicMarkFavorites() {
   $("mu-main")?.querySelectorAll(".mu-row[data-id] .mu-fav").forEach((b) => musicFavState(b, music.favorites.has(b.closest(".mu-row").dataset.id)));
   musicBarUpdate();
+  if (typeof bigNowUpdate === "function") bigNowUpdate();
 }
 
-// A heart put on (or taken off), straight away; back as it was if the
-// server says no. Taken off in Favorites, the song stays until you go.
+// Every heart on show for a song: its rows, and the bar's and the TV's
+// while it's the one playing.
+function musicFavButtonsFor(id) {
+  const out = [...document.querySelectorAll(`.mu-row[data-id="${CSS.escape(id)}"] .mu-fav`)];
+  if (muCurrent() === id) out.push(...document.querySelectorAll(".mu-bar-fav, #big-now-fav"));
+  return out;
+}
+
+// A heart put on (or taken off), as Apple Music's: it breathes while it's
+// saved, then fills with a burst (favPress, app.js). Taken off in
+// Favorites, the song stays until you go.
 async function musicToggleFavorite(id) {
   if (!id) return;
   if (!music.songs.has(id)) return toast("Only songs in your music folder can be favorites.");
+  if (music.favPending.has(id)) return; // one at a time
   const on = !music.favorites.has(id);
-  const was = music.favorites.get(id);
-  if (on) music.favorites.set(id, Math.floor(Date.now() / 1000)); else music.favorites.delete(id);
   music.favPending.set(id, on);
-  musicMarkFavorites();
-  const reply = await api("/api/music/favorite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, on }) })
-    .catch(() => ({ status: 0 }));
-  if (music.favPending.get(id) === on) music.favPending.delete(id);
-  if (reply.status === 200) return toast(on ? `${muSong(id).title} is in your favorites.` : `${muSong(id).title} isn't a favorite any more.`);
-  if (on) music.favorites.delete(id); else music.favorites.set(id, was);
-  musicMarkFavorites();
-  toast(reply.body?.error || "Couldn't change your favorites.");
+  let reply = null;
+  const ok = await favPress(() => musicFavButtonsFor(id), async () => {
+    reply = await api("/api/music/favorite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, on }) })
+      .catch(() => ({ status: 0 }));
+    if (reply.status !== 200) return false;
+    if (on) music.favorites.set(id, Math.floor(Date.now() / 1000)); else music.favorites.delete(id);
+    musicMarkFavorites();
+    return true;
+  }, on);
+  music.favPending.delete(id);
+  if (ok) return toast(on ? `${muSong(id).title} is in your favorites.` : `${muSong(id).title} isn't a favorite any more.`);
+  toast(reply?.body?.error || "Couldn't change your favorites.");
 }
 
 // The same page again where you were on it: something it shows changed.

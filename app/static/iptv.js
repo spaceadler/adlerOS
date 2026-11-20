@@ -175,12 +175,21 @@ function ltTile(c, list) {
   const star = el("button", { type: "button", class: `lt-fav${fav ? " on" : ""}`, "aria-label": fav ? `Unfavorite ${c.name}` : `Favorite ${c.name}`, "aria-pressed": String(fav) }, svg(LT_ICONS.star));
   star.addEventListener("click", async (e) => {
     e.stopPropagation();
+    if (star.classList.contains("fav-busy")) return;
     const on = !iptv.favorites.has(c.id);
-    const got = await ltPost("favorite", { id: c.id, on });
-    if (!got?.ok) return toast(got?.error || "That didn't work.");
-    iptv.favorites = new Set(got.favorites);
+    let got = null;
+    // As Apple Music's (favPress, app.js): it breathes, then fills with a burst.
+    const ok = await favPress(() => [star], async () => {
+      got = await ltPost("favorite", { id: c.id, on });
+      if (!got?.ok) return false;
+      iptv.favorites = new Set(got.favorites);
+      star.classList.toggle("on", on);
+      star.setAttribute("aria-pressed", String(on));
+      return true;
+    }, on);
+    if (!ok) return toast(got?.error || "That didn't work.");
     ltSide();
-    ltRender();
+    setTimeout(ltRender, on ? 800 : 300); // after the burst
   });
   const playing = iptv.playing?.c.id === c.id;
   const tile = el("div", { class: `lt-tile${playing ? " on" : ""}`, role: "button", tabindex: "0", "data-id": c.id, "aria-label": c.name },

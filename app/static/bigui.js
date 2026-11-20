@@ -26,6 +26,8 @@ const BIG_ICONS = {
   shuffle: ["M16 3h5v5", "M4 20 21 3", "M21 16v5h-5", "M15 15l6 6", "M4 4l5 5"],
   back30: ["M3 12a9 9 0 1 0 3-6.7", "M3 4v5h5"], fwd30: ["M21 12a9 9 0 1 1-3-6.7", "M21 4v5h-5"],
   nav: ["M3 11l18-8-8 18-2-8z"], close: ["M18 6 6 18", "M6 6l12 12"],
+  heart: ["M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21.2l8.8-8.8a5.5 5.5 0 0 0 0-7.8z"],
+  star: ["M12 3l2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.4l-5.6 2.9 1.1-6.2L3 9.7l6.2-.9z"],
   zoomIn: ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3", "M11 8v6", "M8 11h6"], zoomOut: ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.3-4.3", "M8 11h6"], left: ["m15 18-6-6 6-6"], right: ["m9 18 6-6-6-6"],
 };
 
@@ -383,8 +385,16 @@ function bigNowPage() {
       el("div", { class: "big-now-ctls" },
         ctl("big-now-prev", BIG_ICONS.prev, "Back", () => (pods() ? pcSkip(-30) : musicPrev())),
         ctl("big-now-play", BIG_ICONS.play, "Play", () => (pods() ? pcToggle() : musicToggle()), true),
-        ctl("big-now-next", BIG_ICONS.next, "Next", () => (pods() ? pcSkip(30) : musicNext())))),
+        ctl("big-now-next", BIG_ICONS.next, "Next", () => (pods() ? pcSkip(30) : musicNext())),
+        // The song a favorite (or not), as in Music.
+        bigNowFav())),
     el("div", { class: "big-now-lyrics", id: "big-now-lyrics" }));
+}
+
+function bigNowFav() {
+  const b = el("button", { type: "button", class: "big-now-ctl big-now-fav", id: "big-now-fav", "aria-label": "Add to Favorites", hidden: "" }, svg(BIG_ICONS.heart));
+  b.addEventListener("click", () => { const id = muCurrent(); if (id) musicToggleFavorite(id); });
+  return b;
 }
 
 // The TV's Now Playing: the song's words beside it, the line being sung lit
@@ -482,6 +492,17 @@ function bigNowUpdate() {
   $("big-now-left").textContent = dur ? `-${clock(dur - at)}` : "";
   const play = $("big-now-play");
   if (play.dataset.paused !== String(paused)) { play.dataset.paused = String(paused); play.replaceChildren(svg(paused ? BIG_ICONS.play : BIG_ICONS.pause)); play.setAttribute("aria-label", paused ? "Play" : "Pause"); }
+  const fav = $("big-now-fav");
+  if (fav) {
+    const song = !pods && id && typeof music !== "undefined" && music.songs.has(id);
+    fav.hidden = !song;
+    if (song && !fav.classList.contains("fav-busy")) {
+      const on = music.favorites.has(id);
+      fav.classList.toggle("on", on);
+      fav.setAttribute("aria-pressed", String(on));
+      fav.setAttribute("aria-label", on ? "Remove from Favorites" : "Add to Favorites");
+    }
+  }
   $("big-now-prev").replaceChildren(svg(pods ? BIG_ICONS.back30 : BIG_ICONS.prev));
   $("big-now-next").replaceChildren(svg(pods ? BIG_ICONS.fwd30 : BIG_ICONS.next));
 }
@@ -986,6 +1007,7 @@ async function bigLivePlay(list, i) {
         el("div", { class: "big-live-ctls" },
           button("prev", BIG_ICONS.prev, "The channel before", () => bigLiveStep(-1)),
           button("next", BIG_ICONS.next, "The channel after", () => bigLiveStep(1)),
+          button("fav", BIG_ICONS.star, "Add to Favorites", bigLiveFav),
           button("close", BIG_ICONS.close, "Close", bigLiveClose))));
     v.onpointerdown = (e) => { if (!e.target.closest(".big-live-btn")) { bigLiveBanner(); bigLiveResume(); } };
     v.hidden = false;
@@ -1003,9 +1025,36 @@ function bigLiveDrop() {
   if (old) { old.pause(); old.removeAttribute("src"); old.load(); }
 }
 
+// The channel on a favorite (or not): kept in Live TV's Favorites.
+function bigLiveFavShow() {
+  const b = $("big-live")?.querySelector(".big-live-btn.fav");
+  const c = big.live?.list[big.live.i];
+  if (!b || !c || b.classList.contains("fav-busy")) return;
+  const on = iptv.favorites.has(c.id);
+  b.classList.toggle("on", on);
+  b.setAttribute("aria-pressed", String(on));
+  b.setAttribute("aria-label", on ? `Remove ${c.name} from Favorites` : `Add ${c.name} to Favorites`);
+}
+async function bigLiveFav() {
+  const c = big.live?.list[big.live.i];
+  if (!c) return;
+  const on = !iptv.favorites.has(c.id);
+  let got = null;
+  const ok = await favPress(() => [$("big-live")?.querySelector(".big-live-btn.fav")], async () => {
+    got = await ltPost("favorite", { id: c.id, on });
+    if (!got?.ok) return false;
+    iptv.favorites = new Set(got.favorites);
+    bigLiveFavShow();
+    return true;
+  }, on);
+  if (!ok) toast(got?.error || "That didn't work.");
+  else toast(on ? `${c.name} is in your favorites.` : `${c.name} isn't a favorite any more.`);
+}
+
 async function bigLiveTune() {
   const live = big.live;
   if (!live) return;
+  bigLiveFavShow();
   bigLiveDrop();
   const gen = ++live.gen;
   const here = () => big.live === live && live.gen === gen;
