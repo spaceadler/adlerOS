@@ -119,7 +119,8 @@ one, each still shows the files themselves. More in
   your homelab.
 - **A terminal**, if you want one: a real shell in a window (colours, `htop`,
   `vim`), off unless you switch it on on the machine, and only there in
-  admin mode.
+  admin mode. On a touch screen, a bar of the keys a phone hasn't (Esc, Tab,
+  Ctrl, Alt, Shift, the arrows, Home, End, PgUp, PgDn).
 
 ## How it sorts your apps
 

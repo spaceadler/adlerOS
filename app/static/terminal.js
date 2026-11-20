@@ -697,8 +697,79 @@ function hideTerminal(t = null) {
 
 // ------------------------------------------------------------- wiring
 
+// A touch screen's keys (a phone has none of these): a translucent bar at
+// the bottom. Ctrl, Alt and Shift stay down for the next key, the phone
+// keyboard's too (Ctrl, then C: ^C); two taps keep one down until a third.
+// The bar never takes the focus, so the keyboard stays up.
+const TERM_KEYS = [
+  [["Esc", "Escape"], ["Tab", "Tab"], ["Ctrl", "ctrl"], ["Alt", "alt"], ["Shift", "shift"], ["~", "~"], ["|", "|"], ["/", "/"], ["-", "-"]],
+  [["Home", "Home"], ["End", "End"], ["PgUp", "PageUp"], ["PgDn", "PageDown"], ["←", "ArrowLeft"], ["↑", "ArrowUp"], ["↓", "ArrowDown"], ["→", "ArrowRight"]],
+];
+const TERM_MODS = ["ctrl", "alt", "shift"];
+function termKeysBar(t) {
+  let bar = t.section.querySelector(".term-keys");
+  if (!bar) {
+    bar = el("div", { class: "term-keys", role: "toolbar", "aria-label": "Keys" },
+      ...TERM_KEYS.map((row) => el("div", { class: "term-keys-row" }, ...row.map(([label, key]) =>
+        el("button", { type: "button", class: `term-key${TERM_MODS.includes(key) ? " mod" : ""}${key.startsWith("Arrow") ? " term-arrow" : ""}`, tabindex: "-1", "data-key": key,
+          "aria-label": { "←": "Left", "↑": "Up", "↓": "Down", "→": "Right" }[label] || label }, label)))));
+    t.screenEl.after(bar);
+  }
+  t.mods = { ctrl: 0, alt: 0, shift: 0 }; // 0 up, 1 for the next key, 2 kept down
+  const lastTap = {};
+  bar.addEventListener("pointerdown", (e) => e.preventDefault()); // the focus (and the keyboard) stays where it is
+  bar.addEventListener("click", (e) => {
+    const b = e.target.closest(".term-key");
+    if (!b) return;
+    const key = b.dataset.key;
+    if (TERM_MODS.includes(key)) {
+      const now = performance.now();
+      const twice = now - (lastTap[key] || 0) < 350;
+      lastTap[key] = now;
+      t.mods[key] = t.mods[key] ? (twice && t.mods[key] === 1 ? 2 : 0) : 1;
+      termModsShow(t);
+    } else {
+      sendTerminal(t, termKeyWithMods(t, key) ?? key);
+      termModsUsed(t);
+    }
+    if (navigator.vibrate) navigator.vibrate(5);
+  });
+  // The phone's keyboard opening: the bar (and the screen's last line) sit
+  // on top of it, not under it.
+  if (window.visualViewport && !t.section.kbWatch) {
+    t.section.kbWatch = true; // a property, not an attribute: a cloned window watches too
+    const place = () => {
+      const vv = window.visualViewport;
+      const under = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      t.section.style.setProperty("--kb", `${Math.round(under)}px`);
+    };
+    visualViewport.addEventListener("resize", place);
+    visualViewport.addEventListener("scroll", place);
+  }
+}
+function termModsShow(t) {
+  for (const k of TERM_MODS) {
+    const b = t.section.querySelector(`.term-key[data-key="${k}"]`);
+    b?.classList.toggle("on", t.mods[k] > 0);
+    b?.classList.toggle("locked", t.mods[k] === 2);
+    b?.setAttribute("aria-pressed", String(t.mods[k] > 0));
+  }
+}
+// A key with the modifiers that are down (the bar's): its sequence, or null.
+function termKeyWithMods(t, key) {
+  const m = t.mods || {};
+  return keySequence({ key, ctrlKey: m.ctrl > 0, altKey: m.alt > 0, shiftKey: m.shift > 0 }, t.screen?.appCursor);
+}
+const termModsDown = (t) => t.mods && TERM_MODS.some((k) => t.mods[k] > 0);
+function termModsUsed(t) {
+  if (!t.mods) return;
+  for (const k of TERM_MODS) if (t.mods[k] === 1) t.mods[k] = 0;
+  termModsShow(t);
+}
+
 function wireTerminal(t) {
   const input = t.input;
+  termKeysBar(t);
   input.addEventListener("keydown", (e) => {
     // Ctrl+Shift+Q closes the window; everything else goes to the shell.
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "q") {
@@ -707,6 +778,17 @@ function wireTerminal(t) {
     }
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "v") return; // paste (the paste event sends it)
     if (e.metaKey) return; // ⌘C, ⌘V on a Mac
+    // The bar's Ctrl, Alt or Shift down: this key with them.
+    if (termModsDown(t) && e.key.length >= 1 && e.key !== "Unidentified" && !["Control", "Alt", "Shift", "Meta"].includes(e.key)) {
+      const m = t.mods;
+      const key = m.shift > 0 && e.key.length === 1 ? e.key.toUpperCase() : e.key;
+      const seq = keySequence({ key, ctrlKey: e.ctrlKey || m.ctrl > 0, altKey: e.altKey || m.alt > 0, shiftKey: e.shiftKey || m.shift > 0 }, t.screen?.appCursor);
+      e.preventDefault();
+      e.stopPropagation();
+      sendTerminal(t, seq ?? key);
+      termModsUsed(t);
+      return;
+    }
     const seq = keySequence(e, t.screen?.appCursor);
     if (seq !== null) {
       e.preventDefault();
@@ -715,8 +797,17 @@ function wireTerminal(t) {
     }
   });
   input.addEventListener("input", () => {
-    if (input.value) sendTerminal(t, input.value);
+    let text = input.value;
     input.value = "";
+    if (!text) return;
+    // A phone keyboard's letter with the bar's Ctrl (or Alt, Shift) down.
+    if (termModsDown(t)) {
+      const m = t.mods;
+      const ch = m.shift > 0 ? text[0].toUpperCase() : text[0];
+      text = (keySequence({ key: ch, ctrlKey: m.ctrl > 0, altKey: m.alt > 0, shiftKey: false }, t.screen?.appCursor) ?? ch) + text.slice(1);
+      termModsUsed(t);
+    }
+    sendTerminal(t, text);
   });
   input.addEventListener("paste", (e) => {
     e.preventDefault();
