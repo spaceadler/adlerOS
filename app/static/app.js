@@ -125,8 +125,8 @@ function fadeBackground(node, url, ms = 900) {
     old.style.backgroundImage = before;
     // A cover that drifts (app.css cover-drift): the old one goes on from
     // where it had drifted to, not from the start.
-    const drift = node.getAnimations().find((a) => a.animationName === "cover-drift");
-    if (drift?.currentTime != null) old.style.animationDelay = `-${Math.round(drift.currentTime)}ms`;
+    const at = (name) => Math.round(node.getAnimations().find((a) => a.animationName === name)?.currentTime || 0);
+    if (node.getAnimations().length) old.style.animationDelay = `-${at("cover-spin")}ms, -${at("cover-drift")}ms`;
     old.style.pointerEvents = "none";
     node.after(old);
     old.animate([{ opacity: getComputedStyle(node).opacity }, { opacity: 0 }], { duration: ms, easing: "ease-in-out", fill: "forwards" });

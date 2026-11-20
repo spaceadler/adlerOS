@@ -5489,12 +5489,15 @@ body.wm .desk > .desk-icon, body.wm .desk > .desk-widget { touch-action: none; }
 /* The blurred cover behind what's playing (Music's and Podcasts' full
    screen, the TV's Now Playing, the car): drifting, slowly, as if it were
    breathing. Only its transform moves, so the blur isn't drawn again. */
-:is(.mu-mini-bg, .pc-mini-bg, .big-now-bg, .car-bgart) { animation: cover-drift 30s ease-in-out infinite; will-change: transform; }
+/* It turns round (45s) while it wanders (30s), so its colours swirl: zoomed
+   in enough that no edge ever shows, a phone's tall screen too. */
+:is(.mu-mini-bg, .pc-mini-bg, .big-now-bg, .car-bgart) { transform: none; animation: cover-spin 45s linear infinite, cover-drift 30s ease-in-out infinite; will-change: transform, rotate, scale, translate; }
+@keyframes cover-spin { from { rotate: 0deg; } to { rotate: 360deg; } }
 @keyframes cover-drift {
-  0%, 100% { transform: scale(1.18) translate(0, 0) rotate(0deg); }
-  25% { transform: scale(1.32) translate(3%, -2.5%) rotate(7deg); }
-  50% { transform: scale(1.22) translate(-2.5%, 2%) rotate(-5deg); }
-  75% { transform: scale(1.36) translate(2%, 3%) rotate(4deg); }
+  0%, 100% { scale: 2.7; translate: 0 0; }
+  25% { scale: 3.2; translate: 9% -7%; }
+  50% { scale: 2.8; translate: -8% 6%; }
+  75% { scale: 3.3; translate: 7% 9%; }
 }
 @media (prefers-reduced-motion: reduce) { :is(.mu-mini-bg, .pc-mini-bg, .big-now-bg, .car-bgart) { animation: none; } }
 
@@ -5513,3 +5516,13 @@ body.wm .desk > .desk-icon, body.wm .desk > .desk-widget { touch-action: none; }
 .big-now-ctl.big-now-fav.on:focus { background: #fff; color: #ff375f; }
 .big-live-btn.fav.on { color: #ffd60a; }
 @media (prefers-reduced-motion: reduce) { .fav-busy svg { animation: none; opacity: 0.6; } }
+
+/* The TV's Now Playing fits the room under its title, whatever the screen:
+   the cover shrinks before anything goes under the title or off the foot.
+   (Under it, with words: the song, its bar and controls, about
+   14.5vw + 4vh + 60px.) */
+.big-body.big-body-now { container-type: size; overflow: hidden; }
+.big-body-now .big-now { height: 100%; min-height: 0; }
+.big-body-now .big-now-art { width: max(64px, min(36cqw, calc(100cqh - 24px))); }
+.big-body-now .big-now.with-lyrics { height: 100%; }
+.big-body-now .big-now.with-lyrics .big-now-art { width: max(56px, min(26cqw, calc(100cqh - 14.5vw - 4vh - 60px))); }

@@ -219,6 +219,7 @@ async function bigDraw(restore = false) {
     content = top.cache.get(top.tab);
   } else { tabsBox.replaceChildren(); tabsBox.bigPage = null; }
   body.replaceChildren(...bigContent(content));
+  body.classList.toggle("big-body-now", Boolean(page.nowPlaying)); // sized to fit (app.css)
   body.scrollTop = restore || top.scroll ? top.scroll || 0 : 0;
   if (!page.nowPlaying) (restore ? viewBack : viewFwd)(body);
   else viewIn(body, { dy: 0, ms: 360 });
