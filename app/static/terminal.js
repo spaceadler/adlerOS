@@ -494,9 +494,24 @@ async function openTerminal() {
   newTerminal(t);
 }
 
+// Open in Terminal (My Computer): a shell in that folder. On a computer, a
+// window of its own; else the terminal, its shell moved there if it's open.
+async function openTerminalAt(path) {
+  closeMenu();
+  if (desktopMode()) return newTerminalWindow(path);
+  if (!(await terminalReady())) return;
+  const t = mainTerm();
+  if (t.alive && t.sid) {
+    showTerminalWindow(t);
+    sendTerminal(t, ` cd -- '${hostPath(path).replace(/'/g, "'\\''")}'\r`);
+    return t.input.focus();
+  }
+  newTerminal(t, path);
+}
+
 // Another terminal window, with a new shell (Alt+Enter with one open, or
-// New window in a terminal's menu).
-async function newTerminalWindow() {
+// New window in a terminal's menu); `path`: in that folder.
+async function newTerminalWindow(path = null) {
   if (!desktopMode()) return openTerminal();
   if (!(await terminalReady())) return;
   let n = 2;
@@ -515,7 +530,7 @@ async function newTerminalWindow() {
   const t = makeTerm(id, section);
   registerWindow(id, { title: `Terminal ${n}`, close: () => closeTerminal(t), hide: () => hideTerminal(t), icon: "terminal",
     size: [920, 580], copy: true });
-  newTerminal(t);
+  newTerminal(t, path);
 }
 
 // Whether a terminal may open: switched on, admin mode. The body, or null.
@@ -540,13 +555,13 @@ function terminalOffDialog() {
 }
 
 // Straight in: admin mode (which your password turned on) is the key.
-async function newTerminal(t) {
+async function newTerminal(t, path = null) {
   showTerminalWindow(t);
   const size = measureTerminal(t);
   const { status, body } = await api("/api/terminal", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rows: size.rows, cols: size.cols }),
+    body: JSON.stringify({ rows: size.rows, cols: size.cols, ...(path ? { path } : {}) }),
   }).catch(() => ({ status: 0 }));
   if (status === 200) return startTerminal(t, body.sid);
   if (status === 401) return showLock();

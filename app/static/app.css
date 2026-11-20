@@ -1814,6 +1814,9 @@ a.chip-button { text-decoration: none; }
 .crumb:hover { background: rgb(255 255 255 / 0.08); }
 .crumb.current { cursor: default; }
 .crumb-sep { color: rgb(255 255 255 / 0.35); }
+/* Beside the crumbs: a click there types a path (files.js crumbsEdit). */
+.crumbs { cursor: text; min-height: 32px; }
+.crumbs-input { flex: 1; min-width: 0; height: 32px; padding: 0 10px; font-size: 14px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
 .files-tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .files-sort { width: auto; height: 32px; padding-left: 12px; }
 .files-main { display: flex; flex: 1; gap: 14px; min-height: 0; }

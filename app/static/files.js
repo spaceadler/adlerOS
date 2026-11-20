@@ -183,6 +183,49 @@ function crumbs(f) {
   return nodes.length ? nodes : [el("span", { class: "crumb current" }, computerName())];
 }
 
+// The path bar, typed into: where you are as it is on the machine (as Copy
+// location gives it); Enter goes to what you typed, Escape (or leaving it)
+// puts the crumbs back.
+function crumbsEdit(f) {
+  const bar = f.part("crumbs");
+  if (bar.querySelector("input")) return;
+  const now = f.view === "folder" && f.path !== "/" ? hostPath(f.path) : "";
+  const input = el("input", { class: "field-input crumbs-input", type: "text", value: now, spellcheck: "false", autocomplete: "off",
+    "aria-label": "Go to a folder", placeholder: "A folder: /home/…, User/Documents, Root/containers…" });
+  let done = false;
+  const back = () => { if (done) return; done = true; if (f.view === "trash") renderTrash(f); else bar.replaceChildren(...crumbs(f)); };
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); back(); f.part("list").focus?.(); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      const to = filesTyped(input.value);
+      if (!to) return toast("That isn't a folder adlerOS can show: try a path under one of your places.");
+      done = true;
+      showFolder(to, f);
+    }
+  });
+  input.addEventListener("blur", back);
+  bar.replaceChildren(input);
+  input.focus();
+  input.select();
+}
+
+// What was typed, as a My Computer path: a path on the machine (under one of
+// the places), a place's name (User/Documents) or one of ours (/user/…).
+function filesTyped(text) {
+  let t = text.trim().replace(/\/+$/, "");
+  if (!t) return null;
+  const hosts = Object.entries(files.hosts).sort((a, b) => b[1].length - a[1].length);
+  for (const [place, host] of hosts) {
+    const h = host.replace(/\/+$/, "");
+    if (t === h || t.startsWith(`${h}/`)) return `/${place}${t.slice(h.length)}`;
+  }
+  t = t.replace(/^\/+/, "");
+  const [first, ...rest] = t.split("/");
+  const place = Object.keys(PLACE_NAMES).find((p) => p === first.toLowerCase() || PLACE_NAMES[p].toLowerCase() === first.toLowerCase());
+  return place ? [`/${place}`, ...rest.filter(Boolean)].join("/") : null;
+}
+
 function renderPlaces(f) {
   const item = (id, label, current, run) => {
     const b = el("button", { type: "button", class: `files-place${current ? " current" : ""}`, "aria-current": current ? "true" : "false",
@@ -390,6 +433,7 @@ function renderTools(f) {
   const canChange = inFolder && f.writable;
   f.part("new-folder").hidden = f.part("new-file").hidden = !canChange;
   f.part("upload").hidden = !canChange || f.place === "root";
+  f.part("terminal").hidden = !inFolder || !f.admin || !files.hosts[f.place];
   const hidden = f.part("hidden");
   hidden.hidden = !inFolder || !f.admin;
   hidden.textContent = files.showHidden ? "Hide hidden files" : "Show hidden files";
@@ -985,6 +1029,12 @@ function wireFiles(f) {
   f.part("up").addEventListener("click", () => {
     if (f.view !== "folder") return showFolder(f.path, f);
     showFolder(parentOf(f.path), f);
+  });
+  f.part("terminal").addEventListener("click", () => openTerminalAt(f.path));
+  // The path bar: a click beside the crumbs (or Ctrl+L) to type where to go.
+  f.part("crumbs").addEventListener("click", (e) => { if (!e.target.closest("button, input")) crumbsEdit(f); });
+  f.section.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "l" && !e.target.closest("input, textarea")) { e.preventDefault(); crumbsEdit(f); }
   });
   f.part("new-folder").addEventListener("click", () => newFolder(f.path));
   f.part("new-file").addEventListener("click", () => newTextFile(f.path));

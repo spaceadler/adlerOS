@@ -120,13 +120,14 @@ def set_size(fd, rows, cols):
 
 
 class Session:
-    def __init__(self, sid, folder, rows, cols):
+    def __init__(self, sid, folder, rows, cols, where=""):
         self.sid, self.folder = sid, folder
         self.in_offset = 0
         self.size = None
         self.written = 0
         self.last_input = time.monotonic()
-        shell, cwd = login_shell(), start_folder()
+        # Open in Terminal: in that folder (one that's there), else as always.
+        shell, cwd = login_shell(), where if where and os.path.isabs(where) and os.path.isdir(where) else start_folder()
         env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL")}
         env.update(TERM="xterm-256color", COLORTERM="truecolor", SHELL=shell)
         self.pid, self.fd = pty.fork()
@@ -245,6 +246,7 @@ def new_requests(sessions):
             if time.time() - float(request.get("created", 0)) > START_WITHIN:
                 raise ValueError("too old: the terminal host wasn't running")
             rows, cols = int(request.get("rows", 24)), int(request.get("cols", 80))
+            where = request.get("dir") if isinstance(request.get("dir"), str) else ""
         except (OSError, ValueError, TypeError) as e:
             log(f"{folder.name}: refused ({e})")
             start.unlink(missing_ok=True)
@@ -256,7 +258,7 @@ def new_requests(sessions):
             continue
         # Taken: so systemd's path unit doesn't start us again for it.
         os.replace(start, folder / "started.json")
-        found.append((folder.name, folder, rows, cols))
+        found.append((folder.name, folder, rows, cols, where))
     return found
 
 
@@ -283,7 +285,7 @@ def main():
         sys.exit("the terminal host runs as your user, not root")
     if not enabled():
         # Refuse every request, so the page says so instead of waiting.
-        for sid, folder, _, _ in new_requests({}):
+        for sid, folder, *_ in new_requests({}):
             write_ended(folder, "the terminal is off (ADLEROS_TERMINAL)")
         sys.exit("the terminal is off: set ADLEROS_TERMINAL=on in the settings file to allow it")
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
@@ -291,12 +293,12 @@ def main():
     idle_since = time.monotonic()
     try:
         while True:
-            for sid, folder, rows, cols in new_requests(sessions):
+            for sid, folder, rows, cols, where in new_requests(sessions):
                 if len(sessions) >= MAX_SESSIONS:
                     write_ended(folder, f"at most {MAX_SESSIONS} terminals at once")
                     continue
                 try:
-                    sessions[sid] = Session(sid, folder, rows, cols)
+                    sessions[sid] = Session(sid, folder, rows, cols, where)
                 except OSError as e:
                     log(f"{sid}: couldn't start: {e}")
             if sessions:

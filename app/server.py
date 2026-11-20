@@ -14,7 +14,7 @@ folder mounted read-only.
     GET  /api/widgets      the desktop widgets you chose, and what they show
     GET  /api/updates      images with a newer version, from Cup if it's installed
     GET  /api/terminal     whether the terminal is on, and its open sessions
-    POST /api/terminal     {"rows", "cols"} -> a new shell (admin mode)
+    POST /api/terminal     {"rows", "cols", "path"?} -> a new shell (admin mode), in that folder
     GET  /api/terminal/<id>?offset=N  its output from N (waits for some)
     POST /api/terminal/<id>/input|size|close
     GET  /api/files?path=   a folder (the Files window): /desktop, /user or /root/...
@@ -9466,6 +9466,15 @@ class Handler(BaseHTTPRequestHandler):
             rows, cols = int(body.get("rows", 24)), int(body.get("cols", 80))
         except (TypeError, ValueError):
             return self.send_json(400, {"error": "rows and cols: numbers"})
+        # Open in Terminal: a folder of My Computer's, as it is on the machine.
+        where = ""
+        if body.get("path"):
+            place, real = locate(body.get("path"))
+            host = place_host(place) if place else ""
+            if not real or not real.is_dir() or not host:
+                return self.send_json(400, {"error": "that folder can't be opened in a terminal"})
+            rel = real.relative_to(PLACES[place].resolve())
+            where = os.path.normpath(os.path.join(host, str(rel)))
         sid = secrets.token_hex(16)
         TERM_DIR.mkdir(parents=True, exist_ok=True)
         # Made under a hidden name, then renamed into place whole: systemd's
@@ -9474,7 +9483,7 @@ class Handler(BaseHTTPRequestHandler):
         ready = TERM_DIR / f".{sid}.new"
         ready.mkdir(mode=0o700)
         terminal_append(ready / "in", b"")
-        write_private(ready / "start.json", json.dumps({"sid": sid, "rows": rows, "cols": cols, "created": time.time()}))
+        write_private(ready / "start.json", json.dumps({"sid": sid, "rows": rows, "cols": cols, "created": time.time(), **({"dir": where} if where else {})}))
         os.rename(ready, TERM_DIR / sid)
         return self.send_json(200, {"sid": sid})
 
