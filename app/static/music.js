@@ -1488,6 +1488,9 @@ function miniSwitch(id, view, on, holder, key) {
     if (!holder.mini) view.hidden = true;
   }, on ? 600 : 380);
   const g = wm.geometry[id];
+  // A phone on its side: not a small window but the whole screen, a cinema
+  // (app.css), over the bar down the left and the dock.
+  if (typeof landOn === "function" && landOn()) return;
   if (on && desktopMode() && g && section.dataset.tiled !== "1") {
     winSave(key, { ...g });
     const w = 340, h = Math.min(620, winArea().h - 24);
