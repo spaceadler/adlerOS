@@ -807,6 +807,7 @@ function openModal(dialog, { dismissable = true, onClose } = {}) {
 function closeModal() {
   const modal = $("modal");
   if (modal.hidden) return;
+  ghostOut(modal, { to: { opacity: 0 }, ms: 180 });
   modal.hidden = true;
   modal.replaceChildren();
   const cleanup = modalCleanup;

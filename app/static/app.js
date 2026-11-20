@@ -143,6 +143,22 @@ function viewIn(node, { dx = 0, dy = 10, ms = 280 } = {}) {
     { duration: ms, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
   a.id = "view-in";
 }
+// Something going away (a menu, a toast, a dialog): it goes at once, as it
+// always did (what comes next needn't wait), and a copy of it, left where it
+// was, fades out over a moment.
+function ghostOut(node, { to = { opacity: 0, transform: "scale(0.97)" }, ms = 170 } = {}) {
+  if (!node || node.hidden || !node.isConnected || !motionOK()) return;
+  const r = node.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  const ghost = node.cloneNode(true);
+  ghost.setAttribute("aria-hidden", "true");
+  ghost.inert = true;
+  Object.assign(ghost.style, { position: "fixed", left: `${r.left}px`, top: `${r.top}px`, right: "auto", bottom: "auto", width: `${r.width}px`, height: `${r.height}px`,
+    margin: "0", transform: "none", translate: "none", animation: "none", pointerEvents: "none" });
+  document.body.append(ghost); // after the real one: $(id) still finds that
+  ghost.animate([{ opacity: 1, transform: "none" }, to], { duration: ms, easing: "ease-in", fill: "forwards" });
+  setTimeout(() => ghost.remove(), ms + 40);
+}
 const viewBack = (node) => viewIn(node, { dx: -24, dy: 0 });
 const viewFwd = (node) => viewIn(node, { dx: 24, dy: 0 });
 
@@ -895,7 +911,7 @@ function toast(text) {
   void t.offsetWidth;
   t.style.animation = "";
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
+  toastTimer = setTimeout(() => { ghostOut(t, { to: { opacity: 0, transform: "translateY(8px)" }, ms: 220 }); t.hidden = true; }, 3200);
 }
 
 // A context menu of {label, run, destructive} items at the pointer.
@@ -931,6 +947,7 @@ function closeMenu() {
   const menu = $("menu");
   if (menu.hidden) return;
   const hadFocus = menu.contains(document.activeElement);
+  ghostOut(menu, { ms: 140 });
   menu.hidden = true;
   if (hadFocus && menuOpener?.isConnected) menuOpener.focus({ preventScroll: true });
 }

@@ -801,6 +801,7 @@ function mdSetMode(tab, mode, line = null) {
 const MD_FOCUS_KEY = "adleros.lunaFocus";
 function mdFocus(on) {
   $("luna").classList.toggle("md-focus", on);
+  viewIn($("luna").querySelector(".md-center"), { dy: 0, ms: 320 });
   winSave(MD_FOCUS_KEY, on);
   let out = $("md-focus-out");
   if (!out) {
