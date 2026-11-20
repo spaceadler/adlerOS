@@ -826,7 +826,7 @@ button { font: inherit; color: inherit; }
 .dock-item.bounce img,
 .dock-item.bounce .dock-plate { animation: bounce 0.4s ease-in-out; }
 /* Under whatever window is open, like umbrelOS. */
-.dock-item.open::after {
+.dock-item::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -835,8 +835,13 @@ button { font: inherit; color: inherit; }
   height: 2px;
   border-radius: 999px;
   background: #fff;
-  transform: translateX(-50%);
+  opacity: 0;
+  transform: translateX(-50%) scaleX(0);
+  transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
 }
+.dock-item.open::after { opacity: 1; transform: translateX(-50%) scaleX(1); }
+.dock-leaving { pointer-events: none; overflow: hidden; }
 .result-icon.dock-glyph img { width: 100%; height: 100%; }
 @keyframes bounce { 50% { transform: translateY(-20%); } }
 

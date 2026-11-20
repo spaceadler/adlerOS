@@ -864,6 +864,7 @@ function winDock() {
     const pinned = w.app && dock.querySelector(`.dock-app[data-app="${CSS.escape(w.app.id)}"]`);
     if (pinned) {
       pinned.classList.add("open");
+      if (typeof dockOpened === "function") dockOpened(`win:${id}`, true, pinned);
       continue;
     }
     const kept = had.get(id);
@@ -874,6 +875,7 @@ function winDock() {
     }
     running.push(kept || winDockItem(id, w));
   }
+  if (typeof dockOpen !== "undefined") for (const id of dockOpen) if (id.startsWith("win:") && !isOpen(id.slice(4))) dockOpen.delete(id);
   // Like a Mac's: after your pinned apps, before the divider (and with no
   // pins, a divider of their own).
   if (running.length) {
@@ -882,6 +884,34 @@ function winDock() {
     else dock.prepend(...running, el("span", { class: "dock-divider dock-run", "aria-hidden": "true" }));
   }
   sizeDock();
+  dockRunMotion([...had.values()], running);
+}
+
+// The windows' own icons in the dock: a new one grows in from nothing and
+// hops; a closed one shrinks away where it was.
+function dockRunMotion(before, now) {
+  if (!motionOK()) return;
+  const dock = $("dock");
+  const d = dockDims();
+  const grow = { duration: 320, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" };
+  for (const item of now) {
+    if (before.includes(item)) continue;
+    item.animate([{ width: "0px", marginRight: `-${d.gap}px`, opacity: 0, transform: "scale(0.4)" },
+      { width: `${d.size}px`, marginRight: "0px", opacity: 1, transform: "none" }], grow);
+    setTimeout(() => { if (item.isConnected) bounce(item); }, 260);
+  }
+  before.forEach((item, i) => {
+    if (now.includes(item)) return;
+    // Not dock-run any more: the next winDock leaves it to finish going.
+    item.classList.add("dock-leaving");
+    item.classList.remove("dock-run", "open", "active");
+    item.inert = true;
+    const next = now[i] || dock.querySelector(".dock-divider");
+    if (next?.parentNode === dock) next.before(item); else dock.prepend(item);
+    item.animate([{ width: `${d.size}px`, marginRight: "0px", opacity: 1, transform: "none" },
+      { width: "0px", marginRight: `-${d.gap}px`, opacity: 0, transform: "scale(0.4)" }], { duration: 260, easing: "ease-in", fill: "forwards" });
+    setTimeout(() => item.remove(), 300);
+  });
 }
 
 function winDockItem(id, w) {

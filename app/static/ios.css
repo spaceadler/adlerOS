@@ -142,7 +142,7 @@ body.phone .dock {
 @keyframes phone-dock-in { from { opacity: 0; transform: translateY(30px); } }
 body.phone .dock-label, body.phone .dock-divider, body.phone .dock-item .glow { display: none; }
 body.phone .dock-item:active { transform: scale(0.92); filter: brightness(0.8); }
-body.phone .dock-item.open::after { bottom: -9px; width: 4px; height: 4px; }
+body.phone .dock-item::after { bottom: -9px; width: 4px; height: 4px; }
 
 /* ------------------------------------------------- windows: page sheets */
 

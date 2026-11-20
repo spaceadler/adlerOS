@@ -185,7 +185,21 @@ function closeSettings() {
 
 // The little line under a dock item whose window is open.
 function markDockOpen(id, open) {
-  $("dock").querySelector(`[data-dock="${id}"]`)?.classList.toggle("open", open);
+  const item = $("dock").querySelector(`[data-dock="${id}"]`);
+  item?.classList.toggle("open", open);
+  dockOpened(`own:${id}`, open, item);
+}
+
+// An app's window opening (however it was opened): its icon in the dock
+// gives a hop, once, as a Mac's does. Kept by app, not by dock item: the
+// dock is drawn again now and then, and that's no opening.
+const dockOpen = new Set();
+function dockOpened(key, open, item) {
+  if (!open) { dockOpen.delete(key); return; }
+  if (dockOpen.has(key)) return;
+  dockOpen.add(key);
+  if (performance.now() < 4000) return; // the windows the page opens with: no hops
+  if (item && motionOK() && typeof bounce === "function") bounce(item);
 }
 
 async function loadSettings() {

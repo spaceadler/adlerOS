@@ -846,7 +846,7 @@ function dockDims() {
   if (phoneLayout()) return { size: 60, zoomed: 60, pad: 14, gap: 0 };
   const base = window.innerWidth < 768 ? DOCK.mobile : DOCK.desktop;
   // Many pins on a narrow screen: shrink every icon so the dock still fits.
-  const items = $("dock").querySelectorAll(".dock-item").length;
+  const items = $("dock").querySelectorAll(".dock-item:not(.dock-leaving)").length;
   const gap = window.innerWidth < 768 ? 8 : 10;
   const divider = $("dock").querySelector(".dock-divider") ? 5 + gap : 0;
   // (A phone on its side: beside the bars down the left, windows.js LAND.)
