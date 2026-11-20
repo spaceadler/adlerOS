@@ -132,6 +132,32 @@ function setGlass(v, keep = true) {
 }
 function appsInTabs() { return winLoad(OPEN_APPS_KEY, "here") === "tab"; }
 
+// Where one app (or website) opens, on this device: a window here (as they
+// all do), a tab of its own, or the Firefox app on the machine. A site you
+// log in to wants one of the last two: inside a window here it's a page in
+// another site's, and browsers keep its login (its cookies) out of that, so
+// you log in and land back on its home page, logged out.
+const OPEN_IN_KEY = "adleros.openIn";
+const firefoxApp = () => state.apps.find((a) => a.known === "firefox" && a.url);
+function openInFor(app) {
+  const how = (winLoad(OPEN_IN_KEY, {}) || {})[app.id];
+  return how === "tab" || (how === "firefox" && app.known !== "firefox" && firefoxApp()) ? how : "window";
+}
+function setOpenIn(app, how) {
+  const all = { ...(winLoad(OPEN_IN_KEY, {}) || {}) };
+  if (how === "window") delete all[app.id]; else all[app.id] = how;
+  winSave(OPEN_IN_KEY, all);
+  toast(`${app.name} opens ${{ window: "in a window here", tab: "in a tab of its own", firefox: "in Firefox" }[how]} on this device.`);
+}
+function openInItems(app) {
+  const now = openInFor(app);
+  return [
+    { label: "A window here", checked: now === "window", run: () => setOpenIn(app, "window") },
+    { label: "A tab of its own", checked: now === "tab", run: () => setOpenIn(app, "tab") },
+    ...(firefoxApp() && app.known !== "firefox" ? [{ label: "Firefox (on the machine)", checked: now === "firefox", run: () => setOpenIn(app, "firefox") }] : []),
+  ];
+}
+
 // This device's: how much liquid glass the see-through surfaces get
 // (glass.css), 1 (all of it) down to 0 (none: no blur, for a slow machine).
 // Near the top, Chromium also bends the light through it (an SVG filter).

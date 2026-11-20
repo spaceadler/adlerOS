@@ -5549,3 +5549,9 @@ body.wm.land .is-mini .mu-mini-ctls { grid-row: 5; justify-content: flex-start; 
 body.wm.land .is-mini .mu-mini-title { font-size: clamp(18px, 6cqh, 30px); }
 body.wm.land .is-mini .mu-mini-artist { font-size: clamp(14px, 4cqh, 19px); }
 body.wm.land .is-mini .mu-mini-line.now { font-size: clamp(16px, 5.4cqh, 26px); }
+
+/* A website's card in the App Store: where it opens (store.js siteOpenIn). */
+.site-open { margin: 4px 0 2px; }
+.site-open-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: rgb(255 255 255 / 0.75); }
+.site-open-in { width: auto; min-width: 180px; height: 32px; padding: 0 10px; font-size: 13px; }
+.site-open .row-description { margin-top: 6px; font-size: 12px; }

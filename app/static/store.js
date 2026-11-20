@@ -321,7 +321,17 @@ function siteCard(app) {
         el("div", { class: "store-state site" }, busy ? `${VERBS[busy.action]}…` : "Website")),
       open),
     el("p", { class: "row-description" }, app.url),
+    siteOpenIn(app),
     el("div", { class: "store-actions" }, ...(busy ? [] : [button("Address", "", () => addressDialog(app)), button("Remove", "destructive", () => appAction(app, "app-forget"))])));
+}
+
+// Where it opens, on this device, and why you'd change it.
+function siteOpenIn(app) {
+  const select = el("select", { class: "field-input site-open-in", "aria-label": `Where ${app.name} opens` },
+    ...openInItems(app).map((it, i) => el("option", { value: ["window", "tab", "firefox"][i], ...(it.checked ? { selected: "" } : {}) }, it.label)));
+  select.addEventListener("change", () => setOpenIn(app, select.value));
+  return el("div", { class: "site-open" }, el("label", { class: "site-open-row" }, el("span", {}, "Opens in"), select),
+    el("p", { class: "row-description" }, "Logging in won't stick in a window here: a website inside another site's page has its login kept out by the browser. If it sends you back to its home page logged out, open it in a tab of its own (or Firefox)."));
 }
 
 // Where an app's page is: what its icon and window open. Changed when your

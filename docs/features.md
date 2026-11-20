@@ -38,7 +38,8 @@ one, each still shows the files themselves. More in
 - **Import.** Already run apps adlerOS didn't find? Point it at a folder; go
   through the compose files one by one, ticking which services are apps (one
   file can hold several). Or **add a website**: any address becomes an app,
-  in a window like the rest.
+  in a window like the rest; or, for a site you log in to, in a tab of its
+  own or Firefox (Opens in, on its menu or its App Store card).
 - **Live Usage.** CPU, memory, storage and temperature as they change, and
   every app's share of the CPU and memory.
 - **Notifications.** An app went offline (or came back), a backup or update

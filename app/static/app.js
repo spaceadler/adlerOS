@@ -1146,6 +1146,10 @@ function openApp(app) {
     toast(`${app.name} has no web page; here it is in the App Store.`);
     return openStore();
   }
+  // Where you asked this one to open (a site you log in to: a tab, Firefox).
+  const how = openInFor(app);
+  if (how === "tab") return void window.open(app.url, "_blank", "noopener,noreferrer");
+  if (how === "firefox") return void openInFirefox(app.url, app.name).then((ok) => ok || window.open(app.url, "_blank", "noopener,noreferrer"));
   // In a window, unless this device wants tabs (on the home screen) or the
   // app won't be shown inside another page.
   if (desktopMode() || !appsInTabs()) return openAppWindow(app);
@@ -1194,7 +1198,7 @@ function menuForItem(target) {
   if (builtin) return [{ label: "Open", run: builtin.open }, ...newWindowItem(appId), pin(appId), ...onDesktop(appId)];
   if (app) {
     const inFolder = target.closest("#folder");
-    return [{ label: "Open", run: () => openApp(app) }, pin(app.id), ...onDesktop(app.id),
+    return [{ label: "Open", run: () => openApp(app) }, ...(app.url ? [{ label: "Opens in", items: openInItems(app) }] : []), pin(app.id), ...onDesktop(app.id),
       ...(inFolder ? [{ label: "Remove from folder", run: () => removeFromFolder(folderView.id, app.id) }]
         : target.closest("#pages") ? [{ label: "Add to a folder…", run: () => folderDialog(app) }] : []),
       { label: app.genre === "extras" ? "Put in a collection…" : "Move to another collection…", run: () => collectionDialog(app) },
