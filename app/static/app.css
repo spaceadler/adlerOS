@@ -5474,7 +5474,7 @@ body.wm .desk > .desk-icon, body.wm .desk > .desk-widget { touch-action: none; }
 /* The blurred cover behind what's playing (Music's and Podcasts' full
    screen, the TV's Now Playing, the car): drifting, slowly, as if it were
    breathing. Only its transform moves, so the blur isn't drawn again. */
-:is(.mu-mini-bg, .pc-mini-bg, .big-now-bg, .car-bgart) { animation: cover-drift 90s ease-in-out infinite; will-change: transform; }
+:is(.mu-mini-bg, .pc-mini-bg, .big-now-bg, .car-bgart) { animation: cover-drift 60s ease-in-out infinite; will-change: transform; }
 @keyframes cover-drift {
   0%, 100% { transform: scale(1.18) translate(0, 0) rotate(0deg); }
   25% { transform: scale(1.32) translate(3%, -2.5%) rotate(7deg); }
