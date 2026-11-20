@@ -169,6 +169,7 @@ async function showFolder(path, f = frontFiles(), { remember = true } = {}) {
   });
   if (!f.admin) files.rootOk = false; // the warning again, next time admin mode is on
   renderFiles(f);
+  if (from && (from.view !== "folder" || from.path !== f.path)) viewIn(f.part("list"), { dy: 6, ms: 240 });
 }
 
 function crumbs(f) {

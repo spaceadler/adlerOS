@@ -287,7 +287,9 @@ function musicShow(view, push = true) {
     music.back = [...music.back, { ...music.view, scroll: $("mu-main").scrollTop }].slice(-50);
     music.fwd = [];
   }
+  const moved = view.kind !== music.view.kind || view.key !== music.view.key;
   music.view = { ...view };
+  if (moved) viewIn($("mu-main"));
   // Up next or the lyrics in the list's place (a narrow window): out of the way.
   if (music.panel && getComputedStyle($("mu-main")).visibility === "hidden") musicSetPanel(null);
   musicRender();
@@ -300,6 +302,7 @@ function musicNav(dir) {
   (dir < 0 ? music.fwd : music.back).push({ ...music.view, scroll: $("mu-main").scrollTop });
   music.view = to;
   $("mu-search").value = to.kind === "search" ? to.query || "" : "";
+  (dir < 0 ? viewBack : viewFwd)($("mu-main"));
   musicRender();
   musicRenderSide();
   $("mu-main").scrollTop = to.scroll || 0;
@@ -1502,7 +1505,7 @@ function musicMiniUpdate() {
     $("mu-mini-art").dataset.key = key;
     $("mu-mini-art").replaceChildren(musicArt(id));
     const cover = s?.cover ? muCover(id) : s?.logo || "";
-    $("mu-mini-bg").style.backgroundImage = cover ? `url("${cover}")` : "";
+    fadeBackground($("mu-mini-bg"), cover || "");
   }
   $("mu-mini-title").textContent = s ? (s.station && s.now ? s.now : s.title) : "Not playing";
   $("mu-mini-artist").textContent = s ? (s.station ? s.title : muArtists(s)) : "";

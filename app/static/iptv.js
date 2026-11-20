@@ -133,6 +133,7 @@ function ltSide() {
 }
 
 function ltShow(view) {
+  if (JSON.stringify(view) !== JSON.stringify(iptv.view)) viewIn($("lt-main"));
   iptv.view = view;
   iptv.shown = LT_PAGE;
   ltSide();

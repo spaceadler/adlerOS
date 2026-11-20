@@ -94,6 +94,76 @@ async function api(path, options = {}) {
   return { status: response.status, body };
 }
 
+// ------------------------------------------------------------- motion
+
+// Things that change, changing smoothly: unless the device asks for less
+// motion (then they just change).
+const motionOK = () => !matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// A background picture (a cover, blurred; the wallpaper) to another: the new
+// one loaded first, then the old one fades away over it. For every page
+// that's coloured by what's playing.
+function fadeBackground(node, url, ms = 900) {
+  if (!node) return;
+  const want = url ? `url("${url}")` : "";
+  const token = (node.bgToken = (node.bgToken || 0) + 1);
+  if ((node.bgWant ?? node.style.backgroundImage) === want) return;
+  node.bgWant = want;
+  const swap = () => {
+    if (node.bgToken !== token) return;
+    const before = node.style.backgroundImage;
+    if (before === want) return;
+    node.style.backgroundImage = want;
+    if (!motionOK() || !node.isConnected) return;
+    if (!before || before === "none") { // the first: it fades in
+      node.animate([{ opacity: 0 }, { opacity: getComputedStyle(node).opacity }], { duration: ms * 0.7, easing: "ease-out" });
+      return;
+    }
+    const old = node.cloneNode(false);
+    old.removeAttribute("id");
+    old.setAttribute("aria-hidden", "true");
+    old.style.backgroundImage = before;
+    old.style.pointerEvents = "none";
+    node.after(old);
+    old.animate([{ opacity: getComputedStyle(node).opacity }, { opacity: 0 }], { duration: ms, easing: "ease-in-out", fill: "forwards" });
+    setTimeout(() => old.remove(), ms + 50); // on a timer: never left behind
+  };
+  if (!url) return swap();
+  const img = new Image();
+  img.onload = img.onerror = swap;
+  img.src = url;
+}
+
+// What a view shows, coming in: a short fade and glide (from the right
+// going forward, the left going back, below for a new view).
+function viewIn(node, { dx = 0, dy = 10, ms = 280 } = {}) {
+  if (!node || !motionOK()) return;
+  for (const a of node.getAnimations?.() || []) if (a.id === "view-in") a.cancel();
+  const a = node.animate([{ opacity: 0, transform: `translate(${dx}px, ${dy}px)` }, { opacity: 1, transform: "none" }],
+    { duration: ms, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+  a.id = "view-in";
+}
+const viewBack = (node) => viewIn(node, { dx: -24, dy: 0 });
+const viewFwd = (node) => viewIn(node, { dx: 24, dy: 0 });
+
+// A layout that changes (things moving to new places): each of `items` (a
+// node, or [node, false] to move it without resizing) glides from where it
+// was to where it is after `change`.
+function flip(items, change, { ms = 520, easing = "cubic-bezier(0.32, 0.72, 0, 1)" } = {}) {
+  const list = items.map((x) => (Array.isArray(x) ? x : [x, true])).filter(([n]) => n);
+  if (!motionOK()) return change();
+  const first = new Map(list.map(([n]) => [n, n.getBoundingClientRect()]));
+  change();
+  for (const [n, scale] of list) {
+    const a = first.get(n), b = n.getBoundingClientRect();
+    if (!a.width || !b.width) continue;
+    const dx = a.left - b.left, dy = a.top - b.top;
+    const sx = scale ? a.width / b.width : 1, sy = scale ? a.height / b.height : 1;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(sx - 1) < 0.01 && Math.abs(sy - 1) < 0.01) continue;
+    n.animate([{ transformOrigin: "0 0", transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` }, { transformOrigin: "0 0", transform: "none" }], { duration: ms, easing });
+  }
+}
+
 // ------------------------------------------------------------- wallpaper
 
 // `id` picks a specific wallpaper (and makes a new URL, so no stale cache).
@@ -101,7 +171,9 @@ function loadWallpaper(id) {
   const url = id ? `/api/wallpaper?id=${encodeURIComponent(id)}` : "/api/wallpaper";
   const img = new Image();
   img.onload = () => {
-    $("wallpaper").style.backgroundImage = `url("${url}")`;
+    // The first fades in (.loaded); another fades over the one before.
+    if ($("wallpaper").classList.contains("loaded")) fadeBackground($("wallpaper"), url, 1000);
+    else $("wallpaper").style.backgroundImage = `url("${url}")`;
     $("wallpaper").classList.add("loaded");
     // Behind every window too, blurred (.sheet-wallpaper).
     document.documentElement.style.setProperty("--wallpaper", `url("${url}")`);

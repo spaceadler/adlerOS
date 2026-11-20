@@ -121,10 +121,11 @@ function vdShow(view, replace = false) {
   if (!replace) vd.back.push(vd.view);
   if (vd.back.length > 30) vd.back.shift();
   vd.view = view;
+  viewIn($("vd-main"));
   vdSide();
   vdRender();
 }
-function vdBack() { vd.view = vd.back.pop() || { kind: "home" }; vdSide(); vdRender(); }
+function vdBack() { vd.view = vd.back.pop() || { kind: "home" }; viewBack($("vd-main")); vdSide(); vdRender(); }
 
 async function vdRender() {
   const main = $("vd-main");

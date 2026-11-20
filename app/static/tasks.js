@@ -184,6 +184,7 @@ function tkRenderSideNow() {
 // ------------------------------------------------------------- showing
 
 async function tkShow(view) {
+  if (JSON.stringify(view) !== JSON.stringify(tk.view)) viewIn($("tk-main"));
   tk.view = view;
   if (view.kind === "project") { tk.prefs.last = view.id; tkSave(); }
   if (view.kind !== "search" && $("tk-search").value) $("tk-search").value = "";

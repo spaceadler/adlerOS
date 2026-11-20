@@ -178,6 +178,7 @@ function docShow(view, push = true) {
     docs.back = [...docs.back, { ...docs.view, scroll: $("doc-main").scrollTop }].slice(-50);
     docs.fwd = [];
   }
+  if (JSON.stringify(view) !== JSON.stringify({ kind: docs.view.kind, filter: docs.view.filter, id: docs.view.id })) viewIn($("doc-main"));
   docs.view = { ...view };
   if (view.kind === "list" && !view.filter?.query) $("doc-search").value = "";
   docRender();
@@ -189,6 +190,7 @@ function docNav(dir) {
   if (!to) return;
   (dir < 0 ? docs.fwd : docs.back).push({ ...docs.view, scroll: $("doc-main").scrollTop });
   docs.view = to;
+  (dir < 0 ? viewBack : viewFwd)($("doc-main"));
   $("doc-search").value = to.filter?.query || "";
   docRender(to.scroll || 0);
   docRenderSide();

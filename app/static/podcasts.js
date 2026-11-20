@@ -240,6 +240,7 @@ function pcRenderSide() {
 
 function pcShow(view, { replace = false } = {}) {
   if (!replace && JSON.stringify(view) !== JSON.stringify(pc.view)) { pc.back.push({ view: pc.view, scroll: $("pc-main").scrollTop }); pc.fwd = []; }
+  if (JSON.stringify(view) !== JSON.stringify(pc.view)) viewIn($("pc-main"));
   pc.view = view;
   pcRenderSide();
   pcRender();
@@ -252,6 +253,7 @@ function pcNav(dir) {
   if (!step) return;
   to.push({ view: pc.view, scroll: $("pc-main").scrollTop });
   pc.view = step.view;
+  (dir < 0 ? viewBack : viewFwd)($("pc-main"));
   pcRenderSide();
   pcRender(step.scroll);
 }
@@ -1057,7 +1059,7 @@ function pcMiniUpdate() {
     art.dataset.key = key;
     art.replaceChildren(pcArt(np.item, 600));
     const img = art.querySelector("img");
-    $("pc-mini-bg").style.backgroundImage = img?.src ? `url("${img.src}")` : "";
+    fadeBackground($("pc-mini-bg"), img?.src || "");
   }
   const playing = !pc.audio.paused;
   const play = $("pc-mini").querySelector(".mu-mini-play");

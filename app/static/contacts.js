@@ -154,6 +154,7 @@ function ctSource() {
 }
 
 function ctShow(view, replace = false) {
+  if (JSON.stringify(view) !== JSON.stringify(ct.view)) viewIn($("ct-main"));
   ct.view = view;
   ctList();
   ctRender();

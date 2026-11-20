@@ -155,6 +155,7 @@ function gaShow(view, push = true) {
     gallery.back = [...gallery.back, { ...gallery.view, scroll: $("ga-main").scrollTop }].slice(-50);
     gallery.fwd = [];
   }
+  if (view.kind !== gallery.view.kind || view.key !== gallery.view.key) viewIn($("ga-main"));
   gallery.view = { ...view };
   gaRender();
   gaRenderSide();
@@ -166,6 +167,7 @@ function gaNav(dir) {
   if (!to) return;
   (dir < 0 ? gallery.fwd : gallery.back).push({ ...gallery.view, scroll: $("ga-main").scrollTop });
   gallery.view = to;
+  (dir < 0 ? viewBack : viewFwd)($("ga-main"));
   $("ga-search").value = to.kind === "search" ? to.query : "";
   gaRender(to.scroll || 0);
   gaRenderSide();
