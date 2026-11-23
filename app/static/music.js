@@ -1458,15 +1458,18 @@ function musicMiniView() {
         musicIconButton("Add to Favorites", "heart", () => musicToggleFavorite(muCurrent()), "mu-bar-fav mu-mini-fav")),
       el("div", { class: "mu-mini-lyric", id: "mu-mini-lyric", "aria-live": "off" }, el("div", { class: "mu-mini-line now" }), el("div", { class: "mu-mini-line next" })),
       el("div", { class: "mu-mini-seekrow" }, seek, el("div", { class: "mu-mini-times" }, el("span", { id: "mu-mini-at" }, "0:00"), el("span", { id: "mu-mini-left" }, "–:––"))),
-      el("div", { class: "mu-mini-ctls" },
+      // The buttons and the volume: one row in a wide enough desktop window
+      // (shuffle and repeat left, volume right), else the volume under them
+      // (app.css, by the deck's width).
+      el("div", { class: "mu-mini-deck" }, el("div", { class: "mu-mini-ctls" },
         musicIconButton("Shuffle", "shuffle", () => musicSetShuffle(!music.shuffle), "mu-mini-shuffle"),
-        musicIconButton("Previous", "prev", musicPrev, "mu-fill"),
+        musicIconButton("Previous", "prev", musicPrev, "mu-fill mu-mini-prev"),
         musicIconButton("Play", "play", musicToggle, "mu-fill mu-mini-play"),
-        musicIconButton("Next", "next", () => musicNext(), "mu-fill"),
-        musicIconButton("Repeat", "repeat", musicCycleRepeat, "mu-mini-repeat")),
-      // An iPhone's volume is its buttons' alone (a page can't set it): no slider there.
-      muVolumeSettable() ? el("div", { class: "mu-mini-volrow" },
-        musicIconButton("Mute", "volume", () => { music.audio.muted = !music.audio.muted; musicBarUpdate(); }, "mu-mini-mute"), volume) : ""));
+        musicIconButton("Next", "next", () => musicNext(), "mu-fill mu-mini-next"),
+        musicIconButton("Repeat", "repeat", musicCycleRepeat, "mu-mini-repeat"),
+        // An iPhone's volume is its buttons' alone (a page can't set it): no slider there.
+        muVolumeSettable() ? el("div", { class: "mu-mini-volrow" },
+          musicIconButton("Mute", "volume", () => { music.audio.muted = !music.audio.muted; musicBarUpdate(); }, "mu-mini-mute"), volume) : ""))));
   view.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); musicMini(false); } });
   return view;
 }
