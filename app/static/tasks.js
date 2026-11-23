@@ -507,7 +507,7 @@ function tkDropOnProject(node, id) {
 function tkTaskMenu(t) {
   return [
     { label: "Open", run: () => tkOpen(t) },
-    { label: t.done ? "Not done" : "Done", run: () => tkToggleDone(t, document.querySelector(`#tasks [data-id="${CSS.escape(t.id)}"]`)) },
+    { label: t.done ? "Not done" : "Done", run: () => tkToggleDone(t, document.querySelector(`#tasks .tk-row[data-id="${CSS.escape(t.id)}"], #tasks .tk-card[data-id="${CSS.escape(t.id)}"]`)) },
     { label: "Due today", run: () => tkPatch(t, { due: tkEndOf(0) }) },
     { label: "Due tomorrow", run: () => tkPatch(t, { due: tkEndOf(1) }) },
     { label: "Delete", run: () => tkDelete(t), destructive: true },
