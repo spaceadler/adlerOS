@@ -104,6 +104,10 @@ function tkBuild() {
       el("aside", { class: "tk-detail", id: "tk-detail", tabindex: "-1", hidden: "" })));
   document.body.insertBefore(section, $("modal"));
   $("tk-shell").append(sideToggle(section, "tasks"));
+  // An opened task's name is as tall as its lines: measured again when the
+  // panel's width changes, as it does from 0 while the panel opens. (Its
+  // border box, which a scrollbar coming or going doesn't change.)
+  new ResizeObserver(() => $("tk-detail").querySelector(".tk-detail-title")?.dispatchEvent(new Event("input"))).observe($("tk-detail"), { box: "border-box" });
   registerWindow("tasks", { title: "Tasks", close: closeTasks, hide: () => closeWindow("tasks"), dock: "tasks", size: [1180, 780] });
   section.addEventListener("keydown", tkKeys);
 }
@@ -603,8 +607,9 @@ function tkMarkSelected() {
 
 // Beside the list (over it, when narrow): every change saved as it's made.
 function tkOpen(t) {
-  tk.open = t;
   const box = $("tk-detail");
+  const fresh = box.hidden || tk.open?.id !== t.id;
+  tk.open = t;
   const saved = el("span", { class: "tk-saved", "aria-live": "polite" });
   const save = async (changes, extra = {}) => {
     saved.textContent = "Saving…";
@@ -703,6 +708,7 @@ function tkOpen(t) {
     notes,
     el("div", { class: "tk-detail-foot" }, del, saved, ...(t.identifier ? [el("span", { class: "tk-ident" }, t.identifier)] : [])));
   box.hidden = false;
+  if (fresh) box.scrollTop = 0; // another task starts at its name; the same one redrawn after a change stays put
   $("tk-shell").classList.add("with-detail");
   requestAnimationFrame(grow);
   tkMarkSelected();
