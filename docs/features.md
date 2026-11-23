@@ -103,7 +103,9 @@ one, each still shows the files themselves. More in
   whole screen, Up and Down (or its buttons) to the next. ViniPlay is in the
   store too, for a TV guide and recordings.
 - **Phone**: your contacts' numbers, favorites, recents and a keypad; a call
-  goes to the device's own phone (an iPhone asks to call).
+  goes to the device's own phone (an iPhone asks to call). In the car it's
+  drawn big, as CarPlay's: favorites as faces, recents, contacts by letter,
+  and a keypad beside the number.
 - **Clock**: world clock (on a map), alarms with snooze, a stopwatch with laps,
   and timers, several at once; they ring on the device, StandBy too.
 - **Five modes**, chosen on each device: the Home screen, Desktop, TV (for a

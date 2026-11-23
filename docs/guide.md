@@ -924,6 +924,15 @@ and your keyboard (or a paste) types too. Favorites and Recents (the calls
 made from adlerOS: a page can't read the phone's own list) are the same on
 every device.
 
+**In the car** (Car mode's Phone tile, or its rail), Phone is drawn big,
+after CarPlay's: **Favorites** as faces, one tap to call; **Recents**;
+**Contacts** by letter, where a tap opens the person (their numbers, each
+with a call button, and a big **Call**) so a list going by never calls
+anyone; and the **Keypad**, the number and the call button beside the keys
+(above and below them, upright), hold 0 for +, hold ⌫ to clear. What's
+playing steps aside on the keypad. Starring and changing people is left for
+Phone on the home screen, parked.
+
 ## StandBy
 
 After the iPhone's: a bedside clock, a photo frame and a glance at your day,

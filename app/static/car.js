@@ -1,9 +1,10 @@
 // Car mode: adlerOS on a phone in the car (turned sideways, on a mount).
 // Only big things you can hit without looking twice: what's playing (Music
 // or Podcasts) with large controls, and big tiles, two to a row, scrolled
-// up and down: Navigate and Calendar, Music and Podcasts, then Photos and
-// Videos (a film for the passengers), Live TV (the same) and the way out,
-// back to the mode you came from. Navigate hands the drive to the phone's Google Maps (it has
+// up and down: Navigate and Music, Podcasts and Phone, Calendar and Photos,
+// Videos (a film for the passengers) and Live TV (the same), and the way
+// out, back to the mode you came from. Phone calls your favorites, recents
+// and contacts, or a number on its keypad (bigui.js, CarPlay's way). Navigate hands the drive to the phone's Google Maps (it has
 // the traffic and the voice), to a place you saved (Home, Work, ones you
 // named) or typed, and remembers the last few; the places are kept on the
 // server, so every device has the same ones. One of the modes (windows.js
@@ -22,6 +23,7 @@ const car = { built: false, timer: null, shown: "", places: null, seeking: null,
 const CAR_ICONS = {
   nav: ["M3 11l18-8-8 18-2-8z"],
   calendar: ["M4 6h16v14H4z", "M4 10h16", "M8 3v4", "M16 3v4"],
+  phone: ["M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"],
   music: ["M9 18V5l12-2v13", "M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M18 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
   pods: ["M12 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2z", "M8.5 15a5 5 0 1 1 7 0", "M6 18a8.5 8.5 0 1 1 12 0", "M12 13v8"],
   photos: ["M4 5h16v14H4z", "M4 16l5-5 4 4 2-2 5 5", "M15.5 9.5a1.5 1.5 0 1 0 0-.01"],
@@ -92,9 +94,10 @@ function carBuild() {
       el("button", { type: "button", class: "car-expand", id: "car-expand", "aria-label": "Full screen" }, svg(CAR_ICONS.expand))),
     el("div", { class: "car-tiles", id: "car-tiles" }, el("div", { class: "car-track", id: "car-track" },
       tile("nav", CAR_ICONS.nav, "Navigate", () => carNavigate()),
-      tile("calendar", CAR_ICONS.calendar, "Calendar", () => bigOpen("calendar", "car")),
       tile("music", CAR_ICONS.music, "Music", () => bigOpen("music", "car")),
       tile("pods", CAR_ICONS.pods, "Podcasts", () => bigOpen("podcasts", "car")),
+      tile("phone", CAR_ICONS.phone, "Phone", () => bigOpen("phone", "car")),
+      tile("calendar", CAR_ICONS.calendar, "Calendar", () => bigOpen("calendar", "car")),
       tile("photos", CAR_ICONS.photos, "Photos", () => bigOpen("photos", "car")),
       tile("videos", CAR_ICONS.videos, "Videos", () => bigOpen("videos", "car")),
       tile("livetv", CAR_ICONS.livetv, "Live TV", () => bigOpen("livetv", "car")),

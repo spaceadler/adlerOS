@@ -1,11 +1,12 @@
 // Big screens: adlerOS's own apps drawn big, for the car (a finger on a
 // phone on a mount: CarPlay) and the TV (a remote from the sofa: tvOS).
 //
-// Each app (Music, Podcasts, Videos, Live TV, Photos, Books, Calendar) says
-// what it has as pages: a page has tabs (Music: Recently Played, Playlists,
-// Albums, Artists), or a hero (an album: its cover, Play and Shuffle) and
-// sections of items in a list, a grid or a shelf (a row across). An item
-// plays, opens its own page, or shows (a photo). One drawing for both, the
+// Each app (Music, Podcasts, Videos, Live TV, Photos, Books, Calendar, and
+// Phone in the car) says what it has as pages: a page has tabs (Music:
+// Recently Played, Playlists, Albums, Artists), or a hero (an album: its
+// cover, Play and Shuffle) and sections of items in a list, a grid or a
+// shelf (a row across), or a screen of its own (`node`: Phone's keypad). An
+// item plays, opens its own page, or shows (a photo). One drawing for both, the
 // sizes and the moving about of each mode their own (app.css .big-car,
 // .big-tv): in the car a rail down the side (home, the apps) and what's
 // playing along the bottom, and what you pick to hear sends you to the
@@ -13,7 +14,8 @@
 // the arrows (tv.js), Back to go back, and a Now Playing of its own.
 // Uses $, el, svg, api, toast, winLoad, winSave, openWindow, closeWindow,
 // Music's, Podcasts', Videos', Live TV's (iptv, ltReady, ltGroups, ltTune,
-// ltStop), Photos' (gaGet, gaThumb), Books' and Calendar's own parts,
+// ltStop), Photos' (gaGet, gaThumb), Books', Calendar's and Phone's
+// (dialer.js: dial, phData, phPeople, phCall, phWho, PH_KEYS…) own parts,
 // carOn/carShow/carGo (car.js) and tvOn/tvFocusSoon (tv.js).
 "use strict";
 
@@ -40,8 +42,9 @@ const BIG_APPS = {
   photos: { name: "Photos", icon: "gallery", root: () => bigPhotosRoot() },
   books: { name: "Books", icon: "books", root: () => bigBooksRoot() },
   calendar: { name: "Calendar", icon: "calendar", root: () => bigCalendarRoot() },
+  phone: { name: "Phone", icon: "phone", root: () => bigPhoneRoot() },
 };
-const BIG_CAR_APPS = ["music", "podcasts", "calendar", "photos", "videos", "livetv"];
+const BIG_CAR_APPS = ["phone", "music", "podcasts", "calendar", "photos", "videos", "livetv"];
 
 function bigOn() { return big.built && !$("big").hidden && !$("big").dataset.closing; }
 
@@ -220,6 +223,7 @@ async function bigDraw(restore = false) {
   } else { tabsBox.replaceChildren(); tabsBox.bigPage = null; }
   body.replaceChildren(...bigContent(content));
   body.classList.toggle("big-body-now", Boolean(page.nowPlaying)); // sized to fit (app.css)
+  body.classList.toggle("big-body-fill", Boolean(content.node)); // a screen of its own: the room there is
   body.scrollTop = restore || top.scroll ? top.scroll || 0 : 0;
   if (!page.nowPlaying) (restore ? viewBack : viewFwd)(body);
   else viewIn(body, { dy: 0, ms: 360 });
@@ -245,6 +249,7 @@ function bigHeadBack() {
 
 function bigContent(page) {
   if (page.nowPlaying) return [bigNowPage()];
+  if (page.node) return [page.node()];
   const out = [];
   if (page.hero) out.push(bigHero(page.hero));
   for (const s of page.sections || []) if (s.items?.length) out.push(bigSection(s));
@@ -997,6 +1002,131 @@ async function bigCalendarRoot() {
     { label: "Today", page: () => ({ sections: [{ layout: "list", items: today.map(bigEventItem) }], empty: "Nothing else today." }) },
     { label: "Coming Up", page: () => ({ sections: [...byDay].map(([day, list]) => ({ title: day, layout: "list", items: list.map(bigEventItem) })), empty: "Nothing in the next two weeks." }) },
   ] };
+}
+
+// --------------------------------------------------------------- Phone
+
+// In the car, after CarPlay's Phone: Favorites as faces to tap (Android
+// Auto's way: one big target each), Recents, Contacts by letter (a person:
+// their numbers), and the Keypad, the number and the call button beside the
+// keys. A call goes to the phone itself (dialer.js phCall: a tel: link; an
+// iPhone asks "Call …?", then CarPlay or the car has it), and is in Recents
+// on every device. Nothing here changes your favorites or contacts: that's
+// for Phone on the home screen, parked.
+
+const BIG_PHONE_TABS = { favorites: 0, recents: 1, contacts: 2, keypad: 3 };
+
+// Their photo, else their initials on a colour of their own.
+function bigPhoneFace(id, name) {
+  const c = id != null ? (dial.people || []).find((x) => x.id === id) : null;
+  if (c?.photo) return el("img", { src: `/api/contacts/card-photo?id=${encodeURIComponent(c.id)}`, alt: "", loading: "lazy", decoding: "async", draggable: "false" });
+  const face = el("span", { class: "big-face" }, /\p{L}/u.test(name || "") ? initials(name) : "#");
+  face.style.setProperty("--face-hue", String(hue(name || "#")));
+  return face;
+}
+
+const bigPhoneType = (type) => PH_TYPES[type] || type || "phone";
+
+function bigPhoneCall(number, name) {
+  phCall(number, name);
+  // Recents again the next time it's shown (now, if it is).
+  const root = big.app === "phone" ? big.stack[0] : null;
+  if (!root) return;
+  root.cache.delete(BIG_PHONE_TABS.recents);
+  if (big.stack.length === 1 && root.tab === BIG_PHONE_TABS.recents) bigDraw(true);
+}
+
+function bigPhoneWhen(at) {
+  const t = new Date(at), today = new Date();
+  if (t.toDateString() === today.toDateString()) return t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const days = Math.round((new Date(today.toDateString()) - new Date(t.toDateString())) / 86400000);
+  return days === 1 ? "Yesterday" : days < 7 ? t.toLocaleDateString([], { weekday: "short" }) : t.toLocaleDateString([], { day: "numeric", month: "short" });
+}
+
+async function bigPhoneRoot() {
+  await phPeople();
+  return { title: "Phone", tabs: [
+    { label: "Favorites", page: () => ({ sections: [{ layout: "grid", shape: "round", items: phData().favorites.map((f) => ({
+      title: f.name, sub: bigPhoneType(f.type), shape: "round", art: () => bigPhoneFace(f.id, f.name), run: () => bigPhoneCall(f.number, f.name) })) }],
+      empty: "No favorites yet. The star beside a number in Phone (on the home screen, parked) puts it here." }) },
+    { label: "Recents", page: () => ({ sections: [{ layout: "list", items: phData().recents.slice(0, 60).map((r) => {
+      const who = phWho(r.number);
+      const name = who?.name || r.name || "";
+      return { title: name || r.number, sub: name ? bigPhoneType(who?.type) : "", side: bigPhoneWhen(r.at), shape: "round",
+        art: () => bigPhoneFace(who?.id, name || r.number), run: () => bigPhoneCall(r.number, name) };
+    }) }], empty: "No calls yet. The ones made from adlerOS show here (your phone's own list is the phone's)." }) },
+    { label: "Contacts", page: () => bigPhoneContacts() },
+    { label: "Keypad", page: () => ({ node: bigPhoneKeypad }) },
+  ] };
+}
+
+// Everyone with a number, under their letter. A tap opens them (a call is
+// never one slip of the finger away in a list going by).
+function bigPhoneContacts() {
+  const people = dial.people || [];
+  const byLetter = new Map();
+  for (const c of people) {
+    const l = /\p{L}/u.test(c.name[0] || "") ? c.name[0].toUpperCase() : "#";
+    if (!byLetter.has(l)) byLetter.set(l, []);
+    byLetter.get(l).push(c);
+  }
+  return { sections: [...byLetter].map(([l, list]) => ({ title: l, layout: "list", items: list.map((c) => ({
+    title: c.name, sub: c.phones.length > 1 ? `${c.phones.length} numbers` : bigPhoneType(c.phones[0]?.type), shape: "round",
+    art: () => bigPhoneFace(c.id, c.name), page: () => bigPhonePerson(c) })) })),
+  empty: "No one with a number yet: Phone calls the people in your address book (Contacts)." };
+}
+
+function bigPhonePerson(c) {
+  return { title: c.name,
+    hero: { title: c.name, sub: c.company || "", shape: "round", art: bigPhoneFace(c.id, c.name),
+      actions: c.phones[0] ? [{ label: c.phones.length > 1 ? `Call ${bigPhoneType(c.phones[0].type)}` : "Call", icon: PH_ICONS.call, primary: true, run: () => bigPhoneCall(c.phones[0].value, c.name) }] : [] },
+    sections: [{ layout: "list", items: c.phones.map((p) => ({ title: bigPhoneType(p.type), sub: p.value,
+      side: el("span", { class: "big-call-mark" }, svg(PH_ICONS.call)), run: () => bigPhoneCall(p.value, c.name) })) }] };
+}
+
+// The keypad: the number (its end, when it's long) and whose it is, the
+// call and delete buttons, the keys. The same number as Phone's (dial.typed).
+function bigPhoneKeypad() {
+  const number = el("div", { class: "big-keypad-number" }, el("span", {}));
+  const who = el("div", { class: "big-keypad-who" });
+  const del = el("button", { type: "button", class: "big-keypad-del", "aria-label": "Delete" }, svg(PH_ICONS.back));
+  const show = () => {
+    number.firstChild.textContent = dial.typed;
+    number.classList.toggle("long", number.firstChild.offsetWidth > number.clientWidth);
+    const w = phWho(dial.typed);
+    who.textContent = w ? `${w.name} · ${bigPhoneType(w.type)}` : "";
+    del.classList.toggle("on", Boolean(dial.typed));
+  };
+  const type = (ch) => { if (dial.typed.length < 40) { dial.typed += ch; show(); } };
+  const keys = PH_KEYS.map(([digit, letters]) => {
+    const b = el("button", { type: "button", class: "big-key", "aria-label": digit }, el("strong", {}, digit), el("span", {}, letters));
+    let held = null;
+    // Hold 0 for +, as on a phone.
+    b.addEventListener("pointerdown", () => { if (digit === "0") held = setTimeout(() => { held = "plus"; type("+"); }, 550); });
+    b.addEventListener("click", () => {
+      if (held === "plus") { held = null; return; }
+      clearTimeout(held);
+      held = null;
+      type(digit);
+    });
+    return b;
+  });
+  let hold = null;
+  // Held: all of it.
+  del.addEventListener("pointerdown", () => { hold = setTimeout(() => { dial.typed = ""; show(); hold = "all"; }, 600); });
+  del.addEventListener("click", () => { if (hold === "all") { hold = null; return; } clearTimeout(hold); dial.typed = dial.typed.slice(0, -1); show(); });
+  const call = el("button", { type: "button", class: "big-keypad-call", "aria-label": "Call" }, svg(PH_ICONS.call));
+  call.addEventListener("click", () => {
+    if (dial.typed) return bigPhoneCall(dial.typed, phWho(dial.typed)?.name || "");
+    const last = phData().recents[0]; // as an iPhone: the last number, ready to call
+    if (last) { dial.typed = last.number; show(); }
+  });
+  const node = el("div", { class: "big-keypad" },
+    el("div", { class: "big-keypad-show" }, number, who),
+    el("div", { class: "big-keypad-keys" }, ...keys),
+    el("div", { class: "big-keypad-acts" }, el("span", { "aria-hidden": "true" }), call, del));
+  requestAnimationFrame(show);
+  return node;
 }
 
 // ------------------------------------------------------------- Live TV

@@ -4805,6 +4805,7 @@ body.car #desktop, body.car #dock, body.car .dock-edge { display: none !importan
 .car-tile.photos { background: linear-gradient(135deg, #ff9f0a, #d0650a); }
 .car-tile.videos { background: linear-gradient(135deg, #5e5ce6, #3532b0); }
 .car-tile.livetv { background: linear-gradient(135deg, #30b0c7, #1b7a8c); }
+.car-tile.phone { background: linear-gradient(135deg, #5ee87a, #16a34a); }
 .car-tile.exit { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: center; gap: 14px;
   background: linear-gradient(to bottom, rgb(255 255 255 / 0.1), rgb(12 14 18 / 0.34)); box-shadow: var(--shine), 0 10px 24px rgb(0 0 0 / 0.25); }
 /* A row of its own, or the other half of the last one when it's half empty. */
@@ -5029,7 +5030,7 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
 .big-car .big-main { position: relative; }
 .big-car .big-mini { position: absolute; left: 16px; right: 16px; bottom: max(10px, env(safe-area-inset-bottom)); z-index: 2; display: flex; align-items: center; gap: 10px; pointer-events: none; }
 .big-car .big-mini > * { pointer-events: auto; }
-.big-car .big-main:has(.big-mini:not([hidden])) .big-body { padding-bottom: 86px; }
+.big-car .big-main:has(.big-mini:not([hidden])) .big-body:not(.big-body-fill) { padding-bottom: 86px; }
 .big-mini-open { display: flex; flex: 0 1 auto; align-items: center; gap: 12px; min-width: 0; max-width: calc(100% - 70px); padding: 6px 22px 6px 6px; border: 0; border-radius: 999px;
   text-align: left; cursor: pointer; background: linear-gradient(to bottom, rgb(255 255 255 / 0.14), rgb(12 14 18 / 0.4)); box-shadow: var(--shine), 0 10px 26px rgb(0 0 0 / 0.4); }
 .big-mini-open .big-mini-art { border-radius: 50%; }
@@ -5046,12 +5047,55 @@ section.big[data-app="books"] { --big-accent: #ff9f0a; }
   .big-car .big-rail { grid-row: 2; flex-direction: row; justify-content: space-around; width: auto; padding: 8px 10px max(8px, env(safe-area-inset-bottom)); overflow: visible;
     background: linear-gradient(to bottom, rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.03)); box-shadow: 0 -1px 0 rgb(255 255 255 / 0.06); }
   .big-car .big-rail-clock { display: none; }
-  .big-car .big-rail-home, .big-car .big-rail-app { width: 52px; height: 52px; }
-  .big-car .big-rail-app img { width: 46px; height: 46px; }
+  /* As big as there's room for: eight across a narrow phone. */
+  .big-car .big-rail { gap: 4px; }
+  .big-car .big-rail-home, .big-car .big-rail-app { flex: 0 1 52px; width: auto; min-width: 0; height: auto; aspect-ratio: 1; }
+  .big-car .big-rail-app img { width: 88%; height: auto; aspect-ratio: 1; }
   .big-car .big-mini { bottom: 10px; }
   .big-car .big-hero { flex-direction: column; align-items: flex-start; }
   .big-car .big-items.grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
   .big-car .big-items.grid.shape-photo { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Phone, in the car (bigui.js bigPhone…): faces (a photo, else initials on
+   a colour of their own), a number's green call mark, and the keypad: the
+   number and the call button beside the keys on a phone on its side, above
+   and below them upright. What's playing steps aside on the keypad. */
+section.big[data-app="phone"] { --big-accent: #30d158; }
+.big-face { display: grid; place-items: center; background: linear-gradient(160deg, hsl(var(--face-hue, 210) 42% 54%), hsl(var(--face-hue, 210) 48% 34%)); color: #fff; font-weight: 650; line-height: 1; }
+.big-row-art .big-face { font-size: 19px; }
+.big-tile-art .big-face { font-size: 44px; }
+.big-hero-art .big-face { font-size: 54px; }
+.big-car .big-row-art.shape-round, .big-car .big-tile-art.shape-round { border-radius: 50%; }
+.big-car .big-items.grid.shape-round { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 18px 14px; }
+.big-items.grid.shape-round .big-tile { align-items: center; text-align: center; }
+.big-items.grid.shape-round .big-tile > :not(.big-tile-art) { max-width: 100%; }
+.big-call-mark { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--big-accent); color: #fff; }
+.big-call-mark svg { width: 20px; height: 20px; fill: currentColor; stroke: none; }
+.big-body.big-body-fill { container: big-fill / size; overflow: hidden; }
+.big-car .big-main:has(.big-body-fill) .big-mini { display: none; }
+.big-keypad { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "show keys" "acts keys"; gap: 10px 24px; height: 100%; }
+.big-keypad-show { grid-area: show; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
+.big-keypad-number { display: flex; justify-content: center; width: 100%; min-height: 1.2em; overflow: hidden; white-space: nowrap; font-size: clamp(26px, 13cqh, 46px); font-weight: 600; letter-spacing: 0.02em; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.big-keypad-number.long { justify-content: flex-end; }
+.big-keypad-who { max-width: 100%; min-height: 1.3em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 16px; color: rgb(255 255 255 / 0.65); }
+.big-keypad-acts { grid-area: acts; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; justify-items: center; padding-bottom: 4px; }
+.big-keypad-call { display: grid; place-items: center; width: 72px; height: 72px; padding: 0; border: 0; border-radius: 50%; background: #30d158; color: #fff; cursor: pointer; box-shadow: 0 10px 24px rgb(0 0 0 / 0.35); }
+.big-keypad-call svg { width: 32px; height: 32px; fill: currentColor; stroke: none; }
+.big-keypad-call:active { transform: scale(0.94); }
+.big-keypad-del { display: grid; place-items: center; width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%; background: none; color: rgb(255 255 255 / 0.8); cursor: pointer; visibility: hidden; }
+.big-keypad-del.on { visibility: visible; }
+.big-keypad-del svg { width: 30px; height: 30px; }
+.big-keypad-del:active { background: rgb(255 255 255 / 0.12); }
+.big-keypad-keys { grid-area: keys; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 8px; min-height: 0; }
+.big-key { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 0; padding: 0; border: 0; border-radius: 16px; background: rgb(255 255 255 / 0.12); cursor: pointer; }
+.big-key:active { background: rgb(255 255 255 / 0.28); transform: scale(0.97); }
+.big-key strong { font-size: clamp(22px, 9cqh, 34px); font-weight: 500; line-height: 1; }
+.big-key span { min-height: 1em; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; line-height: 1; color: rgb(255 255 255 / 0.6); }
+@container big-fill (max-aspect-ratio: 1 / 1) {
+  .big-keypad { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 420px) auto; grid-template-areas: "show" "keys" "acts"; align-content: center; gap: 14px; }
+  .big-keypad-show { padding: 4px 0; }
+  .big-keypad-keys { width: 100%; max-width: 440px; justify-self: center; }
 }
 
 /* On the TV (tvOS's way): tabs on glass along the top, big shelves, a lift
