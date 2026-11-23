@@ -669,7 +669,11 @@ that only what changed, so it opens straight away.
   shows the queue: what you added (Play next goes first, Add to queue after
   what you added), then the rest; drag to reorder, or remove. **Lyrics**
   follow the song as it plays (an `.lrc` beside it, as spotdl makes them, or
-  the song's own); a click on a line goes there.
+  the song's own); a click on a line goes there. The **mini player** (the
+  last button on the bar) is the cover, the line being sung, where you are
+  in the song, the heart, shuffle, repeat and the volume, in the window as
+  big as it was (a wide one puts the cover beside the rest); the cover or
+  Escape goes back.
 - Your keyboard's media keys work, and so does a phone's lock screen
   (previous and next song, play, and dragging along the song; next only when
   there's a song after this one). An iPhone shows either song buttons or

@@ -1426,8 +1426,7 @@ function musicBarTime() {
 // ------------------------------------------------------- the mini player
 
 // Like Apple Music's MiniPlayer: only the cover, the line being sung, where
-// in the song (to drag) and the buttons. On the desktop the window shrinks
-// to it, and grows back after.
+// in the song (to drag), the buttons and the volume, in the window as it is.
 const MU_MINI_KEY = "adleros.musicMiniBefore";
 
 function musicMiniView() {
@@ -1445,35 +1444,53 @@ function musicMiniView() {
   const back = musicIconButton("Back to Music", "expand", () => musicMini(false), "mu-mini-back");
   const art = el("button", { type: "button", class: "mu-mini-art", id: "mu-mini-art", "aria-label": "Back to Music" });
   art.addEventListener("click", () => musicMini(false));
+  const volume = el("input", { type: "range", class: "mu-volume mu-mini-volume", id: "mu-mini-volume", min: "0", max: "1", step: "0.01", value: String(music.audio.volume), "aria-label": "Volume" });
+  volume.addEventListener("input", () => { music.audio.volume = Number(volume.value); music.audio.muted = false; musicSaveSoon(); });
   const view = el("div", { class: "mu-mini", id: "mu-mini", hidden: "" },
     el("div", { class: "mu-mini-bg", id: "mu-mini-bg", "aria-hidden": "true" }),
     back,
     el("div", { class: "mu-mini-body" },
       art,
-      el("div", { class: "mu-mini-text" }, el("div", { class: "mu-mini-title", id: "mu-mini-title" }), el("div", { class: "mu-mini-artist", id: "mu-mini-artist" })),
+      // The heart on the right, an empty space as wide on the left, so the song stays centred.
+      el("div", { class: "mu-mini-info" },
+        el("span", { "aria-hidden": "true" }),
+        el("div", { class: "mu-mini-text" }, el("div", { class: "mu-mini-title", id: "mu-mini-title" }), el("div", { class: "mu-mini-artist", id: "mu-mini-artist" })),
+        musicIconButton("Add to Favorites", "heart", () => musicToggleFavorite(muCurrent()), "mu-bar-fav mu-mini-fav")),
       el("div", { class: "mu-mini-lyric", id: "mu-mini-lyric", "aria-live": "off" }, el("div", { class: "mu-mini-line now" }), el("div", { class: "mu-mini-line next" })),
       el("div", { class: "mu-mini-seekrow" }, seek, el("div", { class: "mu-mini-times" }, el("span", { id: "mu-mini-at" }, "0:00"), el("span", { id: "mu-mini-left" }, "–:––"))),
       el("div", { class: "mu-mini-ctls" },
+        musicIconButton("Shuffle", "shuffle", () => musicSetShuffle(!music.shuffle), "mu-mini-shuffle"),
         musicIconButton("Previous", "prev", musicPrev, "mu-fill"),
         musicIconButton("Play", "play", musicToggle, "mu-fill mu-mini-play"),
-        musicIconButton("Next", "next", () => musicNext(), "mu-fill"))));
+        musicIconButton("Next", "next", () => musicNext(), "mu-fill"),
+        musicIconButton("Repeat", "repeat", musicCycleRepeat, "mu-mini-repeat")),
+      // An iPhone's volume is its buttons' alone (a page can't set it): no slider there.
+      muVolumeSettable() ? el("div", { class: "mu-mini-volrow" },
+        musicIconButton("Mute", "volume", () => { music.audio.muted = !music.audio.muted; musicBarUpdate(); }, "mu-mini-mute"), volume) : ""));
   view.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); musicMini(false); } });
   return view;
 }
 
+function muVolumeSettable() {
+  const a = new Audio();
+  a.volume = 0.5;
+  return a.volume === 0.5;
+}
+
+// The window keeps its size: the mini player fills it, whatever it is.
 function musicMini(on) {
   if (!music.built || Boolean(music.mini) === on) return;
   music.mini = on;
-  miniSwitch("music", $("mu-mini"), on, music, MU_MINI_KEY);
+  miniSwitch("music", $("mu-mini"), on, music, MU_MINI_KEY, false);
   if (on) { musicLyricsLoad(muCurrent()); musicMiniUpdate(); $("mu-mini").querySelector(".mu-mini-play").focus({ preventScroll: true }); }
   else setTimeout(() => music.vdraw?.(true), 50);
 }
 
 // Shared with Podcasts' mini player. In: the cover rises and grows, the rest
 // after it; out: the other way, the library coming back behind it. On the
-// desktop the window shrinks to it, its right edge where it was (a full or
-// half screen one: to the right), and grows back after.
-function miniSwitch(id, view, on, holder, key) {
+// desktop, with shrink, the window shrinks to it, its right edge where it was
+// (a full or half screen one: to the right), and grows back after.
+function miniSwitch(id, view, on, holder, key, shrink = true) {
   const section = $(id);
   clearTimeout(holder.miniTimer);
   section.classList.toggle("is-mini", on);
@@ -1491,7 +1508,7 @@ function miniSwitch(id, view, on, holder, key) {
   // A phone on its side: not a small window but the whole screen, a cinema
   // (app.css), over the bar down the left and the dock.
   if (typeof landOn === "function" && landOn()) return;
-  if (on && desktopMode() && g && section.dataset.tiled !== "1") {
+  if (on && shrink && desktopMode() && g && section.dataset.tiled !== "1") {
     winSave(key, { ...g });
     const w = 340, h = Math.min(620, winArea().h - 24);
     const x = g.mode === "normal" ? g.x + g.w - w : winArea().w - w - 24;
@@ -1529,6 +1546,22 @@ function musicMiniUpdate() {
   play.replaceChildren(svg(music.audio.paused ? MU_ICONS.play : MU_ICONS.pause));
   play.setAttribute("aria-label", music.audio.paused ? "Play" : "Pause");
   $("mu-mini-seek").disabled = Boolean(s?.station);
+  const view = $("mu-mini");
+  const fav = view.querySelector(".mu-mini-fav");
+  fav.style.visibility = id && music.songs.has(id) ? "" : "hidden";
+  musicFavState(fav, Boolean(id) && music.favorites.has(id));
+  view.querySelector(".mu-mini-shuffle").classList.toggle("on", music.shuffle);
+  const rep = view.querySelector(".mu-mini-repeat");
+  rep.classList.toggle("on", music.repeat !== "off");
+  rep.classList.toggle("one", music.repeat === "one");
+  rep.title = { off: "Repeat", all: "Repeat: all", one: "Repeat: this song" }[music.repeat];
+  const mute = view.querySelector(".mu-mini-mute");
+  if (mute) {
+    const v = music.audio.muted ? 0 : music.audio.volume;
+    mute.replaceChildren(svg(v === 0 ? MU_ICONS.muted : MU_ICONS.volume));
+    $("mu-mini-volume").value = String(v);
+    $("mu-mini-volume").style.setProperty("--done", `${v * 100}%`);
+  }
   musicMiniTime();
 }
 

@@ -3078,12 +3078,22 @@ body.wm .mu-mini-back { top: 46px; }
 body:not(.wm) .mu-mini-back { top: max(12px, env(safe-area-inset-top)); }
 .mu-mini-back svg { width: 16px; height: 16px; }
 .mu-mini-body { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; height: 100%; padding: 56px 24px 24px; }
-body.wm .mu-mini { --mini-room: 370px; }
+/* --mini-room: the height of all but the cover (its padding, the song, its
+   line, the bar, the buttons, the volume), so the cover shrinks first. */
+.mu-mini { --mini-room: 380px; }
+.mu-mini:not(:has(.mu-mini-volrow)) { --mini-room: 330px; }
+body.wm .mu-mini { --mini-room: 410px; }
 body.wm .mu-mini-body { padding-top: 84px; }
+body:not(.wm) .mu-mini { --mini-room: calc(300px + max(64px, calc(env(safe-area-inset-top) + 52px)) + max(28px, env(safe-area-inset-bottom))); }
+body:not(.wm) .mu-mini:not(:has(.mu-mini-volrow)) { --mini-room: calc(250px + max(64px, calc(env(safe-area-inset-top) + 52px)) + max(28px, env(safe-area-inset-bottom))); }
 body:not(.wm) .mu-mini-body { padding-top: max(64px, calc(env(safe-area-inset-top) + 52px)); padding-bottom: max(28px, env(safe-area-inset-bottom)); }
-.mu-mini-art { flex-shrink: 0; width: min(100cqw - 48px, 100cqh - var(--mini-room, 330px), 520px); min-width: 120px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: rgb(255 255 255 / 0.08); box-shadow: 0 18px 50px rgb(0 0 0 / 0.5); cursor: pointer; }
+.mu-mini-art { flex-shrink: 0; width: min(100cqw - 48px, 100cqh - var(--mini-room), 520px); min-width: 120px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: rgb(255 255 255 / 0.08); box-shadow: 0 18px 50px rgb(0 0 0 / 0.5); cursor: pointer; }
 .mu-mini-art .mu-art { display: block; width: 100%; border-radius: 0; }
-.mu-mini-text { width: 100%; max-width: 520px; text-align: center; }
+.mu-mini-info { display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px; align-items: center; gap: 8px; width: 100%; max-width: 520px; }
+.mu-mini-text { min-width: 0; text-align: center; }
+.mu-mini .mu-mini-fav { width: 40px; height: 40px; color: rgb(255 255 255 / 0.8); }
+.mu-mini .mu-mini-fav svg { width: 22px; height: 22px; }
+.mu-mini .mu-mini-fav.on { color: var(--mu-accent); }
 .mu-mini-title, .mu-mini-artist { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .mu-mini-title { font-size: 17px; font-weight: 700; }
 .mu-mini-artist { margin-top: 2px; color: rgb(255 255 255 / 0.65); font-size: 14px; }
@@ -3100,9 +3110,16 @@ body:not(.wm) .mu-mini-body { padding-top: max(64px, calc(env(safe-area-inset-to
 .mu-mini-seek::-webkit-slider-thumb { opacity: 1; }
 .mu-mini-seek:disabled { opacity: 0.35; cursor: default; }
 .mu-mini-times { display: flex; justify-content: space-between; margin-top: 6px; color: rgb(255 255 255 / 0.6); font-size: 12px; font-variant-numeric: tabular-nums; }
-.mu-mini-ctls { display: flex; align-items: center; justify-content: center; gap: 22px; }
+.mu-mini-ctls { display: flex; align-items: center; justify-content: center; gap: clamp(6px, 4cqw, 24px); }
 .mu-mini-ctls .mu-icon { flex-shrink: 0; width: 44px; height: 44px; color: #fff; }
 .mu-mini-ctls .mu-icon svg { width: 24px; height: 24px; }
+.mu-mini-ctls :is(.mu-mini-shuffle, .mu-mini-repeat) { width: 36px; height: 36px; color: rgb(255 255 255 / 0.75); }
+.mu-mini-ctls :is(.mu-mini-shuffle, .mu-mini-repeat) svg { width: 20px; height: 20px; }
+.mu-mini-ctls .mu-icon.on { color: var(--mu-accent); }
+.mu-mini-volrow { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 520px; }
+.mu-mini-volrow .mu-mini-mute { flex-shrink: 0; color: rgb(255 255 255 / 0.75); }
+.mu-mini .mu-mini-volume { display: block; flex: 1; width: auto; height: 5px; margin: 0 10px 0 0; }
+.mu-mini-volume::-webkit-slider-thumb { opacity: 1; }
 .mu-mini-ctls .mu-mini-play { width: 58px; height: 58px; background: #fff; color: #111; }
 .mu-mini-ctls .mu-mini-play svg { width: 26px; height: 26px; }
 /* In and out (music.js: musicMini). */
@@ -3113,6 +3130,20 @@ body:not(.wm) .mu-mini-body { padding-top: max(64px, calc(env(safe-area-inset-to
 .mu-mini.closing { animation: mu-mini-in 0.36s ease-in reverse both; pointer-events: none; }
 .mu-mini.closing .mu-mini-art { animation: mu-mini-art-in 0.36s ease-in reverse both; }
 .mu-mini.closing .mu-mini-body > :not(.mu-mini-art) { animation: mu-mini-rise 0.25s ease-in reverse both; }
+/* A wide window (the mini player keeps the window's size): the cover on the
+   left, the rest beside it, as on a phone on its side. */
+@container (min-aspect-ratio: 5 / 4) and (min-width: 720px) {
+  .mu-mini-body { display: grid; grid-template-columns: auto minmax(0, 520px); grid-template-rows: 1fr repeat(5, auto) 1fr; justify-content: center; align-items: center; column-gap: max(28px, 5cqw); row-gap: 12px; padding: 72px 40px 32px; }
+  .mu-mini-art { grid-column: 1; grid-row: 1 / -1; width: min(100cqh - 120px, 40cqw, 480px); }
+  .mu-mini-body > :not(.mu-mini-art) { grid-column: 2; max-width: none; text-align: left; }
+  .mu-mini-info { grid-row: 2; grid-template-columns: minmax(0, 1fr) 40px; }
+  .mu-mini-info > span { display: none; }
+  .mu-mini-text { text-align: left; }
+  .mu-mini-lyric { grid-row: 3; height: auto; min-height: 30px; }
+  .mu-mini-seekrow { grid-row: 4; }
+  .mu-mini-ctls { grid-row: 5; justify-content: flex-start; gap: clamp(8px, 1.8cqw, 22px); }
+  .mu-mini-volrow { grid-row: 6; }
+}
 .mini-back .mu-shell, .mini-back .pc-shell { animation: mu-mini-in 0.4s ease-out; }
 @keyframes mu-mini-in { from { opacity: 0; } }
 @keyframes mu-mini-art-in { from { opacity: 0; transform: translateY(60px) scale(0.6); } }
@@ -5538,14 +5569,17 @@ body.wm.land :is(#music, #podcasts).is-mini { left: 0 !important; top: 0 !import
 body.wm.land :is(#music, #podcasts).is-mini > :is(.win-bar, .win-grip, .sheet-close) { display: none; }
 body.wm.land .is-mini .mu-mini { border-radius: 0; }
 body.wm.land .is-mini .mu-mini-back { top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left)); }
-body.wm.land .is-mini .mu-mini-body { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 1fr auto auto auto auto 1fr; column-gap: max(28px, 5cqw); row-gap: 12px;
+body.wm.land .is-mini .mu-mini-body { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 1fr repeat(5, auto) 1fr; justify-content: stretch; column-gap: max(28px, 5cqw); row-gap: 12px;
   align-items: center; padding: max(18px, env(safe-area-inset-top)) max(36px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(70px, calc(env(safe-area-inset-left) + 56px)); }
 body.wm.land .is-mini .mu-mini-art { grid-column: 1; grid-row: 1 / -1; width: min(82cqh, 44cqw); border-radius: 14px; }
 body.wm.land .is-mini .mu-mini-body > :not(.mu-mini-art) { grid-column: 2; max-width: none; text-align: left; }
-body.wm.land .is-mini .mu-mini-text { grid-row: 2; }
+body.wm.land .is-mini .mu-mini-info { grid-row: 2; grid-template-columns: minmax(0, 1fr) 40px; }
+body.wm.land .is-mini .mu-mini-info > span { display: none; }
+body.wm.land .is-mini .mu-mini-text { text-align: left; }
 body.wm.land .is-mini .mu-mini-lyric { grid-row: 3; height: auto; min-height: 30px; }
 body.wm.land .is-mini .mu-mini-seekrow { grid-row: 4; }
 body.wm.land .is-mini .mu-mini-ctls { grid-row: 5; justify-content: flex-start; }
+body.wm.land .is-mini .mu-mini-volrow { grid-row: 6; }
 body.wm.land .is-mini .mu-mini-title { font-size: clamp(18px, 6cqh, 30px); }
 body.wm.land .is-mini .mu-mini-artist { font-size: clamp(14px, 4cqh, 19px); }
 body.wm.land .is-mini .mu-mini-line.now { font-size: clamp(16px, 5.4cqh, 26px); }
