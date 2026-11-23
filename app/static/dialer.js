@@ -7,7 +7,9 @@
 // - Keypad: the number as you type it (or paste it), with whose it is; the
 //   letters under the digits; hold 0 for +; your keyboard types too.
 // - Favorites and Recents (the calls made from adlerOS: a page can't read
-//   the phone's own log): the same on every device (/api/phone).
+//   the phone's own log): the same on every device (/api/phone). A recent
+//   opens its person (or its number), as an iPhone's info page; the green
+//   button on its right calls.
 // Uses $, el, svg, api, toast, winLoad, winSave, openWindow, closeWindow,
 // registerWindow, toggleWindow, isOpen, openContacts, ctShow.
 "use strict";
@@ -27,7 +29,7 @@ const PH_ICONS = {
 const PH_KEYS = [["1", ""], ["2", "ABC"], ["3", "DEF"], ["4", "GHI"], ["5", "JKL"], ["6", "MNO"], ["7", "PQRS"], ["8", "TUV"], ["9", "WXYZ"], ["*", ""], ["0", "+"], ["#", ""]];
 const PH_TYPES = { mobile: "mobile", iphone: "iPhone", home: "home", work: "work", main: "main", other: "phone" };
 
-const dial = { built: false, tab: "keypad", typed: "", people: null, peopleAt: 0, q: "", person: null, sendTimer: null };
+const dial = { built: false, tab: "keypad", typed: "", people: null, peopleAt: 0, q: "", person: null, number: null, sendTimer: null };
 
 // ------------------------------------------------------------ what's kept
 
@@ -135,20 +137,55 @@ function phRender() {
   if (!dial.built) return;
   const item = (tab, icon, label) => {
     const b = el("button", { type: "button", class: `mu-nav${dial.tab === tab ? " on" : ""}` }, svg(icon), el("span", {}, label));
-    b.addEventListener("click", () => { dial.tab = tab; dial.person = null; phRender(); });
+    b.addEventListener("click", () => { dial.tab = tab; dial.person = null; dial.number = null; phRender(); });
     return b;
   };
   $("ph-nav").replaceChildren(item("favorites", PH_ICONS.star, "Favorites"), item("recents", PH_ICONS.recent, "Recents"),
     item("contacts", PH_ICONS.person, "Contacts"), item("keypad", PH_ICONS.keypad, "Keypad"));
   const main = $("ph-main");
   if (dial.person) return phPerson(main, dial.person);
+  if (dial.number) {
+    // Your contacts came in since: it's someone's after all.
+    const who = phWho(dial.number);
+    if (!who) return phNumber(main, dial.number);
+    dial.person = who.id;
+    dial.number = null;
+    return phPerson(main, who.id);
+  }
   ({ favorites: phFavorites, recents: phRecents, contacts: phContacts, keypad: phKeypad }[dial.tab] || phKeypad)(main);
 }
 
 const phAvatar = (c) => (c?.photo ? el("img", { class: "ct-avatar", src: `/api/contacts/card-photo?id=${c.id}`, alt: "" })
   : el("span", { class: "ct-avatar" }, c?.initials || (c?.name || "#").slice(0, 1).toUpperCase()));
 
-// A row you tap to call; a button on its right for more.
+// The green button on a row's right that calls.
+function phCallButton(number, name) {
+  const b = el("button", { type: "button", class: "ph-call-mini", "aria-label": `Call ${name || number}`, title: "Call" }, svg(PH_ICONS.call));
+  b.addEventListener("click", () => phCall(number, name));
+  return b;
+}
+
+// When a call was: the time today, Yesterday, the weekday this week, else the date.
+function phWhen(at) {
+  const t = new Date(at), today = new Date();
+  if (t.toDateString() === today.toDateString()) return t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const days = Math.round((new Date(today.toDateString()) - new Date(t.toDateString())) / 86400000);
+  return days === 1 ? "Yesterday" : days < 7 ? t.toLocaleDateString([], { weekday: "long" }) : t.toLocaleDateString();
+}
+
+// The calls made to these numbers, newest first, on a person's (or a number's) page.
+function phHistory(numbers) {
+  const tails = new Set(numbers.map(phTail).filter(Boolean));
+  const calls = phData().recents.filter((r) => tails.has(phTail(r.number))).slice(0, 10);
+  if (!calls.length) return [];
+  return [el("h3", { class: "ph-history-title" }, "Recent calls"), el("div", { class: "ph-history" }, ...calls.map((r) => {
+    const t = new Date(r.at);
+    return el("div", { class: "ph-history-row" }, el("span", {}, `${phWhen(r.at)}${t.toDateString() === new Date().toDateString() ? "" : `, ${t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}`),
+      el("span", { class: "vd-dim" }, numbers.length > 1 ? `Outgoing · ${r.number}` : "Outgoing call"));
+  }))];
+}
+
+// A row you tap (to call, or to open); a button on its right for more.
 function phRow(main, sub, onTap, side = null) {
   const b = el("button", { type: "button", class: "ph-row" }, el("span", { class: "ph-row-text" }, el("strong", {}, main), sub ? el("span", {}, sub) : ""));
   b.addEventListener("click", onTap);
@@ -170,19 +207,18 @@ function phFavorites(main) {
 
 // -------------------------------------------------------------- Recents
 
+// A tap opens who it was (their numbers, the calls to them), as an iPhone's
+// info page, never a call by accident; the green button calls.
 function phRecents(main) {
   const d = phData();
-  const when = (at) => {
-    const t = new Date(at), today = new Date();
-    if (t.toDateString() === today.toDateString()) return t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    const days = Math.round((new Date(today.toDateString()) - new Date(t.toDateString())) / 86400000);
-    return days === 1 ? "Yesterday" : days < 7 ? t.toLocaleDateString([], { weekday: "long" }) : t.toLocaleDateString();
-  };
   const rows = d.recents.map((r) => {
     const who = phWho(r.number);
-    const info = el("button", { type: "button", class: "ph-side-button", "aria-label": "Details" }, el("span", { class: "ph-when" }, when(r.at)));
-    if (who) info.addEventListener("click", () => { dial.person = who.id; phRender(); });
-    return phRow(who?.name || r.name || r.number, `↗ ${who ? PH_TYPES[who.type] || who.type : r.number}`, () => phCall(r.number, who?.name || r.name), info);
+    const name = who?.name || r.name || "";
+    const side = el("span", { class: "ph-row-side" }, el("span", { class: "ph-when" }, phWhen(r.at)), phCallButton(r.number, name));
+    return phRow(name || r.number, `↗ ${who ? PH_TYPES[who.type] || who.type : name ? r.number : "phone"}`, () => {
+      if (who) dial.person = who.id; else dial.number = r.number;
+      phRender();
+    }, side);
   });
   const clear = el("button", { type: "button", class: "cl-text-button" }, "Clear");
   clear.addEventListener("click", () => { const y = phData(); y.recents = []; phSave(y); phRender(); });
@@ -216,7 +252,7 @@ function phContacts(main) {
   draw();
 }
 
-// One person: their numbers (a tap calls, the star: Favorites).
+// One person: their numbers (a tap, or the green button, calls; the star: Favorites), and the calls to them.
 function phPerson(main, id) {
   const c = (dial.people || []).find((x) => x.id === id);
   if (!c) { dial.person = null; return phRender(); }
@@ -235,10 +271,31 @@ function phPerson(main, id) {
       phSave(y);
       phRender();
     });
-    return phRow(p.value, PH_TYPES[p.type] || p.type, () => phCall(p.value, c.name), star);
+    return phRow(p.value, PH_TYPES[p.type] || p.type, () => phCall(p.value, c.name), el("span", { class: "ph-row-side" }, star, phCallButton(p.value, c.name)));
   });
   main.replaceChildren(el("div", { class: "mu-page ph-page" }, el("div", { class: "ph-person-bar" }, back, open),
-    el("div", { class: "ph-person-head" }, phAvatar(c), el("h1", {}, c.name), c.company ? el("p", { class: "vd-dim" }, c.company) : ""), ...rows));
+    el("div", { class: "ph-person-head" }, phAvatar(c), el("h1", {}, c.name), c.company ? el("p", { class: "vd-dim" }, c.company) : ""), ...rows,
+    ...phHistory(c.phones.map((p) => p.value))));
+}
+
+// A number that's no one's in your contacts: it, the star, the calls to it.
+function phNumber(main, number) {
+  const back = el("button", { type: "button", class: "cl-text-button" }, "‹ Back");
+  back.addEventListener("click", () => { dial.number = null; phRender(); });
+  const d = phData();
+  const name = d.recents.find((r) => phTail(r.number) === phTail(number) && r.name)?.name || "";
+  const fav = d.favorites.some((f) => phTail(f.number) === phTail(number));
+  const star = el("button", { type: "button", class: `ph-side-button ph-star${fav ? " on" : ""}`, "aria-label": fav ? "Take out of Favorites" : "Add to Favorites", "aria-pressed": String(fav) }, svg(PH_ICONS.star));
+  star.addEventListener("click", () => {
+    const y = phData();
+    if (fav) y.favorites = y.favorites.filter((f) => phTail(f.number) !== phTail(number));
+    else y.favorites.push({ name: name || number, number, type: "other" });
+    phSave(y);
+    phRender();
+  });
+  main.replaceChildren(el("div", { class: "mu-page ph-page" }, el("div", { class: "ph-person-bar" }, back, el("span")),
+    el("div", { class: "ph-person-head" }, phAvatar({ name: "#" }), el("h1", {}, name || number), el("p", { class: "vd-dim" }, name ? number : "Not in your contacts")),
+    phRow(number, "phone", () => phCall(number, name), el("span", { class: "ph-row-side" }, star, phCallButton(number, name))), ...phHistory([number])));
 }
 
 // --------------------------------------------------------------- Keypad

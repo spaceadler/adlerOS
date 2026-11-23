@@ -918,14 +918,18 @@ Calls the people in your contacts, or any number: **Favorites**, **Recents**,
 **Contacts** and **Keypad**, down the side. A call goes to the device's own
 phone (a `tel:` link): an iPhone asks *Call …?*; a computer offers its phone
 app, if it has one. **Contacts** are your address book's people with a number
-(see Contacts): a tap on a number calls it, its star makes it a favorite.
-The **Keypad** says whose number you're typing; hold 0 for +, hold ⌫ to clear,
+(see Contacts): a tap on a number (or the green button beside it) calls it,
+its star makes it a favorite. In **Recents**, as on an iPhone, a tap on a
+call opens who it was (their numbers and your recent calls to them; a
+number that's no one's gets a page of its own, with its star), never a
+call by accident; the green button on its right calls. The **Keypad** says whose number you're typing; hold 0 for +, hold ⌫ to clear,
 and your keyboard (or a paste) types too. Favorites and Recents (the calls
 made from adlerOS: a page can't read the phone's own list) are the same on
 every device.
 
 **In the car** (Car mode's Phone tile, or its rail), Phone is drawn big,
-after CarPlay's: **Favorites** as faces, one tap to call; **Recents**;
+after CarPlay's: **Favorites** as faces, one tap to call; **Recents**, a tap
+opening who it was and the green button calling;
 **Contacts** by letter, where a tap opens the person (their numbers, each
 with a call button, and a big **Call**) so a list going by never calls
 anyone; and the **Keypad**, the number and the call button beside the keys

@@ -310,7 +310,17 @@ function bigBar(frac) {
 // An item's picture: made when it's drawn (a function), or made already.
 const bigArt = (it) => (typeof it.art === "function" ? it.art() : it.art);
 
+// `action` ({ icon, label, run }): a button of its own on the row's right
+// (Phone's Recents: the row opens who it was, this calls).
 function bigRow(it) {
+  const row = bigRowButton(it);
+  if (!it.action) return row;
+  const b = el("button", { type: "button", class: "big-row-action", "aria-label": it.action.label }, svg(it.action.icon));
+  b.addEventListener("click", it.action.run);
+  return el("div", { class: "big-row-box" }, row, b);
+}
+
+function bigRowButton(it) {
   return bigPress(el("button", { type: "button", class: `big-row${it.now ? " now" : ""}` },
     it.lead != null ? el("span", { class: "big-row-lead" }, it.lead) : it.art ? el("span", { class: `big-row-art shape-${it.shape || "square"}` }, bigArt(it) || "") : "",
     el("span", { class: "big-row-text" }, el("span", { class: "big-row-title" }, it.title || ""), it.sub ? el("span", { class: "big-row-sub" }, it.sub) : "", bigBar(it.progress)),
@@ -1007,9 +1017,10 @@ async function bigCalendarRoot() {
 // --------------------------------------------------------------- Phone
 
 // In the car, after CarPlay's Phone: Favorites as faces to tap (Android
-// Auto's way: one big target each), Recents, Contacts by letter (a person:
-// their numbers), and the Keypad, the number and the call button beside the
-// keys. A call goes to the phone itself (dialer.js phCall: a tel: link; an
+// Auto's way: one big target each), Recents (a tap opens who it was, the
+// green button on the right calls, as an iPhone's), Contacts by letter (a
+// person: their numbers), and the Keypad, the number and the call button
+// beside the keys. A call goes to the phone itself (dialer.js phCall: a tel: link; an
 // iPhone asks "Call …?", then CarPlay or the car has it), and is in Recents
 // on every device. Nothing here changes your favorites or contacts: that's
 // for Phone on the home screen, parked.
@@ -1052,8 +1063,11 @@ async function bigPhoneRoot() {
     { label: "Recents", page: () => ({ sections: [{ layout: "list", items: phData().recents.slice(0, 60).map((r) => {
       const who = phWho(r.number);
       const name = who?.name || r.name || "";
+      const person = who ? (dial.people || []).find((c) => c.id === who.id) : null;
       return { title: name || r.number, sub: name ? bigPhoneType(who?.type) : "", side: bigPhoneWhen(r.at), shape: "round",
-        art: () => bigPhoneFace(who?.id, name || r.number), run: () => bigPhoneCall(r.number, name) };
+        art: () => bigPhoneFace(who?.id, name || r.number),
+        page: () => (person ? bigPhonePerson(person) : bigPhoneNumber(r.number, name)),
+        action: { icon: PH_ICONS.call, label: `Call ${name || r.number}`, run: () => bigPhoneCall(r.number, name) } };
     }) }], empty: "No calls yet. The ones made from adlerOS show here (your phone's own list is the phone's)." }) },
     { label: "Contacts", page: () => bigPhoneContacts() },
     { label: "Keypad", page: () => ({ node: bigPhoneKeypad }) },
@@ -1082,6 +1096,15 @@ function bigPhonePerson(c) {
       actions: c.phones[0] ? [{ label: c.phones.length > 1 ? `Call ${bigPhoneType(c.phones[0].type)}` : "Call", icon: PH_ICONS.call, primary: true, run: () => bigPhoneCall(c.phones[0].value, c.name) }] : [] },
     sections: [{ layout: "list", items: c.phones.map((p) => ({ title: bigPhoneType(p.type), sub: p.value,
       side: el("span", { class: "big-call-mark" }, svg(PH_ICONS.call)), run: () => bigPhoneCall(p.value, c.name) })) }] };
+}
+
+// A number that's no one's in your contacts: it, and Call.
+function bigPhoneNumber(number, name) {
+  return { title: name || number,
+    hero: { title: name || number, sub: name ? number : "Not in your contacts", shape: "round", art: bigPhoneFace(null, name || "#"),
+      actions: [{ label: "Call", icon: PH_ICONS.call, primary: true, run: () => bigPhoneCall(number, name) }] },
+    sections: [{ layout: "list", items: [{ title: number, sub: "phone",
+      side: el("span", { class: "big-call-mark" }, svg(PH_ICONS.call)), run: () => bigPhoneCall(number, name) }] }] };
 }
 
 // The keypad: the number (its end, when it's long) and whose it is, the
