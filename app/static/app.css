@@ -3116,9 +3116,12 @@ body:not(.wm) .mu-mini-body { padding-top: max(64px, calc(env(safe-area-inset-to
 .mu-mini-ctls :is(.mu-mini-shuffle, .mu-mini-repeat) { width: 36px; height: 36px; color: rgb(255 255 255 / 0.75); }
 .mu-mini-ctls :is(.mu-mini-shuffle, .mu-mini-repeat) svg { width: 20px; height: 20px; }
 .mu-mini-ctls .mu-icon.on { color: var(--mu-accent); }
-.mu-mini-volrow { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 520px; }
+/* The volume: small and quiet under the buttons, not a second song bar. */
+.mu-mini-volrow { display: flex; align-items: center; justify-self: center; gap: 4px; padding-right: 8px; opacity: 0.8; }
+.mu-mini-volrow:hover, .mu-mini-volrow:focus-within { opacity: 1; }
 .mu-mini-volrow .mu-mini-mute { flex-shrink: 0; color: rgb(255 255 255 / 0.75); }
-.mu-mini .mu-mini-volume { display: block; flex: 1; width: auto; height: 5px; margin: 0 10px 0 0; }
+/* As long as the bar's own (.mu-volume): 90 px. */
+.mu-mini .mu-mini-volume { display: block; margin: 0; }
 .mu-mini-volume::-webkit-slider-thumb { opacity: 1; }
 .mu-mini-ctls .mu-mini-play { width: 58px; height: 58px; background: #fff; color: #111; }
 .mu-mini-ctls .mu-mini-play svg { width: 26px; height: 26px; }
@@ -3142,7 +3145,7 @@ body:not(.wm) .mu-mini-body { padding-top: max(64px, calc(env(safe-area-inset-to
   .mu-mini-lyric { grid-row: 3; height: auto; min-height: 30px; }
   .mu-mini-seekrow { grid-row: 4; }
   .mu-mini-ctls { grid-row: 5; justify-content: flex-start; gap: clamp(8px, 1.8cqw, 22px); }
-  .mu-mini-volrow { grid-row: 6; }
+  .mu-mini-volrow { grid-row: 6; justify-self: start; }
 }
 .mini-back .mu-shell, .mini-back .pc-shell { animation: mu-mini-in 0.4s ease-out; }
 @keyframes mu-mini-in { from { opacity: 0; } }
@@ -5579,7 +5582,7 @@ body.wm.land .is-mini .mu-mini-text { text-align: left; }
 body.wm.land .is-mini .mu-mini-lyric { grid-row: 3; height: auto; min-height: 30px; }
 body.wm.land .is-mini .mu-mini-seekrow { grid-row: 4; }
 body.wm.land .is-mini .mu-mini-ctls { grid-row: 5; justify-content: flex-start; }
-body.wm.land .is-mini .mu-mini-volrow { grid-row: 6; }
+body.wm.land .is-mini .mu-mini-volrow { grid-row: 6; justify-self: start; }
 body.wm.land .is-mini .mu-mini-title { font-size: clamp(18px, 6cqh, 30px); }
 body.wm.land .is-mini .mu-mini-artist { font-size: clamp(14px, 4cqh, 19px); }
 body.wm.land .is-mini .mu-mini-line.now { font-size: clamp(16px, 5.4cqh, 26px); }
