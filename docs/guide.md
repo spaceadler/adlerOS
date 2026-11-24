@@ -102,9 +102,12 @@ The first time anyone logs in, adlerOS welcomes you, in a few steps:
   <!-- screenshot: the widget picker -->
   ![Edit widgets](screenshots/widgets-picker.png)
 
-- **Your apps**: adlerOS's own first (My Computer, Music, Gallery,
-  Documents, Luna, Notepad, the App Store, Settings, Live Usage, and the
-  Terminal in admin mode), then one page per collection, its name above it.
+- **Your apps**: adlerOS's own first, a page per topic: **adlerOS** (My
+  Computer, the App Store, Settings, Live Usage, and the Terminal in admin
+  mode), **Listen & Watch** (Music, Podcasts, Books, Videos, Live TV,
+  Gallery), **Your Day** (Calendar, Tasks, Clock, Phone, Contacts) and
+  **Notes & Documents** (Luna, Notepad, Documents). Then one page per
+  collection, its name above it.
   **Core** (DNS, your proxy, the VPN: what your network needs) is only there
   in admin mode; the App Store and search have it always. Swipe, use the
   dots under them, or the arrows at the sides to move between pages. An app

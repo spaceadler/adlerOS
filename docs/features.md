@@ -26,8 +26,9 @@ one, each still shows the files themselves. More in
 
 - **A desktop.** Up to three widgets (system stats, storage,
   apps up and down, the clock…), a web search bar, and your apps as icons:
-  adlerOS's own on the first page, then one page per collection (Core's
-  only in admin mode). An app that stops answering turns dim and says
+  adlerOS's own first, a page per topic (adlerOS, Listen & Watch, Your
+  Day, Notes & Documents), then one page per collection (Core's only in
+  admin mode). An app that stops answering turns dim and says
   *Offline*.
 - **A dock** of the apps you pin, plus All apps, the App Store, Settings and
   Live Usage. It magnifies like a Mac's.

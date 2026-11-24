@@ -549,30 +549,43 @@ function gridKey(groups) {
 // them into, then alphabetically.
 const PAGE_TITLE_H = 18;
 
-// The home screen's first page: adlerOS's own apps, in this order until you
-// drag them about (the Terminal only in admin mode).
-const OWN_PAGE = ["adleros:files", "adleros:music", "adleros:podcasts", "adleros:books", "adleros:videos", "adleros:iptv", "adleros:gallery", "adleros:documents", "adleros:calendar", "adleros:clock", "adleros:tasks", "adleros:phone", "adleros:contacts", "adleros:luna", "adleros:notepad",
-  "adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:terminal"];
+// The home screen's first pages: adlerOS's own apps, a page per topic, each
+// in this order until you drag them about (the Terminal only in admin mode).
+// No title is a collection's (Media…): moving an app finds its page by name.
+const OWN_PAGES = [
+  { id: "adleros", name: "adlerOS", apps: ["adleros:files", "adleros:app-store", "adleros:settings", "adleros:live-usage", "adleros:terminal"] },
+  { id: "adleros-watch", name: "Listen & Watch", apps: ["adleros:music", "adleros:podcasts", "adleros:books", "adleros:videos", "adleros:iptv", "adleros:gallery"] },
+  { id: "adleros-day", name: "Your Day", apps: ["adleros:calendar", "adleros:tasks", "adleros:clock", "adleros:phone", "adleros:contacts"] },
+  { id: "adleros-notes", name: "Notes & Documents", apps: ["adleros:luna", "adleros:notepad", "adleros:documents"] },
+];
+const isOwnPage = (id) => OWN_PAGES.some((p) => p.id === id);
 
-function ownApps() {
-  const saved = state.order.adleros || [];
-  const rank = (id) => (saved.includes(id) ? saved.indexOf(id) : saved.length + OWN_PAGE.indexOf(id));
-  return OWN_PAGE.filter((id) => id !== "adleros:terminal" || state.admin)
-    .sort((a, b) => rank(a) - rank(b))
-    .map((id) => {
-      const b = BUILTIN_PINS[id];
-      const about = (typeof BUILT_IN !== "undefined" ? BUILT_IN : []).find((x) => `adleros:${x.id}` === id)?.about || "";
-      return { id, name: b.name, icon: b.icon, about, builtin: b, up: true, genre: "adleros" };
-    });
+// One topic's apps (all of adlerOS's own, without one), in the order you
+// dragged them into there, else as they were on the old single page.
+function ownApps(page = null) {
+  const pages = page ? [page] : OWN_PAGES;
+  return pages.flatMap((p) => {
+    const saved = state.order[p.id] || state.order.adleros || [];
+    const rank = (id) => (saved.includes(id) ? saved.indexOf(id) : saved.length + p.apps.indexOf(id));
+    return p.apps.filter((id) => id !== "adleros:terminal" || state.admin)
+      .sort((a, b) => rank(a) - rank(b))
+      .map((id) => {
+        const b = BUILTIN_PINS[id];
+        const about = (typeof BUILT_IN !== "undefined" ? BUILT_IN : []).find((x) => `adleros:${x.id}` === id)?.about || "";
+        return { id, name: b.name, icon: b.icon, about, builtin: b, up: true, genre: "adleros" };
+      });
+  });
 }
 
-// The home screen's pages: adlerOS's own first, then the collections, with
-// Core (DNS, the proxy: what your network needs) only in admin mode. The
-// App Store and search have them all, always.
+// The home screen's pages: adlerOS's own first, by topic, then the
+// collections, with Core (DNS, the proxy: what your network needs) only in
+// admin mode. The App Store and search have them all, always.
 function homeGroups() {
-  const own = ownApps();
-  return [{ id: "adleros", name: "adlerOS", apps: own, items: own.map((app) => ({ key: app.id, app })) },
-    ...groupApps().filter((c) => c.id !== "core" || state.admin)];
+  const own = OWN_PAGES.map((p) => {
+    const apps = ownApps(p);
+    return { id: p.id, name: p.name, apps, items: apps.map((app) => ({ key: app.id, app })) };
+  }).filter((p) => p.apps.length);
+  return [...own, ...groupApps().filter((c) => c.id !== "core" || state.admin)];
 }
 
 function groupApps() {
@@ -1416,7 +1429,7 @@ function turnWhileDragging(dir) {
   if (!drag.active || !page || drag.item.dataset.folder || drag.item.classList.contains("own-app")) return;
   goToPage(state.page + dir);
   const grid = page.querySelector(".app-grid");
-  if (grid && grid !== drag.container && grid.dataset.collection !== "adleros") {
+  if (grid && grid !== drag.container && !isOwnPage(grid.dataset.collection)) {
     grid.append(drag.item);
     drag.container = grid;
     drag.crossed = true;

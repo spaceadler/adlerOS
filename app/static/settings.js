@@ -234,7 +234,7 @@ function renderSide() {
   document.documentElement.style.setProperty("--wallpaper", wallpaperUrl);
 
   // A small picture of the home screen's first page as it is: the search
-  // bar, your widgets (if you have any), adlerOS's own apps and
+  // bar, your widgets (if you have any), the adlerOS page's apps and
   // the dock (your pins, adlerOS's among them, then All apps).
   const preview = $("settings-preview");
   preview.style.backgroundImage = wallpaperUrl;
@@ -252,7 +252,7 @@ function renderSide() {
   preview.replaceChildren(
     el("div", { class: "preview-search" }),
     widgetCount ? el("div", { class: "preview-widgets" }, ...Array.from({ length: widgetCount }, () => el("span"))) : "",
-    el("div", { class: "preview-apps" }, ...ownApps().slice(0, 18).map(iconOf)),
+    el("div", { class: "preview-apps" }, ...ownApps(OWN_PAGES[0]).slice(0, 18).map(iconOf)),
     el("div", { class: "preview-dock" }, ...state.dock.map(pinFor).filter(Boolean).map(iconOf), el("i"),
       ...DOCK_FIXED.map((item) => icon(`/api/dock-icon/${item.id}`))));
 
