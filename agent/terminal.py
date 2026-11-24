@@ -10,9 +10,9 @@ mode (which your password turns on). Each session is your login shell
 ADLEROS_TERMINAL_DIR, else the homelab's folder in a homelab, else your home
 folder. What you type arrives in the session's `in` file and
 goes to the shell; what the shell writes goes to its `out` file for adlerOS to
-show. A session ends when its shell exits, when adlerOS writes `close`, after
-30 minutes without typing, or at 20 MB of output. This exits when no session
-is left.
+show. A session ends when its shell exits, when adlerOS writes `close`, or at
+20 MB of output; there's no limit on how many run at once. This exits when no
+session is left.
 
     python3 agent/terminal.py     run sessions until there are none
 """
@@ -41,11 +41,9 @@ TERM_DIR = DATA_DIR / "agent" / "term"
 
 SID = re.compile(r"[a-f0-9]{32}")
 START_WITHIN = 60  # seconds: an older request is stale
-IDLE_LIMIT = 30 * 60
 OUTPUT_LIMIT = 20 * 1024 * 1024
 KEEP_ENDED = 120  # seconds an ended session's folder stays, for the page to read the end
 QUIT_AFTER = 30  # seconds with no sessions before this exits
-MAX_SESSIONS = 3
 
 
 def log(message):
@@ -125,7 +123,6 @@ class Session:
         self.in_offset = 0
         self.size = None
         self.written = 0
-        self.last_input = time.monotonic()
         # Open in Terminal: in that folder (one that's there), else as always.
         shell, cwd = login_shell(), where if where and os.path.isabs(where) and os.path.isdir(where) else start_folder()
         env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL")}
@@ -173,7 +170,6 @@ class Session:
         finally:
             os.close(fd)
         self.in_offset += len(data)
-        self.last_input = time.monotonic()
         view = memoryview(data)
         while view:
             try:
@@ -196,7 +192,7 @@ class Session:
             os.kill(self.pid, signal.SIGWINCH)
 
     def wanted_closed(self):
-        return (self.folder / "close").exists() or time.monotonic() - self.last_input > IDLE_LIMIT
+        return (self.folder / "close").exists()
 
     def end(self, why):
         try:
@@ -294,9 +290,6 @@ def main():
     try:
         while True:
             for sid, folder, rows, cols, where in new_requests(sessions):
-                if len(sessions) >= MAX_SESSIONS:
-                    write_ended(folder, f"at most {MAX_SESSIONS} terminals at once")
-                    continue
                 try:
                     sessions[sid] = Session(sid, folder, rows, cols, where)
                 except OSError as e:
@@ -309,7 +302,7 @@ def main():
                     s.check_size()
                     why = None if alive else ("the shell exited" if s.written < OUTPUT_LIMIT else "too much output")
                     if not why and s.wanted_closed():
-                        why = "closed" if (s.folder / "close").exists() else "idle for 30 minutes"
+                        why = "closed"
                     if why:
                         s.end(why)
                         del sessions[s.sid]

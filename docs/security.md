@@ -87,8 +87,8 @@ the `docker` group, so it's as good as root. That's why it has two locks:
 The shells run in `agent/terminal.py` on the host, started by systemd when a
 session is asked for and stopped when the last one ends. What you type and
 what the shell prints pass through files in `data/agent/term/<session>/`,
-readable only by you. Sessions end after 30 minutes without typing, at 20 MB
-of output, or when closed; three at most.
+readable only by you. A session ends when its shell exits, when it's
+closed, or at 20 MB of output; any number can run at once.
 
 The honest limit: with the terminal on, someone who took over the web app
 itself (not just a login) could ask the host for a shell, since the host
