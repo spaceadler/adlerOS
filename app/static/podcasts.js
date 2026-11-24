@@ -1009,7 +1009,10 @@ function pcBar() {
 // ------------------------------------------------------- the mini player
 
 // As in Music (music.js: miniSwitch, and its look): the cover, the episode
-// or the book, the show or the chapter under it, where in it, the buttons.
+// or the book, the show or the chapter under it, where in it, the buttons,
+// the volume, in the window as it is. Speed and the sleep timer are its
+// modes, where Music has shuffle and repeat. (No heart: Mark as Played, the
+// nearest, stops it and undoing it loses your place; it's on its menus.)
 const PC_MINI_KEY = "adleros.podcastsMiniBefore";
 
 function pcMiniView() {
@@ -1027,17 +1030,31 @@ function pcMiniView() {
   };
   const art = el("button", { type: "button", class: "mu-mini-art", id: "pc-mini-art", "aria-label": "Back to Podcasts" });
   art.addEventListener("click", () => pcMini(false));
+  // Their menus open above them, as the bar's do (kept on the screen).
+  const rate = el("button", { type: "button", class: "mu-icon pc-mini-rate", "aria-label": "Speed", title: "Speed" }, "1×");
+  rate.addEventListener("click", () => { const r = rate.getBoundingClientRect(); pcRateMenu(r.left, r.top - 8 - PC_RATES.length * 34); });
+  const sleep = el("button", { type: "button", class: "mu-icon pc-mini-sleep", "aria-label": "Sleep timer", title: "Sleep timer" }, svg(PC_ICONS.moon), el("span", { class: "pc-sleep-left" }));
+  sleep.addEventListener("click", () => { const r = sleep.getBoundingClientRect(); pcSleepMenu(r.left - 80, r.top - 8 - (PC_SLEEP.length + 2) * 34); });
+  const volume = el("input", { type: "range", class: "mu-volume mu-mini-volume", id: "pc-mini-volume", min: "0", max: "1", step: "0.01", value: String(pc.audio.volume), "aria-label": "Volume" });
+  volume.addEventListener("input", () => { pc.audio.volume = Number(volume.value); pc.audio.muted = false; pcSavePrefs(); });
   const view = el("div", { class: "mu-mini", id: "pc-mini", hidden: "" },
     el("div", { class: "mu-mini-bg", id: "pc-mini-bg", "aria-hidden": "true" }),
     button("Back to Podcasts", PC_ICONS.expand, () => pcMini(false), "mu-mini-back"),
     el("div", { class: "mu-mini-body" },
       art,
-      el("div", { class: "mu-mini-text" }, el("div", { class: "mu-mini-title", id: "pc-mini-title" }), el("div", { class: "mu-mini-artist", id: "pc-mini-sub" })),
+      el("div", { class: "mu-mini-info" },
+        el("span", { "aria-hidden": "true" }),
+        el("div", { class: "mu-mini-text" }, el("div", { class: "mu-mini-title", id: "pc-mini-title" }), el("div", { class: "mu-mini-artist", id: "pc-mini-sub" })),
+        el("span", { "aria-hidden": "true" })),
       el("div", { class: "mu-mini-seekrow" }, seek, el("div", { class: "mu-mini-times" }, el("span", { id: "pc-mini-at" }, "0:00"), el("span", { id: "pc-mini-left" }, ""))),
-      el("div", { class: "mu-mini-ctls" },
-        button("Back 15 seconds", PC_ICONS.back, () => pcSkip(-15), "pc-mini-skip"),
+      el("div", { class: "mu-mini-deck" }, el("div", { class: "mu-mini-ctls" },
+        el("span", { class: "mu-mini-modes" }, rate, sleep),
+        button("Back 15 seconds", PC_ICONS.back, () => pcSkip(-15), "pc-mini-skip mu-mini-prev"),
         button("Play", PC_ICONS.play, () => pcToggle(), "mu-fill mu-mini-play"),
-        button("Forward 30 seconds", PC_ICONS.ahead, () => pcSkip(30), "pc-mini-skip"))));
+        button("Forward 30 seconds", PC_ICONS.ahead, () => pcSkip(30), "pc-mini-skip mu-mini-next"),
+        // An iPhone's volume is its buttons' alone (music.js muVolumeSettable).
+        muVolumeSettable() ? el("div", { class: "mu-mini-volrow" },
+          button("Mute", PC_ICONS.volume, () => { pc.audio.muted = !pc.audio.muted; pcBarUpdate(); }, "mu-mini-mute"), volume) : ""))));
   view.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); pcMini(false); } });
   return view;
 }
@@ -1061,11 +1078,26 @@ function pcMiniUpdate() {
     const img = art.querySelector("img");
     fadeBackground($("pc-mini-bg"), img?.src || "");
   }
+  const view = $("pc-mini");
   const playing = !pc.audio.paused;
-  const play = $("pc-mini").querySelector(".mu-mini-play");
+  const play = view.querySelector(".mu-mini-play");
   play.replaceChildren(svg(playing ? PC_ICONS.pause : PC_ICONS.play));
   play.setAttribute("aria-label", playing ? "Pause" : "Play");
   play.title = playing ? "Pause" : "Play";
+  // The modes, as the bar shows them: speed (lit when it isn't 1×), the sleep timer.
+  const rate = view.querySelector(".pc-mini-rate");
+  rate.textContent = `${pc.prefs.rate}×`;
+  rate.classList.toggle("on", pc.prefs.rate !== 1);
+  const sleep = view.querySelector(".pc-mini-sleep");
+  sleep.classList.toggle("on", Boolean(pc.sleep));
+  sleep.querySelector(".pc-sleep-left").textContent = pc.sleep?.kind === "min" ? `${Math.max(1, Math.round((pc.sleep.until - Date.now()) / 60000))}m` : pc.sleep ? "ch" : "";
+  const mute = view.querySelector(".mu-mini-mute");
+  if (mute) {
+    const v = pc.audio.muted ? 0 : pc.audio.volume;
+    mute.replaceChildren(svg(v === 0 ? PC_ICONS.muted : PC_ICONS.volume));
+    $("pc-mini-volume").value = String(v);
+    $("pc-mini-volume").style.setProperty("--done", `${v * 100}%`);
+  }
   pcMiniTime();
 }
 

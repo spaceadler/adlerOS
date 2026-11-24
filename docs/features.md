@@ -92,7 +92,8 @@ one, each still shows the files themselves. More in
   files in your Media folders.
 - **Books** and **Podcasts**: your audiobooks, books and podcasts from
   Audiobookshelf, with where you got to (one key for both); without it,
-  the files in your Media folder.
+  the files in your Media folder. A mini player as Music's: the cover, where
+  you are, back 15 and on 30 seconds, speed, the sleep timer and the volume.
 - **Contacts**: the people in Monica (a personal CRM, in the store): how
   to reach them, birthdays, what you know and your notes, changed here and
   in Monica alike. Its token is pasted once in Contacts.

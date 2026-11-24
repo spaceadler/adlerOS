@@ -1459,14 +1459,16 @@ function musicMiniView() {
       el("div", { class: "mu-mini-lyric", id: "mu-mini-lyric", "aria-live": "off" }, el("div", { class: "mu-mini-line now" }), el("div", { class: "mu-mini-line next" })),
       el("div", { class: "mu-mini-seekrow" }, seek, el("div", { class: "mu-mini-times" }, el("span", { id: "mu-mini-at" }, "0:00"), el("span", { id: "mu-mini-left" }, "–:––"))),
       // The buttons and the volume: one row in a wide enough desktop window
-      // (shuffle and repeat left, volume right), else the volume under them
-      // (app.css, by the deck's width).
+      // (shuffle and repeat, the modes, left; volume right), else the modes
+      // either side of the buttons and the volume under them (app.css, by
+      // the deck's width). Podcasts' is the same, with speed and sleep.
       el("div", { class: "mu-mini-deck" }, el("div", { class: "mu-mini-ctls" },
-        musicIconButton("Shuffle", "shuffle", () => musicSetShuffle(!music.shuffle), "mu-mini-shuffle"),
+        el("span", { class: "mu-mini-modes" },
+          musicIconButton("Shuffle", "shuffle", () => musicSetShuffle(!music.shuffle), "mu-mini-shuffle"),
+          musicIconButton("Repeat", "repeat", musicCycleRepeat, "mu-mini-repeat")),
         musicIconButton("Previous", "prev", musicPrev, "mu-fill mu-mini-prev"),
         musicIconButton("Play", "play", musicToggle, "mu-fill mu-mini-play"),
         musicIconButton("Next", "next", () => musicNext(), "mu-fill mu-mini-next"),
-        musicIconButton("Repeat", "repeat", musicCycleRepeat, "mu-mini-repeat"),
         // An iPhone's volume is its buttons' alone (a page can't set it): no slider there.
         muVolumeSettable() ? el("div", { class: "mu-mini-volrow" },
           musicIconButton("Mute", "volume", () => { music.audio.muted = !music.audio.muted; musicBarUpdate(); }, "mu-mini-mute"), volume) : ""))));
@@ -1484,16 +1486,16 @@ function muVolumeSettable() {
 function musicMini(on) {
   if (!music.built || Boolean(music.mini) === on) return;
   music.mini = on;
-  miniSwitch("music", $("mu-mini"), on, music, MU_MINI_KEY, false);
+  miniSwitch("music", $("mu-mini"), on, music, MU_MINI_KEY);
   if (on) { musicLyricsLoad(muCurrent()); musicMiniUpdate(); $("mu-mini").querySelector(".mu-mini-play").focus({ preventScroll: true }); }
   else setTimeout(() => music.vdraw?.(true), 50);
 }
 
 // Shared with Podcasts' mini player. In: the cover rises and grows, the rest
-// after it; out: the other way, the library coming back behind it. On the
-// desktop, with shrink, the window shrinks to it, its right edge where it was
-// (a full or half screen one: to the right), and grows back after.
-function miniSwitch(id, view, on, holder, key, shrink = true) {
+// after it; out: the other way, the library coming back behind it. The
+// window keeps its size (it once shrank to a column: `key` still holds the
+// size from then, given back once).
+function miniSwitch(id, view, on, holder, key) {
   const section = $(id);
   clearTimeout(holder.miniTimer);
   section.classList.toggle("is-mini", on);
@@ -1507,21 +1509,12 @@ function miniSwitch(id, view, on, holder, key, shrink = true) {
     section.classList.remove("mini-back");
     if (!holder.mini) view.hidden = true;
   }, on ? 600 : 380);
-  const g = wm.geometry[id];
-  // A phone on its side: not a small window but the whole screen, a cinema
-  // (app.css), over the bar down the left and the dock.
-  if (typeof landOn === "function" && landOn()) return;
-  if (on && shrink && desktopMode() && g && section.dataset.tiled !== "1") {
-    winSave(key, { ...g });
-    const w = 340, h = Math.min(620, winArea().h - 24);
-    const x = g.mode === "normal" ? g.x + g.w - w : winArea().w - w - 24;
-    const y = g.mode === "normal" ? g.y : 24;
-    Object.assign(g, { mode: "normal", x: Math.max(0, x), y, w, h });
-    winApply(id);
-  } else if (!on) miniRestore(id, key);
+  // (A phone on its side: the whole screen, a cinema: app.css.)
+  if (!on) miniRestore(id, key);
 }
 
-// The window's size before the mini player (kept, so a reload gets it back).
+// The window's size from before, when the mini player shrank it (kept, so a
+// reload got it back).
 function miniRestore(id, key, apply = true) {
   const before = winLoad(key, null);
   if (!before) return;

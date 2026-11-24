@@ -672,8 +672,10 @@ that only what changed, so it opens straight away.
   the song's own); a click on a line goes there. The **mini player** (the
   last button on the bar) is the cover, the line being sung, where you are
   in the song, the heart, shuffle, repeat and the volume, in the window as
-  big as it was (a wide one puts the cover beside the rest); the cover or
-  Escape goes back.
+  big as it was (a wide one puts the cover beside the rest; on a desktop
+  with room, shuffle and repeat on the left of the buttons and the volume
+  on the right, all in one row); the cover or Escape goes back. Podcasts'
+  is the same, with its speed and sleep timer where shuffle and repeat are.
 - Your keyboard's media keys work, and so does a phone's lock screen
   (previous and next song, play, and dragging along the song; next only when
   there's a song after this one). An iPhone shows either song buttons or
