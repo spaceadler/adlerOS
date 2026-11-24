@@ -27,8 +27,16 @@ do with it.
 ## Logging in
 
 - One password (`OS_PASSWORD`, or what you set in Settings, stored as a
-  scrypt hash). A login is a signed cookie (HMAC) valid for 30 days,
-  `HttpOnly`, `SameSite=Strict`, and `Secure` over HTTPS.
+  scrypt hash). A login is a signed cookie (HMAC), `HttpOnly`,
+  `SameSite=Strict`, and `Secure` over HTTPS.
+- It asks for the password every time adlerOS is opened: a new tab or
+  window, the browser started again, the home-screen app launched. A reload
+  of a tab that's in goes straight back in. The cookie is the browser
+  session's (gone when the browser closes), and the server ends a login no
+  request has come with for 15 minutes; an open page asks every 4 minutes,
+  in the background too, so one in use never runs out. A new tab of a
+  browser whose login is still going carries on with that login (tabs share
+  its cookie), so its admin mode stays.
 - Wrong passwords are slowed down (a second each), and too many lock that
   address out for a while.
 - Changing the password logs out every other browser.
@@ -63,9 +71,11 @@ removing core apps (DNS, your reverse proxy, passwords: Pi-hole, Nginx Proxy
 Manager, Vaultwarden…) need **admin mode**, which only your password turns
 on. A core app stays one wherever you put it on the home screen. The server
 checks it on every request, so it isn't just hidden buttons: a stolen login
-cookie alone can't reboot the machine or delete an app. Once on, it's on for
-every browser, until you switch it off or **8 hours** pass, whichever comes
-first.
+cookie alone can't reboot the machine or delete an app. It's on for **one
+login only**: each browser or device turns it on for itself, with the
+password. It goes off when you switch it off, when that login ends (logging
+out, or 15 minutes with no adlerOS page open), when **12 hours** pass, or
+when adlerOS restarts (it's kept in memory).
 
 ## The terminal
 
@@ -78,11 +88,12 @@ the `docker` group, so it's as good as root. That's why it has two locks:
    and with it off the host isn't even installed.
 2. **Admin mode**, which only your password turns on, checked by the server
    on every keystroke it passes on. With it off the terminal isn't even
-   shown, and switching it off closes every open shell. Opening one asks for
-   nothing more, so admin mode left on is a shell for anyone at that login:
-   switch it off when you're done. If you don't, it goes off by itself after
-   8 hours; then your shells keep running, out of reach, until you turn it
-   on again and Terminal takes you back to them.
+   shown, and switching it off closes every open shell (unless another
+   device still has it on). Opening one asks for nothing more, so admin mode
+   left on is a shell for anyone at that login: switch it off when you're
+   done. If you don't, it goes off by itself after 12 hours or when the
+   login ends; then your shells keep running, out of reach, until you turn
+   it on again and Terminal takes you back to them.
 
 The shells run in `agent/terminal.py` on the host, started by systemd when a
 session is asked for and stopped when the last one ends. What you type and

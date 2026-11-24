@@ -737,10 +737,10 @@ async function setAdmin(on, password) {
     body: JSON.stringify(on ? { on, password } : { on }),
   }).catch(() => ({ status: 0 }));
   if (status === 200) {
-    if (!on) closeTerminal(); // you turned it off: its shells go too
+    if (!on) closeTerminal(); // you turned it off: the shells this page shows go too
     showAdmin(on);
     armAdmin(body.adminLeft);
-    toast(on ? "Admin mode is on for 8 hours. Turn it off when you're done." : "Admin mode is off.");
+    toast(on ? "Admin mode is on in this browser for 12 hours. Turn it off when you're done." : "Admin mode is off.");
   }
   return { status, body };
 }
@@ -762,9 +762,10 @@ function showAdmin(on) {
   refreshFiles(); // hidden files, Root's note
 }
 
-// Admin mode turns itself off 8 hours after it's turned on (adlerOS keeps
-// the time): the page goes along then, or when it next hears it's off. A
-// shell it timed out on keeps running, for when it's back on.
+// Admin mode turns itself off 12 hours after it's turned on (adlerOS keeps
+// the time, for each login), or when adlerOS restarts: the page goes along
+// then, or when it next hears it's off. A shell it timed out on keeps
+// running, for when it's back on.
 let adminTimer = null;
 function armAdmin(left) {
   clearTimeout(adminTimer);
@@ -775,7 +776,7 @@ function noteAdmin(on, left) {
   if (on === Boolean(state.admin)) return;
   const was = state.admin;
   showAdmin(on);
-  if (was && !on) toast("Admin mode is off now: it turns itself off 8 hours after you turn it on. A terminal you had keeps running for when it's back on.");
+  if (was && !on) toast("Admin mode is off now: it turns itself off 12 hours after you turn it on, and when adlerOS restarts. A terminal you had keeps running for when it's back on.");
 }
 
 function adminDialog() {
@@ -786,7 +787,7 @@ function adminDialog() {
   const form = el("form", {}, password, error);
   const dialog = el("div", { class: "dialog material", role: "dialog", "aria-modal": "true" },
     el("h2", {}, "Turn on admin mode?"),
-    el("p", {}, "You'll be able to restart and shut down this machine, delete apps, stop or change the ones your network needs (Pi-hole, Nginx Proxy Manager…), and use the terminal. It's on for every browser until you turn it off, or for 8 hours."),
+    el("p", {}, "You'll be able to restart and shut down this machine, delete apps, stop or change the ones your network needs (Pi-hole, Nginx Proxy Manager…), and use the terminal. It's on in this browser only (another device turns it on for itself) until you turn it off or log out, or for 12 hours."),
     form, el("div", { class: "dialog-actions" }, cancel, ok));
   cancel.addEventListener("click", closeModal);
   const submit = async (e) => {

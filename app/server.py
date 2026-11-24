@@ -130,7 +130,8 @@ PASSWORD = os.environ["OS_PASSWORD"]
 SESSION_SECRET = os.environ["OS_SESSION_SECRET"].encode()
 
 COOKIE = "homelab_session"
-SESSION_SECONDS = 30 * 86400
+SESSION_SECONDS = 30 * 86400  # the longest a login lasts, in use or not
+SESSION_IDLE = 15 * 60  # a login no request has come with for this long is over (an open page asks every 4 minutes)
 ICON_CDN = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons"
 ICON_RETRY_SECONDS = 86400  # how long a missing icon stays missing
 STATUS_TTL = 10  # seconds a port check is reused
@@ -408,28 +409,45 @@ def save_settings(changes):
         write_private(SETTINGS_FILE, json.dumps(data, indent=2))
 
 
-ADMIN_SECONDS = 8 * 3600
+ADMIN_SECONDS = 12 * 3600
+_admin = {}  # a login's id -> when its admin mode turns itself off (a time.time())
 
 
-def admin_until():
-    """When admin mode turns itself off (a time.time()), or 0 when it's off."""
-    s = load_settings()
-    until = s.get("adminUntil")
-    return until if s.get("admin") is True and isinstance(until, (int, float)) and until > time.time() else 0
+def admin_until(sid):
+    """When this login's admin mode turns itself off, or 0 when it's off."""
+    with _auth_lock:
+        until = _admin.get(sid, 0) if sid else 0
+    return until if until > time.time() else 0
 
 
-def admin_left():
-    """Seconds until admin mode turns itself off (0: it's off), for the page:
-    its clock needn't agree with this one."""
-    return max(0, round(admin_until() - time.time()))
+def admin_left(sid):
+    """Seconds until this login's admin mode turns itself off (0: it's off),
+    for the page: its clock needn't agree with this one."""
+    return max(0, round(admin_until(sid) - time.time()))
 
 
-def admin_on():
+def admin_on(sid):
     """Admin mode: restart and shut down, delete apps, stop core and network
-    apps, the terminal. Off until you turn it on in Settings, with your
-    password, and off again ADMIN_SECONDS later, in case you forget. Its
-    shells keep running meanwhile, out of reach until it's back on."""
-    return admin_until() > 0
+    apps, the terminal. Each login (a browser, a device) turns it on for
+    itself, with your password, and it's off again when you turn it off, when
+    that login ends, or ADMIN_SECONDS later, in case you forget. Its shells
+    keep running meanwhile, out of reach until it's back on. Kept in memory:
+    a restart of adlerOS turns it off everywhere."""
+    return admin_until(sid) > 0
+
+
+def admin_switch(sid, on):
+    """Turns this login's admin mode on or off. Whether any login still has
+    it on (then turning it off here leaves the shells running)."""
+    now = time.time()
+    with _auth_lock:
+        if on:
+            _admin[sid] = now + ADMIN_SECONDS
+        else:
+            _admin.pop(sid, None)
+        for k in [k for k, until in _admin.items() if until <= now]:
+            del _admin[k]
+        return bool(_admin)
 
 
 def needs_admin(spec, params):
@@ -1200,7 +1218,11 @@ def port_status(ports):
 
 # ---------------------------------------------------------------- sessions
 
-_revoked = {}  # token -> expiry, so logging out ends that session for good
+# A login is a signed cookie: "<expiry>.<id>.<signature>". Its id stays the
+# same while the login lasts (signed again after a password change), and
+# its admin mode is kept under it.
+_revoked = {}  # login id -> expiry, so logging out ends that login for good
+_seen = {}  # login id -> (when a request last came with it: time.monotonic(), its expiry)
 _failures = {}  # client -> [times of wrong passwords]
 _auth_lock = threading.Lock()
 
@@ -1213,32 +1235,50 @@ def _sign(message):
     return hmac.new(key, message.encode(), hashlib.sha256).hexdigest()
 
 
-def new_session():
-    message = f"{int(time.time()) + SESSION_SECONDS}.{secrets.token_urlsafe(16)}"
+def new_session(sid=None):
+    """A login cookie's value: a new login, or (sid) that one signed again."""
+    now = time.time()
+    with _auth_lock:  # logins that expired can't come back: forget them
+        for k in [k for k, (_, exp) in _seen.items() if exp < now]:
+            del _seen[k]
+    message = f"{int(now) + SESSION_SECONDS}.{sid or secrets.token_urlsafe(16)}"
     return f"{message}.{_sign(message)}"
 
 
-def session_valid(token):
+def session_id(token, touch=False):
+    """The login's id if the cookie is a live login, else "". One is over
+    when it expires, when it's logged out, or when no request has come with
+    it for SESSION_IDLE. touch: this request counts as one. A login this
+    server hasn't seen yet (it was just made, or adlerOS restarted) starts
+    counting now."""
     try:
-        expiry, nonce, signature = token.split(".")
+        expiry, sid, signature = token.split(".")
         expiry = int(expiry)
     except (AttributeError, ValueError):
-        return False
-    if not hmac.compare_digest(signature, _sign(f"{expiry}.{nonce}")) or expiry < time.time():
-        return False
+        return ""
+    if not hmac.compare_digest(signature, _sign(f"{expiry}.{sid}")) or expiry < time.time():
+        return ""
+    now = time.monotonic()
     with _auth_lock:
-        return token not in _revoked
+        last = _seen.get(sid)
+        if sid in _revoked or (last and now - last[0] > SESSION_IDLE):
+            return ""
+        if touch or not last:
+            _seen[sid] = (now, expiry)
+    return sid
 
 
 def revoke(token):
+    """Logging out: that login is over for good, and its admin mode with it."""
+    sid = session_id(token)
+    if not sid:
+        return
     now = time.time()
     with _auth_lock:
-        for t in [t for t, exp in _revoked.items() if exp < now]:
-            del _revoked[t]
-        try:
-            _revoked[token] = int(token.split(".")[0])
-        except (AttributeError, ValueError):
-            pass
+        for k in [k for k, exp in _revoked.items() if exp < now]:
+            del _revoked[k]
+        _revoked[sid] = int(token.split(".")[0])
+        _admin.pop(sid, None)
 
 
 def lockout_remaining(client):
@@ -5757,9 +5797,10 @@ def is_kept(place, real):
         return False
 
 
-def root_writes():
-    """Whether Root may change now: admin mode, and the machine allows it."""
-    return admin_on() and terminal_enabled()
+def root_writes(sid):
+    """Whether Root may change now: this login's admin mode, and the machine
+    allows it."""
+    return admin_on(sid) and terminal_enabled()
 
 
 def good_name(name):
@@ -7276,6 +7317,7 @@ def car_places_set(body):
 class Handler(BaseHTTPRequestHandler):
     server_version = "homelab"
     sys_version = ""
+    login_id = ""  # this request's login, once logged_in() has looked
 
     # Through a reverse proxy we trust, it passes the real client and scheme
     # along; anything else is talking to us directly, and its headers count
@@ -7336,8 +7378,15 @@ class Handler(BaseHTTPRequestHandler):
         return morsel.value if morsel else None
 
     def logged_in(self):
-        token = self.session_token()
-        return bool(token) and session_valid(token)
+        """Whether this request comes with a live login; it keeps that login
+        going. Every /api request past the public ones asks this first, so
+        login_id is this request's from then on."""
+        self.login_id = session_id(self.session_token(), touch=True)
+        return bool(self.login_id)
+
+    def admin(self):
+        """Whether this request's login has admin mode on."""
+        return admin_on(self.login_id)
 
     def send(self, status, body=b"", ctype="text/plain; charset=utf-8", headers=(), csp=PAGE_CSP):
         self.send_response(status)
@@ -7357,10 +7406,14 @@ class Handler(BaseHTTPRequestHandler):
         body = json.dumps(obj).encode()
         self.send(status, body, "application/json", [("Cache-Control", "no-store"), *headers])
 
-    def cookie_header(self, value, max_age):
+    def cookie_header(self, value, max_age=None):
+        """The login cookie. Without max_age it's the browser session's, gone
+        when the browser closes, so no login is kept from one visit to the
+        next."""
         secure = "; Secure" if self.https() else ""
+        age = f"; Max-Age={max_age}" if max_age is not None else ""
         return ("Set-Cookie",
-                f"{COOKIE}={value}; Path=/; Max-Age={max_age}; HttpOnly; SameSite=Strict{secure}")
+                f"{COOKIE}={value}; Path=/{age}; HttpOnly; SameSite=Strict{secure}")
 
     def serve_static(self, name):
         parts = name.split("/")
@@ -7404,8 +7457,8 @@ class Handler(BaseHTTPRequestHandler):
             "actions": action_summary(load_actions()),
             "jobs": recent_jobs(),
             "passwordChanged": bool(load_settings().get("passwordHash")),
-            "admin": admin_on(),
-            "adminLeft": admin_left(),
+            "admin": self.admin(),
+            "adminLeft": admin_left(self.login_id),
         }
 
     # --------------------------------------------------------------- GET
@@ -7448,7 +7501,7 @@ class Handler(BaseHTTPRequestHandler):
             env = read_env_file(HOMELAB_ENV)
             return self.send_json(200, {"name": display_name(), "searchUrl": search_url(), "dock": dock_pins(),
                                         "folders": app_folders({a["id"] for a in apps}),
-                                        "admin": admin_on(), "adminLeft": admin_left(), "mode": MODE, "welcomed": bool(load_settings().get("welcomed")),
+                                        "admin": self.admin(), "adminLeft": admin_left(self.login_id), "mode": MODE, "welcomed": bool(load_settings().get("welcomed")),
                                         "collections": collections(apps), "order": app_order(),
                                         "choices": collection_choices(),
                                         "host": {"tsIp": env.get("TS_IP", ""), "domain": env.get("DOMAIN", "")},
@@ -7470,9 +7523,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/settings":
             return self.send_json(200, self.settings_payload())
         if path == "/api/terminal":
-            return self.send_json(200, {"enabled": terminal_enabled(), "admin": admin_on(), "sessions": terminal_sessions()})
+            return self.send_json(200, {"enabled": terminal_enabled(), "admin": self.admin(), "sessions": terminal_sessions()})
         if path.startswith("/api/terminal/"):
-            if not admin_on():
+            if not self.admin():
                 return self.send_json(403, {"error": "admin mode is off", "admin": True})
             folder = terminal_folder(path[len("/api/terminal/"):])
             if not folder:
@@ -7653,7 +7706,7 @@ class Handler(BaseHTTPRequestHandler):
             params, error = validate_action(body.get("action"), body.get("params"), actions)
             if error:
                 return self.send_json(400, {"error": error})
-            if needs_admin(actions[body["action"]], params) and not admin_on():
+            if needs_admin(actions[body["action"]], params) and not self.admin():
                 return self.send_json(403, {"error": "admin mode is off", "admin": True})
             job, busy = queue_action(body["action"], params, actions)
             if busy:
@@ -7676,7 +7729,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(401, {"error": "wrong password"})
         with _auth_lock:
             _failures.pop(client, None)
-        return self.send_json(200, {"ok": True}, [self.cookie_header(new_session(), SESSION_SECONDS)])
+        # This browser's login, if it's still going (another tab of it is
+        # open, or you're back within SESSION_IDLE), carries on with its
+        # admin mode: every tab shares the cookie. Else a new one.
+        sid = session_id(self.session_token(), touch=True)
+        return self.send_json(200, {"ok": True}, [self.cookie_header(new_session(sid or None))])
 
     def update_settings(self, body):
         changes = {}
@@ -7786,8 +7843,9 @@ class Handler(BaseHTTPRequestHandler):
         if not 8 <= len(new) <= 200:
             return self.send_json(400, {"error": "the new password needs 8 to 200 characters"})
         save_settings({"passwordHash": hash_password(new)})
-        # Every other session is now signed with the old key; this one carries on.
-        return self.send_json(200, {"ok": True}, [self.cookie_header(new_session(), SESSION_SECONDS)])
+        # Every other login is now signed with the old key; this one carries
+        # on (signed again, the same login: its admin mode stays).
+        return self.send_json(200, {"ok": True}, [self.cookie_header(new_session(self.login_id))])
 
     # ---------------------------------------------------------- files
 
@@ -7811,7 +7869,7 @@ class Handler(BaseHTTPRequestHandler):
                 entries = [{"name": PLACE_LABELS[p], "dir": True, "size": None, "mtime": None, "kind": "folder",
                             "link": False, "outside": False, "place": p} for p in on]
                 return self.send_json(200, {"path": "/", "place": None, "places": places, "entries": entries,
-                                            "writable": False, "admin": admin_on()})
+                                            "writable": False, "admin": self.admin()})
             place, real = locate(rel)
             if not real or not real.is_dir():
                 return self.send_json(404, {"error": "no such folder"})
@@ -7820,8 +7878,8 @@ class Handler(BaseHTTPRequestHandler):
             except OSError as e:
                 return self.send_json(403, {"error": f"can't read it: {e.strerror}"})
             return self.send_json(200, {"path": place_path(place, real), "place": place, "places": places,
-                                        "entries": entries, "writable": place in WRITABLE or root_writes(),
-                                        "admin": admin_on(), "rootAllowed": terminal_enabled()})
+                                        "entries": entries, "writable": place in WRITABLE or root_writes(self.login_id),
+                                        "admin": self.admin(), "rootAllowed": terminal_enabled()})
         place, real = locate(rel)
         if not real or not real.is_file():
             return self.send_json(404, {"error": "no such file"})
@@ -7834,7 +7892,7 @@ class Handler(BaseHTTPRequestHandler):
             except UnicodeDecodeError:
                 return self.send_json(415, {"error": "not a text file (or not UTF-8)"})
             return self.send_json(200, {"path": place_path(place, real), "place": place, "text": text,
-                                        "mtime": st.st_mtime, "writable": place in WRITABLE or root_writes()})
+                                        "mtime": st.st_mtime, "writable": place in WRITABLE or root_writes(self.login_id)})
         if path == "/api/files/raw":
             return self.send_file_stream(real, inline=query.get("inline", ["0"])[0] == "1")
         return self.send(404, b"not found")
@@ -7882,7 +7940,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def root_refused(self):
         """Sends why Root can't change right now (and says so), else False."""
-        if not admin_on():
+        if not self.admin():
             self.send_json(403, {"error": "Root is read-only. Switch admin mode on (Settings) to change it.", "admin": True})
             return True
         if not terminal_enabled():
@@ -9431,7 +9489,7 @@ class Handler(BaseHTTPRequestHandler):
     def open_terminal(self, body):
         """A new shell: admin mode (your password turned it on) and the
         terminal switched on, on the machine."""
-        if not admin_on():
+        if not self.admin():
             return self.send_json(403, {"error": "admin mode is off", "admin": True})
         if not terminal_enabled():
             return self.send_json(409, {"error": "the terminal is off: set ADLEROS_TERMINAL=on and re-run install.sh"})
@@ -9462,7 +9520,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def terminal_request(self, rest, body):
         sid, _, what = rest.partition("/")
-        if not admin_on():
+        if not self.admin():
             return self.send_json(403, {"error": "admin mode is off", "admin": True})
         folder = terminal_folder(sid)
         if not folder:
@@ -9500,10 +9558,10 @@ class Handler(BaseHTTPRequestHandler):
                 record_failure(client)
                 time.sleep(1)
                 return self.send_json(401, {"error": "wrong password"})
-        save_settings({"admin": on, "adminUntil": time.time() + ADMIN_SECONDS if on else 0})
-        if not on:
-            close_terminals()  # you turned it off: its shells go too
-        return self.send_json(200, {"ok": True, "admin": on, "adminLeft": admin_left()})
+        still_on = admin_switch(self.login_id, on)
+        if not on and not still_on:
+            close_terminals()  # you turned it off, and no other login has it on: its shells go too
+        return self.send_json(200, {"ok": True, "admin": on, "adminLeft": admin_left(self.login_id)})
 
     def log_message(self, fmt, *args):
         sys.stderr.write(f"{self.client()} {fmt % args}\n")

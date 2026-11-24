@@ -1745,7 +1745,40 @@ async function webSearch(query) {
 
 // ------------------------------------------------------------- lock/unlock
 
+// The password every time adlerOS is opened: a new tab or window, the
+// browser started again, the home-screen app launched. A reload of a tab
+// that's in goes straight back in (sessionStorage outlives a reload, not
+// the tab). The login itself lasts while a page uses it: the server ends one
+// no request has come with for 15 minutes.
+const TAB_IN_KEY = "adleros-in";
+function tabIsIn() {
+  try { return sessionStorage.getItem(TAB_IN_KEY) === "1"; } catch { return false; }
+}
+function markTab(isIn) {
+  try {
+    if (isIn) sessionStorage.setItem(TAB_IN_KEY, "1");
+    else sessionStorage.removeItem(TAB_IN_KEY);
+  } catch { /* no storage (a private window): it asks on every load */ }
+}
+
+// Keeps the login going while this page is open, in the background too (a
+// hidden tab doesn't refresh): every 4 minutes, well inside the server's 15.
+const KEEP_ALIVE_MS = 4 * 60 * 1000;
+let keepAliveTimer = null;
+function startKeepAlive() {
+  stopKeepAlive();
+  keepAliveTimer = setInterval(() => {
+    api("/api/session").then(({ body }) => { if (body && !body.authenticated) showLock(); }).catch(() => {});
+  }, KEEP_ALIVE_MS);
+}
+function stopKeepAlive() {
+  clearInterval(keepAliveTimer);
+  keepAliveTimer = null;
+}
+
 function showLock() {
+  markTab(false);
+  stopKeepAlive();
   stopRefresh();
   stopWidgets();
   stopNotes();
@@ -1786,7 +1819,10 @@ async function unlock(event) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: input.value }),
     });
-    if (status === 200) return showDesktop();
+    if (status === 200) {
+      markTab(true);
+      return showDesktop();
+    }
     if (status === 429) {
       const minutes = Math.ceil((body?.retryAfter || 60) / 60);
       error.textContent = `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`;
@@ -1823,6 +1859,7 @@ async function showDesktop() {
   await refresh();
   buildDock();
   startRefresh();
+  startKeepAlive();
   startWidgets();
   startNotes();
   refreshDesk();
@@ -1968,7 +2005,10 @@ $("web-search").addEventListener("submit", (e) => {
 $("kbd").textContent = platformKey();
 loadWallpaper();
 // After every script has run (the desktop needs the windows, Files, the dock…).
+// Opened afresh, it asks for the password (and doesn't even ask the server,
+// so an old login isn't kept going); a reload of a tab that's in goes back in.
 document.addEventListener("DOMContentLoaded", () => {
+  if (!tabIsIn()) return showLock();
   api("/api/session")
     .then(({ body }) => (body?.authenticated ? showDesktop() : showLock()))
     .catch(showLock);

@@ -45,8 +45,10 @@ for (each one's section below says how, and so does the welcome).
 ![The lock screen](screenshots/lock.png)
 
 adlerOS asks for its password (`OS_PASSWORD` in `.env`, until you change it in
-Settings). A login lasts 30 days in that browser. Too many wrong tries locks
-that address out for a while. Log out from the desktop's right-click menu, or
+Settings) every time you open it: a new tab or window, the browser started
+again. A reload of a tab you're in doesn't ask, and an open adlerOS keeps you
+in; 15 minutes after you close the last one, the login is over. Too many
+wrong tries locks that address out for a while. Log out from the desktop's right-click menu, or
 Settings.
 
 ## The welcome
@@ -416,9 +418,10 @@ or the search box:
 
 Only while it's on can you restart or shut down the machine, delete apps,
 stop, restart or update core apps, or use the Terminal. adlerOS's server
-checks it on every request, not just the buttons on the page. It's on for
-every browser until you switch it off, or for 8 hours: then it switches
-itself off, and a terminal you had keeps running for when it's back on.
+checks it on every request, not just the buttons on the page. It's on in
+that browser only (another device turns it on for itself) until you switch
+it off or log out, or for 12 hours: then it switches itself off, and a
+terminal you had keeps running for when it's back on.
 
 ## My Computer
 
