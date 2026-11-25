@@ -114,13 +114,31 @@ class TermScreen {
         line.length = cols;
       }
       while (lines.length < rows) lines.push(Array.from({ length: cols }, () => ({ ch: " ", a: BLANK_ATTR })));
-      // Shrinking: rows above the cursor go to the scrollback, as in xterm.
+      // Shrinking: blank rows below the cursor go first; then rows above it
+      // go to the scrollback, as in xterm.
       while (lines.length > rows) {
+        const last = lines[lines.length - 1];
+        if (lines.length - 1 > this.y && last.every((c) => c.ch === " " && !c.a.bg)) {
+          lines.pop();
+          continue;
+        }
         const gone = lines.shift();
         if (lines === this.lines && !this.alt) this.pushBack(gone);
         this.y = Math.max(0, this.y - 1);
       }
     };
+    // Growing taller: lines that had gone up into the scrollback come back
+    // down into the screen, as in xterm, rather than blank rows below (the
+    // window opening bigger than it was measured, the start of fastfetch's
+    // output stays in view).
+    if (!this.alt) {
+      while (this.lines.length < rows && this.back.lastChild?.cells) {
+        const row = this.back.lastChild;
+        row.remove();
+        this.lines.unshift(row.cells);
+        this.y++;
+      }
+    }
     this.cols = cols;
     this.rows = rows;
     fit(this.lines);
@@ -218,6 +236,7 @@ class TermScreen {
 
   pushBack(line) {
     const row = el("div", { class: "term-row" });
+    row.cells = line; // kept, for when the screen grows and it comes back (resize)
     this.fillRow(row, line, -1);
     this.back.append(row);
     while (this.back.childElementCount > TERM_SCROLLBACK) this.back.firstChild.remove();
@@ -642,6 +661,9 @@ function terminalOffDialog() {
 // Straight in: admin mode (which your password turned on) is the key.
 async function newTerminal(t, path = null) {
   showTerminalWindow(t);
+  // Its size once it's laid out where it opens (a frame or two), so the
+  // shell starts as big as the window is.
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   const size = measureTerminal(t);
   const { status, body } = await api("/api/terminal", {
     method: "POST",
@@ -666,7 +688,9 @@ function measureTerminal(t) {
   const ch = r.height / scale || 17;
   const width = box.clientWidth || window.innerWidth - 80;
   const height = box.clientHeight || window.innerHeight - 200;
-  return { cols: Math.max(20, Math.floor((width - 16) / cw)), rows: Math.max(5, Math.floor((height - 8) / ch)) };
+  // Less the padding on both sides (8px each, .term): a row more than fits
+  // would leave the screen scrolled down past its first line.
+  return { cols: Math.max(20, Math.floor((width - 16) / cw)), rows: Math.max(5, Math.floor((height - 16) / ch)) };
 }
 
 function showTerminalWindow(t) { openWindow(t.id); }
