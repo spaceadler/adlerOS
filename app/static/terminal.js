@@ -1,17 +1,52 @@
 // Terminal: a shell on this machine, in a window. Only there in admin mode
 // (with it off, the terminal isn't shown anywhere), and off unless
-// ADLEROS_TERMINAL=on on the host. The shell runs in agent/terminal.py on the host; this page sends
-// what you type and shows what it writes, through /api/terminal.
+// ADLEROS_TERMINAL=on on the host. The shell runs in agent/terminal.py on the
+// host; each window has one connection to it, a WebSocket
+// (/api/terminal/<id>/ws): what you type goes up it, what the shell writes
+// comes down it. If it drops (a reload, the network, adlerOS restarting), the
+// window connects again and gets the screen back.
 // The screen is a small xterm-style emulator: cursor movement, erasing,
-// scroll regions, 16/256/true colour, bold/underline/inverse, the alternate
-// screen (htop, nano, vim), bracketed paste, and scrollback.
+// scroll regions, 16/256/true colour, bold/underline/inverse, wide characters
+// (emoji, CJK), the alternate screen (htop, nano, vim), the mouse for programs
+// that ask, bracketed paste, answers to the usual queries, and scrollback.
 // Uses $, el, api, toast, state, isOpen, openSettings, closeSettings,
 // closeStore, closeUsage, closeDrawer, markDockOpen, openModal, closeModal.
 "use strict";
 
 // ---------------------------------------------------------------- screen
 
-const TERM_SCROLLBACK = 2000;
+const TERM_SCROLLBACK = 5000;
+
+// How many cells a character takes: 2 for East Asian wide ones and emoji,
+// 0 for marks that go on the one before (accents, joiners, emoji's variation
+// selector), else 1. Ranges as wcwidth has them, the common ones.
+const TERM_ZERO = [[0x300, 0x36f], [0x483, 0x489], [0x591, 0x5bd], [0x610, 0x61a], [0x64b, 0x65f], [0x1ab0, 0x1aff],
+  [0x1dc0, 0x1dff], [0x200b, 0x200f], [0x20d0, 0x20ff], [0xfe00, 0xfe0f], [0xfe20, 0xfe2f], [0xe0100, 0xe01ef]];
+const TERM_WIDE = [[0x1100, 0x115f], [0x231a, 0x231b], [0x23e9, 0x23ec], [0x23f0, 0x23f0], [0x23f3, 0x23f3], [0x25fd, 0x25fe],
+  [0x2614, 0x2615], [0x2648, 0x2653], [0x267f, 0x267f], [0x2693, 0x2693], [0x26a1, 0x26a1], [0x26aa, 0x26ab], [0x26bd, 0x26be],
+  [0x26c4, 0x26c5], [0x26ce, 0x26ce], [0x26d4, 0x26d4], [0x26ea, 0x26ea], [0x26f2, 0x26f3], [0x26f5, 0x26f5], [0x26fa, 0x26fa],
+  [0x26fd, 0x26fd], [0x2705, 0x2705], [0x270a, 0x270b], [0x2728, 0x2728], [0x274c, 0x274c], [0x274e, 0x274e], [0x2753, 0x2755],
+  [0x2757, 0x2757], [0x2795, 0x2797], [0x27b0, 0x27b0], [0x27bf, 0x27bf], [0x2b1b, 0x2b1c], [0x2b50, 0x2b50], [0x2b55, 0x2b55],
+  [0x2e80, 0x303e], [0x3041, 0x33ff], [0x3400, 0x4dbf], [0x4e00, 0x9fff], [0xa000, 0xa4cf], [0xa960, 0xa97f], [0xac00, 0xd7a3],
+  [0xf900, 0xfaff], [0xfe10, 0xfe19], [0xfe30, 0xfe6f], [0xff00, 0xff60], [0xffe0, 0xffe6], [0x1f004, 0x1f004], [0x1f0cf, 0x1f0cf],
+  [0x1f18e, 0x1f18e], [0x1f191, 0x1f19a], [0x1f200, 0x1f251], [0x1f300, 0x1f64f], [0x1f680, 0x1f6ff], [0x1f7e0, 0x1f7eb],
+  [0x1f90c, 0x1f9ff], [0x1fa70, 0x1faff], [0x20000, 0x3fffd]];
+function inRanges(code, ranges) {
+  let lo = 0;
+  let hi = ranges.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (code < ranges[mid][0]) hi = mid - 1;
+    else if (code > ranges[mid][1]) lo = mid + 1;
+    else return true;
+  }
+  return false;
+}
+function cellWidth(code) {
+  if (code < 0x300) return 1;
+  if (inRanges(code, TERM_ZERO)) return 0;
+  return inRanges(code, TERM_WIDE) ? 2 : 1;
+}
 const ANSI = ["#1e1e1e", "#e55561", "#8cc265", "#d18f52", "#4aa5f0", "#c162de", "#42b3c2", "#d7dae0",
   "#5c6370", "#ff6b78", "#a5e075", "#f0a45d", "#6cb8ff", "#d68fff", "#56d4e6", "#ffffff"];
 
@@ -37,8 +72,11 @@ class TermScreen {
     this.rows = rows;
     this.cols = cols;
     this.title = "";
+    this.quiet = false; // replaying old output: its queries aren't answered again, its copies not copied again
     this.reset();
   }
+
+  answer(text) { if (!this.quiet) this.reply?.(text); }
 
   reset() {
     this.attr = { ...BLANK_ATTR };
@@ -60,6 +98,7 @@ class TermScreen {
     this.params = "";
     this.dirty = new Set(this.lines.keys());
     this.back.replaceChildren();
+    this.root.classList.remove("alt");
     this.scheduleDraw();
   }
 
@@ -109,7 +148,7 @@ class TermScreen {
       case "osc":
         if (ch === "\x07") return this.endOsc();
         if (ch === "\x1b") { this.state = "osc-esc"; return; }
-        this.params += ch;
+        if (this.params.length < 1 << 20) this.params += ch; // OSC 52 carries a whole copy; one never ended doesn't grow forever
         return;
       case "osc-esc": // ESC \ ends an OSC
         this.endOsc();
@@ -138,15 +177,38 @@ class TermScreen {
   }
 
   put(ch) {
-    if (this.pendingWrap) {
-      this.x = 0;
-      this.lineFeed();
+    const width = cellWidth(ch.codePointAt(0));
+    const line = this.lines[this.y];
+    if (width === 0) { // a mark: on the character before it
+      const x = this.pendingWrap ? this.x : this.x - 1;
+      const at = line[x]?.cont ? x - 1 : x;
+      if (at >= 0) line[at] = { ...line[at], ch: line[at].ch + ch };
+      this.dirty.add(this.y);
+      return;
+    }
+    if (this.pendingWrap || (width === 2 && this.x === this.cols - 1)) {
+      if (!this.pendingWrap && this.wrap) line[this.x] = { ch: " ", a: this.attr }; // no room for both halves here
+      if (this.pendingWrap || this.wrap) {
+        this.x = 0;
+        this.lineFeed();
+      }
       this.pendingWrap = false;
     }
-    this.lines[this.y][this.x] = { ch, a: this.attr };
+    const row = this.lines[this.y];
+    // Writing over half of a wide one: its other half goes too.
+    if (row[this.x].cont && this.x > 0) row[this.x - 1] = { ch: " ", a: row[this.x - 1].a };
+    const end = this.x + width - 1;
+    if (row[end]?.wide && end + 1 < this.cols) row[end + 1] = { ch: " ", a: row[end + 1].a };
+    if (width === 2 && this.x < this.cols - 1) {
+      row[this.x] = { ch, a: this.attr, wide: true };
+      row[this.x + 1] = { ch: "", a: this.attr, cont: true };
+    } else {
+      row[this.x] = { ch, a: this.attr };
+    }
     this.dirty.add(this.y);
-    if (this.x < this.cols - 1) this.x++;
-    else if (this.wrap) this.pendingWrap = true;
+    const next = this.x + Math.min(width, this.cols - this.x);
+    if (next < this.cols) this.x = next;
+    else if (this.wrap) { this.x = this.cols - 1; this.pendingWrap = true; }
   }
 
   lineFeed() {
@@ -204,6 +266,13 @@ class TermScreen {
     this.state = "text";
     const [kind, ...rest] = this.params.split(";");
     if (kind === "0" || kind === "2") this.title = rest.join(";");
+    // OSC 52: a program putting something on the clipboard (nvim's "+y, tmux).
+    if (kind === "52" && rest.length === 2 && rest[1] !== "?" && !this.quiet) {
+      try {
+        const bytes = Uint8Array.from(atob(rest[1]), (c) => c.charCodeAt(0));
+        navigator.clipboard?.writeText(new TextDecoder().decode(bytes)).catch(() => {});
+      } catch { /* not base64 */ }
+    }
   }
 
   csiChar(ch) {
@@ -279,7 +348,18 @@ class TermScreen {
       case "u": ({ x: this.x, y: this.y, attr: this.attr } = this.saved); break;
       case "m": this.sgr(raw === "" ? [0] : nums.map((v) => (Number.isFinite(v) ? v : 0))); break;
       case "h": case "l": if (priv) this.mode(nums, final === "h"); break;
-      default: break; // device reports and the rest: not needed for a shell
+      // Asked where the cursor is (CSI 6 n), whether all's well (5 n), what
+      // this terminal is (CSI c, CSI > c): answered like xterm, as a program
+      // may wait for the answer.
+      case "n":
+        if (!priv && nums[0] === 6) this.answer(`\x1b[${this.y + 1};${this.x + 1}R`);
+        else if (!priv && nums[0] === 5) this.answer("\x1b[0n");
+        break;
+      case "c":
+        if (raw.startsWith(">")) this.answer("\x1b[>0;276;0c");
+        else if (!priv && !nums[0]) this.answer("\x1b[?62;22c");
+        break;
+      default: break; // the rest: not needed for a shell
     }
   }
 
@@ -381,6 +461,7 @@ class TermScreen {
     let run = "";
     let runKey = null;
     let runAttr = null;
+    let runWide = false;
     const flush = () => {
       if (!run) return;
       const span = el("span", {}, run);
@@ -390,18 +471,22 @@ class TermScreen {
       if (a.inverse !== (runKey && runKey.endsWith("|cur"))) [fg, bg] = [bg || "var(--term-bg)", fg || "var(--term-fg)"];
       if (fg) span.style.color = fg;
       if (bg) span.style.background = bg;
-      const cls = [a.bold && "b", a.dim && "d", a.italic && "i", a.underline && "u"].filter(Boolean).join(" ");
+      // A wide one is a span of its own, exactly two cells wide: an emoji's
+      // own width depends on the font, and the columns after it mustn't move.
+      const cls = [a.bold && "b", a.dim && "d", a.italic && "i", a.underline && "u", runWide && "w"].filter(Boolean).join(" ");
       if (cls) span.className = cls;
       spans.push(span);
       run = "";
     };
     line.forEach((cell, x) => {
+      if (cell.cont) return; // the second half of a wide one
       const cur = x === cursorX;
       const key = `${cell.a.fg}|${cell.a.bg}|${cell.a.bold}${cell.a.dim}${cell.a.italic}${cell.a.underline}${cell.a.inverse}${cur ? "|cur" : ""}`;
-      if (key !== runKey) {
+      if (key !== runKey || cell.wide || runWide) {
         flush();
         runKey = key;
         runAttr = cell.a;
+        runWide = Boolean(cell.wide);
       }
       run += cell.ch;
     });
@@ -461,8 +546,8 @@ function keySequence(e, appCursor) {
 const terms = new Map();
 
 function makeTerm(id, section) {
-  const t = { id, section, sid: null, screen: null, offset: 0, decoder: null, sending: Promise.resolve(), queue: "",
-    timer: null, sizeTimer: null, alive: false, wheel: 0,
+  const t = { id, section, sid: null, screen: null, decoder: null, ws: null, attached: false, pending: "", retries: 0,
+    retryTimer: null, sizeTimer: null, alive: false, wheel: 0, mouseDown: -1, mouseCell: "",
     screenEl: section.querySelector(".term"), input: section.querySelector(".term-input"),
     status: section.querySelector(".term-status"), closeButton: section.querySelector(".term-close") };
   terms.set(id, t);
@@ -590,75 +675,99 @@ function startTerminal(t, sid) {
   showTerminalWindow(t);
   const size = measureTerminal(t);
   t.sid = sid;
-  t.offset = 0;
   t.alive = true;
-  t.decoder = new TextDecoder("utf-8");
+  t.retries = 0;
   t.screen = new TermScreen(t.screenEl, size.rows, size.cols);
   t.screen.follow = true;
-  t.status.textContent = "Starting…";
+  t.screen.reply = (answer) => sendTerminal(t, answer);
+  t.decoder = new TextDecoder("utf-8");
+  t.status.textContent = "Connecting…";
   t.input.focus();
-  readTerminal(t, sid);
+  connectTerminal(t, sid);
 }
 
-async function readTerminal(t, sid) {
-  const asked = Date.now();
-  while (t.sid === sid) {
-    let result;
-    try {
-      result = await api(`/api/terminal/${sid}?offset=${t.offset}`);
-    } catch {
-      await new Promise((r) => setTimeout(r, 1000));
-      continue;
-    }
-    if (t.sid !== sid) return;
-    if (result.status === 401) return showLock();
-    if (result.status === 403) return endTerminal(t, "Admin mode is off. If it timed out, this shell is still running: turn it on again and open Terminal to get back to it.");
-    if (result.status !== 200 || !result.body) return endTerminal(t, "This terminal is gone.");
-    const { data, offset, ended, started } = result.body;
-    if (data) {
-      const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-      t.screen.write(t.decoder.decode(bytes, { stream: true }));
+// The window's one connection to its shell. Binary messages are what the
+// shell wrote; text ones say how things stand (TerminalRelay in server.py).
+function connectTerminal(t, sid) {
+  clearTimeout(t.retryTimer);
+  t.ws?.close();
+  t.attached = false;
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/terminal/${sid}/ws`);
+  ws.binaryType = "arraybuffer";
+  t.ws = ws;
+  let over = false; // ended, or turned away: not to be connected again
+  ws.addEventListener("message", (e) => {
+    if (t.ws !== ws) return;
+    if (typeof e.data !== "string") {
+      t.screen.write(t.decoder.decode(new Uint8Array(e.data), { stream: true }));
       t.status.textContent = t.screen.title || "Connected";
+      return;
     }
-    t.offset = offset;
-    if (ended) return endTerminal(t, `Session ended: ${ended.why || "done"}.`);
-    if (!started) {
-      // The host takes a request for a minute; after that it never will.
-      if (Date.now() - asked > 60000) {
-        api(`/api/terminal/${sid}/close`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
-        return endTerminal(t, "The terminal host didn't answer. On the machine: systemctl status adleros-terminal.path");
+    const msg = JSON.parse(e.data);
+    if (msg.waiting) t.status.textContent = "Waiting for the terminal host…";
+    if (msg.attached) {
+      // The output again from the last of it: onto a clear screen.
+      t.attached = true;
+      t.retries = 0;
+      t.decoder = new TextDecoder("utf-8");
+      t.screen.reset();
+      t.screen.quiet = true; // until {"live"}: what comes first is old
+      t.status.textContent = "Connected";
+      const { rows, cols } = measureTerminal(t);
+      t.screen.resize(rows, cols);
+      ws.send(JSON.stringify({ size: [rows, cols] }));
+      if (t.pending) {
+        ws.send(new TextEncoder().encode(t.pending));
+        t.pending = "";
       }
-      t.status.textContent = "Waiting for the terminal host…";
     }
-  }
+    if (msg.live) t.screen.quiet = false;
+    if (msg.ended) {
+      over = true;
+      endTerminal(t, `Session ended: ${msg.ended.why || "done"}.`);
+    }
+    if (msg.error === "admin") {
+      over = true;
+      endTerminal(t, "Admin mode is off. If it timed out, this shell is still running: turn it on again and open Terminal to get back to it.");
+    }
+  });
+  ws.addEventListener("close", () => {
+    if (t.ws !== ws) return;
+    t.ws = null;
+    t.attached = false;
+    if (!over && t.alive && t.sid === sid) reconnectTerminal(t, sid);
+  });
+}
+
+// Dropped (the network, adlerOS restarting): again, a little later each
+// time, as long as the shell is still there to go back to.
+async function reconnectTerminal(t, sid) {
+  t.status.textContent = "Reconnecting…";
+  const { status, body } = await api("/api/terminal").catch(() => ({ status: 0 }));
+  if (t.sid !== sid || !t.alive) return;
+  if (status === 401) return showLock();
+  if (status === 200 && !body.admin) return endTerminal(t, "Admin mode is off. If it timed out, this shell is still running: turn it on again and open Terminal to get back to it.");
+  if (status === 200 && !(body.sessions || []).includes(sid)) return endTerminal(t, "This terminal is gone.");
+  const wait = Math.min(10000, 500 * 2 ** t.retries++);
+  t.retryTimer = setTimeout(() => { if (t.sid === sid && t.alive) connectTerminal(t, sid); }, wait);
 }
 
 function endTerminal(t, message) {
   t.alive = false;
   t.sid = null;
+  clearTimeout(t.retryTimer);
+  const ws = t.ws;
+  t.ws = null;
+  ws?.close();
   t.status.textContent = message;
   t.screen?.write(`\r\n\x1b[2m[${message}]\x1b[0m\r\n`);
 }
 
+// What you typed, up the connection; held for a moment if it's (re)connecting.
 function sendTerminal(t, text) {
   if (!t.alive || !t.sid || !text) return;
-  t.queue += text;
-  clearTimeout(t.timer);
-  t.timer = setTimeout(() => flushTerminal(t), 8);
-}
-
-function flushTerminal(t) {
-  const sid = t.sid;
-  const bytes = new TextEncoder().encode(t.queue);
-  t.queue = "";
-  // Small pieces: a request body is at most 4 KB.
-  for (let i = 0; i < bytes.length; i += 2400) {
-    const piece = bytes.slice(i, i + 2400);
-    const data = btoa(String.fromCharCode(...piece));
-    t.sending = t.sending.then(() => api(`/api/terminal/${sid}/input`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }),
-    }).catch(() => {}));
-  }
+  if (t.ws?.readyState === WebSocket.OPEN && t.attached) t.ws.send(new TextEncoder().encode(text));
+  else if (t.pending.length < 65536) t.pending += text;
 }
 
 function resizeTerminal(t) {
@@ -667,9 +776,7 @@ function resizeTerminal(t) {
   t.sizeTimer = setTimeout(() => {
     const { rows, cols } = measureTerminal(t);
     t.screen.resize(rows, cols);
-    if (t.alive) {
-      api(`/api/terminal/${t.sid}/size`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows, cols }) }).catch(() => {});
-    }
+    if (t.alive && t.attached && t.ws?.readyState === WebSocket.OPEN) t.ws.send(JSON.stringify({ size: [rows, cols] }));
   }, 120);
 }
 
@@ -678,10 +785,16 @@ function resizeTerminal(t) {
 function closeTerminal(t = null) {
   for (const x of t ? [t] : [...terms.values()]) {
     if (x.alive && x.sid) {
-      api(`/api/terminal/${x.sid}/close`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
+      if (x.ws?.readyState === WebSocket.OPEN) x.ws.send(JSON.stringify({ close: true }));
+      else api(`/api/terminal/${x.sid}/close`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
     }
     x.alive = false;
     x.sid = null;
+    clearTimeout(x.retryTimer);
+    // Its close goes first; the connection after it.
+    const ws = x.ws;
+    x.ws = null;
+    if (ws) setTimeout(() => ws.close(), 300);
     hideTerminal(x);
   }
 }
@@ -767,6 +880,39 @@ function termModsUsed(t) {
   termModsShow(t);
 }
 
+// The cell under the pointer, 1-based: [column, row].
+function termCell(s, e) {
+  const view = s.view.getBoundingClientRect();
+  return [Math.min(s.cols, Math.max(1, Math.floor((e.clientX - view.left) / (view.width / s.cols)) + 1)),
+    Math.min(s.rows, Math.max(1, Math.floor((e.clientY - view.top) / (view.height / s.rows)) + 1))];
+}
+function termMouseReport(s, b, col, row, press) {
+  if (s.mouseSgr) return `\x1b[<${b};${col};${row}${press ? "M" : "m"}`;
+  // The old encoding has no release per button: 3 (with the same modifiers) is any.
+  return `\x1b[M${String.fromCharCode(32 + (press ? b : (b & ~3) | 3), 32 + Math.min(col, 223), 32 + Math.min(row, 223))}`;
+}
+function termMouse(t, e, kind) {
+  const s = t.screen;
+  if (!s || !t.alive || !s.mouse || e.shiftKey) return;
+  const [col, row] = termCell(s, e);
+  const mods = (e.altKey ? 8 : 0) + (e.ctrlKey ? 16 : 0);
+  if (kind === "down") {
+    if (e.button > 2) return;
+    e.preventDefault(); // no text selection: the click is the program's
+    t.input.focus({ preventScroll: true });
+    t.mouseDown = e.button;
+    t.mouseCell = `${col},${row}`;
+    sendTerminal(t, termMouseReport(s, e.button + mods, col, row, true));
+  } else if (kind === "up") {
+    if (t.mouseDown < 0) return;
+    sendTerminal(t, termMouseReport(s, t.mouseDown + mods, col, row, false));
+    t.mouseDown = -1;
+  } else if (t.mouseDown >= 0 && s.mouse >= 1002 && t.mouseCell !== `${col},${row}`) {
+    t.mouseCell = `${col},${row}`;
+    sendTerminal(t, termMouseReport(s, t.mouseDown + 32 + mods, col, row, true)); // a drag
+  }
+}
+
 function wireTerminal(t) {
   const input = t.input;
   termKeysBar(t);
@@ -777,6 +923,13 @@ function wireTerminal(t) {
       return closeTerminal(t);
     }
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "v") return; // paste (the paste event sends it)
+    // Ctrl+Shift+C copies what you selected (Ctrl+C alone stays the shell's interrupt).
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      const text = String(window.getSelection());
+      if (text) copyText(text, "Copied.");
+      return;
+    }
     if (e.metaKey) return; // ⌘C, ⌘V on a Mac
     // The bar's Ctrl, Alt or Shift down: this key with them.
     if (termModsDown(t) && e.key.length >= 1 && e.key !== "Unidentified" && !["Control", "Alt", "Shift", "Meta"].includes(e.key)) {
@@ -817,9 +970,15 @@ function wireTerminal(t) {
   input.addEventListener("focus", () => { if (t.screen) { t.screen.focused = true; t.screen.scheduleDraw(); } });
   input.addEventListener("blur", () => { if (t.screen) { t.screen.focused = false; t.screen.scheduleDraw(); } });
   // Clicking the screen types into it, unless you were selecting text to copy.
-  t.screenEl.addEventListener("mouseup", () => {
+  t.screenEl.addEventListener("mouseup", (e) => {
+    termMouse(t, e, "up");
     if (!String(window.getSelection())) input.focus();
   });
+  // A program that asked for the mouse (htop, vim with the mouse on, Claude
+  // Code) gets its clicks, and drags with 1002 or 1003; with Shift held, the
+  // mouse selects text instead, as in xterm.
+  t.screenEl.addEventListener("mousedown", (e) => termMouse(t, e, "down"));
+  t.screenEl.addEventListener("mousemove", (e) => termMouse(t, e, "move"));
   // The wheel: a program that asked for the mouse (Claude Code, htop, vim
   // with the mouse on) gets it, and scrolls what it shows itself; one on the
   // alternate screen that didn't (less, man) gets the arrow keys. Otherwise,
@@ -835,11 +994,8 @@ function wireTerminal(t) {
     const up = steps < 0;
     let one;
     if (s.mouse) {
-      const view = s.view.getBoundingClientRect();
-      const col = Math.min(s.cols, Math.max(1, Math.floor((e.clientX - view.left) / (view.width / s.cols)) + 1));
-      const row = Math.min(s.rows, Math.max(1, Math.floor((e.clientY - view.top) / (view.height / s.rows)) + 1));
-      const b = up ? 64 : 65;
-      one = s.mouseSgr ? `\x1b[<${b};${col};${row}M` : `\x1b[M${String.fromCharCode(32 + b, 32 + Math.min(col, 223), 32 + Math.min(row, 223))}`;
+      const [col, row] = termCell(s, e);
+      one = termMouseReport(s, up ? 64 : 65, col, row, true);
     } else {
       one = (s.appCursor ? "\x1bO" : "\x1b[") + (up ? "A" : "B");
     }

@@ -87,7 +87,8 @@ the `docker` group, so it's as good as root. That's why it has two locks:
    (`adleros-terminal.path` and `.service`). adlerOS can't change that file,
    and with it off the host isn't even installed.
 2. **Admin mode**, which only your password turns on, checked by the server
-   on every keystroke it passes on. With it off the terminal isn't even
+   when a terminal window connects and every 2 seconds while it stays
+   connected. With it off the terminal isn't even
    shown, and switching it off closes every open shell (unless another
    device still has it on). Opening one asks for nothing more, so admin mode
    left on is a shell for anyone at that login: switch it off when you're
@@ -97,9 +98,13 @@ the `docker` group, so it's as good as root. That's why it has two locks:
 
 The shells run in `agent/terminal.py` on the host, started by systemd when a
 session is asked for and stopped when the last one ends. What you type and
-what the shell prints pass through files in `data/agent/term/<session>/`,
-readable only by you. A session ends when its shell exits, when it's
-closed, or at 20 MB of output; any number can run at once.
+what the shell prints pass through the session's own socket,
+`data/agent/term/<session>/sock`, which only you can open; the page reaches
+it through one WebSocket per window, which the server takes only from
+adlerOS's own page (its `Origin`, as for every change) and only in admin
+mode. The host keeps the last 1 MB a shell printed, for a window that
+connects again. A session ends when its shell exits or when it's closed; any
+number can run at once.
 
 The honest limit: with the terminal on, someone who took over the web app
 itself (not just a login) could ask the host for a shell, since the host

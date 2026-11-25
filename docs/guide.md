@@ -882,18 +882,28 @@ The shell is your account's own (fish, zsh, bash…; `chsh` changes it). It
 starts in `ADLEROS_TERMINAL_DIR` if that's set, else the homelab's folder in a
 homelab, else your home folder.
 
-It's a real terminal: colours, `htop`, `nano`, `vim`, Tab completion,
-scrollback (scroll up), copy (select) and paste. A program that takes the
-mouse (Claude Code, htop, vim with the mouse on) gets the wheel and
-scrolls itself; `less` and `man` get it as arrow keys; Shift+wheel always
-scrolls the scrollback. While you're typing in it,
-every key goes to the shell, Escape included; **Ctrl+Shift+Q** or ✕ closes it
-and ends the session. Opening another window only puts it away: `t` brings
-the same session back, and so does opening the terminal after a reload (or
-in another tab): it joins the shell that's still running, its screen as it
-was. Shells no page is showing are closed when a fourth is wanted. A session also ends when the shell exits, after 30
-minutes without typing, or when admin mode is switched off. Up to three at
-once.
+It's a real terminal: colours, emoji and other wide characters, `htop`,
+`nano`, `vim`, Tab completion, scrollback (scroll up), copy (select it;
+**Ctrl+Shift+C**, as Ctrl+C is the shell's) and paste. A program that takes
+the mouse (Claude Code, htop, vim with the mouse on) gets its clicks and the
+wheel (hold Shift to select text instead); `less` and `man` get the wheel as
+arrow keys; Shift+wheel always scrolls the scrollback. A program that copies
+(nvim's `"+y`, tmux) puts it on this device's clipboard. While you're typing
+in it, every key goes to the shell, Escape included; **Ctrl+Shift+Q** or ✕
+closes it and ends the session.
+
+Each window has one connection to its shell (a WebSocket): what you type
+goes straight up it, what the shell prints comes straight down. Opening
+another window only puts it away: `t` brings the same session back, and so
+does opening the terminal after a reload, in another tab or on another
+device: it joins the shell that's still running and gets the last of its
+screen back (a full-screen program draws itself again). If the connection
+drops, the window connects again by itself. A session ends when the shell
+exits, when you close it, or when admin mode is switched off; any number can
+run at once, for as long as you like, printing as much as they like.
+
+Behind a reverse proxy, the proxy has to pass WebSockets on (in Nginx Proxy
+Manager: *Websockets Support* on adlerOS's host).
 
 ## Clock
 

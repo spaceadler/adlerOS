@@ -15,8 +15,8 @@ folder mounted read-only.
     GET  /api/updates      images with a newer version, from Cup if it's installed
     GET  /api/terminal     whether the terminal is on, and its open sessions
     POST /api/terminal     {"rows", "cols", "path"?} -> a new shell (admin mode), in that folder
-    GET  /api/terminal/<id>?offset=N  its output from N (waits for some)
-    POST /api/terminal/<id>/input|size|close
+    GET  /api/terminal/<id>/ws  a WebSocket: what you type in, its output out (TerminalRelay)
+    POST /api/terminal/<id>/close
     GET  /api/files?path=   a folder (the Files window): /desktop, /user or /root/...
     GET  /api/files/text|raw|trash|tasks  a file to edit or download, the Trash,
                            copies and moves under way
@@ -76,6 +76,7 @@ from html import unescape as html_unescape
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from stat import S_ISSOCK
 
 import ical
 import musictags
@@ -1449,9 +1450,11 @@ def dashboard_icon(name):
 
 TERM_DIR = DATA / "agent" / "term"
 TERM_ID = re.compile(r"[a-f0-9]{32}")
-TERM_WAIT = 20  # seconds a read waits for output
 TERM_START_WITHIN = 60  # seconds the terminal host takes a request for (its START_WITHIN)
 TERM_CHUNK = 256 * 1024
+TERM_HEADER = struct.Struct(">cI")  # the terminal host's messages: a type, a length (agent/terminal.py)
+TERM_REPLAY = 1024 * 1024  # the last of a file session's output, for a window that connects (the host's REPLAY)
+TERM_PING = 25  # seconds between pings: a proxy closes a connection that's been quiet for a minute
 
 
 def terminal_enabled():
@@ -1504,32 +1507,323 @@ def close_terminals():
         terminal_append(TERM_DIR / sid / "close", b"")
 
 
-def terminal_read(folder, offset):
-    """(bytes from offset, ended info or None, started?), waiting up to
-    TERM_WAIT seconds for something new."""
-    deadline = time.monotonic() + TERM_WAIT
-    out, ended = folder / "out", folder / "ended"
-    while True:
-        size = out.stat().st_size if out.exists() else 0
-        if size > offset or ended.exists() or time.monotonic() > deadline:
-            break
-        time.sleep(0.04)
-    data = b""
-    if size > offset:
-        fd = os.open(out, os.O_RDONLY | os.O_NOFOLLOW)
+def terminal_socket(folder):
+    """The session's socket, once the terminal host has made it: a socket of
+    ours, not a link someone planted."""
+    path = folder / "sock"
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return None
+    return path if S_ISSOCK(info.st_mode) and info.st_uid == os.getuid() else None
+
+
+def terminal_ended(folder):
+    try:
+        return json.loads((folder / "ended").read_text())
+    except (OSError, ValueError):
+        return {"why": "ended"}
+
+
+class WebSocket:
+    """A WebSocket (RFC 6455) on a request's connection, once its handshake
+    is done: whole messages in (receive blocks), frames out (send, from any
+    thread). The page's frames come masked, ours go unmasked."""
+
+    LIMIT = 1024 * 1024  # the most one message may carry
+
+    def __init__(self, rfile, sock):
+        self.rfile, self.sock = rfile, sock
+        self.lock = threading.Lock()
+        self.closed = False
+
+    @staticmethod
+    def frame(opcode, data):
+        n = len(data)
+        size = bytes([n]) if n < 126 else bytes([126]) + n.to_bytes(2, "big") if n < 65536 else bytes([127]) + n.to_bytes(8, "big")
+        return bytes([0x80 | opcode]) + size + data
+
+    def send(self, data, opcode=None):
+        """Text (a str), binary (bytes), or a control frame (opcode 9: a ping)."""
+        if isinstance(data, str):
+            data, opcode = data.encode(), 1
+        with self.lock:
+            if self.closed:
+                raise ConnectionError("closed")
+            self.sock.sendall(self.frame(opcode or 2, data))
+
+    def close(self, code=1000):
+        with self.lock:
+            if self.closed:
+                return
+            self.closed = True
+            try:
+                self.sock.sendall(self.frame(8, code.to_bytes(2, "big")))
+            except OSError:
+                pass
+
+    def read(self, n):
+        data = self.rfile.read(n)
+        if len(data) < n:
+            raise ConnectionError("the page went")
+        return data
+
+    def receive(self):
+        """The next message, (1 text or 2 binary, bytes); (8, b"") once it's closed."""
+        message, kind = bytearray(), None
+        while True:
+            head = self.read(2)
+            final, opcode, n = head[0] & 0x80, head[0] & 0x0F, head[1] & 0x7F
+            if not head[1] & 0x80:
+                raise ValueError("an unmasked frame")
+            if n == 126:
+                n = int.from_bytes(self.read(2), "big")
+            elif n == 127:
+                n = int.from_bytes(self.read(8), "big")
+            if n > self.LIMIT or len(message) + n > self.LIMIT:
+                raise ValueError("a message too big")
+            mask = self.read(4)
+            data = self.read(n)
+            if n:  # unmasked all at once, as one big number: byte by byte is slow
+                data = (int.from_bytes(data, "big") ^ int.from_bytes((mask * (n // 4 + 1))[:n], "big")).to_bytes(n, "big")
+            if opcode == 8:
+                self.close()
+                return 8, b""
+            if opcode == 9:
+                with self.lock:
+                    if not self.closed:
+                        self.sock.sendall(self.frame(10, data))  # its pong
+                continue
+            if opcode == 10:
+                continue
+            if opcode in (1, 2):
+                kind = opcode
+            elif opcode != 0 or kind is None:
+                raise ValueError("an unknown frame")
+            message += data
+            if final:
+                return kind, bytes(message)
+
+
+class TerminalRelay:
+    """A Terminal window's one connection (its WebSocket) joined to its
+    session: through the session's socket, or, for a session the terminal
+    host had going before it had sockets (it runs on until its last shell
+    ends), through the session's files as it used to (out, in, size).
+    To the page: binary, the shell's output; text, JSON: {"waiting": true}
+    until the host takes the request, {"attached": true} as the output
+    starts again from the last of it (the page clears its screen first),
+    {"live": true} once that's all been sent and what follows is new (the
+    page doesn't answer old queries in it), {"ended": {"why", "code"}},
+    {"error": "admin"} when admin mode is off.
+    From the page: binary, what you type; text, {"size": [rows, cols]} or
+    {"close": true}."""
+
+    def __init__(self, ws, folder, login_id):
+        self.ws, self.folder, self.login_id = ws, folder, login_id
+        self.mode = None  # "socket" or "files", once the host has taken the request
+        self.host = None
+        self.size = None
+        self.lock = threading.Lock()
+        self.done = threading.Event()
+        self.pinged = self.checked = time.monotonic()
+
+    def run(self):
+        page = threading.Thread(target=self.from_page, name="terminal", daemon=True)
+        page.start()
         try:
-            os.lseek(fd, offset, os.SEEK_SET)
-            data = os.read(fd, TERM_CHUNK)
-        finally:
-            os.close(fd)
-    info = None
-    if ended.exists() and offset + len(data) >= size:
-        try:
-            info = json.loads(ended.read_text())
+            mode = self.wait_for_host()
+            if mode == "socket":
+                self.through_socket()
+            elif mode == "files":
+                self.through_files()
         except (OSError, ValueError):
-            info = {"why": "ended"}
-    started = (folder / "started.json").exists() or out.exists()
-    return data, info, started
+            pass  # the page or the host went; the page connects again if it's still there
+        finally:
+            self.done.set()
+            self.ws.close()
+            if self.host:
+                self.host.close()
+            # The page's own close, a second at most; then the connection
+            # goes, which also wakes from_page if the page never answers.
+            page.join(1)
+            try:
+                self.ws.sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+    # ---- from the page
+
+    def from_page(self):
+        try:
+            while not self.done.is_set():
+                kind, data = self.ws.receive()
+                if kind == 8:
+                    break
+                if kind == 2:
+                    self.typed(data)
+                else:
+                    self.control(json.loads(data))
+        except (OSError, ValueError):
+            pass
+        finally:
+            self.done.set()
+
+    def to_host(self, kind, data=b""):
+        self.host.sendall(TERM_HEADER.pack(kind, len(data)) + data)
+
+    def typed(self, data):
+        with self.lock:
+            if self.mode == "socket":
+                self.to_host(b"i", data)
+            elif self.mode == "files":
+                terminal_append(self.folder / "in", data)
+
+    def control(self, msg):
+        if not isinstance(msg, dict):
+            return
+        size = msg.get("size")
+        if isinstance(size, list) and len(size) == 2 and all(isinstance(x, int) and 0 < x < 1000 for x in size):
+            with self.lock:
+                self.size = size
+                self.send_size()
+        if msg.get("close") is True:
+            with self.lock:
+                if self.mode == "socket":
+                    self.to_host(b"c")
+                else:
+                    terminal_append(self.folder / "close", b"")
+
+    def send_size(self):
+        """The window's size to the session (with self.lock held)."""
+        if self.size and self.mode == "socket":
+            self.to_host(b"s", f"{self.size[0]} {self.size[1]}".encode())
+        elif self.size and self.mode == "files":
+            write_private(self.folder / "size", f"{self.size[0]} {self.size[1]}\n")
+
+    # ---- to the page
+
+    def tick(self):
+        """A ping now and then (a quiet connection gets dropped by a proxy);
+        False once admin mode is off for this login (or it logged out)."""
+        now = time.monotonic()
+        if now - self.pinged > TERM_PING:
+            self.pinged = now
+            self.ws.send(b"", 9)
+        if now - self.checked > 2:
+            self.checked = now
+            if not admin_on(self.login_id):
+                self.ws.send(json.dumps({"error": "admin"}))
+                return False
+        return not self.done.is_set()
+
+    def wait_for_host(self):
+        """"socket" or "files" once the terminal host has taken the request;
+        None if it never will (the page is told why)."""
+        told = False
+        while self.tick():
+            if (self.folder / "ended").exists():
+                self.ws.send(json.dumps({"ended": terminal_ended(self.folder)}))
+                return None
+            if (self.folder / "started.json").exists():
+                # A host with sockets makes the session's before it takes the request.
+                return "socket" if terminal_socket(self.folder) else "files"
+            if not told:
+                self.ws.send(json.dumps({"waiting": True}))
+                told = True
+            try:
+                waited = time.time() - (self.folder / "start.json").stat().st_mtime
+            except OSError:
+                waited = 0  # being taken right now
+            if waited > TERM_START_WITHIN:
+                terminal_append(self.folder / "close", b"")
+                self.ws.send(json.dumps({"ended": {"why": "the terminal host didn't answer. On the machine: systemctl status adleros-terminal.path"}}))
+                return None
+            time.sleep(0.1)
+        return None
+
+    def through_socket(self):
+        self.host = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.host.settimeout(5)
+        path = self.folder / "sock"
+        if len(os.fsencode(str(path))) < 100:
+            self.host.connect(str(path))
+        else:  # longer than Linux takes for a socket: through its folder's descriptor (as the host binds it)
+            fd = os.open(self.folder, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                self.host.connect(f"/proc/self/fd/{fd}/sock")
+            finally:
+                os.close(fd)
+        self.host.settimeout(1)
+        self.ws.send(json.dumps({"attached": True}))
+        with self.lock:
+            self.mode = "socket"
+            self.send_size()
+        inbox = bytearray()
+        while self.tick():
+            try:
+                data = self.host.recv(262144)
+            except TimeoutError:
+                continue
+            if not data:  # the host went without saying (stopped)
+                self.ws.send(json.dumps({"ended": terminal_ended(self.folder) if (self.folder / "ended").exists()
+                                         else {"why": "the terminal host stopped"}}))
+                return
+            inbox += data
+            while len(inbox) >= TERM_HEADER.size:
+                kind, n = TERM_HEADER.unpack_from(inbox)
+                if len(inbox) < TERM_HEADER.size + n:
+                    break
+                body = bytes(inbox[TERM_HEADER.size:TERM_HEADER.size + n])
+                del inbox[:TERM_HEADER.size + n]
+                if kind in (b"r", b"o") and body:
+                    self.ws.send(body)
+                if kind == b"r":
+                    self.ws.send(json.dumps({"live": True}))
+                elif kind == b"e":
+                    self.ws.send(json.dumps({"ended": json.loads(body)}))
+                    return
+
+    def through_files(self):
+        out = self.folder / "out"
+        offset = 0
+        try:
+            size = out.stat().st_size
+        except OSError:
+            size = 0
+        if size > TERM_REPLAY:  # the last of it, from a line's start
+            offset = size - TERM_REPLAY
+            with open(out, "rb") as f:
+                f.seek(offset)
+                offset += f.read(4096).find(b"\n") + 1
+        self.ws.send(json.dumps({"attached": True}))
+        with self.lock:
+            self.mode = "files"
+            self.send_size()
+        live = False  # whether what's sent from here is new, past what was there as it connected
+        while self.tick():
+            if not live and offset >= size:
+                live = True
+                self.ws.send(json.dumps({"live": True}))
+            try:
+                size = out.stat().st_size
+            except OSError:
+                size = 0
+            if size > offset:
+                fd = os.open(out, os.O_RDONLY | os.O_NOFOLLOW)
+                try:
+                    os.lseek(fd, offset, os.SEEK_SET)
+                    data = os.read(fd, TERM_CHUNK)
+                finally:
+                    os.close(fd)
+                offset += len(data)
+                self.ws.send(data)
+                continue
+            # Ended, and nothing more came out before it did.
+            if (self.folder / "ended").exists() and (not out.exists() or out.stat().st_size <= offset):
+                self.ws.send(json.dumps({"ended": terminal_ended(self.folder)}))
+                return
+            time.sleep(0.03)
 
 
 # ------------------------------------------------------------------ files
@@ -7524,19 +7818,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, self.settings_payload())
         if path == "/api/terminal":
             return self.send_json(200, {"enabled": terminal_enabled(), "admin": self.admin(), "sessions": terminal_sessions()})
-        if path.startswith("/api/terminal/"):
-            if not self.admin():
-                return self.send_json(403, {"error": "admin mode is off", "admin": True})
-            folder = terminal_folder(path[len("/api/terminal/"):])
-            if not folder:
-                return self.send_json(404, {"error": "no such terminal"})
-            try:
-                offset = max(0, int(query.get("offset", ["0"])[0]))
-            except ValueError:
-                return self.send_json(400, {"error": "offset: a number"})
-            data, ended, started = terminal_read(folder, offset)
-            return self.send_json(200, {"data": base64.b64encode(data).decode(), "offset": offset + len(data),
-                                        "ended": ended, "started": started})
+        if path.startswith("/api/terminal/") and path.endswith("/ws"):
+            return self.terminal_connect(path[len("/api/terminal/"):-len("/ws")])
         if path.startswith("/api/files"):
             return self.files_get(path, query)
         if path.startswith("/api/notes/"):
@@ -9513,35 +9796,60 @@ class Handler(BaseHTTPRequestHandler):
         # folder after it looked would wait for the next request.
         ready = TERM_DIR / f".{sid}.new"
         ready.mkdir(mode=0o700)
-        terminal_append(ready / "in", b"")
         write_private(ready / "start.json", json.dumps({"sid": sid, "rows": rows, "cols": cols, "created": time.time(), **({"dir": where} if where else {})}))
         os.rename(ready, TERM_DIR / sid)
         return self.send_json(200, {"sid": sid})
 
     def terminal_request(self, rest, body):
+        """Closing a session without its connection (a window that isn't
+        connected right now): the terminal host sees the close file."""
         sid, _, what = rest.partition("/")
         if not self.admin():
             return self.send_json(403, {"error": "admin mode is off", "admin": True})
         folder = terminal_folder(sid)
         if not folder:
             return self.send_json(404, {"error": "no such terminal"})
-        if what == "input":
-            try:
-                data = base64.b64decode(body.get("data", ""), validate=True)
-            except (ValueError, TypeError):
-                return self.send_json(400, {"error": "data: base64"})
-            terminal_append(folder / "in", data)
-        elif what == "size":
-            try:
-                rows, cols = int(body["rows"]), int(body["cols"])
-            except (KeyError, TypeError, ValueError):
-                return self.send_json(400, {"error": "rows and cols: numbers"})
-            write_private(folder / "size", f"{rows} {cols}\n")
-        elif what == "close":
-            terminal_append(folder / "close", b"")
-        else:
+        if what != "close":
             return self.send(404, b"not found")
+        terminal_append(folder / "close", b"")
         return self.send_json(200, {"ok": True})
+
+    def websocket(self):
+        """This request's connection as a WebSocket (RFC 6455's handshake),
+        or None once an error has been sent."""
+        key = self.headers.get("Sec-WebSocket-Key", "")
+        try:
+            good_key = len(base64.b64decode(key, validate=True)) == 16
+        except ValueError:
+            good_key = False
+        if (self.headers.get("Upgrade", "").lower() != "websocket" or "upgrade" not in self.headers.get("Connection", "").lower()
+                or self.headers.get("Sec-WebSocket-Version") != "13" or not good_key):
+            self.send_json(400, {"error": "expected a WebSocket"})
+            return None
+        accept = base64.b64encode(hashlib.sha1(key.encode() + b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest()).decode()
+        self.protocol_version = "HTTP/1.1"  # browsers want a 1.1 status line for this one
+        self.send_response(101)
+        self.send_header("Upgrade", "websocket")
+        self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", accept)
+        self.end_headers()
+        self.close_connection = True  # after it, nothing else on this connection
+        return WebSocket(self.rfile, self.connection)
+
+    def terminal_connect(self, sid):
+        """A Terminal window's connection to its session: admin mode, from
+        adlerOS's own page (a WebSocket's Origin is the only word a browser
+        gives on that, so it must be there)."""
+        if self.cross_site() or not self.headers.get("Origin"):
+            return self.send_json(403, {"error": "only adlerOS's own page can do that"})
+        if not self.admin():
+            return self.send_json(403, {"error": "admin mode is off", "admin": True})
+        folder = terminal_folder(sid)
+        if not folder:
+            return self.send_json(404, {"error": "no such terminal"})
+        ws = self.websocket()
+        if ws:
+            TerminalRelay(ws, folder, self.login_id).run()
 
     def set_admin(self, body):
         """Turning admin mode on takes your password, like sudo; off doesn't."""

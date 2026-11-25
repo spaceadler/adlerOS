@@ -1963,6 +1963,8 @@ body:not(.wm) .sheet.viewer-sheet {
 .term-row span.d { opacity: 0.6; }
 .term-row span.i { font-style: italic; }
 .term-row span.u { text-decoration: underline; }
+/* A wide character (an emoji, CJK): exactly two cells, whatever the font draws. */
+.term-row span.w { display: inline-block; width: 2ch; height: 1.35em; overflow: hidden; vertical-align: top; text-align: center; }
 .term-probe { position: absolute; visibility: hidden; white-space: pre; }
 /* Typed text lands here, out of sight; the screen above shows it. */
 .term-input {
