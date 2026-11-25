@@ -1331,6 +1331,13 @@ def frame_allowed(headers, host, secure=False):
     return False
 
 
+# Apps whose own pages refuse to run inside another page, whatever their
+# headers allow: CryptPad, with embedding on, still stops its drive and its
+# office apps in a frame (sframe-common-outer.js), so a window would only
+# show its error.
+FRAME_REFUSED = {"cryptpad": "its own pages refuse to run inside another page"}
+
+
 def frame_answer(app, host, secure):
     """{"frame": bool, "why": ...}: whether the app can open in a window."""
     url = app.get("url") or ""
@@ -1338,6 +1345,9 @@ def frame_answer(app, host, secure):
         return {"frame": False, "why": "it has no web page"}
     if app.get("window") == "tab":
         return {"frame": False, "why": "it works best in a tab of its own"}
+    refused = FRAME_REFUSED.get(app.get("known") or app["id"])
+    if refused:
+        return {"frame": False, "why": refused}
     if app.get("window") == "https" and not secure:
         return {"frame": False, "why": "in a window it needs adlerOS on HTTPS too"}
     if secure and url.startswith("http:"):
