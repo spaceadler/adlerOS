@@ -4451,11 +4451,11 @@ body.wm .cc:not([hidden]) { position: fixed; top: 34px; right: 8px; z-index: 56;
 .cc-small .cc-name { font-size: 11px; white-space: normal; line-height: 1.15; }
 .cc-slider { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; padding: 9px 10px 10px; }
 .cc-label { font-weight: 600; }
-.cc-range { position: relative; display: flex; align-items: center; }
+.cc-range { --cc-knob: 24px; position: relative; display: flex; align-items: center; }
 .cc-range svg { position: absolute; left: 8px; z-index: 1; width: 14px; height: 14px; fill: none; stroke: #333; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 .cc-range input { width: 100%; height: 24px; margin: 0; border-radius: 12px; appearance: none; -webkit-appearance: none; background: linear-gradient(to right, rgb(255 255 255 / 0.92) var(--done, 50%), rgb(255 255 255 / 0.16) var(--done, 50%)); }
-.cc-range input::-webkit-slider-thumb { width: 24px; height: 24px; border-radius: 50%; -webkit-appearance: none; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.35); }
-.cc-range input::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.35); }
+.cc-range input::-webkit-slider-thumb { width: var(--cc-knob); height: var(--cc-knob); border-radius: 50%; -webkit-appearance: none; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.35); }
+.cc-range input::-moz-range-thumb { width: var(--cc-knob); height: var(--cc-knob); border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.35); }
 .cc-range input:disabled { opacity: 0.4; }
 .cc-now { grid-column: 1 / -1; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; }
 .cc-art { display: grid; place-items: center; width: 40px; height: 40px; overflow: hidden; border-radius: 8px; background: rgb(255 255 255 / 0.12); }

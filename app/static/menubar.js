@@ -298,10 +298,13 @@ function ccTile(cls, icon, name, on, run, sub = "") {
   b.addEventListener("click", run);
   return b;
 }
+// A slider: 0 with its knob against the left end, 1 against the right, and
+// the filled part always up to the knob's middle (the knob's half-width,
+// --cc-knob / 2, either side of the track it travels).
 function ccSlider(title, icon, value, input, disabled = false) {
   const range = el("input", { type: "range", min: "0", max: "1", step: "0.01", value: String(value), "aria-label": title });
   range.disabled = disabled;
-  const paint = () => range.style.setProperty("--done", `${Number(range.value) * 100}%`);
+  const paint = () => range.style.setProperty("--done", `calc(var(--cc-knob) / 2 + ${Number(range.value)} * (100% - var(--cc-knob)))`);
   paint();
   range.addEventListener("input", () => { paint(); input(Number(range.value)); });
   return el("div", { class: "cc-block cc-slider" }, el("span", { class: "cc-label" }, title), el("label", { class: "cc-range" }, svg(icon), range));
@@ -333,7 +336,8 @@ function ccRender() {
   ];
   const audio = music.audio;
   const parts = [big, el("div", { class: "cc-side" }, dnd, el("div", { class: "cc-pair" }, ...small)),
-    ccSlider("Windows", MB_ICONS.glass, 1 - glassLevel(), (v) => setGlass(Math.round((1 - v) * 100) / 100)),
+    // Both up to 1 for the most see-through and glassy, as in Settings.
+    ccSlider("Windows", MB_ICONS.glass, glassLevel(), (v) => setGlass(Math.round(v * 100) / 100)),
     ccSlider("Glass", MB_ICONS.glass, liquidLevel(), (v) => setLiquid(Math.round(v * 20) / 20)),
     ccSlider("Sound", MB_ICONS.sound, audio.muted ? 0 : audio.volume, (v) => { audio.volume = v; audio.muted = false; musicSaveSoon(); }),
     ccNowPlaying(), ccSystem()];
