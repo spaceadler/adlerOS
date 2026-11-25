@@ -244,10 +244,11 @@ made phone-narrow leaves it until it's wide again.
 - **Moving** is on the curves of a Hyprland config: windows glide to where
   they go, pop in and fade. Every Alt key is in [keyboard](keyboard.md#alt-keys).
 - **More than one My Computer, Terminal or Notepad:** right-click it (in the dock,
-  All apps, on the desktop, or its title bar) → **New window**, or Alt+E /
-  Alt+Enter with one open. Each terminal has a shell of its own (three at
-  most); each My Computer its own folder, and a file dragged from one onto
-  another moves into that one's folder; each Notepad a page of its own.
+  its icon there while one's open included, All apps, on the desktop, or its
+  title bar) → **New window**, or Alt+E / Alt+Enter with one open. Each
+  terminal has a shell of its own; each My Computer its own folder, and a
+  file dragged from one onto another moves into that one's folder; each
+  Notepad a page of its own.
 - **Keys:** Ctrl+` goes to the next window, then the desktop; Ctrl+Shift+`
   goes back. On a title bar, `m` (or the Menu key) opens its menu: left or
   right half, maximize, minimize, close, or move and resize it with the

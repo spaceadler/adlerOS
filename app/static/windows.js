@@ -829,8 +829,8 @@ function winMenu(id) {
     items.push({ label: "Open in a new tab", run: () => window.open(w.app.url, "_blank", "noopener,noreferrer") },
       { label: "Reload", run: () => reloadAppWindow(id) });
   }
-  // A My Computer or terminal window: another of it.
-  const kind = fileWins.has(id) ? "adleros:files" : terms.has(id) ? "adleros:terminal" : null;
+  // A My Computer, terminal or Notepad window: another of it.
+  const kind = windowKind(id);
   if (kind) items.push(...newWindowItem(kind));
   if (winZoomable(id)) {
     items.push({ label: "Zoom in (Ctrl +)", run: () => winZoom(id, 1) }, { label: "Zoom out (Ctrl −)", run: () => winZoom(id, -1) });
@@ -947,15 +947,18 @@ function winCycle(back) {
 // you haven't pinned) show at the end of the dock; a pinned app with a
 // window gets the open mark. Called often (a window's title changes as you
 // type in it), so a window's item is kept and only updated: made again, its
-// icon would load again, a white flash each key.
+// icon would load again, a white flash each key; and it stays where it is
+// unless the order changed: taken out and put back, it would hop again.
 function winDock() {
   const dock = $("dock");
   if (!dock) return;
   if (typeof mbUpdate === "function") mbUpdate(); // the menu bar's name for the window in front
   const had = new Map([...dock.querySelectorAll(".dock-item.dock-run")].map((n) => [n.dataset.window, n]));
-  dock.querySelectorAll(".dock-run").forEach((n) => n.remove());
   dock.querySelectorAll(".dock-app:not(.dock-builtin).open").forEach((n) => n.classList.remove("open")); // adlerOS's own: markDockOpen
-  if (!desktopMode()) return sizeDock();
+  if (!desktopMode()) {
+    dock.querySelectorAll(".dock-run").forEach((n) => n.remove());
+    return sizeDock();
+  }
   const running = [];
   for (const id of wm.order) {
     const w = wm.windows.get(id);
@@ -978,10 +981,14 @@ function winDock() {
   if (typeof dockOpen !== "undefined") for (const id of dockOpen) if (id.startsWith("win:") && !isOpen(id.slice(4))) dockOpen.delete(id);
   // Like a Mac's: after your pinned apps, before the divider (and with no
   // pins, a divider of their own).
-  if (running.length) {
-    const divider = dock.querySelector(".dock-divider:not(.dock-run)");
-    if (divider) divider.before(...running);
-    else dock.prepend(...running, el("span", { class: "dock-divider dock-run", "aria-hidden": "true" }));
+  const shown = [...dock.querySelectorAll(".dock-item.dock-run")];
+  if (shown.length !== running.length || shown.some((n, i) => n !== running[i])) {
+    dock.querySelectorAll(".dock-run").forEach((n) => n.remove());
+    if (running.length) {
+      const divider = dock.querySelector(".dock-divider:not(.dock-run)");
+      if (divider) divider.before(...running);
+      else dock.prepend(...running, el("span", { class: "dock-divider dock-run", "aria-hidden": "true" }));
+    }
   }
   sizeDock();
   dockRunMotion([...had.values()], running);

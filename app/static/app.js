@@ -917,6 +917,10 @@ function bounce(item) {
   item.classList.remove("bounce");
   void item.offsetWidth;
   item.classList.add("bounce");
+  // Off again once it's done: a class left on hops again whenever the
+  // item is put back in the dock.
+  clearTimeout(item.bounceTimer);
+  item.bounceTimer = setTimeout(() => item.classList.remove("bounce"), 450);
 }
 
 function fixedDockItem(item) {
@@ -1173,6 +1177,9 @@ function openApp(app) {
 // mode): another, whether or not one's open.
 const NEW_WINDOW = { "adleros:files": () => newFilesWindow(), "adleros:terminal": () => newTerminalWindow(), "adleros:notepad": () => newNotepadWindow() };
 const newWindowItem = (id) => (desktopMode() && NEW_WINDOW[id] ? [{ label: "New window", run: NEW_WINDOW[id] }] : []);
+// Which of those a window is (its NEW_WINDOW key), or null.
+const windowKind = (id) => (fileWins.has(id) ? "adleros:files" : terms.has(id) ? "adleros:terminal"
+  : pads.has(id) && !pads.get(id).markdown ? "adleros:notepad" : null);
 
 // What a right-click (or a long press) on `target` offers.
 // The window a dock item opens, if it's open: its id, for Close.
@@ -1189,7 +1196,8 @@ function menuFor(target) {
   const docked = target.closest("#dock .dock-item");
   const open = docked && openWindowFor(docked);
   if (open && docked.dataset.window) {
-    return [{ label: "Show", run: () => raiseWindow(open, true) }, closeItem(open)]; // open, not in the dock otherwise
+    // Open, not in the dock otherwise; My Computer, the terminal and Notepad: another of it too.
+    return [{ label: "Show", run: () => raiseWindow(open, true) }, ...newWindowItem(windowKind(open)), closeItem(open)];
   }
   const items = menuForItem(target);
   return open && items ? [...items, closeItem(open)] : items;
