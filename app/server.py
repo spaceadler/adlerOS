@@ -253,7 +253,8 @@ def registry_apps(installed=True):
                      "imported": True, "known": str(info.get("known", "")), "note": str(info.get("note", ""))[:300],
                      "site": info.get("source") == "site",  # a website you added: no containers
                      # "https": only in a window when adlerOS is on HTTPS too; "tab": never;
-                     # "frame": it runs framed though FRAME_REFUSED says it won't (patched).
+                     # "frame": it runs framed though FRAME_REFUSED says it won't (by hand;
+                     # a patched CryptPad is found by itself).
                      "window": info.get("window") if info.get("window") in ("https", "tab", "frame") else ""})
     return apps
 
@@ -1333,11 +1334,30 @@ def frame_allowed(headers, host, secure=False):
 
 
 # Apps whose own pages refuse to run inside another page, whatever their
-# headers allow: CryptPad, with embedding on, still stops its drive and its
-# office apps in a frame (sframe-common-outer.js), so a window would only
-# show its error. An install made to run framed says so in its registry
-# entry, "window": "frame" (then its headers decide, as for any app).
-FRAME_REFUSED = {"cryptpad": "its own pages refuse to run inside another page"}
+# headers allow: CryptPad, with embedding on, still stops its drive, its
+# office apps and its home page in a frame, so a window would only show its
+# error or "Loading…" for good. Unless it's been patched to (the homelab's
+# cryptpad/embed-patch.sh marks what it changes "adleros-embed"): then its
+# headers decide, as for any app. app: (a file of its pages, the marker,
+# why not). A registry entry's "window": "frame" says so by hand.
+FRAME_REFUSED = {"cryptpad": ("/common/sframe-common-outer.js", "adleros-embed",
+                              "its own pages refuse to run inside another page")}
+
+
+def frame_patched(app, path, marker):
+    """Whether the app serves that file with the marker in it: at its
+    address, else at its port on this machine."""
+    urls = [urllib.parse.urljoin(app["url"], path)]
+    if app.get("port"):
+        urls.append(f"http://{local_address()}:{app['port']}{path}")
+    for url in urls:
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "adlerOS"})
+            with urllib.request.urlopen(request, timeout=6) as r:
+                return marker.encode() in r.read(2 * 1024 * 1024)
+        except (OSError, ValueError):
+            continue
+    return False
 
 
 def frame_answer(app, host, secure):
@@ -1347,9 +1367,7 @@ def frame_answer(app, host, secure):
         return {"frame": False, "why": "it has no web page"}
     if app.get("window") == "tab":
         return {"frame": False, "why": "it works best in a tab of its own"}
-    refused = FRAME_REFUSED.get(app.get("known") or app["id"])
-    if refused and app.get("window") != "frame":
-        return {"frame": False, "why": refused}
+    refusal = FRAME_REFUSED.get(app.get("known") or app["id"])
     if app.get("window") == "https" and not secure:
         return {"frame": False, "why": "in a window it needs adlerOS on HTTPS too"}
     if secure and url.startswith("http:"):
@@ -1362,6 +1380,8 @@ def frame_answer(app, host, secure):
     headers = frame_headers(app)
     if headers is None:
         answer = {"frame": False, "why": "it didn't answer adlerOS's check"}
+    elif refusal and app.get("window") != "frame" and not frame_patched(app, refusal[0], refusal[1]):
+        answer = {"frame": False, "why": refusal[2]}
     elif url.startswith("https:") and not cert_trusted(url):
         # A browser shows nothing at all in a frame whose certificate it
         # doesn't trust (no warning to click through): a blank window.
