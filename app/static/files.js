@@ -508,6 +508,7 @@ function manyMenu(paths, f) {
   const n = `${paths.length} items`;
   const entries = paths.map((p) => ({ dir: Boolean(f.part("list").querySelector(`.file-row[data-file="${CSS.escape(p)}"][data-dir]`)) }));
   return [
+    ...downloadManyItem(paths, entries),
     ...(tsSendable(entries) ? tsSendItem(paths) : []),
     { label: `Copy ${n}`, run: () => clipPaths(paths, true) },
     ...(docSendable(paths) ? [{ label: `Upload ${n} to Documents`, run: () => docUploadPaths(paths) }] : []),
@@ -617,6 +618,20 @@ function downloadFile(path) {
   document.body.append(a);
   a.click();
   a.remove();
+}
+
+// Several picked (in My Computer or on the desktop): each file downloaded
+// as one alone is, a moment apart; folders can't be, so they're left out.
+// entries: each path's, with its dir.
+function downloadManyItem(paths, entries) {
+  const these = paths.filter((_, i) => !entries[i]?.dir);
+  if (!these.length) return [];
+  const label = these.length === paths.length ? `Download ${these.length} items` : `Download ${these.length === 1 ? "the file" : `the ${these.length} files`} (not the folders)`;
+  return [{ label, run: () => downloadFiles(these) }];
+}
+function downloadFiles(paths) {
+  paths.forEach((p, i) => setTimeout(() => downloadFile(p), i * 400));
+  if (paths.length > 1) toast(`Downloading ${paths.length} files. If the browser asks, let adlerOS download several.`);
 }
 
 // A picture, a video or a PDF opens in a window of its own (one you can

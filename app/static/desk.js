@@ -634,7 +634,8 @@ function deskMenu(target) {
   const many = icon ? deskPickedFiles() : [];
   if (icon && many.length > 1) {
     const entries = many.map((p) => desk.entries.find((x) => `/desktop/${x.name}` === p) || { dir: true });
-    return [...(docSendable(many) ? [{ label: `Upload ${many.length} items to Documents`, run: () => docUploadPaths(many) }] : []),
+    return [...downloadManyItem(many, entries),
+      ...(docSendable(many) ? [{ label: `Upload ${many.length} items to Documents`, run: () => docUploadPaths(many) }] : []),
       ...(tsSendable(entries) ? tsSendItem(many) : []),
       { label: `Copy ${many.length} items`, run: () => clipPaths(many, true) },
       { label: `Cut ${many.length} items`, run: () => clipPaths(many, false) },
