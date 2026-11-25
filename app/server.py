@@ -1309,11 +1309,13 @@ def cert_trusted(url):
         return True
 
 
-def frame_allowed(headers, host):
-    """Whether these headers let a page at `host` (adlerOS) show it in a frame.
-    As browsers decide it: a CSP frame-ancestors, when there is one, is what
-    counts, and X-Frame-Options beside it is ignored (Vaultwarden sends both,
-    SAMEORIGIN and the ALLOWED_IFRAME_ANCESTORS you gave it)."""
+def frame_allowed(headers, host, secure=False):
+    """Whether these headers let a page at `host` (adlerOS, on HTTPS if
+    secure) show it in a frame. As browsers decide it: a CSP frame-ancestors,
+    when there is one, is what counts, and X-Frame-Options beside it is
+    ignored (Vaultwarden sends both, SAMEORIGIN and the
+    ALLOWED_IFRAME_ANCESTORS you gave it). A scheme alone counts too: https:
+    is any page on HTTPS (CryptPad's, with embedding on), http: any at all."""
     policy = " ".join(headers.get_all("Content-Security-Policy") or [])
     match = re.search(r"frame-ancestors\s+([^;]*)", policy, re.I)
     if not match:
@@ -1323,6 +1325,8 @@ def frame_allowed(headers, host):
     for source in match[1].lower().split():
         bare = re.sub(r"^[a-z][a-z0-9+.-]*://", "", source).rstrip("/")
         if source == "*" or bare in (host.lower(), name) or (bare.startswith("*.") and name.endswith(bare[1:])):
+            return True
+        if source == "http:" or (source == "https:" and secure):  # http: takes HTTPS pages too (CSP 3)
             return True
     return False
 
@@ -1350,7 +1354,7 @@ def frame_answer(app, host, secure):
         # A browser shows nothing at all in a frame whose certificate it
         # doesn't trust (no warning to click through): a blank window.
         answer = {"frame": False, "why": "its certificate isn't one browsers trust (its own, made for itself)"}
-    elif frame_allowed(headers, host):
+    elif frame_allowed(headers, host, secure):
         answer = {"frame": True, "why": ""}
     else:
         answer = {"frame": False, "why": "it doesn't allow being shown inside another page"}
