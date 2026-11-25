@@ -594,7 +594,7 @@
       "icon": "archive",
       "title": "Everything",
       "description": "Back up, update the system, clean it up, update the containers, clean them up (aa-all_in_one.sh). adlerOS is offline while your containers are stopped for the backup.",
-      "keywords": "all in one maintenance everything",
+      "keywords": "all in one maintenance everything schedule automatic daily weekly monthly",
       "admin": true,
       "control": {
         "type": "maint",
@@ -609,7 +609,7 @@
       "icon": "archive",
       "title": "Back up",
       "description": "Stops your containers, archives containers/ into backup/containers/ (the last 7 kept), and starts them again (zz-script_backup.sh). adlerOS is offline meanwhile.",
-      "keywords": "backup archive zstd",
+      "keywords": "backup archive zstd schedule automatic daily weekly monthly",
       "admin": true,
       "control": {
         "type": "maint",
@@ -623,7 +623,7 @@
       "icon": "download",
       "title": "Update the system",
       "description": "apt full-upgrade, then autoremove and clean (zx-system_updater.sh). A Docker update restarts every container; a new kernel needs a restart.",
-      "keywords": "apt upgrade update packages system",
+      "keywords": "apt upgrade update packages system schedule automatic daily weekly monthly",
       "admin": true,
       "control": {
         "type": "maint",
@@ -636,7 +636,7 @@
       "icon": "archive",
       "title": "Clean up the system",
       "description": "Packages nothing needs, leftover configs, apt's cache and an old journal go (yy-system_cleanup.sh).",
-      "keywords": "apt autoremove clean journal",
+      "keywords": "apt autoremove clean journal schedule automatic daily weekly monthly",
       "admin": true,
       "control": {
         "type": "maint",
@@ -649,7 +649,7 @@
       "icon": "download",
       "title": "Update the containers",
       "description": "New images for the stacks that are on, and the changed ones recreated (zy-script_updater.sh). adlerOS may restart with them.",
-      "keywords": "docker pull update images containers",
+      "keywords": "docker pull update images containers schedule automatic daily weekly monthly",
       "admin": true,
       "control": {
         "type": "maint",
@@ -662,7 +662,7 @@
       "icon": "archive",
       "title": "Clean up the containers",
       "description": "Stacks put as homelab-stacks.conf has them, and unused images, networks and build cache pruned (xz-script_cleanup.sh).",
-      "keywords": "docker prune cleanup images volumes",
+      "keywords": "docker prune cleanup images volumes schedule automatic daily weekly monthly",
       "admin": true,
       "control": {
         "type": "maint",

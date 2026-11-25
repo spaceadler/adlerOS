@@ -637,26 +637,127 @@ function maintSetupRow(textBlock, control) {
 
 function maintTaskRow(row, c, textBlock, control) {
   const detail = el("div", { class: "row-detail" }, "…");
-  textBlock.append(detail);
+  const planned = el("div", { class: "row-detail maint-planned", hidden: "" });
+  textBlock.append(detail, planned);
+  const plan = el("button", { type: "button", class: "chip-button secondary" }, "Schedule");
   const logs = el("button", { type: "button", class: "chip-button secondary" }, "Logs");
   const start = el("button", { type: "button", class: "chip-button" }, "Start");
+  plan.addEventListener("click", () => maintScheduleDialog(row, c));
   logs.addEventListener("click", () => maintLogs(row.title, c.task));
   start.addEventListener("click", () => maintRun(row, c));
   if (!settings.data.admin) {
-    start.disabled = true;
-    textBlock.append(el("div", { class: "row-detail locked" }, "Turn on admin mode (Settings → System) to run it."));
+    start.disabled = plan.disabled = true;
+    textBlock.append(el("div", { class: "row-detail locked" }, "Turn on admin mode (Settings → System) to run it or schedule it."));
   }
-  control.append(logs, start);
+  control.append(plan, logs, start);
   maintLoad().then((status) => {
     const t = status?.tasks.find((x) => x.task === c.task);
     const last = t?.last;
     detail.textContent = last ? `Last run ${maintWhen(last.time)}: ${MAINT_RESULT[last.result]}${last.line && last.result !== "ok" ? ` (${last.line})` : ""}` : "Not run yet.";
     detail.classList.toggle("maint-bad", last?.result === "failed");
     logs.disabled = !t?.logs.length;
+    const sc = t?.schedule;
+    planned.hidden = !sc;
+    if (sc) planned.textContent = `Runs ${maintScheduleText(sc)}${sc.volumes ? ", unused volumes too" : ""}${sc.next ? `; next ${maintWhenThere(sc.next)}` : ""}.`;
   });
   maint.checkP.then((check) => {
-    if (!check?.ok) { start.disabled = true; start.title = "Set it up first (Maintenance scripts, above)"; }
+    if (!check?.ok) { start.disabled = plan.disabled = true; start.title = plan.title = "Set it up first (Maintenance scripts, above)"; }
   });
+}
+
+// ------------------------------------------------------ schedules
+
+// A task on its own, every day, week, month or year at a time on the
+// machine's clock (server.py: maint_schedule_tick). Weekdays count from
+// Monday (0), as Python does.
+const MAINT_WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const MAINT_MONTHS = Array.from({ length: 12 }, (_, i) => new Date(2024, i, 1).toLocaleString([], { month: "long" }));
+function ordinal(n) {
+  const tens = n % 100;
+  return `${n}${tens >= 11 && tens <= 13 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"}`;
+}
+function maintScheduleText(sc) {
+  if (sc.repeat === "day") return `every day at ${sc.time}`;
+  if (sc.repeat === "week") return `every ${MAINT_WEEKDAYS[sc.weekday]} at ${sc.time}`;
+  if (sc.repeat === "month") return `on the ${ordinal(sc.day)} of every month at ${sc.time}`;
+  return `every year on ${sc.day} ${MAINT_MONTHS[sc.month - 1]} at ${sc.time}`;
+}
+// A time as the machine's clock shows it (the schedule's), not this device's.
+function maintWhenThere(t) {
+  const options = { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+  try {
+    return new Date(t * 1000).toLocaleString([], { ...options, ...(maint.status?.timezone ? { timeZone: maint.status.timezone } : {}) });
+  } catch {
+    return new Date(t * 1000).toLocaleString([], options); // a timezone this browser doesn't know
+  }
+}
+
+function maintScheduleDialog(row, c) {
+  if (!settings.data.admin) return toast("Turn on admin mode in Settings → System first.");
+  const now = maint.status?.tasks.find((x) => x.task === c.task)?.schedule || {};
+  const pick = (label, options, value) => {
+    const select = el("select", { class: "field-input", "aria-label": label }, ...options.map(([v, text]) => el("option", { value: String(v) }, text)));
+    select.value = String(value);
+    return select;
+  };
+  const repeat = pick("Repeat", [["", "Never"], ["day", "Every day"], ["week", "Every week"], ["month", "Every month"], ["year", "Every year"]], now.repeat || "");
+  const weekday = pick("Day of the week", MAINT_WEEKDAYS.map((d, i) => [i, d]), now.weekday ?? 6);
+  const month = pick("Month", MAINT_MONTHS.map((m, i) => [i + 1, m]), now.month ?? 1);
+  const day = pick("Day", Array.from({ length: 31 }, (_, i) => [i + 1, ordinal(i + 1)]), now.day ?? 1);
+  const at = el("input", { class: "field-input", type: "time", value: now.time || "03:00", step: "60", "aria-label": "At" });
+  const volumes = el("input", { type: "checkbox", ...(now.volumes ? { checked: "" } : {}) });
+  const line = (label, ...control) => el("label", { class: "maint-plan-row" }, el("span", {}, label), ...control);
+  const rows = {
+    weekday: line("On", weekday), month: line("In", month), day: line("On the", day),
+    at: line("At", at), volumes: el("label", { class: "maint-plan-check" }, volumes, el("span", {}, "Also delete unused volumes (for good: there's no Trash for them)")),
+  };
+  const hint = el("p", { class: "dialog-text maint-plan-hint" });
+  const tz = maint.status?.timezone;
+  const show = () => {
+    const r = repeat.value;
+    rows.weekday.hidden = r !== "week";
+    rows.month.hidden = r !== "year";
+    rows.day.hidden = r !== "month" && r !== "year";
+    rows.at.hidden = !r;
+    rows.volumes.hidden = !r || !c.volumes;
+    // A year's day: only the days that month has (29 February counts; the 28th in other years).
+    const most = r === "year" ? new Date(2024, Number(month.value), 0).getDate() : 31;
+    for (const o of day.options) o.disabled = Number(o.value) > most;
+    if (Number(day.value) > most) day.value = String(most);
+    hint.textContent = !r ? "It runs only when you press Start."
+      : `On the machine's clock${tz ? ` (${tz})` : ""}. It runs as if you'd pressed Start, with admin mode on or off. If adlerOS is off then, or another job is running, it runs within 3 hours; after that it waits for the next time.${r === "month" && Number(day.value) > 28 ? " A month without that day: its last day." : ""}`;
+  };
+  for (const x of [repeat, month, day]) x.addEventListener("change", show);
+  show();
+  const cancel = el("button", { type: "button", class: "button-secondary" }, "Cancel");
+  const save = el("button", { type: "button", class: "button-primary" }, "Save");
+  cancel.addEventListener("click", closeModal);
+  save.addEventListener("click", async () => {
+    const r = repeat.value;
+    if (r && !/^([01]\d|2[0-3]):[0-5]\d$/.test(at.value)) return toast("Pick a time.");
+    const schedule = !r ? null : {
+      repeat: r, time: at.value,
+      ...(r === "week" ? { weekday: Number(weekday.value) } : {}),
+      ...(r === "month" || r === "year" ? { day: Number(day.value) } : {}),
+      ...(r === "year" ? { month: Number(month.value) } : {}),
+      ...(c.volumes && volumes.checked ? { volumes: true } : {}),
+    };
+    closeModal();
+    if (schedule?.volumes && !now.volumes && !(await confirmDialog({ title: "Delete unused volumes each time?", body: "Each scheduled run deletes the volumes no compose file declares, for good: there's no Trash for them.", button: "Schedule it", destructive: true }))) return;
+    const { status, body } = await api("/api/maintenance/schedule", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: c.task, schedule }),
+    }).catch(() => ({ status: 0 }));
+    if (status === 401) return showLock();
+    if (status !== 200) return toast(body?.error || "Couldn't save the schedule.");
+    maint.status = body;
+    maint.statusP = Promise.resolve(body);
+    toast(schedule ? `${row.title}: ${maintScheduleText(schedule)}.` : `${row.title}: not scheduled.`);
+    renderRows();
+  });
+  openModal(el("div", { class: "dialog material maint-plan", role: "dialog", "aria-modal": "true", "aria-label": `Schedule ${row.title}` },
+    el("h2", {}, `Schedule: ${row.title}`), line("Repeat", repeat), rows.weekday, rows.month, rows.day, rows.at, rows.volumes, hint,
+    el("div", { class: "dialog-actions" }, cancel, save)));
+  repeat.focus();
 }
 
 async function maintRun(row, c) {

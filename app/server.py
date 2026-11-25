@@ -31,6 +31,8 @@ folder mounted read-only.
     POST /api/password     {"current": ..., "new": ...}
     POST /api/admin        {"on": true, "password": ...} or {"on": false}
     POST /api/actions      {"action": ..., "params": {...}} -> queued for the helper
+    GET  /api/maintenance  how each maintenance task last went, and its schedule
+    POST /api/maintenance/schedule  {"task", "schedule": {...} or null} (admin mode)
     GET  /api/jobs[/<id>]  progress of what the helper is doing
     GET  /healthz          "ok", for Docker's healthcheck
 
@@ -903,7 +905,160 @@ def maint_status():
             sums[name] = hashlib.sha256((maint_scripts_dir() / name).read_bytes()).hexdigest()
         except OSError:
             pass
-    return {"tasks": tasks, "scripts": sums, "logsFound": maint_logs_dir().is_dir()}
+    settings = load_settings()
+    rules, last = settings.get("maintSchedule") or {}, settings.get("maintScheduleLast") or {}
+    now = datetime.datetime.now()
+    for t in tasks:
+        rule = rules.get(t["task"])
+        if isinstance(rule, dict):
+            at = maint_time(rule, now, ahead=True)
+            t["schedule"] = {**rule, "next": int(at.timestamp()) if at else None, "last": last.get(t["task"])}
+    return {"tasks": tasks, "scripts": sums, "logsFound": maint_logs_dir().is_dir(),
+            "timezone": os.environ.get("TZ") or None}  # schedules are in the machine's time
+
+
+# Schedules (Settings → Maintenance, a task's Schedule…): the task runs on its
+# own, as if you'd pressed its Start, every day, week, month or year at a
+# time on the machine's clock. Set in admin mode, it then runs whether admin
+# mode is on or not. adlerOS looks every 30 seconds; a time it missed (it was
+# restarting, or the helper was busy with another job) still runs within
+# MAINT_CATCH_UP, and after that waits for the next one.
+# Settings: maintSchedule {task: rule}, maintScheduleRan {task: the time it
+# last ran for}, maintScheduleLast {task: how that went}.
+MAINT_REPEATS = ("day", "week", "month", "year")
+MAINT_CATCH_UP = 3 * 3600
+MAINT_VOLUMES = ("all", "container-cleanup")  # the tasks that can delete unused volumes too
+MAINT_NAMES = {"all": "Everything", "backup": "Back up", "system-update": "Update the system",
+               "system-cleanup": "Clean up the system", "container-update": "Update the containers",
+               "container-cleanup": "Clean up the containers"}  # as Settings names them
+_maint_lock = threading.Lock()
+
+
+def maint_rule(task, raw):
+    """A schedule as the page sent it, checked: (rule, None) or (None, why not).
+    rule: {"repeat", "time": "HH:MM", "weekday": 0 (Monday) to 6, "day": 1 to
+    31, "month": 1 to 12, "volumes": true}, the last four only as it needs them."""
+    whole = lambda v, lo, hi: isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi
+    if not isinstance(raw, dict) or raw.get("repeat") not in MAINT_REPEATS:
+        return None, "repeat: day, week, month or year"
+    if not isinstance(raw.get("time"), str) or not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", raw["time"]):
+        return None, "time: HH:MM, 00:00 to 23:59"
+    rule = {"repeat": raw["repeat"], "time": raw["time"]}
+    if rule["repeat"] == "week":
+        if not whole(raw.get("weekday"), 0, 6):
+            return None, "weekday: 0 (Monday) to 6 (Sunday)"
+        rule["weekday"] = raw["weekday"]
+    if rule["repeat"] in ("month", "year"):
+        if not whole(raw.get("day"), 1, 31):
+            return None, "day: 1 to 31"
+        rule["day"] = raw["day"]
+    if rule["repeat"] == "year":
+        if not whole(raw.get("month"), 1, 12):
+            return None, "month: 1 to 12"
+        if rule["day"] > calendar.monthrange(2024, raw["month"])[1]:  # a leap year: 29 February is a day
+            return None, "that month hasn't that many days"
+        rule["month"] = raw["month"]
+    if raw.get("volumes") is True:
+        if task not in MAINT_VOLUMES:
+            return None, "only Everything and Clean up the containers can delete volumes"
+        rule["volumes"] = True
+    return rule, None
+
+
+def maint_on(rule, day):
+    """Whether the rule runs on that date. The 31st (or the 29th, 30th) is a
+    shorter month's last day; 29 February, the 28th in other years."""
+    if rule["repeat"] == "day":
+        return True
+    if rule["repeat"] == "week":
+        return day.weekday() == rule["weekday"]
+    if rule["repeat"] == "year" and day.month != rule["month"]:
+        return False
+    return day.day == min(rule["day"], calendar.monthrange(day.year, day.month)[1])
+
+
+def maint_time(rule, now, ahead):
+    """The rule's next time after now (ahead), or its last at or before now,
+    on the machine's clock; None if there's none within a year."""
+    hour, minute = (int(x) for x in rule["time"].split(":"))
+    for d in range(370):
+        day = now.date() + datetime.timedelta(days=d if ahead else -d)
+        if maint_on(rule, day):
+            at = datetime.datetime.combine(day, datetime.time(hour, minute))
+            if (at > now) if ahead else (at <= now):
+                return at
+    return None
+
+
+def maint_schedule_tick(now=None):
+    """Starts what's due, as said above; the tasks it started."""
+    now = now or datetime.datetime.now()
+    started = []
+    with _maint_lock:
+        settings = load_settings()
+        rules = settings.get("maintSchedule") or {}
+        ran, last = dict(settings.get("maintScheduleRan") or {}), dict(settings.get("maintScheduleLast") or {})
+        actions = None
+        for task, rule in rules.items():
+            if task not in MAINT_TASKS or not isinstance(rule, dict):
+                continue
+            due = maint_time(rule, now, ahead=False)
+            if not due or ran.get(task, 0) >= due.timestamp():
+                continue
+            if (now - due).total_seconds() > MAINT_CATCH_UP:
+                ran[task] = due.timestamp()
+                last[task] = {"at": int(time.time()), "due": int(due.timestamp()), "missed": True}
+                after = maint_time(rule, now, ahead=True)
+                notify("job-failed", f"{MAINT_NAMES[task]} didn't run at {due:%H:%M} on {due.day} {due:%b}",
+                       "adlerOS wasn't running then, or another job took the helper for hours."
+                       + (f" Next: {after.day} {after:%b, %H:%M}." if after else ""), "settings:maintenance")
+                continue
+            actions = actions or load_actions()
+            name = f"maint-{task}-volumes" if rule.get("volumes") and task in MAINT_VOLUMES else f"maint-{task}"
+            if name not in actions:
+                continue
+            job, busy = queue_action(name, {}, actions)
+            if busy:
+                continue  # after that one, if it ends in time
+            ran[task] = due.timestamp()
+            last[task] = {"at": int(time.time()), "due": int(due.timestamp()), "job": job["id"]}
+            started.append(task)
+        if ran != (settings.get("maintScheduleRan") or {}):
+            save_settings({"maintScheduleRan": ran, "maintScheduleLast": last})
+    return started
+
+
+def set_maint_schedule(task, raw):
+    """A task's schedule (None: none). (status, reply). From now on: a time
+    already gone today isn't run for."""
+    if task not in MAINT_TASKS:
+        return 400, {"error": "no such task"}
+    rule, error = (None, None) if raw is None else maint_rule(task, raw)
+    if error:
+        return 400, {"error": error}
+    with _maint_lock:
+        settings = load_settings()
+        rules = dict(settings.get("maintSchedule") or {})
+        ran = dict(settings.get("maintScheduleRan") or {})
+        if rule:
+            rules[task] = rule
+            gone = maint_time(rule, datetime.datetime.now(), ahead=False)
+            ran[task] = gone.timestamp() if gone else 0
+        else:
+            rules.pop(task, None)
+            ran.pop(task, None)
+        save_settings({"maintSchedule": rules, "maintScheduleRan": ran})
+    return 200, maint_status()
+
+
+def maint_scheduler():
+    """maint_schedule_tick, every 30 seconds for as long as adlerOS runs."""
+    while True:
+        try:
+            maint_schedule_tick()
+        except Exception as e:  # one bad look mustn't stop every schedule for good
+            print(f"maintenance schedule: {e}", flush=True)
+        time.sleep(30)
 
 
 # ------------------------------------------------------------------- actions
@@ -7984,6 +8139,11 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 return self.send_json(400, {"error": "expected {\"read\": \"all\"}, {\"clear\": true} or {\"clear\": [ids]}"})
             return self.send_json(200, {"ok": True})
+        if path == "/api/maintenance/schedule":
+            if not self.admin():
+                return self.send_json(403, {"error": "admin mode is off", "admin": True})
+            status, reply = set_maint_schedule(body.get("task"), body.get("schedule"))
+            return self.send_json(status, reply)
         if path == "/api/actions":
             actions = load_actions()
             params, error = validate_action(body.get("action"), body.get("params"), actions)
@@ -9900,6 +10060,7 @@ def main():
         save_settings({"adminUntil": time.time() + ADMIN_SECONDS})  # on from before it timed out: from now
     threading.Thread(target=Watcher().run, name="watcher", daemon=True).start()
     threading.Thread(target=search_indexer, name="search", daemon=True).start()
+    threading.Thread(target=maint_scheduler, name="maintenance", daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     server.daemon_threads = True
     print(f"adlerOS on :{PORT}, for {os.environ.get('ADLEROS_NETWORKS') or 'anyone'}" if ALLOWED_NETWORKS

@@ -77,6 +77,12 @@ password. It goes off when you switch it off, when that login ends (logging
 out, or 15 minutes with no adlerOS page open), when **12 hours** pass, or
 when adlerOS restarts (it's kept in memory).
 
+A **maintenance schedule** (Settings → Maintenance) is the one thing that
+acts later without it: setting one takes admin mode, and from then on that
+script runs at its times as if you'd pressed Start, admin mode on or off,
+until you change or remove the schedule (admin mode again). It runs only the
+fixed maintenance actions, through the same helper and root-owned copies.
+
 ## The terminal
 
 The Terminal window is a real shell on the machine, as you, and you're in
@@ -261,7 +267,8 @@ only queue actions from the list. That means they could:
 - stop, start, restart, update or delete your apps (data stays; delete only
   removes containers);
 - install a store app, or start a compose file already in your home folder;
-- with admin mode on (or your password): restart or shut down the machine;
+- with admin mode on (or your password): restart or shut down the machine,
+  or schedule the maintenance scripts;
 - with the terminal switched on (on the machine): get a shell (see above);
 - read, change or delete files in your Desktop and storage folders, and read
   Root (through Files);

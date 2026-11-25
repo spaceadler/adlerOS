@@ -122,10 +122,15 @@ one, each still shows the files themselves. More in
 - **Firefox** in the store: a real browser running on the machine, in your
   browser. With My Computer and the terminal, an old laptop is enough to work on
   your homelab.
-- **A terminal**, if you want one: a real shell in a window (colours, `htop`,
-  `vim`), off unless you switch it on on the machine, and only there in
-  admin mode. On a touch screen, a bar of the keys a phone hasn't (Esc, Tab,
-  Ctrl, Alt, Shift, the arrows, Home, End, PgUp, PgDn).
+- **A terminal**, if you want one: a real shell in a window (colours, emoji,
+  `htop`, `vim`, the mouse), on one connection that picks up where it was
+  after a reload or on another device; off unless you switch it on on the
+  machine, and only there in admin mode. On a touch screen, a bar of the keys
+  a phone hasn't (Esc, Tab, Ctrl, Alt, Shift, the arrows, Home, End, PgUp,
+  PgDn).
+- **Maintenance on a schedule**: your homelab's backup, update and cleanup
+  scripts, each started by hand or every day, week, month or year at the
+  time you pick.
 
 ## How it sorts your apps
 

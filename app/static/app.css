@@ -4524,6 +4524,15 @@ body.wm .nc.shown { pointer-events: auto; transform: none; }
 .maint-command { display: block; margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: rgb(0 0 0 / 0.3); font: 12px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace; user-select: all; overflow-wrap: anywhere; }
 .row-detail.maint-bad { color: #ff6b63; }
 .maint-logs { width: min(900px, calc(100vw - 32px)); }
+/* A task's schedule: a label and its choice per line. */
+.maint-plan { width: min(460px, calc(100vw - 32px)); text-align: left; }
+.maint-plan-row { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 14px; }
+.maint-plan-row[hidden], .maint-plan-check[hidden] { display: none; }
+.maint-plan-row .field-input { width: 100%; height: 38px; }
+.maint-plan-check { display: flex; align-items: flex-start; gap: 10px; margin: 4px 0 12px; font-size: 13px; line-height: 1.4; }
+.maint-plan-check input { flex-shrink: 0; width: 18px; height: 18px; margin-top: 1px; accent-color: #fff; }
+.maint-plan .maint-plan-hint { margin: 4px 0 18px; }
+.maint-planned { color: rgb(255 255 255 / 0.75); }
 .maint-logs select { margin-bottom: 10px; }
 .maint-log { max-height: 60vh; white-space: pre-wrap; }
 .chip-button.secondary { background: rgb(255 255 255 / 0.08); }
