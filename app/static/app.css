@@ -3104,7 +3104,8 @@ body:not(.wm) .mu-mini-body { padding-top: max(64px, calc(env(safe-area-inset-to
 .mu-mini-line { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .mu-mini-line.now { display: -webkit-box; color: #fff; font-size: 18px; font-weight: 700; line-height: 1.35; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .mu-mini-lyric.long .mu-mini-line.next { display: none; }
-.mu-mini-line.next { color: rgb(255 255 255 / 0.4); font-size: 14px; font-weight: 600; line-height: 1.4; }
+.mu-mini-line.next { color: rgb(255 255 255 / 0.4); font-size: 14px; font-weight: 600; line-height: 1.4; cursor: pointer; transition: color 0.15s; }
+.mu-mini-line.next:hover { color: rgb(255 255 255 / 0.7); } /* a tap goes there */
 .mu-mini-lyric.step .mu-mini-line { animation: mu-mini-step 0.35s ease-out; }
 @keyframes mu-mini-step { from { opacity: 0; transform: translateY(8px); } }
 .mu-mini-seekrow { width: 100%; max-width: 520px; }

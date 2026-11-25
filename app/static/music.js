@@ -1442,6 +1442,7 @@ function musicMiniView() {
     music.seeking = false;
   });
   const back = musicIconButton("Back to Music", "expand", () => musicMini(false), "mu-mini-back");
+  const nextLine = el("div", { class: "mu-mini-line next", title: "Go to this line" });
   const art = el("button", { type: "button", class: "mu-mini-art", id: "mu-mini-art", "aria-label": "Back to Music" });
   art.addEventListener("click", () => musicMini(false));
   const volume = el("input", { type: "range", class: "mu-volume mu-mini-volume", id: "mu-mini-volume", min: "0", max: "1", step: "0.01", value: String(music.audio.volume), "aria-label": "Volume" });
@@ -1456,7 +1457,7 @@ function musicMiniView() {
         el("span", { "aria-hidden": "true" }),
         el("div", { class: "mu-mini-text" }, el("div", { class: "mu-mini-title", id: "mu-mini-title" }), el("div", { class: "mu-mini-artist", id: "mu-mini-artist" })),
         musicIconButton("Add to Favorites", "heart", () => musicToggleFavorite(muCurrent()), "mu-bar-fav mu-mini-fav")),
-      el("div", { class: "mu-mini-lyric", id: "mu-mini-lyric", "aria-live": "off" }, el("div", { class: "mu-mini-line now" }), el("div", { class: "mu-mini-line next" })),
+      el("div", { class: "mu-mini-lyric", id: "mu-mini-lyric", "aria-live": "off" }, el("div", { class: "mu-mini-line now" }), nextLine),
       el("div", { class: "mu-mini-seekrow" }, seek, el("div", { class: "mu-mini-times" }, el("span", { id: "mu-mini-at" }, "0:00"), el("span", { id: "mu-mini-left" }, "–:––"))),
       // The buttons and the volume: one row in a wide enough desktop window
       // (shuffle and repeat, the modes, left; volume right), else the modes
@@ -1473,6 +1474,14 @@ function musicMiniView() {
         muVolumeSettable() ? el("div", { class: "mu-mini-volrow" },
           musicIconButton("Mute", "volume", () => { music.audio.muted = !music.audio.muted; musicBarUpdate(); }, "mu-mini-mute"), volume) : ""))));
   view.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); musicMini(false); } });
+  // The next line, tapped (or clicked): there, as a line of the full lyrics is.
+  nextLine.addEventListener("click", () => {
+    const l = music.lyrics;
+    const line = l?.synced && l.id === muCurrent() ? l.lines[Number($("mu-mini-lyric").dataset.i) + 1] : null;
+    if (!line) return;
+    music.audio.currentTime = Math.max(0, line.t);
+    musicMiniUpdate();
+  });
   return view;
 }
 
