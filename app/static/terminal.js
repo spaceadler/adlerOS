@@ -748,6 +748,9 @@ async function reconnectTerminal(t, sid) {
   if (status === 401) return showLock();
   if (status === 200 && !body.admin) return endTerminal(t, "Admin mode is off. If it timed out, this shell is still running: turn it on again and open Terminal to get back to it.");
   if (status === 200 && !(body.sessions || []).includes(sid)) return endTerminal(t, "This terminal is gone.");
+  // About two minutes without getting through (adlerOS restarting takes
+  // seconds): something's wrong that waiting won't fix.
+  if (t.retries >= 14) return endTerminal(t, "Can't connect to this shell. If adlerOS was just updated, restart it (Settings → Restart adlerOS), then open Terminal again: the shell is still running.");
   const wait = Math.min(10000, 500 * 2 ** t.retries++);
   t.retryTimer = setTimeout(() => { if (t.sid === sid && t.alive) connectTerminal(t, sid); }, wait);
 }

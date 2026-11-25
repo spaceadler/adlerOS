@@ -7062,7 +7062,7 @@ def vtext(v):
 
 
 def vesc(s):
-    return str(s).replace("\\", "\\\\").replace("\n", "\\n").replace(",", "\\,").replace(";", "\;")
+    return str(s).replace("\\", "\\\\").replace("\n", "\\n").replace(",", "\\,").replace(";", "\\;")
 
 
 def vfold(line):
