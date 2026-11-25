@@ -121,13 +121,18 @@ function icon(name) {
   return svg(ICONS[name] || ICONS.cpu);
 }
 
+// A size the way a file manager says it: bytes, KB, MB (one decimal below
+// 10), GB, TB, so nothing small shows as 0 MB.
 function bytes(n) {
   if (n == null) return "–";
   const gb = n / 1e9;
   if (gb >= 1000) return `${(gb / 1000).toFixed(1)} TB`;
   if (gb >= 100) return `${Math.round(gb)} GB`;
-  if (gb >= 1) return `${gb.toFixed(1)} GB`;
-  return `${Math.round(n / 1e6)} MB`;
+  if (n >= 999.5e6) return `${gb.toFixed(1)} GB`;
+  if (n >= 9.95e6) return `${Math.round(n / 1e6)} MB`;
+  if (n >= 999.5e3) return `${(n / 1e6).toFixed(1)} MB`;
+  if (n >= 1000) return `${Math.round(n / 1e3)} KB`;
+  return `${n} ${n === 1 ? "byte" : "bytes"}`;
 }
 
 function duration(seconds) {
