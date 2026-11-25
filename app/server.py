@@ -252,8 +252,9 @@ def registry_apps(installed=True):
                      "name": info["name"][:40], "about": str(info.get("about", ""))[:200], "url": info["url"],
                      "imported": True, "known": str(info.get("known", "")), "note": str(info.get("note", ""))[:300],
                      "site": info.get("source") == "site",  # a website you added: no containers
-                     # "https": only in a window when adlerOS is on HTTPS too; "tab": never.
-                     "window": info.get("window") if info.get("window") in ("https", "tab") else ""})
+                     # "https": only in a window when adlerOS is on HTTPS too; "tab": never;
+                     # "frame": it runs framed though FRAME_REFUSED says it won't (patched).
+                     "window": info.get("window") if info.get("window") in ("https", "tab", "frame") else ""})
     return apps
 
 
@@ -1334,7 +1335,8 @@ def frame_allowed(headers, host, secure=False):
 # Apps whose own pages refuse to run inside another page, whatever their
 # headers allow: CryptPad, with embedding on, still stops its drive and its
 # office apps in a frame (sframe-common-outer.js), so a window would only
-# show its error.
+# show its error. An install made to run framed says so in its registry
+# entry, "window": "frame" (then its headers decide, as for any app).
 FRAME_REFUSED = {"cryptpad": "its own pages refuse to run inside another page"}
 
 
@@ -1346,7 +1348,7 @@ def frame_answer(app, host, secure):
     if app.get("window") == "tab":
         return {"frame": False, "why": "it works best in a tab of its own"}
     refused = FRAME_REFUSED.get(app.get("known") or app["id"])
-    if refused:
+    if refused and app.get("window") != "frame":
         return {"frame": False, "why": refused}
     if app.get("window") == "https" and not secure:
         return {"frame": False, "why": "in a window it needs adlerOS on HTTPS too"}
