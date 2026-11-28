@@ -596,7 +596,7 @@
   "maint-all": {
     "label": "Running all maintenance",
     "admin": true,
-    "description": "Every step: back up, update the system, clean it, update the containers, clean them up (aa-all_in_one.sh -y).",
+    "description": "Every step: back up the notes and the containers, update the system, clean it, update the containers, clean them up (aa-all_in_one.sh -y).",
     "steps": [
       {
         "run": [
@@ -638,6 +638,22 @@
           "backup"
         ],
         "timeout": 14400
+      }
+    ]
+  },
+  "maint-notes-backup": {
+    "label": "Backing up the notes",
+    "admin": true,
+    "description": "Archives the Notes vault into backup/notes/, unless nothing changed since the last archive (zv-notes_backup.sh).",
+    "steps": [
+      {
+        "run": [
+          "sudo",
+          "-n",
+          "/usr/local/libexec/adleros/maint",
+          "notes-backup"
+        ],
+        "timeout": 3600
       }
     ]
   },

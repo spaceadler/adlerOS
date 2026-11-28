@@ -634,8 +634,11 @@ function maintSetupRow(textBlock, control) {
     }
     // Installed: are those your scripts as they are now?
     const changed = Object.entries(status?.scripts || {}).filter(([name, sum]) => check.scripts?.[name] && check.scripts[name] !== sum).map(([n]) => n);
-    detail.textContent = changed.length
-      ? `Set up, but you've changed ${changed.join(", ")} since: run install-maint.sh again (with sudo) for adlerOS to run the new ${changed.length === 1 ? "version" : "versions"}.`
+    // A task added since (its script isn't installed: the launcher doesn't know it yet)
+    const added = Object.keys(status?.scripts || {}).filter((name) => !check.scripts?.[name]);
+    const why = [changed.length ? `you've changed ${changed.join(", ")}` : "", added.length ? `${added.join(", ")} ${added.length === 1 ? "is" : "are"} new` : ""].filter(Boolean);
+    detail.textContent = why.length
+      ? `Set up, but ${why.join(" and ")} since: run install-maint.sh again (with sudo) for adlerOS to run ${added.length ? "them" : `the new ${changed.length === 1 ? "version" : "versions"}`}.`
       : "Set up: the scripts adlerOS runs are your current ones.";
   });
 }
@@ -665,8 +668,10 @@ function maintTaskRow(row, c, textBlock, control) {
     planned.hidden = !sc;
     if (sc) planned.textContent = `Runs ${maintScheduleText(sc)}${sc.volumes ? ", unused volumes too" : ""}${sc.next ? `; next ${maintWhenThere(sc.next)}` : ""}.`;
   });
-  maint.checkP.then((check) => {
+  Promise.all([maint.statusP, maint.checkP]).then(([status, check]) => {
+    const script = status?.tasks.find((x) => x.task === c.task)?.script;
     if (!check?.ok) { start.disabled = plan.disabled = true; start.title = plan.title = "Set it up first (Maintenance scripts, above)"; }
+    else if (script && !check.scripts?.[script]) { start.disabled = plan.disabled = true; start.title = plan.title = `New: run install-maint.sh again (Maintenance scripts, above) for ${script}`; }
   });
 }
 

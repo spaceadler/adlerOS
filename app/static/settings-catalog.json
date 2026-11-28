@@ -593,7 +593,7 @@
       "category": "maintenance",
       "icon": "archive",
       "title": "Everything",
-      "description": "Back up, update the system, clean it up, update the containers, clean them up (aa-all_in_one.sh). adlerOS is offline while your containers are stopped for the backup.",
+      "description": "Back up the notes and the containers, update the system, clean it up, update the containers, clean them up (aa-all_in_one.sh). adlerOS is offline while your containers are stopped for the backup.",
       "keywords": "all in one maintenance everything schedule automatic daily weekly monthly",
       "admin": true,
       "control": {
@@ -615,6 +615,19 @@
         "type": "maint",
         "task": "backup",
         "down": true
+      }
+    },
+    {
+      "id": "maint-notes-backup",
+      "category": "maintenance",
+      "icon": "archive",
+      "title": "Back up the notes",
+      "description": "Packs your Notes vault (storage/Notes) into backup/notes/ (the last 7 kept), and skips it when nothing changed since the last one (zv-notes_backup.sh). Nothing stops meanwhile.",
+      "keywords": "backup notes vault luna obsidian archive zstd schedule automatic daily weekly monthly",
+      "admin": true,
+      "control": {
+        "type": "maint",
+        "task": "notes-backup"
       }
     },
     {

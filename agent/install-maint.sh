@@ -12,7 +12,7 @@ home=$(getent passwd "$user" | cut -d: -f6)
 src=${1:-$home/homelab/dev/scripts/server}
 here=$(dirname "$(readlink -f "$0")")
 lib=/usr/local/libexec/adleros
-scripts=(aa-all_in_one.sh zz-script_backup.sh zx-system_updater.sh yy-system_cleanup.sh zy-script_updater.sh xz-script_cleanup.sh)
+scripts=(aa-all_in_one.sh zz-script_backup.sh zv-notes_backup.sh zx-system_updater.sh yy-system_cleanup.sh zy-script_updater.sh xz-script_cleanup.sh)
 for s in "${scripts[@]}" homelab-stacks.conf; do
     [ -f "$src/$s" ] || { echo "Not found: $src/$s" >&2; exit 1; }
 done

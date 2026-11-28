@@ -414,8 +414,9 @@ or the search box:
   **Restart adlerOS** (adlerOS alone: your apps keep running, and the page
   reloads when it's back), and **Restart** and **Shut down** for the
   machine.
-- **Maintenance:** your homelab's maintenance scripts (backing up, updating
-  and cleaning the system and the containers, or everything at once), once
+- **Maintenance:** your homelab's maintenance scripts (backing up the
+  containers or the Notes vault, updating and cleaning the system and the
+  containers, or everything at once), once
   `install-maint.sh` has set them up. Each has **Start**, **Logs** and
   **Schedule**: every day, week (a day of it), month (a day of it; the 31st
   is a shorter month's last day) or year, at a time on the machine's clock.

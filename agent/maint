@@ -31,6 +31,7 @@ case "${1:-}" in
     all) run "$dir/aa-all_in_one.sh" -y ;;
     all-volumes) run "$dir/aa-all_in_one.sh" -y --volumes ;;
     backup) run "$dir/zz-script_backup.sh" ;;
+    notes-backup) run "$dir/zv-notes_backup.sh" ;;
     system-update) run "$dir/zx-system_updater.sh" -y ;;
     system-cleanup) run "$dir/yy-system_cleanup.sh" -y ;;
     container-update) run "$dir/zy-script_updater.sh" ;;

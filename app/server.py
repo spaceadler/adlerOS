@@ -845,6 +845,7 @@ def backups_info():
 # say how each last went: its last INFO/WARN/FATAL line.
 MAINT_TASKS = {  # task: (its logs' prefix, its script)
     "all": ("all-in-one", "aa-all_in_one.sh"), "backup": ("backup", "zz-script_backup.sh"),
+    "notes-backup": ("notes-backup", "zv-notes_backup.sh"),
     "system-update": ("system-update", "zx-system_updater.sh"), "system-cleanup": ("system-cleanup", "yy-system_cleanup.sh"),
     "container-update": ("container-update", "zy-script_updater.sh"), "container-cleanup": ("container-cleanup", "xz-script_cleanup.sh"),
 }
@@ -930,7 +931,7 @@ def maint_status():
 MAINT_REPEATS = ("day", "week", "month", "year")
 MAINT_CATCH_UP = 3 * 3600
 MAINT_VOLUMES = ("all", "container-cleanup")  # the tasks that can delete unused volumes too
-MAINT_NAMES = {"all": "Everything", "backup": "Back up", "system-update": "Update the system",
+MAINT_NAMES = {"all": "Everything", "backup": "Back up", "notes-backup": "Back up the notes", "system-update": "Update the system",
                "system-cleanup": "Clean up the system", "container-update": "Update the containers",
                "container-cleanup": "Clean up the containers"}  # as Settings names them
 _maint_lock = threading.Lock()
@@ -6498,6 +6499,7 @@ _notes_lock = threading.Lock()
 NOTIFY_DONE = {"backup": "Backup finished", "update": "Homelab updated", "apply-config": "Settings applied",
                "app-install": "Installed", "app-update": "Updated",
                "maint-all": "Maintenance finished", "maint-all-volumes": "Maintenance finished", "maint-backup": "Backup finished",
+               "maint-notes-backup": "Notes backed up",
                "maint-system-update": "System updated", "maint-system-cleanup": "System cleaned up",
                "maint-container-update": "Containers updated", "maint-container-cleanup": "Containers cleaned up",
                "maint-container-cleanup-volumes": "Containers cleaned up"}
